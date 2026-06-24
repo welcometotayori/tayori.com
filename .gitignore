@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# 秘密・データ（GitHubに絶対上げない）
+.secret_key
+*.db
+
+# ローカルのツール設定
+.claude/

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>たより — 管理画面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #fafaf9;
+            color: #44403c;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e7e5e4;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #f5f5f4;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            font-size: 24px;
+            margin: 0;
+            color: #1c1917;
+            font-weight: 600;
+        }
+        .back-link {
+            text-decoration: none;
+            color: #78716c;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            transition: color 0.2s;
+        }
+        .back-link:hover {
+            color: #1c1917;
+        }
+        p.subtitle {
+            color: #78716c;
+            font-size: 14px;
+            margin-top: -16px;
+            margin-bottom: 24px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            margin-top: 16px;
+        }
+        th {
+            background-color: #f8f6f4;
+            color: #78716c;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 14px 16px;
+            border-bottom: 1px solid #e7e5e4;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #f5f5f4;
+            font-size: 14px;
+            color: #57534e;
+            vertical-align: middle;
+        }
+        tr:hover td {
+            background-color: #fafaf9;
+        }
+        .username {
+            font-weight: 600;
+            color: #1c1917;
+        }
+        .email-none {
+            color: #a8a29e;
+            font-style: italic;
+        }
+        .date {
+            font-family: monospace;
+            color: #78716c;
+        }
+        .btn-delete {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            font-weight: 500;
+        }
+        .btn-delete:hover {
+            background-color: #dc2626;
+        }
+        .btn-delete:active {
+            transform: scale(0.97);
+        }
+        .protected {
+            color: #a8a29e;
+            font-size: 13px;
+            font-style: italic;
+        }
+
+        /* ---- 統計サマリー ---- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin: 8px 0 28px;
+        }
+        .stat-card {
+            background: #fafaf9;
+            border: 1px solid #e7e5e4;
+            border-radius: 10px;
+            padding: 18px 16px;
+            text-align: left;
+        }
+        .stat-num {
+            font-size: 30px;
+            font-weight: 600;
+            color: #1c1917;
+            line-height: 1.1;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat-lbl {
+            font-size: 12px;
+            color: #78716c;
+            margin-top: 6px;
+            letter-spacing: 0.02em;
+        }
+        .stat-card.accent .stat-num { color: #b5543a; }
+        .stat-card.teal .stat-num { color: #4c7a6b; }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #78716c;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin: 8px 0 14px;
+        }
+
+        /* ---- 登録推移グラフ ---- */
+        .trend {
+            margin-bottom: 30px;
+        }
+        .trend-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            height: 110px;
+            padding: 12px 4px 0;
+            border-bottom: 1px solid #e7e5e4;
+        }
+        .trend-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            height: 100%;
+            position: relative;
+        }
+        .trend-bar {
+            width: 100%;
+            max-width: 26px;
+            background: #d6cdbe;
+            border-radius: 4px 4px 0 0;
+            min-height: 3px;
+            transition: background 0.2s;
+        }
+        .trend-col:hover .trend-bar { background: #b5543a; }
+        .trend-col .count {
+            font-size: 11px;
+            color: #57534e;
+            font-variant-numeric: tabular-nums;
+            margin-bottom: 4px;
+            min-height: 14px;
+        }
+        .trend-axis {
+            display: flex;
+            gap: 6px;
+            padding: 8px 4px 0;
+        }
+        .trend-axis span {
+            flex: 1;
+            text-align: center;
+            font-size: 9px;
+            color: #a8a29e;
+            font-family: monospace;
+        }
+        .trend-note {
+            font-size: 12px;
+            color: #a8a29e;
+            margin-top: 10px;
+        }
+
+        /* ---- ユーザー表の件数列 ---- */
+        .count-cell {
+            font-variant-numeric: tabular-nums;
+        }
+        .count-main {
+            font-weight: 600;
+            color: #1c1917;
+            font-size: 15px;
+        }
+        .count-break {
+            font-size: 12px;
+            color: #78716c;
+            margin-top: 2px;
+        }
+        .count-break .recv { color: #4c7a6b; }
+        .count-break .tran { color: #b5543a; }
+        .count-break .wx { color: #8a7d9b; }
+        .count-zero { color: #d6cdbe; }
+
+        @media (max-width: 680px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ---- 最近の便り（中身つき） ---- */
+        .content-warn {
+            background: #fef3f2;
+            border: 1px solid #fcd9d3;
+            color: #9a3a2a;
+            font-size: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        .letters-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .letter-card {
+            border: 1px solid #e7e5e4;
+            border-radius: 10px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            background: #fff;
+        }
+        .letter-card:hover {
+            border-color: #d6b8af;
+            background: #fafaf9;
+        }
+        .lc-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .lc-user {
+            font-weight: 600;
+            color: #1c1917;
+            font-size: 14px;
+        }
+        .lc-badges {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .badge {
+            font-size: 11px;
+            padding: 2px 9px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .badge.recv { background: #e6efea; color: #4c7a6b; }
+        .badge.tran { background: #fbeae6; color: #b5543a; }
+        .badge.wx   { background: #efeaf3; color: #8a7d9b; }
+        .badge.mute { background: #f5f5f4; color: #a8a29e; }
+        .lc-poem {
+            font-size: 14px;
+            color: #44403c;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .lc-poem.empty { color: #a8a29e; font-style: italic; }
+        .lc-meta {
+            font-size: 11px;
+            color: #a8a29e;
+            margin-top: 8px;
+            font-family: monospace;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* モーダル */
+        .modal-back {
+            position: fixed;
+            inset: 0;
+            background: rgba(28,25,23,0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 100;
+        }
+        .modal-back.on { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 14px;
+            max-width: 560px;
+            width: 100%;
+            max-height: 82vh;
+            overflow-y: auto;
+            padding: 26px 28px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+        }
+        .modal h2 {
+            font-size: 17px;
+            color: #1c1917;
+            margin-bottom: 4px;
+        }
+        .modal .m-sub {
+            font-size: 12px;
+            color: #a8a29e;
+            font-family: monospace;
+            margin-bottom: 18px;
+        }
+        .m-poem {
+            font-size: 16px;
+            line-height: 2;
+            color: #292524;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            background: #fafaf9;
+            border-left: 3px solid #d6cdbe;
+            padding: 14px 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 18px;
+        }
+        .m-section-lbl {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #a8a29e;
+            margin: 18px 0 10px;
+        }
+        .m-msg { margin-bottom: 12px; }
+        .m-who {
+            font-size: 11px;
+            color: #78716c;
+            margin-bottom: 3px;
+            font-family: monospace;
+        }
+        .m-bubble {
+            font-size: 14px;
+            line-height: 1.7;
+            padding: 9px 13px;
+            border-radius: 8px;
+            color: #292524;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .m-msg.now .m-bubble { background: #fbeae6; }
+        .m-msg.past .m-bubble, .m-msg.ai .m-bubble { background: #eef1f0; }
+        .m-msg.now .m-who { color: #b5543a; }
+        .modal-close {
+            margin-top: 20px;
+            background: #1c1917;
+            color: #fff;
+            border: 0;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .modal-close:hover { background: #b5543a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ユーザー管理ダッシュボード</h1>
+            <a href="/" class="back-link">← アプリに戻る</a>
+        </div>
+        <p class="subtitle">アプリケーションに登録されているユーザーアカウント、および関連する全てのデータ（便り・下書き・対話）を一元管理・閲覧・削除できます。</p>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-num">{{ totals.users }}</div>
+                <div class="stat-lbl">登録ユーザー</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">{{ totals.letters }}</div>
+                <div class="stat-lbl">便り総数</div>
+            </div>
+            <div class="stat-card teal">
+                <div class="stat-num">{{ totals.received }}</div>
+                <div class="stat-lbl">受信済み</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-num">{{ totals.transit }}</div>
+                <div class="stat-lbl">配送中</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">{{ totals.waiting_weather }}</div>
+                <div class="stat-lbl">天気待ち</div>
+            </div>
+        </div>
+
+        <div class="trend">
+            <div class="section-title">登録ユーザー数の推移（直近14日）</div>
+            <div class="trend-bars">
+                {% for t in trend %}
+                <div class="trend-col" title="{{ t.date }} ・ 新規 {{ t.new }} ・ 累計 {{ t.cumulative }}">
+                    <span class="count">{% if t.new %}{{ t.new }}{% endif %}</span>
+                    <div class="trend-bar" data-h="{{ t.bar_h }}"></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="trend-axis">
+                {% for t in trend %}
+                <span>{{ t.date[5:] }}</span>
+                {% endfor %}
+            </div>
+            <div class="trend-note">棒は各日の新規登録数。バーにカーソルを合わせると累計が出ます。</div>
+        </div>
+
+        {% if read_content %}
+        <div class="section-title">最近の便り（中身つき）</div>
+        <div class="content-warn">
+            ⚠ これは管理用の覗き窓です。tayori 本来は「本人すら開封日まで中身を見られない」設計です。公開時は環境変数 <code>TAYORI_ADMIN_READ_CONTENT</code> を外すと、この一覧は表示されなくなります。
+        </div>
+        {% if recent_letters %}
+        <div class="letters-list">
+            {% for L in recent_letters %}
+            <div class="letter-card" onclick="openLetter('{{ L.id }}')">
+                <div class="lc-top">
+                    <span class="lc-user">{{ L.username }}</span>
+                    <span class="lc-badges">
+                        {% if L.status == '受信済み' %}<span class="badge recv">受信済み</span>
+                        {% elif L.status == '天気待ち' %}<span class="badge wx">天気待ち</span>
+                        {% else %}<span class="badge tran">配送中</span>{% endif %}
+                        {% if L.has_photo %}<span class="badge mute">写真</span>{% endif %}
+                        {% if L.has_voice %}<span class="badge mute">声</span>{% endif %}
+                        {% if L.thread_count %}<span class="badge mute">対話 {{ L.thread_count }}</span>{% endif %}
+                    </span>
+                </div>
+                {% if L.poem %}
+                <div class="lc-poem">{{ L.poem }}</div>
+                {% else %}
+                <div class="lc-poem empty">（テキストなし{% if L.has_photo %}・写真の便り{% elif L.has_voice %}・声の便り{% endif %}）</div>
+                {% endif %}
+                <div class="lc-meta">
+                    <span>投函 {{ L.sent_date[:10] }}</span>
+                    {% if L.arrive_label %}<span>届け先 {{ L.arrive_label }}</span>{% endif %}
+                    {% if L.emos %}<span>{{ L.emos | join('・') }}</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="trend-note">最新50件まで表示。便りをクリックすると全文と対話が見られます。</p>
+        {% else %}
+        <p class="trend-note">まだ便りはありません。</p>
+        {% endif %}
+        {% endif %}
+
+        <div class="section-title">ユーザー一覧</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>ユーザー名</th>
+                    <th>メールアドレス</th>
+                    <th>投函数（受信 / 配送中）</th>
+                    <th>アカウント作成日</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr id="user-row-{{ u.id }}">
+                    <td><span class="username">{{ u.username }}</span></td>
+                    <td>
+                        {% if u.email %}
+                            {{ u.email }}
+                        {% else %}
+                            <span class="email-none">未登録</span>
+                        {% endif %}
+                    </td>
+                    <td class="count-cell">
+                        {% if u.stats.total %}
+                            <div class="count-main">{{ u.stats.total }} 通</div>
+                            <div class="count-break">
+                                <span class="recv">受信 {{ u.stats.received }}</span> ·
+                                <span class="tran">配送中 {{ u.stats.transit }}</span>{% if u.stats.waiting_weather %} · <span class="wx">天気待ち {{ u.stats.waiting_weather }}</span>{% endif %}
+                            </div>
+                        {% else %}
+                            <span class="count-zero">0 通</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="date">{{ u.created[:19].replace('T', ' ') }}</span></td>
+                    <td>
+                        {% if u.username != 'admin' %}
+                            <button class="btn-delete" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')">削除</button>
+                        {% else %}
+                            <span class="protected">保護対象 (管理者)</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()">
+        <div class="modal" id="modalBody"></div>
+    </div>
+
+    <script>
+        // 棒グラフの高さを data-h から反映（インラインstyleにロジックを置かないため）
+        document.querySelectorAll('.trend-bar[data-h]').forEach(function(el){
+            el.style.height = el.getAttribute('data-h') + '%';
+        });
+
+        const esc = s => (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+        function closeModal(){ document.getElementById('modalBack').classList.remove('on'); }
+
+        async function openLetter(id){
+            const back = document.getElementById('modalBack');
+            const body = document.getElementById('modalBody');
+            body.innerHTML = '<div class="m-sub">読み込み中…</div>';
+            back.classList.add('on');
+            try {
+                const res = await fetch('/api/admin/letters/' + id);
+                const d = await res.json();
+                if(!res.ok){ body.innerHTML = '<div class="m-sub">'+esc(d.error||'読み込めませんでした')+'</div><button class="modal-close" onclick="closeModal()">閉じる</button>'; return; }
+                let h = '<h2>' + esc(d.username) + ' さんの便り</h2>';
+                h += '<div class="m-sub">投函 ' + esc((d.sent_date||'').slice(0,10)) + ' ・ 届け先 ' + esc(d.arrive_label||'—') + ' ・ ' + (d.opened?'開封済み':'未開封') + '</div>';
+                if(d.poem){ h += '<div class="m-poem">' + esc(d.poem) + '</div>'; }
+                else { h += '<div class="m-poem" style="color:#a8a29e;font-style:italic">（テキストなし' + (d.has_photo?'・写真の便り':(d.has_voice?'・声の便り':'')) + '）</div>'; }
+                if(d.emos && d.emos.length){ h += '<div class="m-sub">感情タグ: ' + esc(d.emos.join('・')) + '</div>'; }
+                const t = d.thread || [];
+                if(t.length){
+                    h += '<div class="m-section-lbl">過去の自分と今の自分の対話</div>';
+                    t.forEach(m => {
+                        const who = m.who==='now' ? '今のあなた' : (m.who==='ai' ? '過去のあなたからの問い' : '過去のあなた');
+                        const when = m.created_at ? ' · ' + esc(m.created_at.slice(0,16).replace('T',' ')) : '';
+                        h += '<div class="m-msg ' + esc(m.who) + '"><div class="m-who">' + who + when + '</div><div class="m-bubble">' + esc(m.text) + '</div></div>';
+                    });
+                }
+                h += '<button class="modal-close" onclick="closeModal()">閉じる</button>';
+                body.innerHTML = h;
+            } catch(e){
+                body.innerHTML = '<div class="m-sub">通信エラー</div><button class="modal-close" onclick="closeModal()">閉じる</button>';
+            }
+        }
+        document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+        function deleteUser(uid, username) {
+            if (!confirm(`ユーザー「${username}」を完全に削除しますか？\n\n※このユーザーに関連するすべての便り、下書き、対話スレッドのデータも同時に物理削除されます。この操作は取り消せません。`)) {
+                return;
+            }
+            
+            fetch(`/api/admin/users/${uid}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => { throw new Error(err.error || '削除に失敗しました。'); });
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (data.ok) {
+                    alert(`ユーザー「${username}」とその関連データを正常に削除しました。`);
+                    const row = document.getElementById(`user-row-${uid}`);
+                    if (row) {
+                        row.style.transition = 'all 0.3s ease';
+                        row.style.opacity = '0';
+                        setTimeout(() => row.remove(), 300);
+                    }
+                }
+            })
+            .catch(err => {
+                alert(`エラー: ${err.message}`);
+            });
+        }
+    </script>
+</body>
+</html>
