@@ -1161,6 +1161,18 @@ def healthz_dbdiag():
         c.close()
     except Exception as e:
         out["connect_error"] = f"{type(e).__name__}: {e}"
+    # 外部HTTP疎通テスト（位置情報・天気が失敗する原因の切り分け）
+    out["net"] = {"NETWORK_ENABLED": NETWORK_ENABLED}
+    import urllib.request as _u
+    for name, url, to in (("ip-api(http)", "http://ip-api.com/json/?fields=status,city", 10),
+                          ("open-meteo(https)", "https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.76&current_weather=true", 10)):
+        t0 = time.time()
+        try:
+            with _u.urlopen(url, timeout=to) as r:
+                body = r.read(200).decode("utf-8", "replace")
+            out["net"][name] = {"ok": True, "sec": round(time.time() - t0, 2), "head": body[:120]}
+        except Exception as e:
+            out["net"][name] = {"ok": False, "sec": round(time.time() - t0, 2), "err": f"{type(e).__name__}: {e}"}
     return jsonify(out)
 
 
