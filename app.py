@@ -1041,15 +1041,29 @@ def start_notifier(interval=None):
         except ValueError:
             interval = 30
 
+    try:
+        backup_hours = float(os.environ.get("TAYORI_BACKUP_INTERVAL_HOURS", "24"))
+    except ValueError:
+        backup_hours = 24.0
+
     def loop():
+        last_backup = 0.0  # 0 のまま＝設定があれば起動後ほどなく1回目を取る
         while True:
             _check_weather_events()   # 天気待ち伏せ便りの判定を先に
             _check_and_notify()       # 届いた便りのメール通知
+            # オフサイト自動バックアップ（R2/S3設定があるときだけ・日次）
+            try:
+                if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:
+                    if _run_backup_to_s3():
+                        last_backup = time.time()
+            except Exception as e:
+                print(f"[たより] バックアップ判定でエラー（継続）: {e}", flush=True)
             time.sleep(interval)
 
     t = threading.Thread(target=loop, daemon=True)
     t.start()
-    print(f"[たより] 便りのチェックを開始しました（{interval}秒ごと · 天気待ち伏せ＋メール通知）")
+    _bk = "・オフサイトBK有効" if _backup_s3_config() else ""
+    print(f"[たより] 便りのチェックを開始しました（{interval}秒ごと · 天気待ち伏せ＋メール通知{_bk}）")
 
 
 # ---------------------------------------------------------------- 天気 API
@@ -1624,6 +1638,61 @@ def _make_db_snapshot(dest_path):
     finally:
         dst.close()
         src.close()
+
+
+def _backup_s3_config():
+    """オフサイト自動バックアップの設定（Cloudflare R2 / S3 互換）を環境変数から読む。
+    4つ揃って初めて有効。未設定なら None（＝自動バックアップは行わない）。"""
+    ep = os.environ.get("TAYORI_BACKUP_S3_ENDPOINT")
+    bk = os.environ.get("TAYORI_BACKUP_S3_BUCKET")
+    ak = os.environ.get("TAYORI_BACKUP_S3_KEY")
+    sk = os.environ.get("TAYORI_BACKUP_S3_SECRET")
+    if ep and bk and ak and sk:
+        return {"endpoint": ep, "bucket": bk, "key": ak, "secret": sk}
+    return None
+
+
+def _run_backup_to_s3():
+    """整合性コピー→gzip→R2/S3 へアップロード。古い分は最新 KEEP 個だけ残して削除。
+    設定が無ければ何もしない。失敗してもアプリ本体には影響させない（例外は飲み込む）。"""
+    cfg = _backup_s3_config()
+    if not cfg:
+        return False
+    try:
+        import gzip
+        import boto3
+    except ImportError:
+        print("[たより] バックアップ: boto3 が無いためスキップ（requirements.txt 確認）", flush=True)
+        return False
+    fd, tmp = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        _make_db_snapshot(tmp)
+        with open(tmp, "rb") as fh:
+            blob = gzip.compress(fh.read())
+        key = "backups/tayori-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".db.gz"
+        s3 = boto3.client("s3", endpoint_url=cfg["endpoint"],
+                          aws_access_key_id=cfg["key"], aws_secret_access_key=cfg["secret"])
+        s3.put_object(Bucket=cfg["bucket"], Key=key, Body=blob)
+        print(f"[たより] バックアップ完了 → {key}（{len(blob)} bytes）", flush=True)
+        # 古いバックアップを掃除（最新 KEEP 個だけ残す）
+        try:
+            keep = int(os.environ.get("TAYORI_BACKUP_KEEP", "14"))
+        except ValueError:
+            keep = 14
+        objs = s3.list_objects_v2(Bucket=cfg["bucket"], Prefix="backups/").get("Contents", [])
+        objs.sort(key=lambda o: o["Key"])
+        for o in (objs[:-keep] if len(objs) > keep else []):
+            s3.delete_object(Bucket=cfg["bucket"], Key=o["Key"])
+        return True
+    except Exception as e:
+        print(f"[たより] バックアップ失敗（本体は継続）: {e}", flush=True)
+        return False
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 @app.route("/admin.welcometotayori/backup")
