@@ -729,7 +729,11 @@ def _issue_email_verification(db, user_id, email, username):
         "心当たりがなければ、このメールは無視してください。\n"
         "— たより\n"
     )
-    return send_email(email, subject, body)
+    # 送信はバックグラウンドで行う。SMTP(最大15秒)を登録レスポンスの中で待つと、
+    # メール付き登録が遅くなり、Resendが詰まると登録自体が失敗（500）に見えてしまう。
+    # トークンは既に保存済みなのでリンクは有効。送信成否はログに出る。
+    threading.Thread(target=send_email, args=(email, subject, body), daemon=True).start()
+    return True
 
 
 def _landing_page(title, message, ok=True):
@@ -798,7 +802,9 @@ def _fetch_weather_open_meteo(lat, lon):
     import urllib.request
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
     req = urllib.request.Request(url, headers={"User-Agent": "tayori/1.0"})
-    with urllib.request.urlopen(req, timeout=3) as response:
+    # timeout は余裕をもって8秒。Render等ではワーカー起動直後のコールド初回接続
+    # （DNS＋TLSハンドシェイク）が3秒に間に合わず失敗していたため緩和。
+    with urllib.request.urlopen(req, timeout=8) as response:
         data = json.loads(response.read().decode())
     cw = data.get("current_weather", {})
     code = cw.get("weathercode", 0)
@@ -822,7 +828,7 @@ def _fetch_weather_owm(lat, lon, api_key):
     url = (f"https://api.openweathermap.org/data/2.5/weather"
            f"?lat={lat}&lon={lon}&units=metric&appid={api_key}")
     req = urllib.request.Request(url, headers={"User-Agent": "tayori/1.0"})
-    with urllib.request.urlopen(req, timeout=4) as response:
+    with urllib.request.urlopen(req, timeout=8) as response:
         data = json.loads(response.read().decode())
     temp = (data.get("main") or {}).get("temp", 20.0)
     wid = ((data.get("weather") or [{}])[0]).get("id", 800)
@@ -1116,64 +1122,6 @@ def api_locate():
                      (str(lat), str(lon), uid()))
     get_db().commit()
     return jsonify(ok=True)
-
-
-@app.route("/healthz/dbdiag")
-def healthz_dbdiag():
-    """【一時診断】本番DBの健全性を返す。登録(書き込み)が500になる原因を特定するため、
-    ディスク空き容量・journalモード・残存ジャーナルファイル・実テスト書き込みを調べる。
-    機微情報は含まない。原因特定後に削除する。"""
-    out = {"db_path": DB_PATH}
-    # ディスク空き容量
-    try:
-        st = os.statvfs(os.path.dirname(os.path.abspath(DB_PATH)))
-        total = st.f_blocks * st.f_frsize
-        free = st.f_bavail * st.f_frsize
-        out["disk_total_mb"] = round(total / 1e6, 1)
-        out["disk_free_mb"] = round(free / 1e6, 1)
-        out["disk_used_pct"] = round((1 - free / total) * 100, 1) if total else None
-    except Exception as e:
-        out["disk_error"] = str(e)
-    # 残存ジャーナル/WALファイル
-    out["files"] = {}
-    for ext in ("", "-wal", "-shm", "-journal"):
-        p = DB_PATH + ext
-        try:
-            out["files"][ext or "(main)"] = round(os.path.getsize(p) / 1e6, 3)
-        except OSError:
-            out["files"][ext or "(main)"] = None
-    # journalモード ＋ 実テスト書き込み（短いbusy_timeoutで素早く結果を出す）
-    try:
-        c = sqlite3.connect(DB_PATH, timeout=3)
-        out["journal_mode"] = (c.execute("PRAGMA journal_mode").fetchone() or [None])[0]
-        out["integrity"] = (c.execute("PRAGMA quick_check").fetchone() or [None])[0]
-        t0 = time.time()
-        try:
-            c.execute("CREATE TABLE IF NOT EXISTS _diag_write(x INTEGER)")
-            c.execute("INSERT INTO _diag_write(x) VALUES(1)")
-            c.commit()
-            c.execute("DELETE FROM _diag_write")
-            c.commit()
-            out["test_write"] = "OK"
-        except Exception as e:
-            out["test_write"] = f"FAIL: {type(e).__name__}: {e}"
-        out["test_write_sec"] = round(time.time() - t0, 2)
-        c.close()
-    except Exception as e:
-        out["connect_error"] = f"{type(e).__name__}: {e}"
-    # 外部HTTP疎通テスト（位置情報・天気が失敗する原因の切り分け）
-    out["net"] = {"NETWORK_ENABLED": NETWORK_ENABLED}
-    import urllib.request as _u
-    for name, url, to in (("ip-api(http)", "http://ip-api.com/json/?fields=status,city", 10),
-                          ("open-meteo(https)", "https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.76&current_weather=true", 10)):
-        t0 = time.time()
-        try:
-            with _u.urlopen(url, timeout=to) as r:
-                body = r.read(200).decode("utf-8", "replace")
-            out["net"][name] = {"ok": True, "sec": round(time.time() - t0, 2), "head": body[:120]}
-        except Exception as e:
-            out["net"][name] = {"ok": False, "sec": round(time.time() - t0, 2), "err": f"{type(e).__name__}: {e}"}
-    return jsonify(out)
 
 
 # ---------------------------------------------------------------- pages
