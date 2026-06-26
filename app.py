@@ -18,7 +18,7 @@ import sqlite3
 import secrets
 import threading
 from email.mime.text import MIMEText
-from email.utils import formataddr
+from email.utils import formataddr, parseaddr
 from functools import wraps
 from datetime import datetime, date, timedelta
 
@@ -594,7 +594,11 @@ def send_email(to_addr, subject, body):
     try:
         msg = MIMEText(body, "plain", "utf-8")
         msg["Subject"] = subject
-        msg["From"] = cfg["from"]
+        # From の表示名（例「たより」）が日本語だと、生文字列のままでは
+        # RFC2047エンコードされず、Resend等に拒否されたり文字化けする。
+        # parseaddr で「表示名」「アドレス」に分け、formataddr で正しく再構成する。
+        from_name, from_addr = parseaddr(cfg["from"])
+        msg["From"] = formataddr((from_name, from_addr)) if from_addr else cfg["from"]
         msg["To"] = to_addr
         ctx = ssl.create_default_context()
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=15) as s:
