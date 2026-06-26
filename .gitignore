@@ -9,6 +9,7 @@ venv/
 
 # 秘密・データ（GitHubに絶対上げない）
 .secret_key
+.env
 *.db
 
 # ローカルのツール設定

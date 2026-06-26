@@ -13,7 +13,7 @@
             padding: 40px 20px;
         }
         .container {
-            max-width: 900px;
+            max-width: 1080px;
             margin: 0 auto;
             background: #ffffff;
             padding: 32px;
@@ -116,10 +116,31 @@
         /* ---- 統計サマリー ---- */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
-            margin: 8px 0 28px;
+            margin: 8px 0 20px;
         }
+        .stat-sub {
+            font-size: 11px;
+            color: #a8a29e;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        /* 利用機能の内訳（小さめの数値タイル） */
+        .breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 4px 0 30px;
+        }
+        .bd-card {
+            background: #fafaf9;
+            border: 1px solid #e7e5e4;
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        .bd-num { font-size: 20px; font-weight: 600; color: #1c1917; font-variant-numeric: tabular-nums; }
+        .bd-lbl { font-size: 11px; color: #78716c; margin-top: 3px; }
         .stat-card {
             background: #fafaf9;
             border: 1px solid #e7e5e4;
@@ -225,6 +246,19 @@
         .count-break .tran { color: #b5543a; }
         .count-break .wx { color: #8a7d9b; }
         .count-zero { color: #d6cdbe; }
+
+        /* 横に広い表を、はみ出したら横スクロールできるように */
+        .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-scroll table { min-width: 920px; }
+        td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .pill {
+            display: inline-block; font-size: 11px; padding: 2px 8px;
+            border-radius: 10px; font-weight: 500; white-space: nowrap;
+        }
+        .pill.ok   { background: #e6efea; color: #4c7a6b; }
+        .pill.warn { background: #fbeae6; color: #b5543a; }
+        .pill.off  { background: #f5f5f4; color: #a8a29e; }
+        .sub-inline { color: #a8a29e; font-size: 12px; }
 
         @media (max-width: 680px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -404,10 +438,12 @@
         </div>
         <p class="subtitle">アプリケーションに登録されているユーザーアカウント、および関連する全てのデータ（便り・下書き・対話）を一元管理・閲覧・削除できます。</p>
 
+        <div class="section-title">全体サマリー</div>
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-num">{{ totals.users }}</div>
                 <div class="stat-lbl">登録ユーザー</div>
+                <div class="stat-sub">1人あたり便り {{ totals.avg_letters }} 通</div>
             </div>
             <div class="stat-card">
                 <div class="stat-num">{{ totals.letters }}</div>
@@ -420,11 +456,39 @@
             <div class="stat-card accent">
                 <div class="stat-num">{{ totals.transit }}</div>
                 <div class="stat-lbl">配送中</div>
+                <div class="stat-sub">うち天気待ち {{ totals.waiting_weather }}</div>
+            </div>
+            <div class="stat-card teal">
+                <div class="stat-num">{{ totals.open_rate }}%</div>
+                <div class="stat-lbl">開封率</div>
+                <div class="stat-sub">{{ totals.opened }} / {{ totals.received }} 通</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-num">{{ totals.dialogues }}</div>
+                <div class="stat-lbl">対話メッセージ</div>
+                <div class="stat-sub">AI問い {{ totals.ai }} ・ 返信 {{ totals.reply }}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num">{{ totals.waiting_weather }}</div>
-                <div class="stat-lbl">天気待ち</div>
+                <div class="stat-num">{{ totals.email_rate }}%</div>
+                <div class="stat-lbl">メール登録率</div>
+                <div class="stat-sub">{{ totals.emails }} 人（認証 {{ totals.verified }}）</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-num">{{ totals.onb_rate }}%</div>
+                <div class="stat-lbl">オンボード回答率</div>
+                <div class="stat-sub">{{ totals.onboarded }} / {{ totals.users }} 人が回答</div>
+            </div>
+        </div>
+
+        <div class="section-title">利用機能の内訳</div>
+        <div class="breakdown">
+            <div class="bd-card"><div class="bd-num">{{ totals.photo }}</div><div class="bd-lbl">写真つきの便り</div></div>
+            <div class="bd-card"><div class="bd-num">{{ totals.voice }}</div><div class="bd-lbl">声の便り</div></div>
+            <div class="bd-card"><div class="bd-num">{{ totals.weather }}</div><div class="bd-lbl">天気待ち伏せの便り</div></div>
+            <div class="bd-card"><div class="bd-num">{{ totals.reply }}</div><div class="bd-lbl">返信から生まれた便り</div></div>
+            <div class="bd-card"><div class="bd-num">{{ totals.ai }}</div><div class="bd-lbl">AIへの問いかけ</div></div>
+            <div class="bd-card"><div class="bd-num">{{ totals.located }}</div><div class="bd-lbl">位置情報を許可した人</div></div>
+            <div class="bd-card"><div class="bd-num">{{ totals.notify }}</div><div class="bd-lbl">通知ONの人</div></div>
         </div>
 
         <div class="trend">
@@ -484,14 +548,20 @@
         {% endif %}
         {% endif %}
 
-        <div class="section-title">ユーザー一覧</div>
-        
+        <div class="section-title">ユーザー一覧（行をクリックでも詳細）</div>
+
+        <div class="table-scroll">
         <table>
             <thead>
                 <tr>
                     <th>ユーザー名</th>
-                    <th>メールアドレス</th>
+                    <th>メール</th>
                     <th>投函数（受信 / 配送中）</th>
+                    <th class="num">開封</th>
+                    <th class="num">対話（AI / 返信）</th>
+                    <th class="num">向き合い</th>
+                    <th>オンボード</th>
+                    <th>位置 / 通知</th>
                     <th>アカウント作成日</th>
                     <th>操作</th>
                 </tr>
@@ -503,6 +573,7 @@
                     <td>
                         {% if u.email %}
                             {{ u.email }}
+                            {% if u.email_verified %}<span class="pill ok">認証済</span>{% else %}<span class="pill warn">未認証</span>{% endif %}
                         {% else %}
                             <span class="email-none">未登録</span>
                         {% endif %}
@@ -518,6 +589,23 @@
                             <span class="count-zero">0 通</span>
                         {% endif %}
                     </td>
+                    <td class="num">{{ u.stats.opened }}</td>
+                    <td class="num">
+                        {{ u.stats.dialogues }}
+                        {% if u.stats.dialogues %}<div class="sub-inline">{{ u.stats.ai }} / {{ u.stats.replies }}</div>{% endif %}
+                    </td>
+                    <td class="num">{{ u.stats.reflect }}</td>
+                    <td>
+                        {% if u.stats.onb_answered %}
+                            <span class="pill {% if u.onboarded %}ok{% else %}warn{% endif %}">{{ u.stats.onb_answered }} / {{ onb_total }}</span>
+                        {% else %}
+                            <span class="pill off">未回答</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.has_location %}<span class="pill ok">位置</span>{% else %}<span class="pill off">位置—</span>{% endif %}
+                        {% if u.notify_enabled %}<span class="pill ok">通知</span>{% else %}<span class="pill off">通知—</span>{% endif %}
+                    </td>
                     <td><span class="date">{{ u.created[:19].replace('T', ' ') }}</span></td>
                     <td>
                         {% if u.username != 'admin' %}
@@ -530,6 +618,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     </div>
 
     <div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()">

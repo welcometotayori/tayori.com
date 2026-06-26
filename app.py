@@ -36,7 +36,50 @@ except AttributeError:
     pass  # Windows には tzset が無い（その場合は OS の TZ 設定に従う）
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(APP_DIR, "tayori.db")
+# DBの保存先。デプロイ時はコンテナのファイルシステムが揮発するため、
+# Render等では「永続ディスク」をマウントし、その場所を TAYORI_DB_PATH で指す。
+# 例: Renderで /var/data に永続ディスクを付け、TAYORI_DB_PATH=/var/data/tayori.db
+# これでデプロイ（再ビルド）してもユーザーが消えない。未設定ならローカルの tayori.db。
+DB_PATH = os.environ.get("TAYORI_DB_PATH") or os.path.join(APP_DIR, "tayori.db")
+# 保存先フォルダが無ければ作る（永続ディスクのサブパス指定にも対応）
+_db_dir = os.path.dirname(os.path.abspath(DB_PATH))
+try:
+    os.makedirs(_db_dir, exist_ok=True)
+except OSError as _e:
+    print(f"[たより] DB保存先フォルダを作成できません: {_db_dir} ({_e})", flush=True)
+# デプロイ時の切り分け用：実際に使うDBパスと、そのフォルダが書き込み可能かをログに出す。
+print(f"[たより] DB_PATH = {DB_PATH} / フォルダ書込可={os.access(_db_dir, os.W_OK)} "
+      f"（TAYORI_DB_PATH={'未設定' if not os.environ.get('TAYORI_DB_PATH') else '設定済'}）", flush=True)
+
+
+def _load_dotenv():
+    """同じフォルダの .env を読み込んで os.environ に流し込む（外部ライブラリ不要）。
+    これが無いと、鍵は『export したのと同じターミナルで起動』しないと効かず、
+    ダブルクリック起動や別ウィンドウ起動だと毎回スルーされて定型文に落ちる。
+    すでに環境変数で設定済みのキーは上書きしない（明示の export を尊重）。"""
+    path = os.path.join(APP_DIR, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                # 空行・コメント・KEY=VALUE 以外は無視
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key = key.strip()
+                # `export KEY=...` 形式も許容する
+                if key.startswith("export "):
+                    key = key[len("export "):].strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except OSError:
+        pass
+
+
+_load_dotenv()
 
 app = Flask(__name__)
 
@@ -150,6 +193,7 @@ def init_db():
         "ALTER TABLE letters ADD COLUMN opened_at TEXT",                # 初めて開封した日時（届いた時の自分の記録）
         "ALTER TABLE letters ADD COLUMN open_mood TEXT",                # 開封時の気分タグ
         "ALTER TABLE letters ADD COLUMN reflect_count INTEGER DEFAULT 0", # 何度この便りと向き合ったか
+        "ALTER TABLE letters ADD COLUMN stamp TEXT",                    # 封をする時に選んだ切手（儀式の記録）
         "ALTER TABLE thread ADD COLUMN created_at TEXT",                # スレッド発言の正確な日時
         "ALTER TABLE thread ADD COLUMN kind TEXT",                      # 発言種別: reply/question/ai
         # --- メール確認・配信停止・再試行制御 ---
@@ -377,7 +421,7 @@ def api_register():
     if not USERNAME_RE.match(username):
         return jsonify(error="名前は2〜24文字で。漢字・かな・英数字と _ . - が使えます。"), 400
     if len(password) < 8:
-        return jsonify(error="合言葉は8文字以上にしてください。"), 400
+        return jsonify(error="パスワードは8文字以上にしてください。"), 400
     if email and not EMAIL_RE.match(email):
         return jsonify(error="メールアドレスの形式が正しくありません。"), 400
     db = get_db()
@@ -408,7 +452,7 @@ def api_login():
     password = data.get("password") or ""
     row = get_db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if not row or not check_password_hash(row["pw_hash"], password):
-        return jsonify(error="名前か合言葉が違います。"), 401
+        return jsonify(error="名前かパスワードが違います。"), 401
     session.permanent = True
     session["uid"] = row["id"]
     keys = row.keys()
@@ -724,6 +768,45 @@ def fetch_weather(lat, lon):
 
 
 
+def _client_ip():
+    """利用者の実IPを取る。Render等のリバースプロキシ下では remote_addr はプロキシのIPに
+    なるため、X-Forwarded-For の先頭（＝最初に到達した利用者のIP）を優先する。"""
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        # "client, proxy1, proxy2" の形。先頭が本来の利用者IP。
+        ip = xff.split(",")[0].strip()
+        if ip:
+            return ip
+    return request.remote_addr or ""
+
+
+def _ip_geolocate(client_ip=None):
+    """ブラウザの位置情報が使えない時の保険。利用者のIPからおおよその緯度経度を得る。
+    無料・キー不要の ip-api.com を使う。client_ip を渡すとそのIPの地域を、渡さなければ
+    リクエスト元（=サーバ自身）の地域を返す。本番はサーバがSingapore等のデータセンターに
+    なるため、必ず利用者IPを渡すこと。精度は市区町村レベル。失敗時 None。"""
+    if not NETWORK_ENABLED:
+        return None
+    import urllib.request
+    # プライベートIP/ループバックは ip-api で引けない（ローカル開発時）。その場合は
+    # IP無指定でフォールバック＝外向きIP＝開発者の地域、で従来通り動く。
+    def _is_public(ip):
+        return ip and not (ip.startswith(("10.", "127.", "192.168.", "172.16.",
+                                          "172.17.", "172.18.", "172.19.", "172.2",
+                                          "172.30.", "172.31.", "::1", "fc", "fd"))
+                           or ip == "localhost")
+    target = client_ip if _is_public(client_ip) else ""
+    try:
+        url = f"http://ip-api.com/json/{target}?fields=status,lat,lon,city"
+        with urllib.request.urlopen(url, timeout=8) as r:
+            d = json.loads(r.read().decode())
+        if d.get("status") == "success" and d.get("lat") is not None:
+            return d["lat"], d["lon"], d.get("city")
+    except Exception as e:
+        print(f"[IP位置推定失敗] {e}", flush=True)
+    return None
+
+
 def _weather_matches(event, wx):
     """便りの待ち伏せ条件 event を、今の天気 wx が満たすか。"""
     if not wx:
@@ -881,8 +964,17 @@ def api_weather():
     """現在地の緯度経度から Open-Meteo で天気を取得（無料・APIキー不要）。
     ログイン中なら、天気待ち伏せ便りの判定用に位置を記録する。"""
     lat, lon = request.args.get("lat"), request.args.get("lon")
+    approx, city = False, None
+
+    # 座標が無い（＝ブラウザの位置情報が使えない）ときは、サーバの公開IPから推定する。
     if not lat or not lon:
-        return jsonify(error="位置情報がありません"), 400
+        if not NETWORK_ENABLED:
+            return jsonify(ok=False, disabled=True, error="天気機能は現在オフです")
+        ip = _ip_geolocate(_client_ip())
+        if not ip:
+            return jsonify(ok=False, error="位置を推定できませんでした")
+        lat, lon, city = str(ip[0]), str(ip[1]), ip[2]
+        approx = True
 
     # ログイン中ユーザーの最終位置を保存（天気待ち伏せに使う）
     if session.get("uid"):
@@ -900,7 +992,8 @@ def api_weather():
     wx = fetch_weather(lat, lon)
     if not wx:
         return jsonify(ok=False, error="天気が取得できませんでした"), 500
-    return jsonify(ok=True, temp=wx["temp"], condition=wx["condition"], temp_tag=wx["tag"])
+    return jsonify(ok=True, temp=wx["temp"], condition=wx["condition"], temp_tag=wx["tag"],
+                   approx=approx, city=city)
 
 
 @app.route("/api/locate", methods=["POST"])
@@ -941,6 +1034,23 @@ def api_letters():
             received.append(letter_to_dict(r))
         else:
             in_transit.append(sealed_meta(r))
+
+    # 受信便りの並び：
+    #  ① まだ開けていない「新しく届いた便り」を一番上に（到着が新しいものほど上）。
+    #  ② 開封済みは「最近ふれた順」（開封時刻と対話の最新メッセージの新しい方）で続ける。
+    # これで、開けるようになった新着がいつも最上部に来る。
+    def _sort_key(d):
+        new = not d.get("opened")   # 届いたがまだ開けていない＝新着
+        if new:
+            t = d.get("arrive_at") or ((d.get("arrive_date") or "") + "T00:00:00")
+        else:
+            t = d.get("opened_at") or ""
+            th = d.get("thread") or []
+            if th:
+                t = max(t, th[-1].get("created_at") or "")
+            t = t or (d.get("sent_date") or "")
+        return (1 if new else 0, t)
+    received.sort(key=_sort_key, reverse=True)
     return jsonify(received=received, in_transit=in_transit)
 
 
@@ -969,14 +1079,15 @@ def api_create_letter():
 
     lid = secrets.token_hex(8)
     seal_env = json.dumps(data.get("seal_env")) if data.get("seal_env") else None
+    stamp = (data.get("stamp") or "")[:16] or None  # 封をする時に選んだ切手
 
     get_db().execute(
         """INSERT INTO letters
-           (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env)
-           VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?)""",
+           (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp)
+           VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?)""",
         (lid, uid(), poem, photo, voice, date.today().isoformat(), arrive_date, arrive_at,
          data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
-         1 if data.get("from_reply") else 0, weather_event, seal_env),
+         1 if data.get("from_reply") else 0, weather_event, seal_env, stamp),
     )
     get_db().commit()
     return jsonify(id=lid, ok=True)
@@ -1091,9 +1202,10 @@ def _weather_context_text(seal_env, open_env):
     return ""
 
 
-def _profile_context_text(user_id, limit=8):
+def _profile_context_text(user_id, limit=12):
     """30の質問の回答から、AIに渡す事前知識テキストを作る。
-    全部は渡さず、答えのあるものを最大 limit 件まで。"""
+    オンボーディングは10問前後に答えてもらう設計なので、答えたものは原則すべて
+    （最大 limit 件）渡し、『その人の原体験・初期状態』をAIの前提として効かせる。"""
     row = get_db().execute("SELECT onboarding FROM users WHERE id=?", (user_id,)).fetchone()
     answers = _load_onboarding(row["onboarding"] if row else None)
     if not answers:
@@ -1107,37 +1219,82 @@ def _profile_context_text(user_id, limit=8):
     return "\n".join(lines)
 
 
-def _gemini_question(prompt, api_key, _retries=2):
+def _gemini_question(prompt, api_key):
     """Google Gemini（Google AI Studio）で問いを1つ生成する。
     追加ライブラリ不要：標準の urllib.request で REST API を直接叩く。
     無料枠（クレカ登録不要）で使えるのが利点。失敗時は例外を投げる（呼び出し側でフォールバック）。
-    モデルは環境変数 TAYORI_GEMINI_MODEL で変更可（既定 gemini-1.5-flash）。
+    モデルは環境変数 TAYORI_GEMINI_MODEL で変更可（既定 gemini-2.5-flash-lite）。
 
-    無料枠は「毎分のリクエスト数」に上限があり、続けて押すと 429(Too Many Requests) が返る。
-    その場合だけ、少し待って数回まで自動リトライする（毎分の上限はすぐ回復するため）。"""
+    無料枠は 429(毎分の上限) と 503(混雑) が出やすい。どちらも一時的なので、
+    少し待って再試行し、それでもダメなら『空いている別モデル』に自動で切り替える
+    （flash 系が混雑していても lite 系は通ることが多い）。"""
     import urllib.request
     import urllib.error
-    model = os.environ.get("TAYORI_GEMINI_MODEL", "gemini-1.5-flash")
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{model}:generateContent?key={api_key}")
-    body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
-    req = urllib.request.Request(url, data=body,
-                                 headers={"Content-Type": "application/json"}, method="POST")
+    # 鍵にプレースホルダ（日本語）や非ASCIIが混じっていると、ヘッダー生成時に
+    # 暗号のような 'ascii' codec エラーになる。先に弾いて、原因が分かる例外にする。
+    if ("…" in api_key or "..." in api_key or "（" in api_key
+            or "ここ" in api_key or "鍵" in api_key):
+        raise ValueError(".env の GEMINI_API_KEY が例文（プレースホルダ）のままです。"
+                         "本物の鍵に置き換えてください。")
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 429 and _retries > 0:
-            print("[Gemini] 毎分の無料枠に当たりました。少し待って再試行します…", flush=True)
-            time.sleep(5)
-            return _gemini_question(prompt, api_key, _retries=_retries - 1)
-        raise
-    cands = data.get("candidates") or []
-    if not cands:
-        return None
-    parts = (cands[0].get("content") or {}).get("parts") or []
-    text = "".join(p.get("text", "") for p in parts).strip()
-    return text or None
+        api_key.encode("ascii")
+    except UnicodeEncodeError:
+        raise ValueError("GEMINI_API_KEY に日本語など非ASCII文字が含まれています。"
+                         "鍵は英数字（AIzaSy… または AQ.…）だけです。コピーし直してください。")
+
+    # 試すモデルの順番：環境変数の指定（あれば最優先）→ 無料枠で空きやすい控え。
+    preferred = os.environ.get("TAYORI_GEMINI_MODEL")
+    fallbacks = ["gemini-2.5-flash-lite", "gemini-flash-lite-latest",
+                 "gemini-2.0-flash-lite", "gemini-2.5-flash"]
+    models = ([preferred] if preferred else []) + [m for m in fallbacks if m != preferred]
+
+    # 温度＝意外性のつまみ。高すぎると本人の言葉から離れて「突拍子のない」問いになる。
+    # lite モデルは特に高温で暴投しやすいので、既定は 0.8 に抑える（本人の詩に根ざしつつ
+    # 少しだけ意外性が出る塩梅）。もっと遊ばせたい時は TAYORI_GEMINI_TEMP で上げられる。
+    try:
+        temperature = float(os.environ.get("TAYORI_GEMINI_TEMP", "0.8"))
+    except ValueError:
+        temperature = 0.8
+    body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature, "topP": 0.9},
+    }).encode("utf-8")
+    last_err = None
+    for model in models:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent")
+        for attempt in range(2):  # 同じモデルで最大2回（混雑時の取りこぼし対策）
+            # 鍵は URL の ?key= ではなく X-goog-api-key ヘッダーで渡す。
+            # 新形式の鍵（AQ.…）は ?key= だと 401(ACCESS_TOKEN_TYPE_UNSUPPORTED) になる。
+            # 旧形式（AIzaSy…）もヘッダーで通るので、これで両対応。
+            req = urllib.request.Request(
+                url, data=body, method="POST",
+                headers={"Content-Type": "application/json", "X-goog-api-key": api_key})
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode())
+                cands = data.get("candidates") or []
+                parts = (cands[0].get("content") or {}).get("parts") or [] if cands else []
+                text = "".join(p.get("text", "") for p in parts).strip()
+                if text:
+                    return text
+                break  # 応答は来たが本文が空 → 次のモデルへ
+            except urllib.error.HTTPError as e:
+                last_err = e
+                # 400/401/403 は鍵やリクエスト自体の問題。モデルを変えても直らないので即中断。
+                if e.code in (400, 401, 403):
+                    raise
+                # 429(上限)・503(混雑) は一時的。1回だけ短く待って再試行する。
+                if e.code in (429, 503) and attempt == 0:
+                    print(f"[Gemini] {model} が {e.code}。少し待って再試行します…", flush=True)
+                    time.sleep(2)
+                    continue
+                # それ以外、または再試行済み → 次のモデルへ切り替え。
+                print(f"[Gemini] {model} が {e.code}。別モデルに切り替えます…", flush=True)
+                break
+    if last_err:
+        raise last_err
+    return None
 
 
 def _claude_question(prompt, api_key):
@@ -1177,15 +1334,34 @@ def api_ask_past_self(lid):
         weather_ctx = _weather_context_text(L.get("seal_env"), L.get("open_env"))
         # 30の質問の回答を「その人らしさ」の事前知識として渡す
         profile_ctx = _profile_context_text(uid())
+        # --- ペルソナ・プロンプト ---
+        # ねらい：定型文のような既視感を避けつつ、AI/アシスタント臭を消す。
+        #  ・「分析・指摘・診断」をさせると第三者の観察＝AIに見える。これを強く禁止する。
+        #  ・代わりに『一人称の過去の自分』として、本人の言葉に根ざした"意外な角度の問い"を返す。
+        #  ・意外性（突拍子のなさ）は温度で出し、暴投はこの口調ガードで防ぐ。
         prompt = (
-            f"あなたは「過去のその人自身」を演じます。下記は{L['sent_date']}にその人が自分宛てに書いた便りです。\n\n"
-            f"【詩・ことば】\n{L['poem'] or '（なし）'}\n\n"
+            f"あなたは、ある人の「過去の自分」そのものです。下記は{L['sent_date']}に、その人が"
+            "未来の自分（＝今のその人）へ宛てて書き残した便りです。あなたはその便りを書いた"
+            "当時の本人になりきり、今の自分へ語りかけます。\n\n"
+            f"【私（過去の自分）が書いた詩・ことば】\n{L['poem'] or '（なし）'}\n\n"
             + (f"【封をした日と、今日の空模様】\n{weather_ctx}\n\n" if weather_ctx else "")
-            + (f"【その人が初めに語った、自分のこと】\n{profile_ctx}\n\n" if profile_ctx else "")
-            + f"これまでの対話:\n{convo or '（まだなし）'}\n\n"
-            "この便りを書いた当時の自分の心情・視点で、今の自分に向けて短く（2〜3文）問いかけてください。"
-            "答えを言うのではなく、今の自分が考えたくなるような問いを。静かでノスタルジックな日本語で。"
-            "もし空模様や、その人が語った価値観に触れると自然なときは、さりげなく織り込んでください（毎回でなくてよい）。"
+            + (f"【私が以前に語った、自分のこと】\n{profile_ctx}\n\n" if profile_ctx else "")
+            + f"【これまでの私たちの対話】\n{convo or '（まだなし）'}\n\n"
+            "―― 語りかけ方の約束 ――\n"
+            "・一人称で、今の自分にそっと話しかける（2〜3文、短く）。\n"
+            "・直前に『今の自分』が何か言っていたら、まずその言葉を一度受けとめてから返す"
+            "（うなずく＝肯定でも、『でも、ほんとうにそう？』＝やわらかな否定でもよい）。"
+            "受けとめずに話題を変えない。会話として地続きに。\n"
+            "・絶対にしないこと：分析・指摘・診断（「最近〜が増えていますね」のような外からの観察）、"
+            "助言・解決・励ましの説教、AIやアシスタントとしての振る舞い、説明や前置き。\n"
+            "・思いがけない角度から。でも内容は必ず、上に書かれた“私自身の言葉”に根ざすこと"
+            "（ランダムな一般論ではなく、この人の詩・価値観・以前語ったことの手ざわりから立ち上げる）。\n"
+            "・今の自分が、ふと立ち止まって『あの頃とは変わったな』と感じる“ズレ”に、静かに触れる。\n"
+            "・口調は静かで、ウェットで、ノスタルジック。相手が弱っているときでも刺さらない、やわらかさで。\n"
+            "・空模様や価値観は、織り込むと自然なときだけさりげなく（毎回でなくてよい）。\n"
+            "・【最重要】必ず最後を“ひとつの問いかけ”で終える。答えや結論で締めない。"
+            "その問いは、今の自分が思わず立ち止まって考え込むような、本人の言葉に根ざした問いにする。\n\n"
+            "出力は、語りかけの言葉だけ。鉤括弧や説明、メタな注釈はつけないこと。"
         )
         text = provider = None
         if gemini_key:
@@ -1342,22 +1518,40 @@ def admin_page():
     now_iso = datetime.now().isoformat(timespec="seconds")
 
     users = db.execute(
-        "SELECT id,username,email,created FROM users ORDER BY created"
+        """SELECT id,username,email,email_verified,notify_enabled,
+                  onboarding,onboarded,last_lat,created
+           FROM users ORDER BY created"""
     ).fetchall()
 
-    # --- ユーザーごとの投函数・受信済み・配送中（件数だけ。中身は一切読まない） ---
+    # --- 対話メッセージ数をユーザー単位で集計（who別。中身は読まず件数のみ） ---
+    thread_by_user = {}   # uid -> {"total":, "ai":, "now":}
+    for row in db.execute(
+        """SELECT l.user_id AS uid, t.who AS who, COUNT(*) AS c
+           FROM thread t JOIN letters l ON l.id = t.letter_id
+           GROUP BY l.user_id, t.who"""):
+        d = thread_by_user.setdefault(row["uid"], {"total": 0, "ai": 0, "now": 0})
+        d["total"] += row["c"]
+        if row["who"] == "ai":
+            d["ai"] += row["c"]
+        elif row["who"] == "now":
+            d["now"] += row["c"]
+
+    onb_total = len(ONBOARDING_QUESTIONS)
+
+    # --- ユーザーごとの投函数・受信状況・利用機能（件数だけ。中身は一切読まない） ---
     # 受信済み = 通常便は arrive_at が現在以前 / 天気便は weather_met_at が入っている
-    # 配送中  = それ以外
-    # 天気待ち = weather_event があって weather_met_at が未確定
+    # 配送中  = それ以外 / 天気待ち = weather_event があって weather_met_at が未確定
     user_stats = {}
     for u in users:
         rows = db.execute(
-            """SELECT arrive_at, arrive_date, weather_event, weather_met_at
+            """SELECT arrive_at, arrive_date, weather_event, weather_met_at,
+                      opened, photo, voice, from_reply, reflect_count
                FROM letters WHERE user_id=?""",
             (u["id"],)
         ).fetchall()
         total = len(rows)
         received = transit = waiting_weather = 0
+        opened = photo = voice = weather = reply = reflect = 0
         for r in rows:
             wevent = r["weather_event"]
             if wevent:
@@ -1367,25 +1561,60 @@ def admin_page():
                 else:
                     transit += 1
                     waiting_weather += 1
+                weather += 1
             else:
                 arrive_at = r["arrive_at"] or (r["arrive_date"] + "T00:00:00")
                 if arrive_at <= now_iso:
                     received += 1
                 else:
                     transit += 1
+            if r["opened"]:
+                opened += 1
+            if r["photo"]:
+                photo += 1
+            if r["voice"]:
+                voice += 1
+            if r["from_reply"]:
+                reply += 1
+            reflect += (r["reflect_count"] or 0)
+        th = thread_by_user.get(u["id"], {"total": 0, "ai": 0, "now": 0})
+        ob = _load_onboarding(u["onboarding"])
+        onb_answered = sum(1 for v in ob.values() if str(v).strip())
         user_stats[u["id"]] = {
             "total": total, "received": received,
             "transit": transit, "waiting_weather": waiting_weather,
+            "opened": opened, "photo": photo, "voice": voice,
+            "weather": weather, "reply": reply, "reflect": reflect,
+            "dialogues": th["total"], "ai": th["ai"], "replies": th["now"],
+            "onb_answered": onb_answered,
         }
 
-    # --- 全体サマリー ---
+    # --- 全体サマリー（件数＋派生する率） ---
+    def _sum(k):
+        return sum(s[k] for s in user_stats.values())
     totals = {
         "users": len(users),
-        "letters": sum(s["total"] for s in user_stats.values()),
-        "received": sum(s["received"] for s in user_stats.values()),
-        "transit": sum(s["transit"] for s in user_stats.values()),
-        "waiting_weather": sum(s["waiting_weather"] for s in user_stats.values()),
+        "letters": _sum("total"),
+        "received": _sum("received"),
+        "transit": _sum("transit"),
+        "waiting_weather": _sum("waiting_weather"),
+        "opened": _sum("opened"),
+        "dialogues": _sum("dialogues"),
+        "ai": _sum("ai"),
+        "photo": _sum("photo"),
+        "voice": _sum("voice"),
+        "weather": _sum("weather"),
+        "reply": _sum("reply"),
+        "emails": sum(1 for u in users if u["email"]),
+        "verified": sum(1 for u in users if u["email_verified"]),
+        "onboarded": sum(1 for u in users if user_stats[u["id"]]["onb_answered"]),
+        "located": sum(1 for u in users if u["last_lat"]),
+        "notify": sum(1 for u in users if u["notify_enabled"]),
     }
+    totals["open_rate"] = round(totals["opened"] / totals["received"] * 100) if totals["received"] else 0
+    totals["email_rate"] = round(totals["emails"] / totals["users"] * 100) if totals["users"] else 0
+    totals["onb_rate"] = round(totals["onboarded"] / totals["users"] * 100) if totals["users"] else 0
+    totals["avg_letters"] = round(totals["letters"] / totals["users"], 1) if totals["users"] else 0
 
     # --- 直近の登録ユーザー数推移（日別・過去14日） ---
     signups = {}
@@ -1419,6 +1648,8 @@ def admin_page():
     for u in users:
         d = dict(u)
         d["stats"] = user_stats[u["id"]]
+        d["has_location"] = bool(u["last_lat"])
+        d.pop("onboarding", None)  # 生のJSON回答はテンプレに渡さない（件数だけで十分）
         enriched_users.append(d)
 
     # --- 最近の便り（中身つき）。ADMIN_READ_CONTENT が有効なときだけ集める ---
@@ -1473,6 +1704,7 @@ def admin_page():
         trend=trend,
         recent_letters=recent_letters,
         read_content=ADMIN_READ_CONTENT,
+        onb_total=onb_total,
     )
 
 @app.route("/api/admin/letters/<lid>")

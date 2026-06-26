@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>たより — tayori</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500&family=Courier+Prime&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Yuji+Syuku&family=Zen+Kaku+Gothic+New:wght@400;500&family=Courier+Prime&display=swap');
+  @import url('https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css');
   :root{
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Zen Kaku Gothic New','Hiragino Sans','Yu Gothic',sans-serif;
@@ -56,6 +57,26 @@
   .voice-btn.rec{background:var(--seal);border-color:var(--seal);color:var(--paper)}
   .voice-dot{width:8px;height:8px;border-radius:50%;background:var(--seal)}
   .voice-btn.rec .voice-dot{background:var(--paper);animation:pulse 1s infinite}
+  /* ---- 切手を選ぶ（封をする＝儀式化） ---- */
+  .stamp-row{align-items:flex-start}
+  .stamps{display:flex;gap:8px;flex-wrap:wrap}
+  .stamp-opt{width:44px;height:52px;border:1px dashed var(--line);border-radius:2px;background:var(--paper-2);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;transition:.2s;flex:0 0 auto}
+  .stamp-opt:hover{border-color:var(--seal)}
+  .stamp-opt .m{color:var(--ink-soft);line-height:0;transition:color .2s}
+  .stamp-opt .m svg{width:24px;height:24px;display:block}
+  .stamp-opt .l{font-family:'Courier Prime',monospace;font-size:6.5px;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7}
+  .stamp-opt.on{border-style:solid;border-color:var(--seal);background:var(--paper);
+    box-shadow:0 4px 12px -6px rgba(58,46,37,0.4);transform:translateY(-1px) rotate(-2deg)}
+  .stamp-opt.on .m{color:var(--seal)}
+  .stamp-opt.on .l{color:var(--seal);opacity:0.85}
+  /* 受信した便りに貼られた切手 */
+  .letter-stamp{position:absolute;top:10px;right:12px;width:40px;height:48px;border:1px solid var(--line);border-radius:2px;
+    background:var(--paper-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    transform:rotate(-3deg);box-shadow:0 3px 8px -5px rgba(58,46,37,0.5)}
+  .letter-stamp .m{color:var(--seal);line-height:0}
+  .letter-stamp .m svg{width:22px;height:22px;display:block}
+  .letter-stamp .l{font-family:'Courier Prime',monospace;font-size:5.5px;letter-spacing:0.06em;color:var(--ink-soft)}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .voice-have{color:var(--teal)}
   .voice-clear{cursor:pointer;text-decoration:underline;color:var(--ink-soft);font-size:11px}
@@ -88,6 +109,16 @@
   .wx-banner{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);
     letter-spacing:0.06em;text-align:center;margin-bottom:18px;opacity:0.85}
   .wx-banner b{color:var(--seal);font-weight:500}
+  /* 天気オフ時：状態テキスト＋押しやすい「位置情報をオンに」ボタン */
+  .wx-off{display:flex;flex-direction:column;align-items:center;gap:11px;opacity:1;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:15px 16px;margin-bottom:18px}
+  .wx-enable-btn{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);
+    border:0;border-radius:20px;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;
+    letter-spacing:0.04em;padding:8px 16px;transition:background .2s,transform .1s;-webkit-tap-highlight-color:transparent}
+  .wx-enable-btn:hover{background:var(--seal)}
+  .wx-enable-btn:active{transform:scale(0.96)}
+  .wx-enable-btn:disabled{opacity:0.7;cursor:default}
+  .wx-enable-btn i{font-size:14px;line-height:1}
   .weather-locked-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);
     letter-spacing:0.06em;margin-top:10px}
   .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:.25s}
@@ -131,6 +162,14 @@
   .slide-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.16em;color:var(--ink-soft);pointer-events:none;padding-left:30px}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
   .thread-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:16px}
+  /* 会話の折りたたみトグル（各会話の下・中央に置く押しやすいボタン。「開く／閉じる」） */
+  .thread-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px auto 2px;padding:10px 22px;
+    background:var(--paper);border:1px solid var(--line);border-radius:22px;cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;color:var(--ink-soft);transition:.2s}
+  .thread-toggle:hover{color:var(--seal);border-color:var(--seal)}
+  .thread-toggle .tt-count{font-family:'Courier Prime',monospace;font-size:10px;min-width:18px;height:18px;padding:0 5px;border:1px solid var(--line);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-soft)}
+  .thread-toggle .tt-chev{font-family:'Shippori Mincho',serif;letter-spacing:0.1em;color:var(--seal)}
+  .thread-msgs.collapsed{display:none}
   .msg{margin-bottom:14px;display:flex;flex-direction:column}
   .msg .who{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:5px;color:var(--ink-soft)}
   .msg .bubble{font-family:'Shippori Mincho',serif;font-size:15px;line-height:1.95;padding:11px 15px;border-radius:3px;max-width:90%;word-break:break-word;overflow-wrap:anywhere}
@@ -177,13 +216,6 @@
   .seal-future input{margin-top:2px;width:15px;height:15px;accent-color:var(--seal);cursor:pointer;flex-shrink:0}
   .seal-future:hover{color:var(--ink)}
   .seal-future .hint{display:block;font-size:10.5px;color:var(--ink-soft);opacity:0.7}
-  /* 「過去の自分から問いをもらう」専用ボタン。返信のすぐ近くで、はっきり押せる見た目に */
-  .ask-row{margin-top:16px;text-align:center}
-  .ask-btn{display:inline-flex;align-items:center;gap:8px;background:var(--paper);color:var(--seal);
-    border:1px solid var(--seal);cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;
-    padding:10px 20px;border-radius:24px;transition:.2s}
-  .ask-btn:hover{background:var(--seal);color:var(--paper)}
-  .ask-btn:disabled{opacity:0.5;cursor:default}
   .reply-actions{display:flex;gap:14px;margin-top:14px;flex-wrap:wrap;align-items:center}
   .mini-act{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--teal)}
   .mini-act:hover{color:var(--seal)}
@@ -247,14 +279,36 @@
   .gate-hint{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:18px;opacity:0.8}
 
   /* account bar */
-  .acct{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px;
-    font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.14em;color:var(--ink-soft);text-transform:uppercase}
-  .acct b{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink);letter-spacing:0.06em;text-transform:none}
-  .acct button{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);letter-spacing:0.06em}
-  .acct button:hover{color:var(--seal)}
+  /* 案A：差出人の氏名を中央で主役に、その下に操作ボタンを横並び */
+  .acct{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:16px}
+  .acct-id{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.2em;color:var(--ink-soft);text-transform:uppercase}
+  .acct b{display:block;font-family:'Yuji Syuku','Shippori Mincho',serif;font-weight:400;
+    font-size:24px;line-height:1.3;color:var(--ink);letter-spacing:0.04em;text-transform:none;margin:2px 0 14px}
+  .acct-actions{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
+  /* 押しやすいピル型ボタンに（タップ領域を広げる） */
+  .acct button{display:inline-flex;align-items:center;gap:6px;background:var(--paper-2);border:1px solid var(--line);border-radius:20px;cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);letter-spacing:0.06em;padding:9px 16px;transition:.2s}
+  .acct button:hover{color:var(--seal);border-color:var(--seal)}
+  .acct button i{font-size:15px;line-height:1}
   .app-hidden{display:none}
 
   /* ── 30の質問オンボーディング ── */
+  /* ── コンセプト導入画面（初回・設問の前に哲学を伝える） ── */
+  .concept{position:fixed;inset:0;z-index:90;background:var(--paper);overflow-y:auto;padding:56px 22px 40px;display:none}
+  .concept.on{display:block}
+  .concept-inner{max-width:460px;margin:0 auto;text-align:center;animation:conceptIn 1s ease both}
+  @keyframes conceptIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .concept-mark{font-family:'Shippori Mincho',serif;font-size:30px;color:var(--seal);border:1.5px solid var(--seal);
+    width:58px;height:58px;line-height:55px;border-radius:50%;margin:0 auto 26px;letter-spacing:0}
+  .concept-title{font-family:'Shippori Mincho',serif;font-size:24px;line-height:1.7;letter-spacing:0.1em;color:var(--ink);margin:0 0 30px}
+  .concept-body p{font-family:'Shippori Mincho',serif;font-size:14px;line-height:2.1;letter-spacing:0.05em;color:var(--ink-soft);margin:0 0 22px}
+  .concept-body b{color:var(--ink);font-weight:normal;border-bottom:1px solid var(--seal);padding-bottom:1px}
+  .concept-go{margin-top:14px;width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.24em;padding:15px;border-radius:3px;transition:.25s;
+    box-shadow:0 8px 22px -14px rgba(58,46,37,0.5)}
+  .concept-go:hover{background:var(--seal);transform:translateY(-1px)}
+  .concept-go:active{transform:translateY(0)}
+
   .onb{position:fixed;inset:0;z-index:85;background:var(--paper);overflow-y:auto;padding:40px 20px 32px;display:none}
   .onb.on{display:block}
   .onb-inner{max-width:520px;margin:0 auto}
@@ -272,22 +326,19 @@
   .onb-q textarea:focus{outline:none;border-color:var(--seal)}
   .onb-q.answered{border-color:var(--teal)}
   .onb-actions{position:sticky;bottom:0;background:linear-gradient(transparent,var(--paper) 30%);padding:20px 0 8px;margin-top:8px;
-    display:flex;flex-direction:column;align-items:center;gap:14px}
-  /* Primary：塗りつぶし・大きく・主役。クリック領域を広く取る */
+    display:flex;flex-direction:column;align-items:center;gap:10px}
+  /* Primary：塗りつぶし・主役。ただし「閉じる」を巻き込む誤タップを防ぐため大きすぎない。 */
   .onb-save{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:17px;letter-spacing:0.2em;padding:18px;border-radius:3px;transition:.25s;
-    box-shadow:0 10px 26px -12px rgba(58,46,37,0.55)}
+    font-size:16px;letter-spacing:0.2em;padding:15px;border-radius:3px;transition:.25s;
+    box-shadow:0 8px 22px -14px rgba(58,46,37,0.5)}
   .onb-save:hover{background:var(--seal);transform:translateY(-1px)}
   .onb-save:active{transform:translateY(0)}
-  /* Secondary：背景なしのテキストリンク調・控えめ */
-  .onb-skip{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);
-    letter-spacing:0.06em;padding:4px 8px;opacity:0.75;text-decoration:underline;text-underline-offset:3px;transition:.2s}
-  .onb-skip:hover{color:var(--seal);opacity:1}
+  /* Secondary：枠線のゴースト調。塗りはしないが、誤タップ防止のため十分なタップ領域を確保。 */
+  .onb-skip{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:14px;color:var(--ink-soft);letter-spacing:0.1em;padding:12px;border-radius:3px;transition:.2s}
+  .onb-skip:hover{color:var(--seal);border-color:var(--seal)}
 
   /* ── 開封時の気分タグ（差分オーバーレイ内） ── */
-  .mood-pick{margin-top:26px}
-  .mood-pick .ml{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);letter-spacing:0.08em;margin-bottom:12px}
-  .mood-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:340px;margin:0 auto}
   .strata-dot.mood{background:var(--seal);opacity:0.7}
 </style>
 </head>
@@ -323,6 +374,19 @@
   </div>
 </div>
 
+<div class="concept" id="concept">
+  <div class="concept-inner">
+    <div class="concept-mark">緘</div>
+    <h2 class="concept-title">これは、<br>過去の自分と話す道具です</h2>
+    <div class="concept-body">
+      <p>ここに置いた言葉は、いますぐ誰かに届くものではありません。<br>時間をおいて、<b>過去のあなた自身</b>として、あなたのもとへ返ってきます。</p>
+      <p>だから、返ってくる声に、正解や情報を求めないでください。<br>それは検索の答えではなく、かつてのあなたからの問いかけです。</p>
+      <p>天気やその日の空気で、便りの見え方は少し揺らぎます。<br>同じ言葉が、読む日によって違って見えること。<br>それも、この道具の一部です。</p>
+    </div>
+    <button class="concept-go" id="conceptGo">はじめる</button>
+  </div>
+</div>
+
 <div class="onb" id="onb">
   <div class="onb-inner">
     <div class="onb-head">
@@ -346,10 +410,12 @@
     <div class="tagline">投げる。封をする。忘れた頃に、自分から届く。</div>
     <div class="rule"></div>
     <div class="acct" id="acctBar">
-      <span>差出人</span><b id="acctName">—</b>
-      <button id="profileBtn" title="はじめの問いに、いつでも書き足せます">🖊 はじめの問い</button>
-      <button id="emailBtn" title="届いたお知らせメールの設定">📧 <span id="emailStatus">メール未設定</span></button>
-      <button id="logoutBtn">ログアウト</button>
+      <span class="acct-id">差出人</span><b id="acctName">—</b>
+      <div class="acct-actions">
+        <button id="profileBtn" title="初めての問いに、いつでも書き足せます"><i class="ti ti-pencil" aria-hidden="true"></i>初めての問い</button>
+        <button id="emailBtn" title="届いたお知らせメールの設定"><i class="ti ti-mail" aria-hidden="true"></i><span id="emailStatus">メール未設定</span></button>
+        <button id="logoutBtn"><i class="ti ti-logout" aria-hidden="true"></i>ログアウト</button>
+      </div>
     </div>
   </header>
 
@@ -424,7 +490,11 @@
           </div>
         </div>
         <div class="when-readout" id="whenReadout"></div>
-        <button class="send" id="sendBtn">封 を す る</button>
+        <div class="field-row stamp-row">
+          <label>切手：</label>
+          <div class="stamps" id="stampPicker"></div>
+        </div>
+        <button class="send" id="sendBtn">切 手 を 貼 っ て 封 を す る</button>
       </div>
     </div>
     <p class="note">送った瞬間、これは見えなくなります。<br>いいねも、既読も、ここにはありません。</p>
@@ -438,10 +508,7 @@
     <p class="tl-intro">あなたの便りの、全部。<br>過去から、まだ届いていない未来まで。</p>
     <div class="tl-filter" id="tlFilter">
       <button class="chip on" data-emo="all">全て</button>
-      <button class="chip" data-emo="懐かしい">懐かしい</button>
-      <button class="chip" data-emo="痛い">痛い</button>
       <button class="chip" data-emo="誇らしい">誇らしい</button>
-      <button class="chip" data-emo="静か">静か</button>
     </div>
     <div class="tl" id="tlList"></div>
   </section>
@@ -466,10 +533,6 @@
       <div class="diff-lbl">開けた今日</div>
       <div class="diff-val now" id="diffOpenVal">—<br>—℃</div>
     </div>
-  </div>
-  <div class="mood-pick" id="moodPick">
-    <div class="ml">いま、どんな気持ちで開きましたか？</div>
-    <div class="mood-chips" id="moodChips"></div>
   </div>
   <button class="diff-btn" id="diffClose">便りを読む</button>
 </div>
@@ -636,6 +699,36 @@
 
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
+
+  // ---- 切手（封をする＝儀式）。選んだ切手は便りに貼られ、届いた時に見える ----
+  // STAMPS は受信描画でも使うので、idから引けるようにグローバルに置く。
+  // 切手モチーフは小さな線画（SVG）。currentColor を使うので、選択時に封蝋色へ発色する。
+  const STAMPS=[
+    {id:'tsuki',l:'MOON', m:'<svg viewBox="0 0 24 24"><path d="M14.5 3a9 9 0 1 0 6 15.4A7 7 0 0 1 14.5 3z" fill="currentColor"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>'},
+    {id:'hana', l:'BLOOM',m:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.6" r="2.7"/><circle cx="18.1" cy="10.1" r="2.7"/><circle cx="15.7" cy="17.2" r="2.7"/><circle cx="8.3" cy="17.2" r="2.7"/><circle cx="5.9" cy="10.1" r="2.7"/><circle cx="12" cy="12" r="1.7" opacity="0.45"/></svg>'},
+    {id:'nami', l:'WAVE', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 9c2.2 0 2.2 2.6 4.5 2.6S8.7 9 11 9s2.2 2.6 4.5 2.6S17.8 9 20 9"/><path d="M2 15c2.2 0 2.2 2.6 4.5 2.6S8.7 15 11 15s2.2 2.6 4.5 2.6S17.8 15 20 15"/></svg>'},
+    {id:'hi',   l:'SUN',  m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/></g></svg>'},
+    {id:'yuki', l:'SNOW', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2.5v19M3.7 7.25l16.6 9.5M20.3 7.25 3.7 16.75"/><path d="M9.7 4.6 12 6.9l2.3-2.3M9.7 19.4 12 17.1l2.3 2.3"/></svg>'},
+    {id:'tori', l:'BIRD', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2.5 12.5c3.4 0 3.9-5 6.5-5s3.1 5 6.5 5" stroke-width="1.8"/><path d="M14 16.5c1.8 0 2.1-2.8 3.5-2.8s1.7 2.8 3.5 2.8" stroke-width="1.3"/></svg>'},
+  ];
+  window.STAMP_BY_ID=Object.fromEntries(STAMPS.map(s=>[s.id,s]));
+  let pickedStamp=STAMPS[0].id;  // 既定で一つ選んでおく（必ず切手が貼られる）
+  (function renderStampPicker(){
+    const box=document.getElementById('stampPicker');if(!box)return;
+    box.innerHTML='';
+    STAMPS.forEach(s=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='stamp-opt'+(s.id===pickedStamp?' on':'');
+      b.dataset.stamp=s.id;b.title=s.l;
+      b.innerHTML='<span class="m">'+s.m+'</span><span class="l">'+s.l+'</span>';
+      b.addEventListener('click',()=>{
+        pickedStamp=s.id;
+        box.querySelectorAll('.stamp-opt').forEach(x=>x.classList.toggle('on',x.dataset.stamp===s.id));
+      });
+      box.appendChild(b);
+    });
+  })();
+
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';updateCount();}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
@@ -675,7 +768,8 @@
       poem,photo:photoData,voice:voiceData,
       arrive_at:isoDateTime(arrival),arrive_label:label,arrive_hidden:hidden,
       weather_event:wEvent||null,
-      seal_env: currentWeather || null
+      seal_env: currentWeather || null,
+      stamp: pickedStamp
     })});
     setTimeout(()=>{sealing.classList.remove('on');clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
   });
@@ -693,7 +787,9 @@
   // mailbox
   const mailList=document.getElementById('mailList');
   let received=[],inTransit=[];
+  const threadCollapsed=new Set();  // 会話を「しまう」便りIDを保持（再描画でも維持）
   let currentWeather=null; // {temp, condition, temp_tag}
+  let lastGeoError=null;   // 失敗理由: denied/timeout/unavailable/unsupported/serveroff/fetchfail
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
 
   function applyWeatherTint(){
@@ -709,27 +805,41 @@
   }
 
 async function detectWeather(){
-    if(currentWeather!==null)return; 
-    if(!navigator.geolocation){currentWeather=false;return;}
-    
-    // ① 天気を取得する約束
-    const geoPromise = new Promise(res=>{
-      navigator.geolocation.getCurrentPosition(async pos=>{
-        const w=await api('/api/weather?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude);
-        currentWeather=(w&&w.ok)?w:false;res();
-      },()=>{
-        currentWeather=false;res();
-      }, {timeout: 5000}); // ブラウザ自体のタイムアウト
-    });
-
-    // ② 5秒経ったら強制的に諦める約束（フリーズ防止の安全装置）
-    const safetyTimeout = new Promise(res => setTimeout(()=>{ 
-      currentWeather=false; 
-      res(); 
-    }, 5000));
-    
-    // ①と②、どちらか早い方で処理を進める（無限に固まるのを防ぐ）
-    await Promise.race([geoPromise, safetyTimeout]);
+    if(currentWeather!==null)return;
+    lastGeoError=null;
+    // ① まずブラウザの位置情報を試す（許可されていれば一番正確）。
+    // ただし https か localhost/127.0.0.1 でないとブラウザが位置情報を一切返さないので、
+    // その判定をしてから呼ぶ（ダメでも下の②IP推定に落ちるので、ここで諦めない）。
+    const host=location.hostname;
+    const secureOk = window.isSecureContext || host==='localhost' || host==='127.0.0.1';
+    if(secureOk && navigator.geolocation){
+      console.log('[たより] 位置情報を要求中…（許可ダイアログが出たら「許可」を）');
+      const pos=await new Promise(res=>{
+        let done=false; const fin=v=>{ if(!done){done=true;res(v);} };
+        navigator.geolocation.getCurrentPosition(p=>fin(p),e=>{
+          // code 1=拒否 / 2=取得不可（macOSの位置情報サービスOFFなど） / 3=タイムアウト
+          console.warn('[たより] ブラウザ位置取得ERR code='+e.code+' '+e.message+'。IP推定に切り替えます');
+          fin(null);
+        },{timeout:10000,maximumAge:600000,enableHighAccuracy:false});
+        setTimeout(()=>fin(null),11000); // 応答が無くても止まらない保険
+      });
+      if(pos){
+        console.log('[たより] 位置取得OK', pos.coords.latitude, pos.coords.longitude);
+        try{
+          const w=await api('/api/weather?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude);
+          if(w&&w.ok){ currentWeather=w; console.log('[たより] 天気取得OK', w.condition, w.temp+'℃'); return; }
+        }catch(e){ console.warn('[たより] 天気API例外', e); }
+      }
+    } else {
+      console.warn('[たより] ブラウザ位置情報は使えない環境（非セキュア/未対応）。IP推定に切り替えます');
+    }
+    // ② ブラウザがダメでも、サーバが公開IPからおおよその地域を推定して天気を返す（権限・OS設定とも不要）
+    try{
+      const w=await api('/api/weather'); // 座標なし → サーバ側でIP推定
+      if(w&&w.ok){ currentWeather=w; console.log('[たより] IP推定で天気取得', w.city||'', w.condition, w.temp+'℃'); return; }
+      currentWeather=false; lastGeoError=(w&&w.disabled)?'serveroff':'fetchfail';
+      console.warn('[たより] IP推定も失敗', w);
+    }catch(e){ currentWeather=false; lastGeoError='fetchfail'; console.warn('[たより] IP推定 例外', e); }
   }
 
   async function loadMail(){
@@ -737,11 +847,57 @@ async function detectWeather(){
     const data=await api('/api/letters');received=data.received||[];inTransit=data.in_transit||[];
     applyWeatherTint();renderMail();
   }
+
+  // 許可状態が変わった（allow⇄not allow）時に、キャッシュを捨てて取り直し＆画面に反映する。
+  async function refreshWeather(){
+    currentWeather=null;                 // キャッシュ破棄（これが無いと再取得しない）
+    await detectWeather();
+    applyWeatherTint();                  // 本文の色味（天気テイント）を更新
+    if(panels.mailbox.classList.contains('on'))renderMail(); // 受信表示中ならバナーも描き直す
+  }
+  // ブラウザの位置情報パーミッションを監視。ユーザーが設定で allow / not allow を
+  // 切り替えたら onchange が走り、リロード無しで即HTMLへ反映する。
+  function watchGeoPermission(){
+    if(!navigator.permissions||!navigator.permissions.query)return; // 非対応ブラウザは初回取得のみ
+    navigator.permissions.query({name:'geolocation'}).then(st=>{
+      st.onchange=()=>{
+        console.log('[たより] 位置情報の許可が「'+st.state+'」に変わりました → 取り直します');
+        refreshWeather();
+      };
+    }).catch(()=>{});
+  }
+
   function renderMail(){mailList.innerHTML='';
     if(currentWeather){
       const b=document.createElement('div');b.className='wx-banner';
-      const t=(currentWeather.temp!=null)?Math.round(currentWeather.temp)+'°':'';
-      b.innerHTML='いま、あなたのいる場所は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。便りの見え方が、少し揺らいでいます。';
+      const t=(currentWeather.temp!=null)?Math.round(currentWeather.temp)+'℃':'';
+      // IP推定（approx）のときは、おおよその地域であることを添える
+      const place=currentWeather.approx?('おおよそ '+esc(currentWeather.city||'現在地')+' あたり'):'あなたのいる場所';
+      b.innerHTML='いま、'+place+'は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。便りの見え方が、少し揺らいでいます。';
+      mailList.appendChild(b);
+    } else if(currentWeather===false){
+      // 失敗理由（lastGeoError）ごとに、状態と対処法を出し分ける。原因が見えないと直しようがないため。
+      const M={
+        insecure:{msg:'このアドレスでは位置情報が<b>使えません</b>',hint:'スマホから http://（MacのIP）で開いていると、ブラウザが http 接続の位置情報をブロックします。MacのSafariで 127.0.0.1:5000 を開くか、https化（ngrok 等）が必要です。'},
+        denied:{msg:'位置情報が<b>拒否</b>されています',hint:'Safari：設定→プライバシーとセキュリティ→位置情報サービスで Safari をオン＋このサイトを許可してください'},
+        timeout:{msg:'位置情報の取得が<b>タイムアウト</b>しました',hint:'もう一度お試しください（電波の良い場所だと取得しやすいです）'},
+        unavailable:{msg:'位置情報を<b>取得できませんでした</b>',hint:'少し時間をおいて、もう一度お試しください'},
+        unsupported:{msg:'このブラウザは位置情報に<b>対応していません</b>',hint:''},
+        serveroff:{msg:'天気機能が<b>サーバー側でオフ</b>です',hint:'TAYORI_ENABLE_NETWORK=1 を設定して再起動してください'},
+        fetchfail:{msg:'天気の取得に<b>失敗</b>しました',hint:'通信状況を確認して、もう一度お試しください'}
+      };
+      const info=M[lastGeoError]||{msg:'天気はいま <b>オフ</b> です（位置情報が取得できていません）',hint:''};
+      const b=document.createElement('div');b.className='wx-banner wx-off';
+      b.innerHTML='<span>'+info.msg+'</span>'+
+        (info.hint?'<span style="font-size:11px;opacity:0.8;line-height:1.5">'+info.hint+'</span>':'')+
+        '<button class="wx-enable-btn"><i class="ti ti-map-pin" aria-hidden="true"></i>位置情報をオンにする</button>';
+      b.querySelector('.wx-enable-btn').onclick=(e)=>{
+        // タップ直後に即フィードバック（取得に時間がかかる間、無反応に見えるのを防ぐ）
+        const btn=e.currentTarget;
+        btn.disabled=true;
+        btn.innerHTML='<i class="ti ti-loader-2" aria-hidden="true"></i>確認中…';
+        currentWeather=null; loadMail();
+      };
       mailList.appendChild(b);
     }
     if(!received.length && !inTransit.length){const p=document.createElement('p');p.className='mail-intro';
@@ -821,7 +977,11 @@ async function detectWeather(){
   }
 
   function renderOpenLetter(L,i,sent){
-    let h='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
+    let h='';
+    // 封をする時に貼った切手（あれば便りの右上に見える）
+    const st=window.STAMP_BY_ID&&window.STAMP_BY_ID[L.stamp];
+    if(st)h+='<div class="letter-stamp"><span class="m">'+st.m+'</span><span class="l">'+st.l+'</span></div>';
+    h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'">';
     h+='<div class="letter-body">';
     if(L.poem)h+='<div class="letter-poem">'+esc(L.poem)+'</div>';
@@ -832,16 +992,20 @@ async function detectWeather(){
     h+='<div class="strata">';
     h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmt(sent)+'</span><span class="strata-what">封をした</span></div>';
     if(L.opened_at)
-      h+='<div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">'+fmtDateTime(L.opened_at)+'</span><span class="strata-what">封を開けた'+(L.open_mood?'（'+esc(L.open_mood)+'）':'')+'</span></div>';
+      h+='<div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">'+fmtDateTime(L.opened_at)+'</span><span class="strata-what">封を開けた</span></div>';
     if(L.reflect_count>0)
       h+='<div class="strata-row"><span class="strata-dot reflect"></span><span class="strata-when">これまで</span><span class="strata-what">'+L.reflect_count+'回 向き合った</span></div>';
     h+='</div>';
 
-    // 対話スレッド
+    // 対話スレッド（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
     const thread=L.thread||[];
-    h+='<div class="thread"><div class="thread-label">― 過去の自分と、今の自分の対話 ―</div>';
+    const collapsed=threadCollapsed.has(L.id);
+    h+='<div class="thread">';
+    h+='<div class="thread-label">― 過去の自分と、今の自分の対話 ―</div>';
+    // 会話本体（時系列＝古い順。新しいやり取りほど下に積まれ、会話が下へ進んでいく）
+    h+='<div class="thread-msgs'+(collapsed?' collapsed':'')+'">';
     if(!thread.length)
-      h+='<div class="thread-empty">まだ、ことばは交わされていません。<br>下のボタンで、過去のあなたに問いを投げてもらえます。</div>';
+      h+='<div class="thread-empty">まだ、ことばは交わされていません。<br>下の「送る」で、過去のあなたに問いを投げてもらえます。</div>';
     thread.forEach(m=>{
       const when=fmtDateTime(m.created_at)||(m.created?m.created.slice(0,10):'');
       if(m.who==='ai'){
@@ -853,14 +1017,18 @@ async function detectWeather(){
       }else{
         h+='<div class="msg past"><div class="who">過去のあなた</div><div class="bubble">'+esc(m.text)+'</div></div>';
       }});
-    // 返信入力＋送信
+    h+='</div>';// .thread-msgs
+    // 返信入力＋送信（会話の下に置く）
     h+='<div class="reply-row"><textarea placeholder="今のあなたから、返事を書く…" data-i="'+i+'"></textarea><button class="reply-send" data-reply="'+i+'">送る</button></div>';
     // 要件4：この返事を「新しい便り」として未来へ封印するかの選択（チェックで送信時に封印）
     h+='<label class="seal-future"><input type="checkbox" data-sealfut="'+i+'">'+
        '<span>この返事を、新しい便りとして未来へ封印する<span class="hint">封をすると、数ヶ月後のあなたに、いまの言葉がもう一度届きます。</span></span></label>';
-    h+='<div class="reply-emos" data-emos="'+i+'">'+['懐かしい','痛い','誇らしい','静か'].map(e=>'<button class="chip'+((L.emos||[]).includes(e)?' on':'')+'" data-emo="'+e+'" data-li="'+i+'">'+e+'</button>').join('')+'</div>';
-    // 要件2：返信のすぐ近くに「過去の自分から問いをもらう」専用ボタン
-    h+='<div class="ask-row"><button class="ask-btn" data-ai="'+i+'">🕊 過去の自分から、問いをもらう</button></div></div>';
+    // 折りたたみトグルは各会話の下・中央に（押しやすいピル型ボタン）
+    if(thread.length)
+      h+='<button class="thread-toggle'+(collapsed?' collapsed':'')+'" data-thtoggle="'+L.id+'">'+
+         '<span class="tt-count">'+thread.length+'</span>'+
+         '<span class="tt-chev">'+(collapsed?'開く':'閉じる')+'</span></button>';
+    h+='</div>';// .thread
     return h;}
 
   function wireOpenLetters(){
@@ -880,50 +1048,34 @@ async function detectWeather(){
       // 送る ＝ 過去の自分から問いをもらう：返信を反映したうえで、過去の自分が問いを返す
       await loadMail();
       askPastSelfById(lid);}));
-    mailList.querySelectorAll('[data-ai]').forEach(b=>b.addEventListener('click',()=>askPastSelf(+b.dataset.ai)));
+    // 会話の折りたたみトグル（再描画しても状態が残るよう threadCollapsed で保持）
+    mailList.querySelectorAll('[data-thtoggle]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.dataset.thtoggle;  // 便りIDは16進文字列。数値化(+)するとNaNになり状態が壊れる
+      if(threadCollapsed.has(id))threadCollapsed.delete(id);else threadCollapsed.add(id);
+      const c=threadCollapsed.has(id);
+      b.querySelector('.tt-chev').textContent=c?'開く':'閉じる';
+      const msgs=b.parentElement.querySelector('.thread-msgs');
+      if(msgs)msgs.classList.toggle('collapsed',c);}));
     mailList.querySelectorAll('textarea').forEach(ta=>ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}));}
 
   // 💡 【機能3：差分演出オーバーレイの表示処理＋開封時の気分タグ】
   const dOver=document.getElementById('diffOverlay'), dSealVal=document.getElementById('diffSealVal'), dOpenVal=document.getElementById('diffOpenVal');
-  const moodPick=document.getElementById('moodPick'), moodChips=document.getElementById('moodChips');
-  const MOODS=['しずか','なつかしい','せつない','うれしい','こころが軽い','ざわめく','泣きそう','ありがとう'];
-  let moodLetterId=null;  // いま気分を記録している便りID
   document.getElementById('diffClose').addEventListener('click', ()=>{ dOver.classList.remove('on'); });
-
-  function buildMoodChips(){
-    moodChips.innerHTML='';
-    MOODS.forEach(m=>{
-      const b=document.createElement('button');b.className='chip';b.textContent=m;b.dataset.mood=m;
-      b.addEventListener('click',async()=>{
-        const on=b.classList.contains('on');
-        moodChips.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
-        const mood=on?'':m;  // 同じものを再タップで解除
-        if(!on)b.classList.add('on');
-        if(moodLetterId)await api('/api/letters/'+moodLetterId+'/mood',{method:'POST',body:JSON.stringify({mood})});
-      });
-      moodChips.appendChild(b);
-    });
-  }
-  buildMoodChips();
 
   const diffTitle=document.getElementById('diffTitle'), diffRow=document.getElementById('diffRow');
   function showDiffOverlay(seal_env, open_env, letterId){
-    moodLetterId=letterId||null;
-    moodChips.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
-    moodPick.style.display=letterId?'block':'none';   // 気分タグは開封直後のみ
     const hasWx=!!(seal_env || open_env);
-    // 天気情報があれば差分を、無ければ天気ブロックは隠して気分だけ尋ねる
-    diffRow.style.display=hasWx?'flex':'none';
-    diffTitle.style.display=hasWx?'block':'none';
-    if(!hasWx && !letterId)return;  // 何も見せるものが無いなら開かない
-    if(hasWx){
-      const sC = seal_env ? (WX_JP[seal_env.condition]||'—') : '—';
-      const sT = seal_env ? Math.round(seal_env.temp)+'℃' : '—℃';
-      const oC = open_env ? (WX_JP[open_env.condition]||'—') : '—';
-      const oT = open_env ? Math.round(open_env.temp)+'℃' : '—℃';
-      dSealVal.innerHTML = `${sC}<br>${sT}`;
-      dOpenVal.innerHTML = `${oC}<br>${oT}`;
-    }
+    // 天気情報があるときだけ「封をした日→今日」の差分を見せる。
+    // 無ければオーバーレイは出さず、すぐ便り本文へ（気持ち選択はカード内で尋ねる）。
+    if(!hasWx)return;
+    diffRow.style.display='flex';
+    diffTitle.style.display='block';
+    const sC = seal_env ? (WX_JP[seal_env.condition]||'—') : '—';
+    const sT = seal_env ? Math.round(seal_env.temp)+'℃' : '—℃';
+    const oC = open_env ? (WX_JP[open_env.condition]||'—') : '—';
+    const oT = open_env ? Math.round(open_env.temp)+'℃' : '—℃';
+    dSealVal.innerHTML = `${sC}<br>${sT}`;
+    dOpenVal.innerHTML = `${oC}<br>${oT}`;
     dOver.classList.add('on');
   }
 
@@ -949,8 +1101,7 @@ async function detectWeather(){
     }
   }
 
-  // index指定（ボタン直押し）／id指定（返信送信後）の両方から呼べるようにする
-  function askPastSelf(i){const L=received[i];if(L)return askPastSelfById(L.id);}
+  // 「送る」（返信送信後）から呼ばれ、過去の自分が問いを返す
   async function askPastSelfById(id){
     const L=received.find(x=>x.id===id);if(!L)return;
     L.thread=L.thread||[];
@@ -1017,7 +1168,7 @@ async function detectWeather(){
     gSubmit.textContent=gMode==='login'?'ログイン':'始める';
     gPass.placeholder=gMode==='login'?'合言葉':'8文字以上';
     gPass.autocomplete=gMode==='login'?'current-password':'new-password';
-    gHint.style.display=gMode==='login'?'block':'none';
+    if(gHint)gHint.style.display=gMode==='login'?'block':'none'; // gHint要素は無い場合があるのでガード
     gEmailField.style.display=gMode==='register'?'block':'none'; // 登録時だけメアド欄
   }));
   async function doAuth(){
@@ -1048,9 +1199,10 @@ async function detectWeather(){
     document.getElementById('acctName').textContent=username;
     setEmailStatus(email,verified);
     gUser.value='';gPass.value='';if(gEmail)gEmail.value='';
-    // まだ「30の問い」を通っていなければ、先にそちらへ案内する（初回のみ）
+    // まだ「30の問い」を通っていなければ、初回のみ：
+    // ① コンセプト導入画面（この道具の哲学）→ ② はじめの問い、の順で案内する。
     if(onboarded===false){
-      openOnboarding(true);  // 完了/スキップ後に enterAppBody() が呼ばれる
+      showConcept();  // 「はじめる」で openOnboarding(true) へ。完了/スキップ後に enterAppBody()
       return;
     }
     enterAppBody();
@@ -1058,6 +1210,8 @@ async function detectWeather(){
   // オンボーディングの後（または不要なとき）に実行する本来の入室処理
   function enterAppBody(){
     onb.classList.remove('on');
+    watchGeoPermission(); // 位置情報の許可 allow⇄not allow の変化を監視して即反映
+
     // メールの開封リンクから来ていたら、受信タブを開いてその便りへ
     if(pendingOpenId){
       goTab('mailbox');
@@ -1067,6 +1221,17 @@ async function detectWeather(){
       loadMail();
     }
   }
+
+  // ---------- コンセプト導入画面（初回・設問の前） ----------
+  const concept=document.getElementById('concept');
+  function showConcept(){
+    gate.classList.add('hidden');
+    concept.classList.add('on');concept.scrollTop=0;
+  }
+  document.getElementById('conceptGo').addEventListener('click',()=>{
+    concept.classList.remove('on');
+    openOnboarding(true);  // 哲学を読んでから、はじめの問いへ
+  });
 
   // ---------- 30の問い（オンボーディング） ----------
   const onb=document.getElementById('onb'),onbList=document.getElementById('onbList'),
@@ -1159,7 +1324,7 @@ async function detectWeather(){
   });
   document.getElementById('logoutBtn').addEventListener('click',async()=>{
     await api('/api/logout',{method:'POST'});
-    appEl.classList.add('app-hidden');onb.classList.remove('on');gate.classList.remove('hidden');
+    appEl.classList.add('app-hidden');onb.classList.remove('on');concept.classList.remove('on');gate.classList.remove('hidden');
     goTab('compose');
     document.querySelector('.gate-tab[data-g="login"]').click();
   });

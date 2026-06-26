@@ -1,0 +1,28 @@
+# Render デプロイ設定（Blueprint）
+# これで「再デプロイしてもユーザーが消えない」状態になる。
+# 肝は disk（永続ディスク）＋ TAYORI_DB_PATH で、SQLite を揮発しない場所に置くこと。
+services:
+  - type: web
+    name: tayori
+    runtime: python
+    plan: starter            # ※永続ディスクは有料プランが必要（無料tierはディスク不可）。常時起動で配達ループも止まらない。
+    buildCommand: pip install -r requirements.txt
+    # SQLite はプロセスが複数だと壊れやすく、start_notifier も多重起動になるため worker は1に固定。
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    disk:
+      name: tayori-data
+      mountPath: /var/data   # ここにDBを置く＝デプロイで消えない
+      sizeGB: 1
+    envVars:
+      - key: TAYORI_DB_PATH
+        value: /var/data/tayori.db   # 永続ディスク上にSQLiteを置く
+      - key: TAYORI_ENABLE_NETWORK
+        value: "1"                    # 天気・メール・AIを有効化
+      - key: TAYORI_PRODUCTION
+        value: "1"                    # SESSION_COOKIE_SECURE 等を本番モードに
+      - key: TAYORI_SECRET
+        generateValue: true           # セッション鍵を自動生成・固定（再デプロイでログアウトされない）
+      - key: GEMINI_API_KEY
+        sync: false                   # 鍵はダッシュボードで手入力（YAMLには書かない）
+      - key: TAYORI_ADMIN_PASSWORD
+        sync: false                   # 管理画面パスワードもダッシュボードで設定（既定値は使わない）
