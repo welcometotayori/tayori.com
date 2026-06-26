@@ -16,6 +16,7 @@ import time
 import smtplib
 import sqlite3
 import secrets
+import tempfile
 import threading
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
@@ -40,13 +41,36 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Render等では「永続ディスク」をマウントし、その場所を TAYORI_DB_PATH で指す。
 # 例: Renderで /var/data に永続ディスクを付け、TAYORI_DB_PATH=/var/data/tayori.db
 # これでデプロイ（再ビルド）してもユーザーが消えない。未設定ならローカルの tayori.db。
-DB_PATH = os.environ.get("TAYORI_DB_PATH") or os.path.join(APP_DIR, "tayori.db")
-# 保存先フォルダが無ければ作る（永続ディスクのサブパス指定にも対応）
+_DB_DESIRED = os.environ.get("TAYORI_DB_PATH") or os.path.join(APP_DIR, "tayori.db")
+
+
+def _resolve_db_path(desired):
+    """書き込み可能なDB保存先を返す。
+    指定先（例：Renderで未マウントの /var/data）が使えない場合でも、アプリが
+    クラッシュループせず必ず起動できるよう、書ける場所へ静かにフォールバックする。
+    フォールバック時は『データが永続しない』ことを大きく警告する（落ち続けるより、まず立ち上げる）。"""
+    candidates = [desired,
+                  os.path.join(APP_DIR, "tayori.db"),
+                  os.path.join(tempfile.gettempdir(), "tayori.db")]
+    for i, p in enumerate(candidates):
+        d = os.path.dirname(os.path.abspath(p))
+        try:
+            os.makedirs(d, exist_ok=True)
+        except OSError:
+            pass
+        if os.access(d, os.W_OK):
+            if i > 0:
+                print(f"[たより] ⚠️ 指定のDB保存先 {desired} に書き込めません。"
+                      f"一時的に {p} を使って起動します。"
+                      "【このままだと再デプロイでユーザーが消えます】"
+                      "Renderの永続ディスクのMount Pathが TAYORI_DB_PATH と一致しているか確認してください。",
+                      flush=True)
+            return p
+    return desired  # 通常ここには来ない（最後の保険）
+
+
+DB_PATH = _resolve_db_path(_DB_DESIRED)
 _db_dir = os.path.dirname(os.path.abspath(DB_PATH))
-try:
-    os.makedirs(_db_dir, exist_ok=True)
-except OSError as _e:
-    print(f"[たより] DB保存先フォルダを作成できません: {_db_dir} ({_e})", flush=True)
 # デプロイ時の切り分け用：実際に使うDBパスと、そのフォルダが書き込み可能かをログに出す。
 print(f"[たより] DB_PATH = {DB_PATH} / フォルダ書込可={os.access(_db_dir, os.W_OK)} "
       f"（TAYORI_DB_PATH={'未設定' if not os.environ.get('TAYORI_DB_PATH') else '設定済'}）", flush=True)
