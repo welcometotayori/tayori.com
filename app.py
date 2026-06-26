@@ -862,11 +862,18 @@ def fetch_weather(lat, lon):
             return _fetch_weather_owm(lat, lon, owm_key)
         except Exception as e:
             print(f"[天気取得失敗:OWM→Open-Meteoへ] {e}")
-    try:
-        return _fetch_weather_open_meteo(lat, lon)
-    except Exception as e:
-        print(f"[天気取得失敗] {e}")
-        return None
+    # ワーカー起動直後はネットワークスタックが冷えており、初回の外部接続だけ
+    # 即失敗することがある。1回だけ短い間を置いて再試行すると、まず成功する。
+    last = None
+    for attempt in range(2):
+        try:
+            return _fetch_weather_open_meteo(lat, lon)
+        except Exception as e:
+            last = e
+            if attempt == 0:
+                time.sleep(0.6)
+    print(f"[天気取得失敗] {last}")
+    return None
 
 
 
