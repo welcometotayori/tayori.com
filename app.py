@@ -1118,6 +1118,52 @@ def api_locate():
     return jsonify(ok=True)
 
 
+@app.route("/healthz/dbdiag")
+def healthz_dbdiag():
+    """【一時診断】本番DBの健全性を返す。登録(書き込み)が500になる原因を特定するため、
+    ディスク空き容量・journalモード・残存ジャーナルファイル・実テスト書き込みを調べる。
+    機微情報は含まない。原因特定後に削除する。"""
+    out = {"db_path": DB_PATH}
+    # ディスク空き容量
+    try:
+        st = os.statvfs(os.path.dirname(os.path.abspath(DB_PATH)))
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        out["disk_total_mb"] = round(total / 1e6, 1)
+        out["disk_free_mb"] = round(free / 1e6, 1)
+        out["disk_used_pct"] = round((1 - free / total) * 100, 1) if total else None
+    except Exception as e:
+        out["disk_error"] = str(e)
+    # 残存ジャーナル/WALファイル
+    out["files"] = {}
+    for ext in ("", "-wal", "-shm", "-journal"):
+        p = DB_PATH + ext
+        try:
+            out["files"][ext or "(main)"] = round(os.path.getsize(p) / 1e6, 3)
+        except OSError:
+            out["files"][ext or "(main)"] = None
+    # journalモード ＋ 実テスト書き込み（短いbusy_timeoutで素早く結果を出す）
+    try:
+        c = sqlite3.connect(DB_PATH, timeout=3)
+        out["journal_mode"] = (c.execute("PRAGMA journal_mode").fetchone() or [None])[0]
+        out["integrity"] = (c.execute("PRAGMA quick_check").fetchone() or [None])[0]
+        t0 = time.time()
+        try:
+            c.execute("CREATE TABLE IF NOT EXISTS _diag_write(x INTEGER)")
+            c.execute("INSERT INTO _diag_write(x) VALUES(1)")
+            c.commit()
+            c.execute("DELETE FROM _diag_write")
+            c.commit()
+            out["test_write"] = "OK"
+        except Exception as e:
+            out["test_write"] = f"FAIL: {type(e).__name__}: {e}"
+        out["test_write_sec"] = round(time.time() - t0, 2)
+        c.close()
+    except Exception as e:
+        out["connect_error"] = f"{type(e).__name__}: {e}"
+    return jsonify(out)
+
+
 # ---------------------------------------------------------------- pages
 @app.route("/")
 def index():
