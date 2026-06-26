@@ -23,7 +23,7 @@ from email.utils import formataddr, parseaddr
 from functools import wraps
 from datetime import datetime, date, timedelta
 
-from flask import Flask, request, jsonify, render_template, g, session
+from flask import Flask, request, jsonify, render_template, g, session, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # サーバーのタイムゾーンを日本時間に固定する。
@@ -1611,6 +1611,42 @@ def _admin_ok():
 #   export TAYORI_ADMIN_READ_CONTENT=1
 # 公開時はこれを外せば、中身は管理画面からも一切見えなくなる。
 ADMIN_READ_CONTENT = bool(os.environ.get("TAYORI_ADMIN_READ_CONTENT", "1"))
+
+def _make_db_snapshot(dest_path):
+    """動作中でも壊れない整合性のあるDBコピーを dest_path に作る。
+    単純なファイルコピー(cp)はWAL/書き込み途中を掴んで壊れることがあるため、
+    SQLite公式のオンラインバックアップAPI(conn.backup)を使う。"""
+    src = sqlite3.connect(DB_PATH, timeout=30)
+    dst = sqlite3.connect(dest_path)
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+@app.route("/admin.welcometotayori/backup")
+def admin_backup():
+    """管理者だけが、今この瞬間の整合バックアップ(.db)をダウンロードできる。
+    手元に保存しておけば、ディスク障害時もこのファイルから復元できる。"""
+    if not _admin_ok():
+        return "アクセス権がありません。", 403
+    fd, tmp = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        _make_db_snapshot(tmp)
+        with open(tmp, "rb") as fh:
+            data = fh.read()
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    fname = "tayori-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".db"
+    return Response(data, mimetype="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
 
 @app.route("/admin.welcometotayori")
 def admin_page():
