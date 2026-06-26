@@ -1157,6 +1157,14 @@ def api_create_letter():
     voice = data.get("voice")
     if not poem and not photo and not voice:
         return jsonify(error="写真かことば、声をひとつ。"), 400
+
+    # 保険：写真・音声のサイズ上限（base64の文字数）。クライアントで圧縮しているが、
+    # 圧縮失敗時のフォールバックや不正クライアントから巨大データが来ても、永続ディスクを
+    # 守るためサーバ側でも弾く。写真は約3MB、音声は約4MB相当まで。
+    if photo and len(photo) > 4_000_000:
+        return jsonify(error="写真が大きすぎます。もう少し小さい画像でお願いします。"), 413
+    if voice and len(voice) > 5_500_000:
+        return jsonify(error="音声が長すぎます。短く録り直してください。"), 413
     
     arrive_at = data.get("arrive_at")
     try:

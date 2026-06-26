@@ -596,15 +596,36 @@
   let photoData=null;
   const sGal=document.getElementById('photoSlotGallery'), pGal=document.getElementById('photoInputGallery');
 
-  function handlePhoto(e){
+  // 写真をブラウザ側で圧縮する。スマホ写真(3〜5MB)を長辺1280px＋JPEG品質0.72に
+  // 縮小し、約150〜300KBに。DBにbase64保存するため、これで保存容量が10〜20分の1に。
+  async function compressPhoto(file){
+    const MAX=1280, Q=0.72;
+    let bmp;
+    try{
+      // createImageBitmap は EXIF の回転も正しく反映してくれる（対応ブラウザ）
+      bmp=await createImageBitmap(file,{imageOrientation:'from-image'});
+    }catch(_){
+      bmp=await new Promise((res,rej)=>{const img=new Image();img.onload=()=>res(img);img.onerror=rej;img.src=URL.createObjectURL(file);});
+    }
+    let w=bmp.width||bmp.naturalWidth, h=bmp.height||bmp.naturalHeight;
+    if(Math.max(w,h)>MAX){const s=MAX/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    cv.getContext('2d').drawImage(bmp,0,0,w,h);
+    if(bmp.close)bmp.close();
+    return cv.toDataURL('image/jpeg',Q);
+  }
+
+  async function handlePhoto(e){
     const f=e.target.files[0];if(!f)return;
-    const r=new FileReader();
-    r.onload=()=>{
-      photoData=r.result;
-      sGal.classList.add('has');
-      sGal.innerHTML='<img src="'+photoData+'">';
-    };
-    r.readAsDataURL(f);
+    sGal.classList.add('has');
+    sGal.innerHTML='<span class="t" style="padding:24px;display:block">写真を整えています…</span>';
+    try{
+      photoData=await compressPhoto(f);
+    }catch(err){
+      // 圧縮に失敗したら、従来どおり原本をそのまま使う（保険）
+      photoData=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);});
+    }
+    sGal.innerHTML='<img src="'+photoData+'">';
   }
   pGal.addEventListener('change', handlePhoto);
 
