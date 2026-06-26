@@ -185,6 +185,19 @@ def close_db(exc):
     if db is not None:
         db.close()
 
+
+# パスワードハッシュは pbkdf2 を使う。Werkzeug 3.x の既定 scrypt は1回につき約32MBを
+# 確保するメモリハード方式で、Renderのような小メモリ(512MB)・1ワーカー環境では
+# ログイン/登録のたびにメモリスパイク→ワーカーがOOMで落ち、全リクエスト無応答→再起動の
+# フラッピングを起こす。pbkdf2 はメモリをほぼ使わずCPUのみなのでスパイクしない。
+# 旧scryptハッシュも check_password_hash 側が方式を自動判別するため、そのまま検証可能。
+_PW_METHOD = "pbkdf2:sha256:200000"
+
+
+def _hash_pw(pw):
+    return generate_password_hash(pw, method=_PW_METHOD)
+
+
 def init_db():
     db = _connect()
     db.executescript(
@@ -280,13 +293,13 @@ def init_db():
         # 管理ダッシュボードで「保護対象」として扱う管理者アカウント
         db.execute(
             "INSERT INTO users (id,username,pw_hash,created,email) VALUES (?,?,?,?,?)",
-            (secrets.token_hex(8), "admin", generate_password_hash("admin.welcometotayori"),
+            (secrets.token_hex(8), "admin", _hash_pw("admin.welcometotayori"),
              datetime.now().isoformat(), None),
         )
         demo_id = secrets.token_hex(8)
         db.execute(
             "INSERT INTO users (id,username,pw_hash,created) VALUES (?,?,?,?)",
-            (demo_id, "demo", generate_password_hash("demo1234"), datetime.now().isoformat()),
+            (demo_id, "demo", _hash_pw("demo1234"), datetime.now().isoformat()),
         )
         today = date.today()
         # 過去のデータにも仮の時間を付与
@@ -326,13 +339,13 @@ def init_db():
     if admin_row is None:
         db.execute(
             "INSERT INTO users (id,username,pw_hash,created,email) VALUES (?,?,?,?,?)",
-            (secrets.token_hex(8), "admin", generate_password_hash(admin_pw),
+            (secrets.token_hex(8), "admin", _hash_pw(admin_pw),
              datetime.now().isoformat(), None),
         )
     else:
         # 既にいる場合はパスワードを希望のものに揃える
         db.execute("UPDATE users SET pw_hash=? WHERE username='admin'",
-                   (generate_password_hash(admin_pw),))
+                   (_hash_pw(admin_pw),))
 
     # 配信停止トークンを持たないユーザーに発行（seed/admin 含む全員ぶん埋め戻す）
     for r in db.execute("SELECT id FROM users WHERE unsub_token IS NULL OR unsub_token=''").fetchall():
@@ -479,7 +492,7 @@ def api_register():
     new_id = secrets.token_hex(8)
     db.execute(
         "INSERT INTO users (id,username,pw_hash,created,email,unsub_token) VALUES (?,?,?,?,?,?)",
-        (new_id, username, generate_password_hash(password), datetime.now().isoformat(),
+        (new_id, username, _hash_pw(password), datetime.now().isoformat(),
          email or None, secrets.token_urlsafe(16)),
     )
     db.commit()
