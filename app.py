@@ -147,10 +147,32 @@ BASE_URL = (os.environ.get("TAYORI_BASE_URL") or "http://127.0.0.1:5000").rstrip
 
 
 # ---------------------------------------------------------------- DB
+_wal_ready = False  # WALモードはDBにつき一度設定すれば永続する
+
+
+def _connect():
+    """SQLite接続を統一設定で開く。
+    ・timeout=15 / busy_timeout=15000：ロック中でも即エラーにせず最大15秒待つ。
+    ・WALモード：読み取りと書き込みが互いをブロックしない（通知スレッドの書き込み中でも
+      ログイン等のSELECTが固まらない）。1ワーカー構成での『送信中のままハング』対策の肝。
+    これが無いと、既定のrollback journalでは writer が全 reader をブロックして詰まる。"""
+    global _wal_ready
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA busy_timeout=15000")
+        if not _wal_ready:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            _wal_ready = True
+    except sqlite3.Error as e:
+        print(f"[たより] SQLite PRAGMA設定に失敗（続行します）: {e}", flush=True)
+    return conn
+
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
+        g.db = _connect()
     return g.db
 
 @app.teardown_appcontext
@@ -160,8 +182,7 @@ def close_db(exc):
         db.close()
 
 def init_db():
-    db = sqlite3.connect(DB_PATH)
-    db.row_factory = sqlite3.Row
+    db = _connect()
     db.executescript(
         """
         CREATE TABLE IF NOT EXISTS users (
@@ -855,8 +876,7 @@ def _check_weather_events():
     条件が合致したら weather_met_at を打って「届いた」状態にする。"""
     if not NETWORK_ENABLED:
         return  # 外部通信オフなら天気判定はできないのでスキップ
-    db = sqlite3.connect(DB_PATH)
-    db.row_factory = sqlite3.Row
+    db = _connect()
     try:
         rows = db.execute(
             """SELECT l.id AS lid, l.weather_event AS event, l.arrive_at AS arrive_at,
@@ -895,8 +915,7 @@ def _check_weather_events():
 def _check_and_notify():
     """届いたばかりで、まだ通知していない便りを探してメールを送る。
     バックグラウンドスレッドから定期的に呼ばれる。"""
-    db = sqlite3.connect(DB_PATH)
-    db.row_factory = sqlite3.Row
+    db = _connect()
     try:
         now = datetime.now()
         # 送る条件：未通知・諦めてない便り × 確認済みで通知ONのメール持ちユーザー
