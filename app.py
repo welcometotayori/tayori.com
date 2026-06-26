@@ -148,20 +148,24 @@ BASE_URL = (os.environ.get("TAYORI_BASE_URL") or "http://127.0.0.1:5000").rstrip
 
 # ---------------------------------------------------------------- DB
 _wal_ready = False  # WALモードはDBにつき一度設定すれば永続する
+# WALは「読み書きが互いをブロックしない」点で理想的だが、共有メモリ(-shm)を使うため
+# overlayfs 等の一部ファイルシステムでは PRAGMA journal_mode=WAL がハングする危険がある
+# （Renderのフォールバック先など）。安全のため既定はオフ。永続ディスク等でだけ
+# TAYORI_SQLITE_WAL=1 で明示的に有効化する。ロック対策の主役は busy_timeout。
+_USE_WAL = os.environ.get("TAYORI_SQLITE_WAL") == "1"
 
 
 def _connect():
     """SQLite接続を統一設定で開く。
-    ・timeout=15 / busy_timeout=15000：ロック中でも即エラーにせず最大15秒待つ。
-    ・WALモード：読み取りと書き込みが互いをブロックしない（通知スレッドの書き込み中でも
-      ログイン等のSELECTが固まらない）。1ワーカー構成での『送信中のままハング』対策の肝。
-    これが無いと、既定のrollback journalでは writer が全 reader をブロックして詰まる。"""
+    ・timeout=15 / busy_timeout=15000：ロック中でも即エラーにせず最大15秒待つ。これが
+      『通知スレッドの書き込み中にログインのSELECTが詰まる』問題の主対策（どのFSでも安全）。
+    ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
     conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA busy_timeout=15000")
-        if not _wal_ready:
+        if _USE_WAL and not _wal_ready:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             _wal_ready = True
