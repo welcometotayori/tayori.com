@@ -198,7 +198,37 @@ def _hash_pw(pw):
     return generate_password_hash(pw, method=_PW_METHOD)
 
 
+def _normalize_journal_mode():
+    """既存DBがWALモードのままだと、Renderの永続ディスク(FS)で -shm の mmap に失敗し、
+    クエリのたびに『disk I/O error』を起こす。起動時に rollback(DELETE) モードへ戻す。
+    （WAL化は過去のデプロイの名残。モードはDBファイルに永続記録されるため、コードでWALを
+      オフにしただけでは戻らず、ここで明示的に変換する必要がある。）
+    WALに残っていたコミットは DELETE への切替時に本体へ統合される＝データは失わない。
+    それでも壊れている場合のみ、最終手段として -wal/-shm を除去して本体だけで起動する。"""
+    try:
+        c = sqlite3.connect(DB_PATH, timeout=15)
+        try:
+            mode = (c.execute("PRAGMA journal_mode").fetchone() or [""])[0]
+            if str(mode).lower() == "wal":
+                c.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # WAL→本体へ統合
+                newmode = (c.execute("PRAGMA journal_mode=DELETE").fetchone() or [""])[0]
+                print(f"[たより] DBをWAL→{newmode}へ戻しました（永続ディスクのdisk I/O error対策）", flush=True)
+            # 読めることを実検証
+            c.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+        finally:
+            c.close()
+    except sqlite3.Error as e:
+        print(f"[たより] journal_mode正規化に失敗: {e} → -wal/-shm の除去を試みます", flush=True)
+        for ext in ("-wal", "-shm"):
+            try:
+                os.remove(DB_PATH + ext)
+                print(f"[たより] 残存ファイル {os.path.basename(DB_PATH)}{ext} を除去しました", flush=True)
+            except OSError:
+                pass
+
+
 def init_db():
+    _normalize_journal_mode()  # 壊れたWAL状態を先に復旧してから通常のスキーマ初期化へ
     db = _connect()
     db.executescript(
         """
