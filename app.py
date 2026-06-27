@@ -1140,6 +1140,31 @@ def api_locate():
     return jsonify(ok=True)
 
 
+APP_VERSION = "v3-busytimeout5"  # デプロイ確認用。修正のたびに更新する。
+
+
+@app.route("/healthz/ver")
+def healthz_ver():
+    """【一時】どのバージョンが稼働中かと、直接書き込みの所要時間を返す。
+    登録/保存が詰まる原因（デプロイ未反映か・書き込み自体が遅いか）を切り分ける。"""
+    out = {"version": APP_VERSION}
+    out["backup_configured"] = bool(_backup_s3_config())
+    try:
+        c = sqlite3.connect(DB_PATH, timeout=6)
+        t0 = time.time()
+        c.execute("CREATE TABLE IF NOT EXISTS _vw(x INTEGER)")
+        c.execute("INSERT INTO _vw(x) VALUES(1)")
+        c.commit()
+        c.execute("DELETE FROM _vw")
+        c.commit()
+        out["write_test"] = "OK"
+        out["write_sec"] = round(time.time() - t0, 2)
+        c.close()
+    except Exception as e:
+        out["write_test"] = f"FAIL: {type(e).__name__}: {e}"
+    return jsonify(out)
+
+
 # ---------------------------------------------------------------- pages
 @app.route("/")
 def index():
