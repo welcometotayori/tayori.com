@@ -1131,6 +1131,38 @@ def api_locate():
     return jsonify(ok=True)
 
 
+@app.route("/healthz/maildiag")
+def healthz_maildiag():
+    """【一時診断】Resend(SMTP)の設定と接続・ログインを検査する。送信はしない。
+    秘密の値は出さず、長さや成否だけ返す。原因特定後に削除する。"""
+    out = {"network_enabled": NETWORK_ENABLED, "base_url": BASE_URL}
+    cfg = _smtp_config()
+    if not cfg:
+        out["smtp_configured"] = False
+        out["reason"] = ("TAYORI_SMTP_USER / TAYORI_SMTP_PASS が未設定、または "
+                         "TAYORI_ENABLE_NETWORK が未設定")
+        out["have_user"] = bool(os.environ.get("TAYORI_SMTP_USER"))
+        out["have_pass"] = bool(os.environ.get("TAYORI_SMTP_PASS"))
+        return jsonify(out)
+    out["smtp_configured"] = True
+    from_name, from_addr = parseaddr(cfg["from"])
+    out.update({"host": cfg["host"], "port": cfg["port"], "user": cfg["user"],
+                "from_addr": from_addr, "from_has_name": bool(from_name),
+                "pass_len": len(cfg["pw"]),
+                "from_domain_ok": from_addr.endswith("@tayori-letter.com")})
+    t0 = time.time()
+    try:
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=12) as s:
+            s.starttls(context=ctx)
+            s.login(cfg["user"], cfg["pw"])
+        out["login_test"] = "OK"
+    except Exception as e:
+        out["login_test"] = f"FAIL: {type(e).__name__}: {e}"
+    out["login_sec"] = round(time.time() - t0, 2)
+    return jsonify(out)
+
+
 # ---------------------------------------------------------------- pages
 @app.route("/")
 def index():
