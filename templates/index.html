@@ -1295,10 +1295,14 @@ async function detectWeather(){
     onbList.querySelectorAll('textarea').forEach(t=>{out[t.dataset.qid]=t.value.trim();});
     return out;
   }
+  let _savingOnb=false;
   async function saveOnboarding(done){
-    onbSave.disabled=true;
+    if(_savingOnb)return null;        // 多重送信ガード（連打・二重発火を防ぐ）
+    _savingOnb=true;
+    onbSave.disabled=true; onbSkip.disabled=true;
     const res=await api('/api/onboarding',{method:'POST',body:JSON.stringify({answers:collectOnbAnswers(),done:done})});
-    onbSave.disabled=false;
+    _savingOnb=false;
+    onbSave.disabled=false; onbSkip.disabled=false;
     return res;
   }
   onbSave.addEventListener('click',async()=>{
