@@ -1076,8 +1076,10 @@ def start_notifier(interval=None):
             # オフサイト自動バックアップ（R2/S3設定があるときだけ・日次）
             try:
                 if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:
-                    if _run_backup_to_s3():
-                        last_backup = time.time()
+                    ok = _run_backup_to_s3()
+                    # 成功なら次は backup_hours 後。失敗しても最低1時間は空ける
+                    #（30秒ごとに再試行するとスナップショットのロックで書き込みを妨げるため）。
+                    last_backup = time.time() if ok else (time.time() - backup_hours * 3600 + 3600)
             except Exception as e:
                 print(f"[たより] バックアップ判定でエラー（継続）: {e}", flush=True)
             time.sleep(interval)
@@ -1140,7 +1142,7 @@ def api_locate():
     return jsonify(ok=True)
 
 
-APP_VERSION = "v3-busytimeout5"  # デプロイ確認用。修正のたびに更新する。
+APP_VERSION = "v4-backup-paged"  # デプロイ確認用。修正のたびに更新する。
 
 
 @app.route("/healthz/ver")
@@ -1681,7 +1683,10 @@ def _make_db_snapshot(dest_path):
     dst = sqlite3.connect(dest_path)
     try:
         with dst:
-            src.backup(dst)
+            # ページ分割でコピーする。一度に全ページ(pages=-1)だとコピー中ずっと読みロックを
+            # 保持し、さらに書き込みが入るとバックアップが最初からやり直し(livelock)になって
+            # 全書き込みが詰まる。pages=64＋sleepで小刻みにロックを解放し、書き込みを通す。
+            src.backup(dst, pages=64, sleep=0.01)
     finally:
         dst.close()
         src.close()
