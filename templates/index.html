@@ -548,14 +548,24 @@
   let pendingOpenId = "{{ open_letter_id }}" || null;
   
   // 💡 【ログイン問題を解決する通信強化】
-  const api=(u,o)=>fetch(u,Object.assign({credentials: 'same-origin', headers:{'Content-Type':'application/json'}},o)).then(async r=>{
-    const data=await r.json().catch(()=>({}));
-    if(r.status===401 && document.getElementById('app') && !document.getElementById('app').classList.contains('app-hidden')){
-      document.getElementById('app').classList.add('app-hidden');
-      document.getElementById('gate').classList.remove('hidden');
-    }
-    return data;
-  }).catch(()=>({__neterror:true,error:'サーバーに接続できません。'}));
+  const api=(u,o)=>{
+    // 15秒で必ず打ち切る。サーバーが詰まっても無限「送信中」にならないようにする保険。
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),15000);
+    return fetch(u,Object.assign({credentials:'same-origin',headers:{'Content-Type':'application/json'},signal:ctrl.signal},o)).then(async r=>{
+      clearTimeout(t);
+      const data=await r.json().catch(()=>({}));
+      if(r.status===401 && document.getElementById('app') && !document.getElementById('app').classList.contains('app-hidden')){
+        document.getElementById('app').classList.add('app-hidden');
+        document.getElementById('gate').classList.remove('hidden');
+      }
+      return data;
+    }).catch(e=>{
+      clearTimeout(t);
+      if(e&&e.name==='AbortError') return {__neterror:true,error:'サーバーが混み合っています。もう一度お試しください。'};
+      return {__neterror:true,error:'サーバーに接続できません。'};
+    });
+  };
 
   function parseISO(s){
     // "2026-06-20T09:00:00" -> Date

@@ -318,16 +318,16 @@ _USE_WAL = os.environ.get("TAYORI_SQLITE_WAL") == "1"
 # なので、競合は最大15秒の短い待ちに変わるだけで、待ちが掛け算で膨らむ過去の回帰は起きない。
 _BUSY_TIMEOUT_MS = int(os.environ.get("TAYORI_BUSY_TIMEOUT_MS", "15000"))
 
-# fsync の強さ。Renderの永続ディスクは fsync が遅く、既定の FULL だと commit のたびに
-# 数秒～十数秒ディスク同期で止まり、rollbackモードでは全read/writeをブロックする。
-#  ・NORMAL（既定）：同期回数を減らす。電源断時のみ最後の書き込みを失う可能性（管理基盤は
-#    通常graceful停止なので実害は小さい）。オフサイトBKがあればさらに安全。
-#  ・OFF：fsyncを一切しない＝書き込みが詰まらない最強の応急。OS/電源クラッシュ時は破損リスク。
-#  ・FULL：最も安全だが、遅いディスクでは詰まる（従来の挙動）。
+# fsync の強さ。既定は OFF。
+#  理由：ライブDBは高速ローカル(/tmp)に置き、耐久性は定期スナップショット(persist)が担保する
+#  設計なので、commitごとの fsync は不要。OFF にすることで「遅いディスクの fsync 待ちで
+#  書き込みが詰まる→全read/writeをブロック→送信中で固まる」を根本から断つ。
+#  失うのは最大「最後の persist 以降ぶん（既定30秒）」で、これは fsync を切らなくても
+#  ローカルキャッシュ構成では同じ。必要なら TAYORI_SQLITE_SYNC=NORMAL / FULL に変更可。
 # 接続ごとの設定なので _connect で毎回適用する。
-_SYNC_MODE = (os.environ.get("TAYORI_SQLITE_SYNC", "NORMAL") or "NORMAL").upper()
+_SYNC_MODE = (os.environ.get("TAYORI_SQLITE_SYNC", "OFF") or "OFF").upper()
 if _SYNC_MODE not in ("OFF", "NORMAL", "FULL"):
-    _SYNC_MODE = "NORMAL"
+    _SYNC_MODE = "OFF"
 
 # プロセス内グローバル書き込みロック。worker は1個なので、SQLite に書くスレッドを
 # 「常に1つだけ」に直列化すれば、別接続どうしの衝突＝'database is locked' は原理的に起きない
@@ -377,7 +377,13 @@ def close_db(exc):
 # ログイン/登録のたびにメモリスパイク→ワーカーがOOMで落ち、全リクエスト無応答→再起動の
 # フラッピングを起こす。pbkdf2 はメモリをほぼ使わずCPUのみなのでスパイクしない。
 # 旧scryptハッシュも check_password_hash 側が方式を自動判別するため、そのまま検証可能。
-_PW_METHOD = "pbkdf2:sha256:200000"
+# イテレーションは env で調整可（既定10万＝低価格インスタンスでログインが詰まらない妥協値）。
+# 公開規模が見えてきたら 200000 へ戻す/argon2化を推奨（TAYORI_PBKDF2_ITERS で即変更可）。
+try:
+    _PBKDF2_ITERS = int(os.environ.get("TAYORI_PBKDF2_ITERS", "100000"))
+except ValueError:
+    _PBKDF2_ITERS = 100000
+_PW_METHOD = f"pbkdf2:sha256:{_PBKDF2_ITERS}"
 
 
 def _hash_pw(pw):
@@ -1041,7 +1047,7 @@ def _fetch_weather_open_meteo(lat, lon):
     req = urllib.request.Request(url, headers={"User-Agent": "tayori/1.0"})
     # timeout は余裕をもって8秒。Render等ではワーカー起動直後のコールド初回接続
     # （DNS＋TLSハンドシェイク）が3秒に間に合わず失敗していたため緩和。
-    with urllib.request.urlopen(req, timeout=8) as response:
+    with urllib.request.urlopen(req, timeout=4) as response:
         data = json.loads(response.read().decode())
     cw = data.get("current_weather", {})
     code = cw.get("weathercode", 0)
@@ -1065,7 +1071,7 @@ def _fetch_weather_owm(lat, lon, api_key):
     url = (f"https://api.openweathermap.org/data/2.5/weather"
            f"?lat={lat}&lon={lon}&units=metric&appid={api_key}")
     req = urllib.request.Request(url, headers={"User-Agent": "tayori/1.0"})
-    with urllib.request.urlopen(req, timeout=8) as response:
+    with urllib.request.urlopen(req, timeout=4) as response:
         data = json.loads(response.read().decode())
     temp = (data.get("main") or {}).get("temp", 20.0)
     wid = ((data.get("weather") or [{}])[0]).get("id", 800)
@@ -1144,7 +1150,7 @@ def _ip_geolocate(client_ip=None):
     target = client_ip if _is_public(client_ip) else ""
     try:
         url = f"http://ip-api.com/json/{target}?fields=status,lat,lon,city"
-        with urllib.request.urlopen(url, timeout=8) as r:
+        with urllib.request.urlopen(url, timeout=4) as r:
             d = json.loads(r.read().decode())
         if d.get("status") == "success" and d.get("lat") is not None:
             return d["lat"], d["lon"], d.get("city")
@@ -1281,6 +1287,11 @@ def start_notifier(interval=None):
     """一定間隔で「天気待ち伏せ判定」と「届いた便りのメール通知」を回す常駐スレッド。
     間隔は環境変数 TAYORI_CHECK_INTERVAL（秒）で変更可。デモなら 10 などにすると反応が速い。"""
     global _notify_started
+    # キルスイッチ：背景処理（天気判定・通知・定期persist）を即停止できる安全弁。
+    # 万一バックグラウンドが暴れたら TAYORI_DISABLE_NOTIFIER=1 を設定して再デプロイすれば止まる。
+    if os.environ.get("TAYORI_DISABLE_NOTIFIER") == "1":
+        print("[たより] 通知ループは TAYORI_DISABLE_NOTIFIER=1 のため停止中", flush=True)
+        return
     # モジュールが2つの文脈で読み込まれる等で start_notifier が二重に走っても、
     # プロセス内に通知スレッドが1本しか立たないようにする（背景の書き込み手を増やさない）。
     # _notify_started（グローバル）に加え、実際に生きているスレッド名でも二重起動を防ぐ。
