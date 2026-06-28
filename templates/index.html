@@ -36,7 +36,7 @@
   .panel.on{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .envelope{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 10px 30px -18px rgba(58,46,37,0.5);position:relative;overflow:hidden}
-  .env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--line);font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.18em;color:var(--ink-soft);text-transform:uppercase}
+  .env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--line);font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft)}
   .photo-opts{display:flex;margin:18px;gap:12px;flex-wrap:wrap}
   .photo-slot{flex:1;height:120px;border:1.5px dashed var(--line);border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft);gap:8px;position:relative;overflow:hidden;background:repeating-linear-gradient(45deg,transparent,transparent 11px,rgba(203,187,160,0.08) 11px,rgba(203,187,160,0.08) 12px);transition:.25s}
   .photo-slot:hover{border-color:var(--seal);color:var(--seal)}
@@ -82,7 +82,7 @@
   .voice-clear{cursor:pointer;text-decoration:underline;color:var(--ink-soft);font-size:11px}
   .env-foot{padding:16px 18px 20px;border-top:1px dashed var(--line)}
   .field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;flex-wrap:wrap;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
-  .field-row>label{white-space:nowrap;text-transform:uppercase;padding-top:6px}
+  .field-row>label{white-space:nowrap;padding-top:6px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;text-transform:none}
   .chips{display:flex;gap:7px;flex-wrap:wrap;flex:1}
   .chip{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;border:1px solid var(--line);background:transparent;color:var(--ink-soft);padding:5px 11px;border-radius:20px;cursor:pointer;transition:.2s}
   .chip.on{background:var(--seal);border-color:var(--seal);color:var(--paper)}
@@ -246,7 +246,7 @@
   .diff-btn{background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.12em;padding:12px 30px;border-radius:3px;transition:.2s}
   .diff-btn:hover{background:var(--seal)}
 
-  footer{text-align:center;margin-top:50px;font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.24em;color:var(--ink-soft);opacity:0.6;text-transform:uppercase}
+  footer{text-align:center;margin-top:50px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.24em;color:var(--ink-soft);opacity:0.6}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
 
   /* auth gate */
@@ -298,8 +298,8 @@
   .concept.on{display:block}
   .concept-inner{max-width:460px;margin:0 auto;text-align:center;animation:conceptIn 1s ease both}
   @keyframes conceptIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  .concept-mark{font-family:'Shippori Mincho',serif;font-size:30px;color:var(--seal);border:1.5px solid var(--seal);
-    width:58px;height:58px;line-height:55px;border-radius:50%;margin:0 auto 26px;letter-spacing:0}
+  .concept-mark{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--seal);border:1.5px solid var(--seal);
+    display:table;padding:7px 16px;line-height:1;border-radius:4px;margin:0 auto 26px;letter-spacing:0.14em}
   .concept-title{font-family:'Shippori Mincho',serif;font-size:24px;line-height:1.7;letter-spacing:0.1em;color:var(--ink);margin:0 0 30px}
   .concept-body p{font-family:'Shippori Mincho',serif;font-size:14px;line-height:2.1;letter-spacing:0.05em;color:var(--ink-soft);margin:0 0 22px}
   .concept-body b{color:var(--ink);font-weight:normal;border-bottom:1px solid var(--seal);padding-bottom:1px}
@@ -333,6 +333,7 @@
     font-size:16px;letter-spacing:0.2em;padding:15px;border-radius:3px;transition:.25s;
     box-shadow:0 8px 22px -14px rgba(58,46,37,0.5)}
   .onb-save:hover{background:var(--seal);transform:translateY(-1px)}
+  .onb-save:disabled{opacity:0.4;cursor:default;background:var(--line);transform:none}
   .onb-save:active{transform:translateY(0)}
   /* Secondary：枠線のゴースト調。塗りはしないが、誤タップ防止のため十分なタップ領域を確保。 */
   .onb-skip{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
@@ -377,12 +378,12 @@
 
 <div class="concept" id="concept">
   <div class="concept-inner">
-    <div class="concept-mark">緘</div>
-    <h2 class="concept-title">これは、<br>過去の自分と話す道具です</h2>
+    <div class="concept-mark">JPたよりPost</div>
+    <h2 class="concept-title">これは、<br>過去の自分と対話するツールです</h2>
     <div class="concept-body">
       <p>ここに置いた言葉は、いますぐ誰かに届くものではありません。<br>時間をおいて、<b>過去のあなた自身</b>として、あなたのもとへ返ってきます。</p>
-      <p>だから、返ってくる声に、正解や情報を求めないでください。<br>それは検索の答えではなく、かつてのあなたからの問いかけです。</p>
-      <p>天気やその日の空気で、便りの見え方は少し揺らぎます。<br>同じ言葉が、読む日によって違って見えること。<br>それも、この道具の一部です。</p>
+      <p>返ってくる声に、正解や情報を求めないでください。<br>それは検索の答えではなく、かつてのあなたからの問いかけです。</p>
+      <p>天気やその日の空気によって、たよりの見え方は少し揺らぎます。<br>そのため、同じ言葉が読む日によって違って見えることがあります。<br>それも、このツールの味わいの一部です。</p>
     </div>
     <button class="concept-go" id="conceptGo">はじめる</button>
   </div>
@@ -509,7 +510,6 @@
     <p class="tl-intro">あなたの便りの、全部。<br>過去から、まだ届いていない未来まで。</p>
     <div class="tl-filter" id="tlFilter">
       <button class="chip on" data-emo="all">全て</button>
-      <button class="chip" data-emo="誇らしい">誇らしい</button>
     </div>
     <div class="tl" id="tlList"></div>
   </section>
@@ -1260,13 +1260,22 @@ async function detectWeather(){
         onbProg=document.getElementById('onbProg'),onbSave=document.getElementById('onbSave'),
         onbSkip=document.getElementById('onbSkip');
   let onbFirstRun=false;  // 初回（登録直後）か、acctバーからの再訪か
-  const ONB_TARGET=10;  // おすすめの最低回答数（強制はしない＝非強制方針）
+  const ONB_TARGET=10;  // 初回は最低この数の回答を必須にする（満たすまで進めない）
+  function countOnbAnswered(){
+    let n=0;
+    onbList.querySelectorAll('textarea').forEach(t=>{if(t.value.trim().length>0)n++;});
+    return n;
+  }
   function updateOnbProgress(){
     const tas=onbList.querySelectorAll('textarea');
     let n=0;
     tas.forEach(t=>{const has=t.value.trim().length>0;t.closest('.onb-q').classList.toggle('answered',has);if(has)n++;});
     let extra='';
-    if(onbFirstRun && n<ONB_TARGET) extra=' <span class="onb-remain">（あと '+(ONB_TARGET-n)+' 問で、おすすめの'+ONB_TARGET+'問）</span>';
+    if(onbFirstRun){
+      // 初回は10問必須：満たすまで「はじめる」を無効化し、残り数を表示する
+      onbSave.disabled = n<ONB_TARGET;
+      if(n<ONB_TARGET) extra=' <span class="onb-remain">（あと '+(ONB_TARGET-n)+' 問・必須）</span>';
+    }
     onbProg.innerHTML='回答 <b>'+n+'</b> / '+tas.length+extra;
     return n;
   }
@@ -1289,6 +1298,7 @@ async function detectWeather(){
       onbList.appendChild(wrap);
     });
     onbSkip.textContent=onbFirstRun?'あとで':'閉じる';
+    onbSkip.style.display=onbFirstRun?'none':'';   // 初回はスキップ不可（10問必須）
     onbSave.textContent=onbFirstRun?'保存して、はじめる':'保存する';
     updateOnbProgress();
     // textareaの初期高さを内容に合わせる
@@ -1330,10 +1340,10 @@ async function detectWeather(){
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushOnbSave();});
   window.addEventListener('pagehide',flushOnbSave);
   onbSave.addEventListener('click',async()=>{
-    // 初回は10問を「おすすめ」する（強制はしない）。未満なら一度だけ確認して、進める。
-    if(onbFirstRun){
-      const n=countOnbAnswered();
-      if(n<ONB_TARGET && !confirm('いまは '+n+' 問の回答です。おすすめは'+ONB_TARGET+'問以上ですが、このまま始めますか？\n（あとから「初めての問い」でいつでも書き足せます）')) return;
+    // 初回は10問必須：満たなければ進めない（ボタンも無効化しているが二重で防ぐ）
+    if(onbFirstRun && countOnbAnswered()<ONB_TARGET){
+      flash('はじめの'+ONB_TARGET+'問に答えると、始められます。');
+      return;
     }
     await saveOnboarding(true);
     if(onbFirstRun){flash('ありがとう。これからの便りに、そっと活きてきます。');enterAppBody();}

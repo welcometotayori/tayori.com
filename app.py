@@ -14,6 +14,7 @@ import ssl
 import gzip
 import json
 import time
+import random
 import atexit
 import shutil
 import signal
@@ -26,7 +27,7 @@ import urllib.request   # 関数内で遅延importすると、複数スレッド
 import urllib.error     # 「cannot access submodule 'request'（循環import）」で失敗する。
                         # 起動時にモジュールレベルで1回だけimportして競合を防ぐ。
 from email.mime.text import MIMEText
-from email.utils import formataddr, parseaddr
+from email.utils import formataddr, parseaddr, make_msgid, formatdate
 from functools import wraps
 from datetime import datetime, date, timedelta
 
@@ -919,6 +920,14 @@ def send_email(to_addr, subject, body):
         from_name, from_addr = parseaddr(cfg["from"])
         msg["From"] = formataddr((from_name, from_addr)) if from_addr else cfg["from"]
         msg["To"] = to_addr
+        # 到達率を上げる標準ヘッダ（迷惑メール判定の軽減に効く）。
+        # ・Date/Message-ID が無いメールはスパム扱いされやすい。
+        # ・Reply-To を差出ドメインに。Message-ID も差出ドメインで採番する。
+        msg["Date"] = formatdate(localtime=True)
+        _dom = from_addr.split("@")[-1] if from_addr and "@" in from_addr else None
+        msg["Message-ID"] = make_msgid(domain=_dom) if _dom else make_msgid()
+        if from_addr:
+            msg["Reply-To"] = from_addr
         ctx = ssl.create_default_context()
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=15) as s:
             s.starttls(context=ctx)
@@ -1578,20 +1587,17 @@ def _weather_context_text(seal_env, open_env):
     return ""
 
 
-def _profile_context_text(user_id, limit=12):
-    """30の質問の回答から、AIに渡す事前知識テキストを作る。
-    オンボーディングは10問前後に答えてもらう設計なので、答えたものは原則すべて
-    （最大 limit 件）渡し、『その人の原体験・初期状態』をAIの前提として効かせる。"""
+def _profile_context_text(user_id, limit=3):
+    """30の質問の回答から、AIに渡す“ごく薄い背景”を作る。
+    全部渡すと会話に反映され過ぎて不自然（＝気持ち悪い）になるため、答えのうち
+    ランダムに数件だけ（最大 limit 件）を、あくまで雰囲気のヒントとして渡す。"""
     row = get_db().execute("SELECT onboarding FROM users WHERE id=?", (user_id,)).fetchone()
     answers = _load_onboarding(row["onboarding"] if row else None)
     if not answers:
         return ""
-    lines = []
-    for qid in sorted(answers):
-        if 0 <= qid < len(ONBOARDING_QUESTIONS):
-            lines.append(f"・{ONBOARDING_QUESTIONS[qid]} → {answers[qid]}")
-        if len(lines) >= limit:
-            break
+    qids = [q for q in answers if 0 <= q < len(ONBOARDING_QUESTIONS)]
+    random.shuffle(qids)   # 毎回違う数件＝特定の回答に固執させない
+    lines = [f"・{ONBOARDING_QUESTIONS[q]} → {answers[q]}" for q in qids[:limit]]
     return "\n".join(lines)
 
 
@@ -1721,7 +1727,7 @@ def api_ask_past_self(lid):
             "当時の本人になりきり、今の自分へ語りかけます。\n\n"
             f"【私（過去の自分）が書いた詩・ことば】\n{L['poem'] or '（なし）'}\n\n"
             + (f"【封をした日と、今日の空模様】\n{weather_ctx}\n\n" if weather_ctx else "")
-            + (f"【私が以前に語った、自分のこと】\n{profile_ctx}\n\n" if profile_ctx else "")
+            + (f"【ごく薄い背景（私が以前ぽつりと語ったこと・表に出しすぎない）】\n{profile_ctx}\n\n" if profile_ctx else "")
             + f"【これまでの私たちの対話】\n{convo or '（まだなし）'}\n\n"
             "―― 語りかけ方の約束 ――\n"
             "・一人称で、今の自分にそっと話しかける（2〜3文、短く）。\n"
@@ -1730,8 +1736,11 @@ def api_ask_past_self(lid):
             "受けとめずに話題を変えない。会話として地続きに。\n"
             "・絶対にしないこと：分析・指摘・診断（「最近〜が増えていますね」のような外からの観察）、"
             "助言・解決・励ましの説教、AIやアシスタントとしての振る舞い、説明や前置き。\n"
-            "・思いがけない角度から。でも内容は必ず、上に書かれた“私自身の言葉”に根ざすこと"
-            "（ランダムな一般論ではなく、この人の詩・価値観・以前語ったことの手ざわりから立ち上げる）。\n"
+            "・思いがけない角度から。でも、まずは“私が書いた詩・ことば”と直前の対話に根ざすこと"
+            "（ランダムな一般論にしない）。\n"
+            "・『ごく薄い背景』は、表に出しすぎない。引用・列挙・要約・言い当てをしない。"
+            "毎回は触れず、ごくたまに、ひとつの語の手ざわり程度にうっすら滲ませるだけでよい"
+            "（背景の話題を会話に持ち込んで掘り返すと“気持ち悪い”ので避ける）。\n"
             "・今の自分が、ふと立ち止まって『あの頃とは変わったな』と感じる“ズレ”に、静かに触れる。\n"
             "・口調は静かで、ウェットで、ノスタルジック。相手が弱っているときでも刺さらない、やわらかさで。\n"
             "・空模様や価値観は、織り込むと自然なときだけさりげなく（毎回でなくてよい）。\n"
