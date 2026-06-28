@@ -1014,7 +1014,7 @@ def _landing_page(title, message, ok=True):
         f".m{{color:{color};font-size:15px;letter-spacing:.05em;line-height:1.95;margin-top:14px}}"
         "a{color:#B5543A}</style></head><body><div class=card><h1>たより</h1>"
         f"<div class=m>{message}</div>"
-        f"<p style='margin-top:22px'><a href='{BASE_URL}/'>アプリへ戻る →</a></p>"
+        f"<p style='margin-top:22px'><a href='{BASE_URL}/'>戻る →</a></p>"
         "</div></body></html>"
     )
 
