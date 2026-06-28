@@ -349,20 +349,12 @@ def _connect():
       通知スレッドの書き込みが重なっても 'database is locked' で即死しないように）。
     ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
-    # ▼一時診断：_connect のどの段で停止するかを1行ずつ可視化（原因確定後に撤去）
-    _ct = time.monotonic()
-    def _ct_bc(msg):
-        print(f"[たより][conn] {(time.monotonic()-_ct)*1000:6.0f}ms {msg}", flush=True)
-    _ct_bc("connecting")
     conn = sqlite3.connect(DB_PATH, timeout=_BUSY_TIMEOUT_MS / 1000.0)
-    _ct_bc("opened")
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
-        _ct_bc("busy_timeout")
         # synchronous は「接続ごと」の設定なので毎回適用する（既定 OFF＝fsync遅延を回避）。
         conn.execute(f"PRAGMA synchronous={_SYNC_MODE}")
-        _ct_bc("synchronous")
         if _USE_WAL and not _wal_ready:
             conn.execute("PRAGMA journal_mode=WAL")
             _wal_ready = True
@@ -764,21 +756,13 @@ def api_register():
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
-    _t = time.monotonic()
-    def _bc(msg):  # 一時診断：どの段でハングするか（DB接続/SELECT/ハッシュ照合）
-        print(f"[たより][login] {(time.monotonic()-_t)*1000:6.0f}ms {msg}", flush=True)
-    _bc(f"start db={DB_PATH} cache={_LOCAL_CACHE}")
     data = request.get_json(force=True)
-    _bc("json")
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
     db = get_db()
-    _bc("connected")
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-    _bc("selected")
     if not row or not check_password_hash(row["pw_hash"], password):
         return jsonify(error="名前かパスワードが違います。"), 401
-    _bc("verified")
     # 古い scrypt ハッシュ（メモリハードで小メモリ環境に重い）を、ログイン成功時に
     # そっと pbkdf2 へ移行する。次回以降の照合が軽くなる。
     try:
@@ -786,7 +770,6 @@ def api_login():
             with _WRITE_LOCK:
                 db.execute("UPDATE users SET pw_hash=? WHERE id=?", (_hash_pw(password), row["id"]))
                 db.commit()
-            _bc("rehashed scrypt->pbkdf2")
     except Exception as e:
         print(f"[たより] pw再ハッシュ失敗（継続）: {e}", flush=True)
     session.permanent = True
