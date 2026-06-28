@@ -11,6 +11,7 @@
 import os
 import re
 import ssl
+import gzip
 import json
 import time
 import smtplib
@@ -137,6 +138,59 @@ app.config.update(
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,
 )
 
+
+# ------------------------------------------------ パフォーマンス計測 & 応答最適化
+# 「急に重い」を後から特定できるよう各リクエストの処理時間を測る。combined アクセス
+# ログにはレスポンス時間が無いため、ここで自前に出す（Renderのログで grep できる）。
+@app.before_request
+def _perf_start():
+    g._t0 = time.monotonic()
+
+
+# gzip で縮むテキスト系の Content-Type だけ圧縮する。
+_COMPRESSIBLE = ("text/html", "text/css", "text/plain", "text/javascript",
+                 "application/javascript", "application/json", "image/svg+xml")
+_GZIP_MIN_BYTES = 1024  # これ未満は圧縮しても割に合わない
+
+
+@app.after_request
+def _finalize_response(resp):
+    try:
+        ctype = (resp.content_type or "").split(";")[0].strip()
+        # send_file 等のストリーミング応答は触らない（get_data で壊れる）
+        if not resp.direct_passthrough and request.method in ("GET", "HEAD"):
+            # 1) 大きなHTML（index.html は約95KB）に ETag を付け、変わらなければ 304 で
+            #    本文ゼロで返す。毎回95KBをフル送出していたのを再訪問では止める。
+            if ctype == "text/html" and resp.status_code == 200:
+                resp.add_etag()
+                resp.headers.setdefault("Cache-Control", "no-cache")
+                resp.make_conditional(request)  # If-None-Match 一致なら 304 化
+
+            # 2) gzip 圧縮（クライアント対応・圧縮で得する・未圧縮のときだけ）
+            if (resp.status_code == 200
+                    and ctype in _COMPRESSIBLE
+                    and "gzip" in (request.headers.get("Accept-Encoding") or "")
+                    and "Content-Encoding" not in resp.headers):
+                data = resp.get_data()
+                if len(data) >= _GZIP_MIN_BYTES:
+                    resp.set_data(gzip.compress(data, compresslevel=6))
+                    resp.headers["Content-Encoding"] = "gzip"
+            resp.headers["Vary"] = "Accept-Encoding"
+    except Exception as e:
+        # 最適化が失敗しても本来の応答は壊さない
+        print(f"[たより] 応答最適化スキップ: {e}", flush=True)
+
+    # 処理時間ログ（重い応答だけ＝200ms超を出す。常時出すとログが膨らむため）
+    try:
+        dt = (time.monotonic() - getattr(g, "_t0", time.monotonic())) * 1000.0
+        if dt >= 200:
+            print(f"[たより][slow] {dt:6.0f}ms {request.method} {request.path}"
+                  f" -> {resp.status_code}", flush=True)
+    except Exception:
+        pass
+    return resp
+
+
 # 天気・メール送信などの外部通信を使うか。
 # PythonAnywhere の無料プランは外部通信が遮断されるため、既定で OFF にしておく。
 # 有料プラン等で天気/メールを使いたいときは環境変数 TAYORI_ENABLE_NETWORK=1 を設定する。
@@ -161,19 +215,31 @@ _USE_WAL = os.environ.get("TAYORI_SQLITE_WAL") == "1"
 # busy_timeout(待ち) × リトライ回数 で待ち時間が掛け算になり、ロック保持者が長いと
 # 書き込みが何十秒もハングしてワーカーを食い潰すため採用しない（保持型ロックはデッドロックの
 # 危険があり、これも不可）。並行書き込みの主因だった「オンボ保存の多重送信」はフロント側の
-# 多重送信ガードで断つ。busy_timeout は短め(5秒)にして、万一詰まっても素早く失敗させる。
+# 多重送信ガードで断つ。
+# busy_timeout は 15秒。Renderの永続ディスクは fsync が遅く、通知スレッド(30秒ごとの
+# UPDATE)とリクエストの書き込みが少し重なるだけで、5秒では待ちきれず 'database is locked'
+# →500 になっていた（register の db.commit() が代表例）。リトライではなく「単一の待ち上限」
+# なので、競合は最大15秒の短い待ちに変わるだけで、待ちが掛け算で膨らむ過去の回帰は起きない。
+_BUSY_TIMEOUT_MS = int(os.environ.get("TAYORI_BUSY_TIMEOUT_MS", "15000"))
+
+# プロセス内グローバル書き込みロック。worker は1個なので、SQLite に書くスレッドを
+# 「常に1つだけ」に直列化すれば、別接続どうしの衝突＝'database is locked' は原理的に起きない
+# （待つのは Python のロックで、SQLite のロックではない）。通知スレッドとリクエストの
+# 書き込み（register/onboarding 等）で同じロックを取り、競合を根本から断つ。リトライではなく
+# 「短時間だけ握って離す」ので、過去にハングを招いた保持型ロックとは別物（書き込みは一瞬）。
+_WRITE_LOCK = threading.RLock()
 
 
 def _connect():
     """SQLite接続を統一設定で開く。
-    ・timeout=5 / busy_timeout=5000：瞬間のロック待ちは吸収しつつ、詰まっても5秒で
-      素早く失敗させる（長時間ハングでワーカーを食い潰さない）。
+    ・timeout / busy_timeout=15秒：瞬間〜数秒のロック待ちを吸収する（Renderの遅いfsyncと
+      通知スレッドの書き込みが重なっても 'database is locked' で即死しないように）。
     ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
-    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn = sqlite3.connect(DB_PATH, timeout=_BUSY_TIMEOUT_MS / 1000.0)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
         if _USE_WAL and not _wal_ready:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
@@ -496,11 +562,16 @@ def api_save_onboarding():
         else:
             answers.pop(qid, None)
     done = 1 if data.get("done") else 0
-    db.execute(
-        "UPDATE users SET onboarding=?, onboarded=CASE WHEN ?=1 THEN 1 ELSE onboarded END WHERE id=?",
-        (json.dumps(answers, ensure_ascii=False), done, uid()),
-    )
-    db.commit()
+    try:
+        with _WRITE_LOCK:  # 書き込みを直列化（通知スレッド等と衝突させない）
+            db.execute(
+                "UPDATE users SET onboarding=?, onboarded=CASE WHEN ?=1 THEN 1 ELSE onboarded END WHERE id=?",
+                (json.dumps(answers, ensure_ascii=False), done, uid()),
+            )
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] onboarding 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
     now_onboarded = db.execute("SELECT onboarded FROM users WHERE id=?", (uid(),)).fetchone()["onboarded"]
     return jsonify(ok=True, answered=len(answers), onboarded=bool(now_onboarded))
 
@@ -529,12 +600,19 @@ def api_register():
     if db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         return jsonify(error="その名前はもう使われています。"), 409
     new_id = secrets.token_hex(8)
-    db.execute(
-        "INSERT INTO users (id,username,pw_hash,created,email,unsub_token) VALUES (?,?,?,?,?,?)",
-        (new_id, username, _hash_pw(password), datetime.now().isoformat(),
-         email or None, secrets.token_urlsafe(16)),
-    )
-    db.commit()
+    pw_hash = _hash_pw(password)  # ハッシュ計算は重いのでロックの外で済ませておく
+    try:
+        with _WRITE_LOCK:  # 書き込みを直列化（通知スレッド等と衝突させない）
+            db.execute(
+                "INSERT INTO users (id,username,pw_hash,created,email,unsub_token) VALUES (?,?,?,?,?,?)",
+                (new_id, username, pw_hash, datetime.now().isoformat(),
+                 email or None, secrets.token_urlsafe(16)),
+            )
+            db.commit()
+    except sqlite3.OperationalError as e:
+        # 万一ここまで来てもロックなら、生の500ではなく分かる日本語で返す
+        print(f"[たより] register 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
     email_pending = False
     if email:
         # 確認メールを送り、確認が済むまでは通知しない
@@ -971,9 +1049,10 @@ def _check_weather_events():
                 wx_cache[key] = fetch_weather(r["lat"], r["lon"])
             wx = wx_cache[key]
             if _weather_matches(r["event"], wx):
-                db.execute("UPDATE letters SET weather_met_at=? WHERE id=?",
-                           (now.isoformat(timespec="seconds"), r["lid"]))
-                db.commit()
+                with _WRITE_LOCK:  # リクエストの書き込みと直列化
+                    db.execute("UPDATE letters SET weather_met_at=? WHERE id=?",
+                               (now.isoformat(timespec="seconds"), r["lid"]))
+                    db.commit()
                 print(f"[天気待ち伏せ成立] {r['event']} → 便り {r['lid']} が届きました")
     except Exception as e:
         print(f"[天気待ち伏せチェックでエラー] {e}")
@@ -1031,15 +1110,17 @@ def _check_and_notify():
             if r["unsub"]:
                 body += f"――\nこの通知を止めるには: {BASE_URL}/unsubscribe/{r['unsub']}\n"
             if send_email(r["email"], subject, body):
-                db.execute("UPDATE letters SET notified=1 WHERE id=?", (r["lid"],))
-                db.commit()
+                with _WRITE_LOCK:  # リクエストの書き込みと直列化
+                    db.execute("UPDATE letters SET notified=1 WHERE id=?", (r["lid"],))
+                    db.commit()
             else:
                 # 失敗したら試行回数を増やし、上限に達したら諦める（無限リトライ防止）
                 attempts = r["attempts"] + 1
                 failed = 1 if attempts >= MAX_NOTIFY_ATTEMPTS else 0
-                db.execute("UPDATE letters SET notify_attempts=?, notify_failed=? WHERE id=?",
-                           (attempts, failed, r["lid"]))
-                db.commit()
+                with _WRITE_LOCK:  # リクエストの書き込みと直列化
+                    db.execute("UPDATE letters SET notify_attempts=?, notify_failed=? WHERE id=?",
+                               (attempts, failed, r["lid"]))
+                    db.commit()
                 if failed:
                     print(f"[通知あきらめ] 便り {r['lid']} は {attempts} 回失敗したため停止しました")
     except Exception as e:
@@ -1694,7 +1775,13 @@ def _run_backup_to_s3():
     fd, tmp = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:
+        # スナップショット中は書き込みロックと競合しうる。所要時間を必ず記録して、
+        # 「サイトが重い時刻」と突き合わせられるようにする（重さの原因切り分け用）。
+        _t0 = time.monotonic()
+        print(f"[たより] バックアップ開始 {datetime.now().strftime('%H:%M:%S')}", flush=True)
         _make_db_snapshot(tmp)
+        _snap_ms = (time.monotonic() - _t0) * 1000.0
+        print(f"[たより] スナップショット完了（{_snap_ms:.0f}ms・この間は書き込みが詰まりうる）", flush=True)
         with open(tmp, "rb") as fh:
             blob = gzip.compress(fh.read())
         key = "backups/tayori-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".db.gz"
