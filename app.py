@@ -353,22 +353,23 @@ def _connect():
       通知スレッドの書き込みが重なっても 'database is locked' で即死しないように）。
     ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
-    _t0 = time.monotonic()
+    # ▼一時診断：_connect のどの段で停止するかを1行ずつ可視化（原因確定後に撤去）
+    _ct = time.monotonic()
+    def _ct_bc(msg):
+        print(f"[たより][conn] {(time.monotonic()-_ct)*1000:6.0f}ms {msg}", flush=True)
+    _ct_bc("connecting")
     conn = sqlite3.connect(DB_PATH, timeout=_BUSY_TIMEOUT_MS / 1000.0)
-    _dt = (time.monotonic() - _t0) * 1000.0
-    if _dt > 300:  # 一時診断：接続自体が遅い＝DBファイル/ディスクの問題を可視化
-        print(f"[たより][connect] sqlite3.connect が {_dt:.0f}ms（path={DB_PATH}）", flush=True)
+    _ct_bc("opened")
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        _ct_bc("busy_timeout")
         # synchronous は「接続ごと」の設定なので毎回適用する（既定 OFF＝fsync遅延を回避）。
         conn.execute(f"PRAGMA synchronous={_SYNC_MODE}")
-        if _USE_WAL:
-            # journal_mode=WAL はDBファイルに永続するので一度設定すれば足りる。
-            # ※ただしRenderの永続ディスクでは -shm の mmap で接続がハングする既知問題あり。
-            if not _wal_ready:
-                conn.execute("PRAGMA journal_mode=WAL")
-                _wal_ready = True
+        _ct_bc("synchronous")
+        if _USE_WAL and not _wal_ready:
+            conn.execute("PRAGMA journal_mode=WAL")
+            _wal_ready = True
     except sqlite3.Error as e:
         print(f"[たより] SQLite PRAGMA設定に失敗（続行します）: {e}", flush=True)
     return conn
