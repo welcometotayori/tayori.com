@@ -246,10 +246,14 @@ def _connect():
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
-        if _USE_WAL and not _wal_ready:
-            conn.execute("PRAGMA journal_mode=WAL")
+        if _USE_WAL:
+            # journal_mode=WAL はDBファイルに永続するので一度設定すれば足りるが、
+            # synchronous は「接続ごと」の設定なので毎回 NORMAL にする必要がある
+            # （でないと2本目以降が既定の FULL に戻り、commitごとに fsync が走って遅くなる）。
+            if not _wal_ready:
+                conn.execute("PRAGMA journal_mode=WAL")
+                _wal_ready = True
             conn.execute("PRAGMA synchronous=NORMAL")
-            _wal_ready = True
     except sqlite3.Error as e:
         print(f"[たより] SQLite PRAGMA設定に失敗（続行します）: {e}", flush=True)
     return conn
@@ -280,17 +284,22 @@ def _hash_pw(pw):
 
 
 def _normalize_journal_mode():
-    """既存DBがWALモードのままだと、Renderの永続ディスク(FS)で -shm の mmap に失敗し、
-    クエリのたびに『disk I/O error』を起こす。起動時に rollback(DELETE) モードへ戻す。
-    （WAL化は過去のデプロイの名残。モードはDBファイルに永続記録されるため、コードでWALを
-      オフにしただけでは戻らず、ここで明示的に変換する必要がある。）
-    WALに残っていたコミットは DELETE への切替時に本体へ統合される＝データは失わない。
+    """ジャーナルモードを起動時に意図した状態へ寄せる。
+    ・既定（WAL未指定）：rollback(DELETE) に戻す。書込不可FSへフォールバックした際の
+      -shm mmap 失敗による『disk I/O error』を避けるため。
+    ・TAYORI_SQLITE_WAL=1：WAL のままにする（DELETEへ戻さない）。永続ディスク上では
+      WALが読み書きを互いにブロックせず、commitごとのfsync停止も避けられる＝本命の対策。
+    モードはDBファイルに永続記録されるため、ここで明示的に揃える必要がある。
     それでも壊れている場合のみ、最終手段として -wal/-shm を除去して本体だけで起動する。"""
     try:
         c = sqlite3.connect(DB_PATH, timeout=15)
         try:
             mode = (c.execute("PRAGMA journal_mode").fetchone() or [""])[0]
-            if str(mode).lower() == "wal":
+            if _USE_WAL and str(mode).lower() != "wal":
+                newmode = (c.execute("PRAGMA journal_mode=WAL").fetchone() or [""])[0]
+                c.execute("PRAGMA synchronous=NORMAL")
+                print(f"[たより] DBを{newmode}へ切替（読書ブロック解消＋fsync停止対策・TAYORI_SQLITE_WAL=1）", flush=True)
+            elif not _USE_WAL and str(mode).lower() == "wal":
                 c.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # WAL→本体へ統合
                 newmode = (c.execute("PRAGMA journal_mode=DELETE").fetchone() or [""])[0]
                 print(f"[たより] DBをWAL→{newmode}へ戻しました（永続ディスクのdisk I/O error対策）", flush=True)
