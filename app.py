@@ -228,6 +228,17 @@ _USE_WAL = os.environ.get("TAYORI_SQLITE_WAL") == "1"
 # なので、競合は最大15秒の短い待ちに変わるだけで、待ちが掛け算で膨らむ過去の回帰は起きない。
 _BUSY_TIMEOUT_MS = int(os.environ.get("TAYORI_BUSY_TIMEOUT_MS", "15000"))
 
+# fsync の強さ。Renderの永続ディスクは fsync が遅く、既定の FULL だと commit のたびに
+# 数秒～十数秒ディスク同期で止まり、rollbackモードでは全read/writeをブロックする。
+#  ・NORMAL（既定）：同期回数を減らす。電源断時のみ最後の書き込みを失う可能性（管理基盤は
+#    通常graceful停止なので実害は小さい）。オフサイトBKがあればさらに安全。
+#  ・OFF：fsyncを一切しない＝書き込みが詰まらない最強の応急。OS/電源クラッシュ時は破損リスク。
+#  ・FULL：最も安全だが、遅いディスクでは詰まる（従来の挙動）。
+# 接続ごとの設定なので _connect で毎回適用する。
+_SYNC_MODE = (os.environ.get("TAYORI_SQLITE_SYNC", "NORMAL") or "NORMAL").upper()
+if _SYNC_MODE not in ("OFF", "NORMAL", "FULL"):
+    _SYNC_MODE = "NORMAL"
+
 # プロセス内グローバル書き込みロック。worker は1個なので、SQLite に書くスレッドを
 # 「常に1つだけ」に直列化すれば、別接続どうしの衝突＝'database is locked' は原理的に起きない
 # （待つのは Python のロックで、SQLite のロックではない）。通知スレッドとリクエストの
@@ -246,14 +257,14 @@ def _connect():
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        # synchronous は「接続ごと」の設定なので毎回適用する（既定 NORMAL＝fsync削減）。
+        conn.execute(f"PRAGMA synchronous={_SYNC_MODE}")
         if _USE_WAL:
-            # journal_mode=WAL はDBファイルに永続するので一度設定すれば足りるが、
-            # synchronous は「接続ごと」の設定なので毎回 NORMAL にする必要がある
-            # （でないと2本目以降が既定の FULL に戻り、commitごとに fsync が走って遅くなる）。
+            # journal_mode=WAL はDBファイルに永続するので一度設定すれば足りる。
+            # ※ただしRenderの永続ディスクでは -shm の mmap で接続がハングする既知問題あり。
             if not _wal_ready:
                 conn.execute("PRAGMA journal_mode=WAL")
                 _wal_ready = True
-            conn.execute("PRAGMA synchronous=NORMAL")
     except sqlite3.Error as e:
         print(f"[たより] SQLite PRAGMA設定に失敗（続行します）: {e}", flush=True)
     return conn
