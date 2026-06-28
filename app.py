@@ -960,11 +960,11 @@ def _issue_email_verification(db, user_id, email, username):
     body = (
         f"{username} さんへ。\n"
         "たより の通知メールを、このアドレスで受け取る設定をしました。\n"
-        "下のリンクをひらいて、確認を完了してください（7日間有効）。\n"
-        "確認が済むまで、便りが届いてもお知らせは送られません。\n"
-        f"{verify_url}\n\n"
+        "下のリンクを開いて、確認を完了してください（7日間有効）。\n"
+        "確認が済むまで、たよりが届いてもお知らせは送られません。\n"
+        f"{verify_url}\n"
         "心当たりがなければ、このメールは無視してください。\n"
-        "— たより\n"
+        "tayoriー たより\n"
     )
     # 送信はバックグラウンドで行う。SMTP(最大15秒)を登録レスポンスの中で待つと、
     # メール付き登録が遅くなり、Resendが詰まると登録自体が失敗（500）に見えてしまう。
@@ -1250,15 +1250,12 @@ def _check_and_notify():
             subject = "たより — 便りが、届きました"
             body = (
                 f"{r['username']} さんへ。\n"
-                "むかしのあなたが封をした便りが、たったいま届きました。\n"
-                f"「{r['arrive_label'] or 'あの日のあなたから'}」と書かれています。\n"
+                "過去のあなたが封をしたたよりが、いま届きました。\n"
                 "封の中身は、まだあなたも見ていません。\n"
                 "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
                 f"{open_url}\n\n"
-                "— たより\n"
+                "tayori ーたより\n"
             )
-            if r["unsub"]:
-                body += f"――\nこの通知を止めるには: {BASE_URL}/unsubscribe/{r['unsub']}\n"
             if send_email(r["email"], subject, body):
                 with _WRITE_LOCK:  # リクエストの書き込みと直列化
                     db.execute("UPDATE letters SET notified=1 WHERE id=?", (r["lid"],))
