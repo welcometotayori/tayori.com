@@ -145,6 +145,12 @@ app.config.update(
 @app.before_request
 def _perf_start():
     g._t0 = time.monotonic()
+    # POST等の書き込み系は「到達した瞬間」も出す。これで『送信中のまま固まる』が
+    #  ・[recv] が出ない → リクエストがアプリに届いていない（経路/プロキシ or ワーカー詰まり）
+    #  ・[recv] は出るが [slow]/応答が出ない → ハンドラ内（commitのfsync等）で停止
+    # と一発で切り分けられる。
+    if request.method != "GET":
+        print(f"[たより][recv] {request.method} {request.path}", flush=True)
 
 
 # gzip で縮むテキスト系の Content-Type だけ圧縮する。
@@ -1134,7 +1140,11 @@ def start_notifier(interval=None):
     """一定間隔で「天気待ち伏せ判定」と「届いた便りのメール通知」を回す常駐スレッド。
     間隔は環境変数 TAYORI_CHECK_INTERVAL（秒）で変更可。デモなら 10 などにすると反応が速い。"""
     global _notify_started
-    if _notify_started:
+    # モジュールが2つの文脈で読み込まれる等で start_notifier が二重に走っても、
+    # プロセス内に通知スレッドが1本しか立たないようにする（背景の書き込み手を増やさない）。
+    # _notify_started（グローバル）に加え、実際に生きているスレッド名でも二重起動を防ぐ。
+    if _notify_started or any(t.name == "tayori-notifier" and t.is_alive()
+                              for t in threading.enumerate()):
         return
     _notify_started = True
 
@@ -1165,7 +1175,7 @@ def start_notifier(interval=None):
                 print(f"[たより] バックアップ判定でエラー（継続）: {e}", flush=True)
             time.sleep(interval)
 
-    t = threading.Thread(target=loop, daemon=True)
+    t = threading.Thread(target=loop, daemon=True, name="tayori-notifier")
     t.start()
     _bk = "・オフサイトBK有効" if _backup_s3_config() else ""
     print(f"[たより] 便りのチェックを開始しました（{interval}秒ごと · 天気待ち伏せ＋メール通知{_bk}）")
