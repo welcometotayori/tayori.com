@@ -806,11 +806,12 @@ def _issue_email_verification(db, user_id, email, username):
     """確認トークンを発行して確認メールを送る。verified は 0 に戻す。
     送信できたかに関わらず、トークン自体は保存する（リンクは有効）。"""
     token = secrets.token_urlsafe(24)
-    db.execute(
-        "UPDATE users SET email=?, email_verified=0, email_token=?, email_token_at=?, notify_enabled=1 WHERE id=?",
-        (email, token, datetime.now().isoformat(timespec="seconds"), user_id),
-    )
-    db.commit()
+    with _WRITE_LOCK:  # 書き込みを直列化
+        db.execute(
+            "UPDATE users SET email=?, email_verified=0, email_token=?, email_token_at=?, notify_enabled=1 WHERE id=?",
+            (email, token, datetime.now().isoformat(timespec="seconds"), user_id),
+        )
+        db.commit()
     verify_url = f"{BASE_URL}/verify/{token}"
     subject = "たより — メールアドレスの確認"
     body = (
@@ -1202,9 +1203,10 @@ def api_weather():
     # ログイン中ユーザーの最終位置を保存（天気待ち伏せに使う）
     if session.get("uid"):
         try:
-            get_db().execute("UPDATE users SET last_lat=?, last_lon=? WHERE id=?",
-                             (lat, lon, session["uid"]))
-            get_db().commit()
+            with _WRITE_LOCK:  # 書き込みを直列化
+                get_db().execute("UPDATE users SET last_lat=?, last_lon=? WHERE id=?",
+                                 (lat, lon, session["uid"]))
+                get_db().commit()
         except Exception:
             pass
 
@@ -1227,9 +1229,10 @@ def api_locate():
     lat, lon = data.get("lat"), data.get("lon")
     if lat is None or lon is None:
         return jsonify(error="位置がありません"), 400
-    get_db().execute("UPDATE users SET last_lat=?, last_lon=? WHERE id=?",
-                     (str(lat), str(lon), uid()))
-    get_db().commit()
+    with _WRITE_LOCK:  # 書き込みを直列化
+        get_db().execute("UPDATE users SET last_lat=?, last_lon=? WHERE id=?",
+                         (str(lat), str(lon), uid()))
+        get_db().commit()
     return jsonify(ok=True)
 
 
@@ -2085,14 +2088,19 @@ def api_admin_delete_user(uid_):
         return jsonify(error="ユーザーが見つかりません。"), 404
     if row["username"] == "admin":
         return jsonify(error="管理者アカウントは削除できません。"), 403
-    # このユーザーの便りに紐づくスレッドも消す
-    db.execute(
-        "DELETE FROM thread WHERE letter_id IN (SELECT id FROM letters WHERE user_id=?)",
-        (uid_,))
-    db.execute("DELETE FROM letters WHERE user_id=?", (uid_,))
-    db.execute("DELETE FROM drafts  WHERE user_id=?", (uid_,))
-    db.execute("DELETE FROM users   WHERE id=?",      (uid_,))
-    db.commit()
+    try:
+        with _WRITE_LOCK:  # 複数DELETE＋commitを1トランザクションで直列化
+            # このユーザーの便り・スレッド・下書きも全て物理削除（関連データを残さない）
+            db.execute(
+                "DELETE FROM thread WHERE letter_id IN (SELECT id FROM letters WHERE user_id=?)",
+                (uid_,))
+            db.execute("DELETE FROM letters WHERE user_id=?", (uid_,))
+            db.execute("DELETE FROM drafts  WHERE user_id=?", (uid_,))
+            db.execute("DELETE FROM users   WHERE id=?",      (uid_,))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] ユーザー削除 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
     return jsonify(ok=True)
 
 

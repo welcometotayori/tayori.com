@@ -317,6 +317,7 @@
   .onb-lead{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);letter-spacing:0.06em;line-height:1.95;margin-bottom:6px}
   .onb-prog{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.18em;color:var(--ink-soft);text-align:center;margin:14px 0 22px}
   .onb-prog b{color:var(--seal)}
+  .onb-remain{color:var(--seal);opacity:0.85;letter-spacing:0.04em}
   .onb-q{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:16px 16px 14px;margin-bottom:14px;
     box-shadow:0 6px 20px -16px rgba(58,46,37,0.5)}
   .onb-q .num{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.18em;color:var(--seal);text-transform:uppercase}
@@ -1259,11 +1260,15 @@ async function detectWeather(){
         onbProg=document.getElementById('onbProg'),onbSave=document.getElementById('onbSave'),
         onbSkip=document.getElementById('onbSkip');
   let onbFirstRun=false;  // 初回（登録直後）か、acctバーからの再訪か
+  const ONB_TARGET=10;  // おすすめの最低回答数（強制はしない＝非強制方針）
   function updateOnbProgress(){
     const tas=onbList.querySelectorAll('textarea');
     let n=0;
     tas.forEach(t=>{const has=t.value.trim().length>0;t.closest('.onb-q').classList.toggle('answered',has);if(has)n++;});
-    onbProg.innerHTML='回答 <b>'+n+'</b> / '+tas.length;
+    let extra='';
+    if(onbFirstRun && n<ONB_TARGET) extra=' <span class="onb-remain">（あと '+(ONB_TARGET-n)+' 問で、おすすめの'+ONB_TARGET+'問）</span>';
+    onbProg.innerHTML='回答 <b>'+n+'</b> / '+tas.length+extra;
+    return n;
   }
   async function openOnboarding(firstRun){
     onbFirstRun=!!firstRun;
@@ -1280,7 +1285,7 @@ async function detectWeather(){
         '<textarea data-qid="'+q.id+'" rows="1" placeholder="（答えられるものだけで）"></textarea>';
       const ta=wrap.querySelector('textarea');
       if(ans[String(q.id)])ta.value=ans[String(q.id)];
-      ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';updateOnbProgress();});
+      ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';updateOnbProgress();scheduleOnbAutosave();});
       onbList.appendChild(wrap);
     });
     onbSkip.textContent=onbFirstRun?'あとで':'閉じる';
@@ -1305,7 +1310,31 @@ async function detectWeather(){
     onbSave.disabled=false; onbSkip.disabled=false;
     return res;
   }
+  // 入力途中の自動保存（done:false＝完了印は付けずに回答だけ保存）。
+  // 入力のたびにデバウンスして静かに保存し、ボタン状態は触らない（チラつき防止）。
+  let _onbAutoTimer=null;
+  function scheduleOnbAutosave(){
+    clearTimeout(_onbAutoTimer);
+    _onbAutoTimer=setTimeout(()=>{
+      api('/api/onboarding',{method:'POST',body:JSON.stringify({answers:collectOnbAnswers(),done:false})});
+    },1200);
+  }
+  // アプリを閉じる/バックグラウンドにした瞬間の取りこぼし防止（sendBeaconで確実に送る）。
+  function flushOnbSave(){
+    if(!onb.classList.contains('on'))return;   // オンボ画面を開いている時だけ
+    try{
+      const body=JSON.stringify({answers:collectOnbAnswers(),done:false});
+      navigator.sendBeacon('/api/onboarding', new Blob([body],{type:'application/json'}));
+    }catch(e){}
+  }
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushOnbSave();});
+  window.addEventListener('pagehide',flushOnbSave);
   onbSave.addEventListener('click',async()=>{
+    // 初回は10問を「おすすめ」する（強制はしない）。未満なら一度だけ確認して、進める。
+    if(onbFirstRun){
+      const n=countOnbAnswered();
+      if(n<ONB_TARGET && !confirm('いまは '+n+' 問の回答です。おすすめは'+ONB_TARGET+'問以上ですが、このまま始めますか？\n（あとから「初めての問い」でいつでも書き足せます）')) return;
+    }
     await saveOnboarding(true);
     if(onbFirstRun){flash('ありがとう。これからの便りに、そっと活きてきます。');enterAppBody();}
     else{onb.classList.remove('on');flash('書き足しました。');}
