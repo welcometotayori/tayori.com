@@ -125,33 +125,49 @@ def _restore_from_durable():
 
 _persist_lock = threading.Lock()
 def _persist_to_durable():
-    """ライブDB→永続ディスクへ整合性スナップショット。一時ファイルへ書いてから
-    アトミックに差し替えるので、途中で落ちても永続側が壊れない。foregroundは妨げない
-    （読み取り元はライブ＝高速、書き込み先は永続＝遅いが、この処理は背景スレッドで走る）。"""
+    """ライブDB→永続ディスクへ整合性スナップショット。
+    【重要】遅い永続ディスクへの書き込みを、ライブDBのロック保持から完全に切り離す：
+      ① ライブ → 高速な /tmp 上の「ステージ」へ整合性コピー（チャンク化＝ライブの読みロックは
+         一瞬しか持たない。foregroundのDBアクセスを止めない）。
+      ② ステージ(/tmp) → 永続(/var/data) は“ただのファイルコピー＋アトミックrename”。
+         これは SQLite のロックを一切介さないので、/var/data が遅く/詰まっても
+         ライブDB（＝実行中の読み書き）には一切影響しない。
+    （以前は src.backup(dst=/var/data) を一括実行し、遅い書き込み中ずっとライブの読みロックを
+      保持→全DBアクセスが固まっていた。その回帰の根治。）"""
     if not _LOCAL_CACHE:
         return False
     if not _persist_lock.acquire(blocking=False):
         return False   # 既に保存中なら重ねない
-    tmp = _PERSIST_DB_PATH + ".tmp"
+    stage = DB_PATH + ".persist.tmp"        # 高速ローカル上の中間ファイル
+    durtmp = _PERSIST_DB_PATH + ".tmp"      # 永続側の一時ファイル（最後にrename）
     try:
+        # ① ライブ → /tmp ステージ（チャンク化でロックを小刻みに解放）
         src = sqlite3.connect(DB_PATH, timeout=30)
-        dst = sqlite3.connect(tmp, timeout=60)
+        dst = sqlite3.connect(stage, timeout=30)
         try:
+            dst.execute("PRAGMA synchronous=OFF")
             with dst:
-                src.backup(dst)
+                src.backup(dst, pages=256, sleep=0.002)
         finally:
             dst.close()
             src.close()
-        os.replace(tmp, _PERSIST_DB_PATH)   # アトミック差し替え
+        # ② /tmp ステージ → /var/data（ただのファイルコピー。SQLiteロックを介さない）
+        shutil.copyfile(stage, durtmp)
+        os.replace(durtmp, _PERSIST_DB_PATH)   # アトミック差し替え
         return True
     except Exception as e:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
+        for p in (durtmp,):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
         print(f"[たより] 永続化に失敗（次回再試行）: {e}", flush=True)
         return False
     finally:
+        try:
+            os.remove(stage)
+        except OSError:
+            pass
         _persist_lock.release()
 
 
@@ -343,11 +359,15 @@ def _connect():
       通知スレッドの書き込みが重なっても 'database is locked' で即死しないように）。
     ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
+    _t0 = time.monotonic()
     conn = sqlite3.connect(DB_PATH, timeout=_BUSY_TIMEOUT_MS / 1000.0)
+    _dt = (time.monotonic() - _t0) * 1000.0
+    if _dt > 300:  # 接続自体が遅い＝ディスク/ロックの問題を可視化（一時診断）
+        print(f"[たより][connect] sqlite3.connect が {_dt:.0f}ms（path={DB_PATH}）", flush=True)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
-        # synchronous は「接続ごと」の設定なので毎回適用する（既定 NORMAL＝fsync削減）。
+        # synchronous は「接続ごと」の設定なので毎回適用する（既定 OFF＝fsync遅延を回避）。
         conn.execute(f"PRAGMA synchronous={_SYNC_MODE}")
         if _USE_WAL:
             # journal_mode=WAL はDBファイルに永続するので一度設定すれば足りる。
