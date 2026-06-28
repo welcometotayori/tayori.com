@@ -251,12 +251,6 @@ app.config.update(
 @app.before_request
 def _perf_start():
     g._t0 = time.monotonic()
-    # POST等の書き込み系は「到達した瞬間」も出す。これで『送信中のまま固まる』が
-    #  ・[recv] が出ない → リクエストがアプリに届いていない（経路/プロキシ or ワーカー詰まり）
-    #  ・[recv] は出るが [slow]/応答が出ない → ハンドラ内（commitのfsync等）で停止
-    # と一発で切り分けられる。
-    if request.method != "GET":
-        print(f"[たより][recv] {request.method} {request.path}", flush=True)
 
 
 # gzip で縮むテキスト系の Content-Type だけ圧縮する。
@@ -359,11 +353,7 @@ def _connect():
       通知スレッドの書き込みが重なっても 'database is locked' で即死しないように）。
     ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
-    _t0 = time.monotonic()
     conn = sqlite3.connect(DB_PATH, timeout=_BUSY_TIMEOUT_MS / 1000.0)
-    _dt = (time.monotonic() - _t0) * 1000.0
-    if _dt > 300:  # 接続自体が遅い＝ディスク/ロックの問題を可視化（一時診断）
-        print(f"[たより][connect] sqlite3.connect が {_dt:.0f}ms（path={DB_PATH}）", flush=True)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
@@ -739,34 +729,22 @@ def api_register():
         return jsonify(error="パスワードは8文字以上にしてください。"), 400
     if email and not EMAIL_RE.match(email):
         return jsonify(error="メールアドレスの形式が正しくありません。"), 400
-    # ▼一時診断：どの行で固まるかを特定するパンくず（time付き）。原因確定後に撤去する。
-    _t = time.monotonic()
-    def _bc(msg):
-        print(f"[たより][reg] {(time.monotonic()-_t)*1000:6.0f}ms {msg}", flush=True)
-    _bc("start")
     db = get_db()
-    _bc("connected")
     if db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         return jsonify(error="その名前はもう使われています。"), 409
-    _bc("select ok")
     new_id = secrets.token_hex(8)
     pw_hash = _hash_pw(password)  # ハッシュ計算は重いのでロックの外で済ませておく
-    _bc("hashed")
     # ロックは無限待ちにしない（保持者がfsync等で固まっても、ここで諦めて503にする）
     got = _WRITE_LOCK.acquire(timeout=20)
     if not got:
-        _bc("LOCK TIMEOUT（別の書き込みが20秒以上ロックを保持＝fsync停止の疑い）")
         return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
-    _bc("lock acquired")
     try:
         db.execute(
             "INSERT INTO users (id,username,pw_hash,created,email,unsub_token) VALUES (?,?,?,?,?,?)",
             (new_id, username, pw_hash, datetime.now().isoformat(),
              email or None, secrets.token_urlsafe(16)),
         )
-        _bc("insert ok（commit前＝ここから先が長いなら fsync 停止）")
         db.commit()
-        _bc("committed")
     except sqlite3.OperationalError as e:
         print(f"[たより] register 書き込み失敗（再試行可）: {e}", flush=True)
         return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
@@ -785,20 +763,13 @@ def api_register():
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
-    _t = time.monotonic()
-    def _bc(msg):
-        print(f"[たより][login] {(time.monotonic()-_t)*1000:6.0f}ms {msg}", flush=True)
-    _bc("start")
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
     db = get_db()
-    _bc("connected")
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-    _bc("selected")
     if not row or not check_password_hash(row["pw_hash"], password):
         return jsonify(error="名前かパスワードが違います。"), 401
-    _bc("verified")
     session.permanent = True
     session["uid"] = row["id"]
     keys = row.keys()
