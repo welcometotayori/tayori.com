@@ -770,8 +770,9 @@ def api_login():
     _t = time.monotonic()
     def _bc(msg):  # 一時診断：どの段でハングするか（DB接続/SELECT/ハッシュ照合）
         print(f"[たより][login] {(time.monotonic()-_t)*1000:6.0f}ms {msg}", flush=True)
-    _bc("start")
+    _bc(f"start db={DB_PATH} cache={_LOCAL_CACHE}")
     data = request.get_json(force=True)
+    _bc("json")
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
     db = get_db()
