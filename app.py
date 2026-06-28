@@ -14,6 +14,9 @@ import ssl
 import gzip
 import json
 import time
+import atexit
+import shutil
+import signal
 import smtplib
 import sqlite3
 import secrets
@@ -74,10 +77,96 @@ def _resolve_db_path(desired):
 
 
 DB_PATH = _resolve_db_path(_DB_DESIRED)
+
+# ---- ライブDBを高速ローカルに置く（永続ディスクの遅い fsync を実行パスから外す）----
+# Renderの永続ディスク(/var/data)はネットワーク接続で fsync が遅く、SQLiteの読み書きが
+# 数秒～十数秒ハングして1ワーカーを食い潰す（loginの読み取りまで固まる）。そこで：
+#   ・実行時は高速なローカル(/tmp)の「ライブDB」を使う＝読み書きが即時。
+#   ・起動時に永続ディスク→ライブへ復元、定期＋終了時にライブ→永続へスナップショット保存。
+# TAYORI_DB_PATH（=/var/data上）が指定されている本番でのみ既定ON。ローカル開発はOFF。
+# 無効化したいときは TAYORI_DB_LOCAL_CACHE=0。
+_PERSIST_DB_PATH = DB_PATH
+_LOCAL_CACHE = (os.environ.get("TAYORI_DB_LOCAL_CACHE", "1") == "1"
+                and bool(os.environ.get("TAYORI_DB_PATH")))
+if _LOCAL_CACHE:
+    DB_PATH = os.environ.get("TAYORI_LIVE_DB_PATH") or os.path.join(tempfile.gettempdir(), "tayori-live.db")
+try:
+    _PERSIST_SECONDS = int(os.environ.get("TAYORI_PERSIST_SECONDS", "30"))
+except ValueError:
+    _PERSIST_SECONDS = 30
+
 _db_dir = os.path.dirname(os.path.abspath(DB_PATH))
 # デプロイ時の切り分け用：実際に使うDBパスと、そのフォルダが書き込み可能かをログに出す。
 print(f"[たより] DB_PATH = {DB_PATH} / フォルダ書込可={os.access(_db_dir, os.W_OK)} "
       f"（TAYORI_DB_PATH={'未設定' if not os.environ.get('TAYORI_DB_PATH') else '設定済'}）", flush=True)
+if _LOCAL_CACHE:
+    print(f"[たより] ローカルキャッシュDB有効：実行={DB_PATH} ／ 永続={_PERSIST_DB_PATH}"
+          f"（{_PERSIST_SECONDS}秒ごと＋終了時に保存）", flush=True)
+
+
+def _restore_from_durable():
+    """起動時：ライブDBが無ければ（＝新しいコンテナ）永続ディスクから復元する。
+    ライブが既に在る場合は中身が新しいとみなして上書きしない（取りこぼし防止）。"""
+    if not _LOCAL_CACHE:
+        return
+    try:
+        if os.path.exists(_PERSIST_DB_PATH) and not os.path.exists(DB_PATH):
+            # 本体に加え、WAL残骸(-wal/-shm)もあれば一緒に運ぶ（過去のWAL実験で永続側がWAL
+            # 状態でも、未チェックポイントのコミットを失わないように）。-journalも同様。
+            shutil.copy2(_PERSIST_DB_PATH, DB_PATH)
+            for ext in ("-wal", "-shm", "-journal"):
+                if os.path.exists(_PERSIST_DB_PATH + ext):
+                    shutil.copy2(_PERSIST_DB_PATH + ext, DB_PATH + ext)
+            print(f"[たより] 起動復元：{_PERSIST_DB_PATH} → {DB_PATH}", flush=True)
+    except Exception as e:
+        print(f"[たより] 起動復元に失敗（新規DBで起動）: {e}", flush=True)
+
+
+_persist_lock = threading.Lock()
+def _persist_to_durable():
+    """ライブDB→永続ディスクへ整合性スナップショット。一時ファイルへ書いてから
+    アトミックに差し替えるので、途中で落ちても永続側が壊れない。foregroundは妨げない
+    （読み取り元はライブ＝高速、書き込み先は永続＝遅いが、この処理は背景スレッドで走る）。"""
+    if not _LOCAL_CACHE:
+        return False
+    if not _persist_lock.acquire(blocking=False):
+        return False   # 既に保存中なら重ねない
+    tmp = _PERSIST_DB_PATH + ".tmp"
+    try:
+        src = sqlite3.connect(DB_PATH, timeout=30)
+        dst = sqlite3.connect(tmp, timeout=60)
+        try:
+            with dst:
+                src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        os.replace(tmp, _PERSIST_DB_PATH)   # アトミック差し替え
+        return True
+    except Exception as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        print(f"[たより] 永続化に失敗（次回再試行）: {e}", flush=True)
+        return False
+    finally:
+        _persist_lock.release()
+
+
+# 終了時（gunicornのSIGTERM・通常終了）に必ず最後の状態を永続化する。
+if _LOCAL_CACHE:
+    atexit.register(_persist_to_durable)
+
+    def _persist_on_signal(signum, frame):
+        _persist_to_durable()
+        # 既定の終了動作へ戻して、gunicornのgraceful停止を妨げない
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+    try:
+        signal.signal(signal.SIGTERM, _persist_on_signal)
+    except (ValueError, OSError):
+        pass  # メインスレッド以外で読み込まれた場合は無視（atexitと定期保存で担保）
 
 
 def _load_dotenv():
@@ -329,6 +418,7 @@ def _normalize_journal_mode():
 
 
 def init_db():
+    _restore_from_durable()    # ライブDBが無ければ永続ディスクから復元（高速ローカルへ）
     _normalize_journal_mode()  # 壊れたWAL状態を先に復旧してから通常のスキーマ初期化へ
     db = _connect()
     db.executescript(
@@ -668,12 +758,20 @@ def api_register():
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
+    _t = time.monotonic()
+    def _bc(msg):
+        print(f"[たより][login] {(time.monotonic()-_t)*1000:6.0f}ms {msg}", flush=True)
+    _bc("start")
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
-    row = get_db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    db = get_db()
+    _bc("connected")
+    row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    _bc("selected")
     if not row or not check_password_hash(row["pw_hash"], password):
         return jsonify(error="名前かパスワードが違います。"), 401
+    _bc("verified")
     session.permanent = True
     session["uid"] = row["id"]
     keys = row.keys()
@@ -1198,9 +1296,17 @@ def start_notifier(interval=None):
 
     def loop():
         last_backup = 0.0  # 0 のまま＝設定があれば起動後ほどなく1回目を取る
+        last_persist = 0.0
         while True:
             _check_weather_events()   # 天気待ち伏せ便りの判定を先に
             _check_and_notify()       # 届いた便りのメール通知
+            # ライブDB→永続ディスクへの定期スナップショット（高速ローカル運用の保存）
+            try:
+                if _LOCAL_CACHE and (time.time() - last_persist) >= _PERSIST_SECONDS:
+                    if _persist_to_durable():
+                        last_persist = time.time()
+            except Exception as e:
+                print(f"[たより] 永続化判定でエラー（継続）: {e}", flush=True)
             # オフサイト自動バックアップ（R2/S3設定があるときだけ・日次）
             try:
                 if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:

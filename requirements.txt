@@ -1,4 +1,4 @@
 Flask>=3.0
 Werkzeug>=3.0
 gunicorn>=21.0
-boto3>=1.34            # オフサイト自動バックアップ（Cloudflare R2 / S3 互換）用。未設定なら未使用。
+boto3>=1.34           

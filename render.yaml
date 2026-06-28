@@ -8,7 +8,7 @@ services:
     plan: starter            # ※永続ディスクは有料プランが必要（無料tierはディスク不可）。常時起動で配達ループも止まらない。
     buildCommand: pip install -r requirements.txt
     # SQLite はプロセスが複数だと壊れやすく、start_notifier も多重起動になるため worker は1に固定。
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120
     disk:
       name: tayori-data
       mountPath: /var/data   # ここにDBを置く＝デプロイで消えない
