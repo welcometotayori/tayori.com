@@ -728,6 +728,11 @@
 
   // time of day
   const timeInput=document.getElementById('timeInput');
+  // 既定値の 09:00 ではなく「いまの時刻」を初期表示にする（投函した時刻が反映されるように）
+  (function(){
+    const d=new Date();
+    timeInput.value=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  })();
 
   // 選択中の出来事が「天気イベント」なら、その種類(snow/rain/hot/cold)を返す
   function selectedWeatherEvent(){
