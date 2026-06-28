@@ -126,14 +126,13 @@ def _restore_from_durable():
 _persist_lock = threading.Lock()
 def _persist_to_durable():
     """ライブDB→永続ディスクへ整合性スナップショット。
-    【重要】遅い永続ディスクへの書き込みを、ライブDBのロック保持から完全に切り離す：
-      ① ライブ → 高速な /tmp 上の「ステージ」へ整合性コピー（チャンク化＝ライブの読みロックは
-         一瞬しか持たない。foregroundのDBアクセスを止めない）。
-      ② ステージ(/tmp) → 永続(/var/data) は“ただのファイルコピー＋アトミックrename”。
-         これは SQLite のロックを一切介さないので、/var/data が遅く/詰まっても
-         ライブDB（＝実行中の読み書き）には一切影響しない。
-    （以前は src.backup(dst=/var/data) を一括実行し、遅い書き込み中ずっとライブの読みロックを
-      保持→全DBアクセスが固まっていた。その回帰の根治。）"""
+    【重要】ライブDBへ“並行SQLite接続”を作らず（backup APIを使わず）、遅い書き込みも
+    ライブのロックから切り離す：
+      ① _WRITE_LOCK を一瞬だけ取り、ライブDBファイルを /tmp ステージへ「ただのファイルコピー」。
+         書き込みが無い瞬間にコピーするので DELETEモードでは整合する（小・/tmp＝一瞬）。
+      ② ステージ(/tmp) → 永続(/var/data) はロックも並行接続も介さないファイルコピー＋rename。
+    （過去の回帰：src.backup を使うと「ライブDBへの並行接続」が生じ、その最中に新規
+      sqlite3.connect が固まった。backupを廃しファイルコピーにして根治。）"""
     if not _LOCAL_CACHE:
         return False
     if not _persist_lock.acquire(blocking=False):
@@ -141,17 +140,14 @@ def _persist_to_durable():
     stage = DB_PATH + ".persist.tmp"        # 高速ローカル上の中間ファイル
     durtmp = _PERSIST_DB_PATH + ".tmp"      # 永続側の一時ファイル（最後にrename）
     try:
-        # ① ライブ → /tmp ステージ（チャンク化でロックを小刻みに解放）
-        src = sqlite3.connect(DB_PATH, timeout=30)
-        dst = sqlite3.connect(stage, timeout=30)
-        try:
-            dst.execute("PRAGMA synchronous=OFF")
-            with dst:
-                src.backup(dst, pages=256, sleep=0.002)
-        finally:
-            dst.close()
-            src.close()
-        # ② /tmp ステージ → /var/data（ただのファイルコピー。SQLiteロックを介さない）
+        # ① ライブDB → /tmp ステージ。SQLiteの backup 接続は使わず、ただのファイルコピー。
+        #    （backup は「ライブDBへの並行SQLite接続」を作り、その最中に新規 sqlite3.connect が
+        #      固まる事象が出たため廃止。）_WRITE_LOCK を一瞬だけ取り＝書き込みが無い瞬間に
+        #    コピーするので、DELETEモード（コミット後は-journal無し）では整合する。
+        #    ファイルは小さく/tmp上なのでコピーは一瞬＝ロック保持も一瞬。読み取りは止めない。
+        with _WRITE_LOCK:
+            shutil.copyfile(DB_PATH, stage)
+        # ② /tmp ステージ → /var/data（遅いが、ロックも並行SQLite接続も介さない）
         shutil.copyfile(stage, durtmp)
         os.replace(durtmp, _PERSIST_DB_PATH)   # アトミック差し替え
         return True
