@@ -1302,34 +1302,41 @@ def start_notifier(interval=None):
     except ValueError:
         backup_hours = 24.0
 
-    def loop():
-        last_backup = 0.0  # 0 のまま＝設定があれば起動後ほどなく1回目を取る
-        last_persist = 0.0
+    # 通知ループ：天気判定＋メール通知だけ。重い処理は一切混ぜない＝通知が遅延しない。
+    # （以前は同じループ内で persist＝遅い/var/data書き込みをしていたため、persistが長引くと
+    #  次の通知が後ろにずれ、通知メールだけ十数分遅れていた。確認メールは登録時に別スレッドで
+    #  即送るので速かった。重い処理を別スレッドに分離してこの遅延を根治する。）
+    def notify_loop():
         while True:
-            _check_weather_events()   # 天気待ち伏せ便りの判定を先に
-            _check_and_notify()       # 届いた便りのメール通知
-            # ライブDB→永続ディスクへの定期スナップショット（高速ローカル運用の保存）
             try:
-                if _LOCAL_CACHE and (time.time() - last_persist) >= _PERSIST_SECONDS:
-                    if _persist_to_durable():
-                        last_persist = time.time()
+                _check_weather_events()   # 天気待ち伏せ便りの判定を先に
+                _check_and_notify()       # 届いた便りのメール通知（遅延なく回す）
             except Exception as e:
-                print(f"[たより] 永続化判定でエラー（継続）: {e}", flush=True)
-            # オフサイト自動バックアップ（R2/S3設定があるときだけ・日次）
+                print(f"[たより] 通知ループでエラー（継続）: {e}", flush=True)
+            time.sleep(interval)
+
+    # メンテナンス・ループ：永続化（ライブ→/var/data）とオフサイトBK。遅い処理はここに隔離。
+    def maintenance_loop():
+        last_backup = 0.0  # 0 のまま＝設定があれば起動後ほどなく1回目を取る
+        while True:
+            try:
+                if _LOCAL_CACHE:
+                    _persist_to_durable()   # 遅い/var/data書き込み。ここなら通知を妨げない
+            except Exception as e:
+                print(f"[たより] 永続化でエラー（継続）: {e}", flush=True)
             try:
                 if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:
                     ok = _run_backup_to_s3()
-                    # 成功なら次は backup_hours 後。失敗しても最低1時間は空ける
-                    #（30秒ごとに再試行するとスナップショットのロックで書き込みを妨げるため）。
                     last_backup = time.time() if ok else (time.time() - backup_hours * 3600 + 3600)
             except Exception as e:
                 print(f"[たより] バックアップ判定でエラー（継続）: {e}", flush=True)
-            time.sleep(interval)
+            time.sleep(_PERSIST_SECONDS)
 
-    t = threading.Thread(target=loop, daemon=True, name="tayori-notifier")
-    t.start()
+    threading.Thread(target=notify_loop, daemon=True, name="tayori-notifier").start()
+    threading.Thread(target=maintenance_loop, daemon=True, name="tayori-persist").start()
     _bk = "・オフサイトBK有効" if _backup_s3_config() else ""
-    print(f"[たより] 便りのチェックを開始しました（{interval}秒ごと · 天気待ち伏せ＋メール通知{_bk}）")
+    _pc = f"・永続化{_PERSIST_SECONDS}秒ごと(別スレッド)" if _LOCAL_CACHE else ""
+    print(f"[たより] 便りのチェックを開始しました（{interval}秒ごと · 天気待ち伏せ＋メール通知{_bk}{_pc}）", flush=True)
 
 
 # ---------------------------------------------------------------- 天気 API
