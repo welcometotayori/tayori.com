@@ -353,7 +353,11 @@ def _connect():
       通知スレッドの書き込みが重なっても 'database is locked' で即死しないように）。
     ・WALは TAYORI_SQLITE_WAL=1 のときだけ（FS非対応でのハングを避けるため既定オフ）。"""
     global _wal_ready
+    _t0 = time.monotonic()
     conn = sqlite3.connect(DB_PATH, timeout=_BUSY_TIMEOUT_MS / 1000.0)
+    _dt = (time.monotonic() - _t0) * 1000.0
+    if _dt > 300:  # 一時診断：接続自体が遅い＝DBファイル/ディスクの問題を可視化
+        print(f"[たより][connect] sqlite3.connect が {_dt:.0f}ms（path={DB_PATH}）", flush=True)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
@@ -763,13 +767,30 @@ def api_register():
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
+    _t = time.monotonic()
+    def _bc(msg):  # 一時診断：どの段でハングするか（DB接続/SELECT/ハッシュ照合）
+        print(f"[たより][login] {(time.monotonic()-_t)*1000:6.0f}ms {msg}", flush=True)
+    _bc("start")
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
     db = get_db()
+    _bc("connected")
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    _bc("selected")
     if not row or not check_password_hash(row["pw_hash"], password):
         return jsonify(error="名前かパスワードが違います。"), 401
+    _bc("verified")
+    # 古い scrypt ハッシュ（メモリハードで小メモリ環境に重い）を、ログイン成功時に
+    # そっと pbkdf2 へ移行する。次回以降の照合が軽くなる。
+    try:
+        if not str(row["pw_hash"]).startswith("pbkdf2:"):
+            with _WRITE_LOCK:
+                db.execute("UPDATE users SET pw_hash=? WHERE id=?", (_hash_pw(password), row["id"]))
+                db.commit()
+            _bc("rehashed scrypt->pbkdf2")
+    except Exception as e:
+        print(f"[たより] pw再ハッシュ失敗（継続）: {e}", flush=True)
     session.permanent = True
     session["uid"] = row["id"]
     keys = row.keys()
