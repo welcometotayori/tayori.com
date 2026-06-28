@@ -950,7 +950,7 @@ async function detectWeather(){
       const sent=parseISO(L.sent_date);
       if(!L.opened){
         el.innerHTML='<div class="unopened-tease"><div class="wax">緘</div><div class="from">過去のあなたから</div>'+
-          '<div class="ago">SENT '+fmt(sent)+'</div>'+
+          '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
           '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
           (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
           '<div class="slide-track" data-slide="'+i+'"><div class="slide-fill"></div>'+
@@ -981,7 +981,7 @@ async function detectWeather(){
         }
         el.innerHTML='<div class="transit-inner"><div class="wax dim">緘</div>'+
           whenHtml+
-          '<div class="transit-meta">投函 '+fmt(sent)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+'</div>'+
+          '<div class="transit-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+'</div>'+
           (extras.length?'<div class="transit-meta">'+extras.join('・')+'が入っています</div>':'')+
           '<div class="transit-note">届く時まで、中身はあなたにも見られません。</div></div>';
         mailList.appendChild(el);});
@@ -1014,6 +1014,15 @@ async function detectWeather(){
     const d=new Date(iso); if(isNaN(d))return (iso||'').slice(0,10);
     return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   }
+  // 投函の表示：時刻が記録されていれば「日付 · HH:MM」、無ければ（旧データ）日付のみ。
+  function fmtSent(iso){
+    const d=parseISO(iso);
+    if(typeof iso==='string' && iso.indexOf('T')>-1){
+      const hh=String(d.getHours()).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');
+      return fmt(d)+' · '+hh+':'+mm;
+    }
+    return fmt(d);
+  }
 
   function renderOpenLetter(L,i,sent){
     let h='';
@@ -1029,7 +1038,7 @@ async function detectWeather(){
 
     // 届いた時の自分の記録（封をした日 → 開けた日の「層」）
     h+='<div class="strata">';
-    h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmt(sent)+'</span><span class="strata-what">封をした</span></div>';
+    h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmtSent(L.sent_date)+'</span><span class="strata-what">封をした</span></div>';
     if(L.opened_at)
       h+='<div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">'+fmtDateTime(L.opened_at)+'</span><span class="strata-what">封を開けた</span></div>';
     if(L.reflect_count>0)

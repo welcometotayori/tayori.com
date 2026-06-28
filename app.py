@@ -1474,15 +1474,19 @@ def api_create_letter():
     seal_env = json.dumps(data.get("seal_env")) if data.get("seal_env") else None
     stamp = (data.get("stamp") or "")[:16] or None  # 封をする時に選んだ切手
 
-    get_db().execute(
-        """INSERT INTO letters
-           (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp)
-           VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?)""",
-        (lid, uid(), poem, photo, voice, date.today().isoformat(), arrive_date, arrive_at,
-         data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
-         1 if data.get("from_reply") else 0, weather_event, seal_env, stamp),
-    )
-    get_db().commit()
+    # 投函の「いま」を時刻つきで記録する（date.today()だと日付だけで時刻が失われていた）。
+    sent_iso = datetime.now().isoformat(timespec="seconds")
+    db = get_db()
+    with _WRITE_LOCK:  # 書き込みを直列化
+        db.execute(
+            """INSERT INTO letters
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?)""",
+            (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
+             data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
+             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp),
+        )
+        db.commit()
     return jsonify(id=lid, ok=True)
 
 
