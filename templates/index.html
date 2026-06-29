@@ -373,6 +373,9 @@
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
+      <div class="gate-hint" style="text-align: center; margin-top: 16px;">
+        登録により、<a href="/terms" target="_blank" style="color:#B5543A;">利用規約</a>と<a href="/privacy" target="_blank" style="color:#B5543A;">プライバシーポリシー</a>に<br>同意したものとみなされます。
+      </div>
     </div>
   </div>
 </div>
@@ -512,7 +515,13 @@
     <div class="tl" id="tlList"></div>
   </section>
 
-  <footer>遅 れ て 届 く 自 分 へ の 手 紙</footer>
+  <footer>
+    遅 れ て 届 く 自 分 へ の 手 紙<br>
+    <div style="margin-top:16px; font-family:'Zen Kaku Gothic New', sans-serif; letter-spacing:0.05em;">
+      <a href="/terms" target="_blank" style="color:var(--ink-soft); text-decoration:none; margin-right:16px;">利用規約</a>
+      <a href="/privacy" target="_blank" style="color:var(--ink-soft); text-decoration:none;">プライバシーポリシー</a>
+    </div>
+  </footer>
 </div>
 
 <div class="sealing" id="sealing">
@@ -916,7 +925,7 @@ async function detectWeather(){
     if(currentWeather){
       const b=document.createElement('div');b.className='wx-banner';
       const t=(currentWeather.temp!=null)?Math.round(currentWeather.temp)+'℃':'';
-      // IP推定（approx）のときは、おおよその地域であることを添える
+      // IP推定（approx）のときは、おおよ藐の地域であることを添える
       const place=currentWeather.approx?('おおよそ '+esc(currentWeather.city||'現在地')+' あたり'):'あなたのいる場所';
       b.innerHTML='いま、'+place+'は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。便りの見え方が、少し揺らいでいます。';
       mailList.appendChild(b);
