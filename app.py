@@ -648,6 +648,23 @@ def login_required(f):
 def uid():
     return session["uid"]
 
+@app.route("/")
+def index():
+    return render_template("index.html", open_letter_id="")
+
+@app.route("/open/<lid>")
+def open_letter_page(lid):
+    safe = lid if re.fullmatch(r"[A-Za-z0-9]{1,32}", lid or "") else ""
+    return render_template("index.html", open_letter_id=safe)
+
+# ▼▼▼ ココから下を追加 ▼▼▼
+@app.route("/terms")
+def terms_page():
+    return render_template("terms.html")
+
+@app.route("/privacy")
+def privacy_page():
+    return render_template("privacy.html")
 
 @app.route("/api/onboarding", methods=["GET"])
 @login_required
@@ -1404,9 +1421,16 @@ def index():
 def open_letter_page(lid):
     """メールの開封リンクの着地点。トップ画面を出し、ログイン後にこの便りへ誘導する。
     （ログインしていなければ、ログイン後に自動でこの便りを開きにいく）"""
-    # lid はテンプレートに埋め込むだけ。安全のため英数字に限定。
     safe = lid if re.fullmatch(r"[A-Za-z0-9]{1,32}", lid or "") else ""
     return render_template("index.html", open_letter_id=safe)
+
+@app.route("/terms")
+def terms_page():
+    return render_template("terms.html")
+
+@app.route("/privacy")
+def privacy_page():
+    return render_template("privacy.html")
 
 # ---------------------------------------------------------------- letters
 @app.route("/api/letters")
