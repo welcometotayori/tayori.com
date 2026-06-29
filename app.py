@@ -811,12 +811,14 @@ def api_set_email():
     if email:
         _issue_email_verification(db, uid(), email, current_user()["username"])
         # アドレスを変えたので、過去に諦めた便りも新アドレスへ再挑戦できるようにする
-        db.execute("UPDATE letters SET notify_attempts=0, notify_failed=0 WHERE user_id=?", (uid(),))
-        db.commit()
+        with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+            db.execute("UPDATE letters SET notify_attempts=0, notify_failed=0 WHERE user_id=?", (uid(),))
+            db.commit()
         return jsonify(ok=True, email=email, email_verified=False, email_pending=True)
     # 空＝通知オフ
-    db.execute("UPDATE users SET email=NULL, email_verified=0, email_token=NULL, email_token_at=NULL WHERE id=?", (uid(),))
-    db.commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        db.execute("UPDATE users SET email=NULL, email_verified=0, email_token=NULL, email_token_at=NULL WHERE id=?", (uid(),))
+        db.commit()
     return jsonify(ok=True, email=None, email_verified=False)
 
 
@@ -1009,8 +1011,9 @@ def verify_email(token):
         issued = None
     if issued and datetime.now() - issued > EMAIL_TOKEN_TTL:
         return _landing_page("確認", "確認リンクの有効期限が切れています。<br>アプリの📧設定からメールを登録し直してください。", ok=False), 410
-    db.execute("UPDATE users SET email_verified=1, email_token=NULL, email_token_at=NULL WHERE id=?", (row["id"],))
-    db.commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        db.execute("UPDATE users SET email_verified=1, email_token=NULL, email_token_at=NULL WHERE id=?", (row["id"],))
+        db.commit()
     return _landing_page("確認完了", "メールアドレスを確認しました。<br>便りが届く頃に、そっとお知らせが届きます。")
 
 
@@ -1023,8 +1026,9 @@ def unsubscribe(token):
     row = db.execute("SELECT id FROM users WHERE unsub_token=?", (token,)).fetchone()
     if not row:
         return _landing_page("配信停止", "このリンクは無効です。", ok=False), 404
-    db.execute("UPDATE users SET notify_enabled=0 WHERE id=?", (row["id"],))
-    db.commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        db.execute("UPDATE users SET notify_enabled=0 WHERE id=?", (row["id"],))
+        db.commit()
     return _landing_page("配信停止", "通知メールの配信を停止しました。<br>再開したいときは、アプリの📧設定からメールを登録し直してください。")
 
 
@@ -1506,21 +1510,22 @@ def api_open_letter(lid):
     # 初めて開いた瞬間だけ opened_at を刻む（届いた時の自分の記録）。
     # このとき「向き合った回数」も1つ数える（開封＝最初の対面）。
     already = row["opened_at"] if "opened_at" in row.keys() else None
-    if not already:
-        now_iso = datetime.now().isoformat(timespec="seconds")
-        get_db().execute(
-            "UPDATE letters SET opened=1, open_env=?, open_mood=?, opened_at=?, "
-            "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
-            (open_env, open_mood, now_iso, lid, uid()))
-    else:
-        # 再開封：気分が新たに渡されたら更新する（無ければ既存を残す）
-        if open_mood:
-            get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
-                             (open_env, open_mood, lid, uid()))
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        if not already:
+            now_iso = datetime.now().isoformat(timespec="seconds")
+            get_db().execute(
+                "UPDATE letters SET opened=1, open_env=?, open_mood=?, opened_at=?, "
+                "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
+                (open_env, open_mood, now_iso, lid, uid()))
         else:
-            get_db().execute("UPDATE letters SET opened=1, open_env=? WHERE id=? AND user_id=?",
-                             (open_env, lid, uid()))
-    get_db().commit()
+            # 再開封：気分が新たに渡されたら更新する（無ければ既存を残す）
+            if open_mood:
+                get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
+                                 (open_env, open_mood, lid, uid()))
+            else:
+                get_db().execute("UPDATE letters SET opened=1, open_env=? WHERE id=? AND user_id=?",
+                                 (open_env, lid, uid()))
+        get_db().commit()
 
     # 差分(diff)情報を返す
     return jsonify(ok=True, seal_env=row["seal_env"], open_env=open_env, open_mood=open_mood)
@@ -1536,8 +1541,9 @@ def api_set_open_mood(lid):
     if not _is_arrived(row):
         return jsonify(error="まだ封の中です。"), 403
     mood = (request.get_json(force=True).get("mood") or "").strip()[:40] or None
-    get_db().execute("UPDATE letters SET open_mood=? WHERE id=? AND user_id=?", (mood, lid, uid()))
-    get_db().commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        get_db().execute("UPDATE letters SET open_mood=? WHERE id=? AND user_id=?", (mood, lid, uid()))
+        get_db().commit()
     return jsonify(ok=True, open_mood=mood)
 
 
@@ -1549,8 +1555,9 @@ def api_set_emos(lid):
     if not _is_arrived(row): return jsonify(error="まだ封の中です。"), 403
     
     emos = request.get_json(force=True).get("emos", [])
-    get_db().execute("UPDATE letters SET emos=? WHERE id=? AND user_id=?", (json.dumps(emos, ensure_ascii=False), lid, uid()))
-    get_db().commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        get_db().execute("UPDATE letters SET emos=? WHERE id=? AND user_id=?", (json.dumps(emos, ensure_ascii=False), lid, uid()))
+        get_db().commit()
     return jsonify(ok=True)
 
 @app.route("/api/letters/<lid>/reply", methods=["POST"])
@@ -1564,12 +1571,13 @@ def api_reply(lid):
     if not text: return jsonify(error="空の返事です。"), 400
 
     now_iso = datetime.now().isoformat(timespec="seconds")
-    get_db().execute(
-        "INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-        (lid, "now", text, date.today().isoformat(), now_iso, "reply"))
-    # この便りと向き合った回数を増やす
-    get_db().execute("UPDATE letters SET reflect_count = COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?", (lid, uid()))
-    get_db().commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        get_db().execute(
+            "INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
+            (lid, "now", text, date.today().isoformat(), now_iso, "reply"))
+        # この便りと向き合った回数を増やす
+        get_db().execute("UPDATE letters SET reflect_count = COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?", (lid, uid()))
+        get_db().commit()
     return jsonify(ok=True)
 
 _WX_JP = {"snow": "雪", "rain": "雨", "fog": "霧", "cloud": "曇り", "clear": "晴れ"}
@@ -1787,9 +1795,10 @@ def api_ask_past_self(lid):
             except Exception as e:
                 print(f"[Claude失敗→フォールバック] {e}", flush=True)
         if text:
-            get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-                             (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
-            get_db().commit()
+            with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）。Gemini呼出は済んでいる
+                get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
+                                 (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
+                get_db().commit()
             return jsonify(text=text, used_ai=True, provider=provider)
 
     # --- AI なし：過去の自分の言葉から「問い」を組み立てる ---
@@ -1799,9 +1808,10 @@ def api_ask_past_self(lid):
     elif not (os.environ.get("GEMINI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")):
         print("[AI] 定型生成。理由: GEMINI_API_KEY も ANTHROPIC_API_KEY も未設定", flush=True)
     text = _build_self_question(L)
-    get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-                     (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
-    get_db().commit()
+    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
+        get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
+                         (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
+        get_db().commit()
     return jsonify(text=text, used_ai=False)
 
 
