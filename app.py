@@ -811,14 +811,12 @@ def api_set_email():
     if email:
         _issue_email_verification(db, uid(), email, current_user()["username"])
         # アドレスを変えたので、過去に諦めた便りも新アドレスへ再挑戦できるようにする
-        with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-            db.execute("UPDATE letters SET notify_attempts=0, notify_failed=0 WHERE user_id=?", (uid(),))
-            db.commit()
+        db.execute("UPDATE letters SET notify_attempts=0, notify_failed=0 WHERE user_id=?", (uid(),))
+        db.commit()
         return jsonify(ok=True, email=email, email_verified=False, email_pending=True)
     # 空＝通知オフ
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        db.execute("UPDATE users SET email=NULL, email_verified=0, email_token=NULL, email_token_at=NULL WHERE id=?", (uid(),))
-        db.commit()
+    db.execute("UPDATE users SET email=NULL, email_verified=0, email_token=NULL, email_token_at=NULL WHERE id=?", (uid(),))
+    db.commit()
     return jsonify(ok=True, email=None, email_verified=False)
 
 
@@ -1011,9 +1009,8 @@ def verify_email(token):
         issued = None
     if issued and datetime.now() - issued > EMAIL_TOKEN_TTL:
         return _landing_page("確認", "確認リンクの有効期限が切れています。<br>アプリの📧設定からメールを登録し直してください。", ok=False), 410
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        db.execute("UPDATE users SET email_verified=1, email_token=NULL, email_token_at=NULL WHERE id=?", (row["id"],))
-        db.commit()
+    db.execute("UPDATE users SET email_verified=1, email_token=NULL, email_token_at=NULL WHERE id=?", (row["id"],))
+    db.commit()
     return _landing_page("確認完了", "メールアドレスを確認しました。<br>便りが届く頃に、そっとお知らせが届きます。")
 
 
@@ -1026,9 +1023,8 @@ def unsubscribe(token):
     row = db.execute("SELECT id FROM users WHERE unsub_token=?", (token,)).fetchone()
     if not row:
         return _landing_page("配信停止", "このリンクは無効です。", ok=False), 404
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        db.execute("UPDATE users SET notify_enabled=0 WHERE id=?", (row["id"],))
-        db.commit()
+    db.execute("UPDATE users SET notify_enabled=0 WHERE id=?", (row["id"],))
+    db.commit()
     return _landing_page("配信停止", "通知メールの配信を停止しました。<br>再開したいときは、アプリの📧設定からメールを登録し直してください。")
 
 
@@ -1510,22 +1506,21 @@ def api_open_letter(lid):
     # 初めて開いた瞬間だけ opened_at を刻む（届いた時の自分の記録）。
     # このとき「向き合った回数」も1つ数える（開封＝最初の対面）。
     already = row["opened_at"] if "opened_at" in row.keys() else None
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        if not already:
-            now_iso = datetime.now().isoformat(timespec="seconds")
-            get_db().execute(
-                "UPDATE letters SET opened=1, open_env=?, open_mood=?, opened_at=?, "
-                "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
-                (open_env, open_mood, now_iso, lid, uid()))
+    if not already:
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        get_db().execute(
+            "UPDATE letters SET opened=1, open_env=?, open_mood=?, opened_at=?, "
+            "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
+            (open_env, open_mood, now_iso, lid, uid()))
+    else:
+        # 再開封：気分が新たに渡されたら更新する（無ければ既存を残す）
+        if open_mood:
+            get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
+                             (open_env, open_mood, lid, uid()))
         else:
-            # 再開封：気分が新たに渡されたら更新する（無ければ既存を残す）
-            if open_mood:
-                get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
-                                 (open_env, open_mood, lid, uid()))
-            else:
-                get_db().execute("UPDATE letters SET opened=1, open_env=? WHERE id=? AND user_id=?",
-                                 (open_env, lid, uid()))
-        get_db().commit()
+            get_db().execute("UPDATE letters SET opened=1, open_env=? WHERE id=? AND user_id=?",
+                             (open_env, lid, uid()))
+    get_db().commit()
 
     # 差分(diff)情報を返す
     return jsonify(ok=True, seal_env=row["seal_env"], open_env=open_env, open_mood=open_mood)
@@ -1541,9 +1536,8 @@ def api_set_open_mood(lid):
     if not _is_arrived(row):
         return jsonify(error="まだ封の中です。"), 403
     mood = (request.get_json(force=True).get("mood") or "").strip()[:40] or None
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        get_db().execute("UPDATE letters SET open_mood=? WHERE id=? AND user_id=?", (mood, lid, uid()))
-        get_db().commit()
+    get_db().execute("UPDATE letters SET open_mood=? WHERE id=? AND user_id=?", (mood, lid, uid()))
+    get_db().commit()
     return jsonify(ok=True, open_mood=mood)
 
 
@@ -1555,9 +1549,8 @@ def api_set_emos(lid):
     if not _is_arrived(row): return jsonify(error="まだ封の中です。"), 403
     
     emos = request.get_json(force=True).get("emos", [])
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        get_db().execute("UPDATE letters SET emos=? WHERE id=? AND user_id=?", (json.dumps(emos, ensure_ascii=False), lid, uid()))
-        get_db().commit()
+    get_db().execute("UPDATE letters SET emos=? WHERE id=? AND user_id=?", (json.dumps(emos, ensure_ascii=False), lid, uid()))
+    get_db().commit()
     return jsonify(ok=True)
 
 @app.route("/api/letters/<lid>/reply", methods=["POST"])
@@ -1571,13 +1564,12 @@ def api_reply(lid):
     if not text: return jsonify(error="空の返事です。"), 400
 
     now_iso = datetime.now().isoformat(timespec="seconds")
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        get_db().execute(
-            "INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-            (lid, "now", text, date.today().isoformat(), now_iso, "reply"))
-        # この便りと向き合った回数を増やす
-        get_db().execute("UPDATE letters SET reflect_count = COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?", (lid, uid()))
-        get_db().commit()
+    get_db().execute(
+        "INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
+        (lid, "now", text, date.today().isoformat(), now_iso, "reply"))
+    # この便りと向き合った回数を増やす
+    get_db().execute("UPDATE letters SET reflect_count = COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?", (lid, uid()))
+    get_db().commit()
     return jsonify(ok=True)
 
 _WX_JP = {"snow": "雪", "rain": "雨", "fog": "霧", "cloud": "曇り", "clear": "晴れ"}
@@ -1657,19 +1649,12 @@ def _gemini_question(prompt, api_key):
         temperature = float(os.environ.get("TAYORI_GEMINI_TEMP", "0.8"))
     except ValueError:
         temperature = 0.8
+    body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature, "topP": 0.9},
+    }).encode("utf-8")
     last_err = None
     for model in models:
-        # generationConfig はモデルごとに組む。
-        # gemini-2.5系は既定で「思考(thinking)」が有効で、出力トークンを思考に使い切って
-        # 本文が空になることがある（＝まともに回答しない原因）。思考を無効化(thinkingBudget=0)し、
-        # 出力上限も明示する。thinkingConfig は2.5系のみ（2.0系へ送ると400になるため付けない）。
-        gen = {"temperature": temperature, "topP": 0.9, "maxOutputTokens": 512}
-        if "2.5" in model:
-            gen["thinkingConfig"] = {"thinkingBudget": 0}
-        body = json.dumps({
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": gen,
-        }).encode("utf-8")
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent")
         for attempt in range(2):  # 同じモデルで最大2回（混雑時の取りこぼし対策）
@@ -1687,9 +1672,6 @@ def _gemini_question(prompt, api_key):
                 text = "".join(p.get("text", "") for p in parts).strip()
                 if text:
                     return text
-                # 本文が空：理由を出して次のモデルへ（safety/MAX_TOKENS等の切り分け用）
-                fr = (cands[0].get("finishReason") if cands else None) or data.get("promptFeedback")
-                print(f"[Gemini] {model} は本文が空（finishReason={fr}）→次のモデルへ", flush=True)
                 break  # 応答は来たが本文が空 → 次のモデルへ
             except urllib.error.HTTPError as e:
                 last_err = e
@@ -1760,6 +1742,7 @@ def api_ask_past_self(lid):
             + (f"【ごく薄い背景（私が以前ぽつりと語ったこと・表に出しすぎない）】\n{profile_ctx}\n\n" if profile_ctx else "")
             + f"【これまでの私たちの対話】\n{convo or '（まだなし）'}\n\n"
             "―― 語りかけ方の約束 ――\n"
+            "・【厳守事項】天候、季節、気温などの物理的な環境描写やメタファーは一切使用しないでください。ユーザーの内面的な感情や思考のみに焦点を当ててください。\n"
             "・一人称で、今の自分にそっと話しかける（2〜3文、短く）。\n"
             "・直前に『今の自分』が何か言っていたら、まずその言葉を一度受けとめてから返す"
             "（うなずく＝肯定でも、『でも、ほんとうにそう？』＝やわらかな否定でもよい）。"
@@ -1795,10 +1778,9 @@ def api_ask_past_self(lid):
             except Exception as e:
                 print(f"[Claude失敗→フォールバック] {e}", flush=True)
         if text:
-            with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）。Gemini呼出は済んでいる
-                get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-                                 (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
-                get_db().commit()
+            get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
+                             (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
+            get_db().commit()
             return jsonify(text=text, used_ai=True, provider=provider)
 
     # --- AI なし：過去の自分の言葉から「問い」を組み立てる ---
@@ -1808,10 +1790,9 @@ def api_ask_past_self(lid):
     elif not (os.environ.get("GEMINI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")):
         print("[AI] 定型生成。理由: GEMINI_API_KEY も ANTHROPIC_API_KEY も未設定", flush=True)
     text = _build_self_question(L)
-    with _WRITE_LOCK:  # 書き込みを直列化（database is locked 防止）
-        get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-                         (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
-        get_db().commit()
+    get_db().execute("INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
+                     (lid, "ai", text, date.today().isoformat(), now_iso, "question"))
+    get_db().commit()
     return jsonify(text=text, used_ai=False)
 
 
