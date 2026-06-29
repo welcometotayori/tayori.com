@@ -1649,12 +1649,19 @@ def _gemini_question(prompt, api_key):
         temperature = float(os.environ.get("TAYORI_GEMINI_TEMP", "0.8"))
     except ValueError:
         temperature = 0.8
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": temperature, "topP": 0.9},
-    }).encode("utf-8")
     last_err = None
     for model in models:
+        # generationConfig はモデルごとに組む。
+        # gemini-2.5系は既定で「思考(thinking)」が有効で、出力トークンを思考に使い切って
+        # 本文が空になることがある（＝まともに回答しない原因）。思考を無効化(thinkingBudget=0)し、
+        # 出力上限も明示する。thinkingConfig は2.5系のみ（2.0系へ送ると400になるため付けない）。
+        gen = {"temperature": temperature, "topP": 0.9, "maxOutputTokens": 512}
+        if "2.5" in model:
+            gen["thinkingConfig"] = {"thinkingBudget": 0}
+        body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": gen,
+        }).encode("utf-8")
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent")
         for attempt in range(2):  # 同じモデルで最大2回（混雑時の取りこぼし対策）
@@ -1672,6 +1679,9 @@ def _gemini_question(prompt, api_key):
                 text = "".join(p.get("text", "") for p in parts).strip()
                 if text:
                     return text
+                # 本文が空：理由を出して次のモデルへ（safety/MAX_TOKENS等の切り分け用）
+                fr = (cands[0].get("finishReason") if cands else None) or data.get("promptFeedback")
+                print(f"[Gemini] {model} は本文が空（finishReason={fr}）→次のモデルへ", flush=True)
                 break  # 応答は来たが本文が空 → 次のモデルへ
             except urllib.error.HTTPError as e:
                 last_err = e
