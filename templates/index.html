@@ -146,6 +146,16 @@
   .letter-photo{width:100%;height:auto;display:block;filter:sepia(0.18) contrast(0.97)}
   .letter-body{padding:20px 22px 22px}
   .letter-poem{font-family:'Shippori Mincho',serif;font-size:18px;line-height:2.3;white-space:pre-wrap;color:var(--ink);word-break:break-word;overflow-wrap:anywhere}
+  /* タイプ再生（TypeTrace）：書いていた時の迷い・間をそのまま再生 */
+  .trace-play{display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:transparent;border:1px solid var(--line);
+    cursor:pointer;font-family:'Shippori Mincho',serif;font-size:11.5px;letter-spacing:0.08em;color:var(--ink-soft);
+    padding:6px 12px;border-radius:20px;transition:.2s}
+  .trace-play:hover{color:var(--seal);border-color:var(--seal)}
+  .trace-play svg{width:13px;height:13px}
+  .trace-play:disabled{opacity:0.5;cursor:default}
+  .letter-poem.tracing{color:var(--ink-soft)}
+  .trace-caret{display:inline-block;width:2px;height:1.05em;background:var(--seal);margin-left:1px;vertical-align:-0.16em;animation:traceBlink .9s steps(1) infinite}
+  @keyframes traceBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
   .letter-voice{margin-top:14px}
   .letter-voice audio{width:100%;height:38px}
   .letter-date{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:18px}
@@ -712,6 +722,13 @@
   // char counter (80字制約)
   const poemEl=document.getElementById('poemInput'),poemCount=document.getElementById('poemCount');
   function updateCount(){const n=poemEl.value.length;poemCount.textContent=n;poemCount.parentElement.classList.toggle('near', n >= 72);}
+  // タイプ再生用：入力のたびに「その瞬間の全文＋経過ms」を記録（IME・モバイル安全）
+  let poemTrace=[],traceStart=0;
+  poemEl.addEventListener('input',()=>{
+    const now=Date.now();
+    if(!poemTrace.length)traceStart=now;
+    if(poemTrace.length<1000)poemTrace.push({t:now-traceStart,v:poemEl.value});
+  });
   poemEl.addEventListener('input',updateCount);updateCount();
 
   // voice
@@ -828,7 +845,7 @@
     });
   })();
 
-  function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';updateCount();}
+  function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
@@ -865,6 +882,7 @@
     sealCap.textContent='封をしました';sealing.classList.add('on');
     await api('/api/letters',{method:'POST',body:JSON.stringify({
       poem,photo:photoData,voice:voiceData,
+      trace: poemTrace.length>1 ? poemTrace : null,
       arrive_at:isoDateTime(arrival),arrive_label:label,arrive_hidden:hidden,
       weather_event:wEvent||null,
       seal_env: currentWeather || null,
@@ -1092,7 +1110,10 @@ async function detectWeather(){
     h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'">';
     h+='<div class="letter-body">';
-    if(L.poem)h+='<div class="letter-poem">'+esc(L.poem)+'</div>';
+    if(L.poem){
+      h+='<div class="letter-poem" id="poem-'+L.id+'">'+esc(L.poem)+'</div>';
+      if(L.has_trace)h+='<button class="trace-play" data-lid="'+L.id+'" data-target="poem-'+L.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>書いていた時を、再生する</button>';
+    }
     if(L.voice)h+='<div class="letter-voice"><audio controls src="'+L.voice+'"></audio></div>';
     if(L.emos&&L.emos.length)h+='<div class="emo-tags">'+L.emos.map(e=>'<span class="emo-tag">'+esc(e)+'</span>').join('')+'</div>';
 
@@ -1554,6 +1575,35 @@ async function detectWeather(){
   document.getElementById('portraitBtn').addEventListener('click',openPortrait);
   portraitGen.addEventListener('click',generatePortrait);
   portraitClose.addEventListener('click',()=>portraitOv.classList.remove('on'));
+
+  // ── タイプ再生（TypeTrace）：書いていた時の迷い・書き直し・間をそのまま再生 ──
+  async function playTrace(btn){
+    if(btn._playing)return;
+    const target=document.getElementById(btn.dataset.target);
+    if(!target)return;
+    btn._playing=true;btn.disabled=true;
+    const finalText=target.textContent;
+    const d=await api('/api/letters/'+btn.dataset.lid+'/trace',{method:'GET'})||{};
+    const steps=d.trace;
+    if(!Array.isArray(steps)||steps.length<2){btn._playing=false;btn.disabled=false;return;}
+    // 個々の「間」は最大1.2sに丸め、全体は最大14秒に収める（長すぎる空白で退屈させない）
+    const norm=[];let prev=0,acc=0;
+    for(const s of steps){let gap=Math.max(0,(s.t||0)-prev);prev=s.t||0;gap=Math.min(gap,1200);acc+=gap;norm.push({at:acc,v:String(s.v==null?'':s.v)});}
+    const total=norm[norm.length-1].at||1;
+    const scale=total>14000?14000/total:1;
+    target.classList.add('tracing');
+    const caret='<span class="trace-caret"></span>';
+    let idx=0;const t0=performance.now();
+    function frame(now){
+      const el=now-t0;
+      while(idx<norm.length&&norm[idx].at*scale<=el){target.innerHTML=esc(norm[idx].v)+caret;idx++;}
+      if(idx<norm.length){requestAnimationFrame(frame);}
+      else{target.classList.remove('tracing');target.textContent=finalText;btn._playing=false;btn.disabled=false;}
+    }
+    target.innerHTML=esc(norm[0].v)+caret;
+    requestAnimationFrame(frame);
+  }
+  document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.trace-play');if(b)playTrace(b);});
 
   // check existing session on load
   (async function boot(){

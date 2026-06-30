@@ -394,6 +394,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN onboarding TEXT",
             "ALTER TABLE users ADD COLUMN portrait TEXT",
             "ALTER TABLE users ADD COLUMN portrait_at TEXT",
+            "ALTER TABLE letters ADD COLUMN trace TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -745,6 +746,10 @@ def _is_arrived(row):
 def letter_to_dict(row, include_thread=True):
     d = dict(row)
     d.pop("user_id", None)
+    # タイプ再生のデータ(trace)は重いので一覧では本体を送らず、有無のフラグだけにする。
+    # 本体は GET /api/letters/<id>/trace で再生時に取りにいく。
+    _trace = d.pop("trace", None)
+    d["has_trace"] = bool(_trace)
     d["emos"] = json.loads(d.get("emos") or "[]")
     d["arrive_hidden"] = bool(d["arrive_hidden"])
     d["opened"] = bool(d["opened"])
@@ -1277,19 +1282,43 @@ def api_create_letter():
     seal_env = json.dumps(data.get("seal_env")) if data.get("seal_env") else None
     stamp = (data.get("stamp") or "")[:16] or None
 
+    # タイプ再生（TypeTrace）の打鍵スナップショット列。JSON文字列で保存。暴走サイズは捨てる。
+    trace = data.get("trace")
+    if trace is not None and not isinstance(trace, str):
+        trace = json.dumps(trace, ensure_ascii=False)
+    if trace and len(trace) > 600_000:
+        trace = None
+
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
-             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp),
+             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace),
         )
         db.commit()
     return jsonify(id=lid, ok=True)
+
+
+@app.route("/api/letters/<lid>/trace", methods=["GET"])
+@login_required
+def api_get_trace(lid):
+    """タイプ再生用：その便りの打鍵スナップショット列を返す（到着後のみ）。"""
+    row = own_letter(lid)
+    if row is None:
+        return jsonify(error="便りが見つかりません。"), 404
+    if not _is_arrived(row):
+        return jsonify(error="まだ封の中です。"), 403
+    raw = row["trace"] if "trace" in row.keys() else None
+    try:
+        steps = json.loads(raw) if raw else None
+    except (TypeError, ValueError):
+        steps = None
+    return jsonify(trace=steps)
 
 
 @app.route("/api/letters/<lid>/open", methods=["POST"])
