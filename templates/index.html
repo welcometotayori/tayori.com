@@ -398,6 +398,36 @@
 
   /* ── 開封時の気分タグ（差分オーバーレイ内） ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
+
+  /* ════════════════════════════════════════════════════════════════
+     Vintage Ephemera 装飾レイヤー（追記CSSのみ・フォント/機能/JSは不変）
+     UI/UX Pro Max: Vintage Analog(#49) + UXチェックリスト由来
+     ════════════════════════════════════════════════════════════════ */
+  /* 1) 光漏れ（Vintage Analog / Retro Film）。本文より背面・操作不可・色を「足す」だけ */
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;mix-blend-mode:screen;
+    background:
+      radial-gradient(120% 90% at 100% -5%, rgba(255,201,120,0.16), transparent 55%),
+      radial-gradient(120% 90% at -5% 105%, rgba(181,84,58,0.12), transparent 55%);}
+  /* 2) ポラロイド調の写真フレーム（白マット＋下重ね＋退色）。要素・JSは変えずCSSで額装 */
+  .letter-photo{box-sizing:border-box;border:7px solid #F6EFE1;border-bottom-width:22px;border-radius:1px;
+    filter:sepia(0.20) contrast(1.04) saturate(0.9);
+    box-shadow:0 10px 24px -16px rgba(58,46,37,0.55),0 1px 0 rgba(255,255,255,0.5) inset}
+  .photo-slot.has{box-shadow:0 10px 24px -16px rgba(58,46,37,0.5)}
+  /* 3) 紙の重なりを強める柔らかい影＋クリッカブルの浮き上がり（アフォーダンス） */
+  .tl-card{transition:transform .2s, border-color .2s, box-shadow .2s}
+  .tl-card:hover{transform:translateY(-1px);box-shadow:0 10px 22px -16px rgba(58,46,37,0.5)}
+  .stamp-opt{transition:transform .2s, border-color .2s, background .2s, box-shadow .2s}
+  /* 4) a11y：キーボードのフォーカスリング（UXチェックリスト・重要度High。欠落していた） */
+  :focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  .gate-field input:focus-visible,.acct-input:focus-visible,.reply-row textarea:focus-visible,
+  .poem textarea:focus-visible,.onb-q textarea:focus-visible,.date-pick:focus-visible,
+  .pw-wrap input:focus-visible{outline:2px solid var(--seal);outline-offset:1px}
+  /* 5) 押下フィードバック（active）。未設定の主要ボタンにのみ追加 */
+  .send:active,.gate-submit:active,.diff-btn:active,.portrait-go:active,.acct-save:active{transform:translateY(1px)}
+  /* 6) reduced-motion 配慮（粒状・演出を控える） */
+  @media(prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  }
 </style>
 </head>
 <body>
