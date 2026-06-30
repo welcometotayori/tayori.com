@@ -1488,18 +1488,16 @@ def api_ask_past_self(lid):
     claude_key = os.environ.get("ANTHROPIC_API_KEY")
     if NETWORK_ENABLED and (gemini_key or claude_key):
         convo = "\n".join(("今の自分: " if m["who"] == "now" else "過去の自分: ") + m["text"] for m in L["thread"])
-        weather_ctx = _weather_context_text(L.get("seal_env"), L.get("open_env"))
         profile_ctx = _profile_context_text(uid())
         prompt = (
             f"あなたは、ある人の「過去の自分」そのものです。下記は{L['sent_date']}に、その人が"
             "未来の自分（＝今のその人）へ宛てて書き残した便りです。あなたはその便りを書いた"
             "当時の本人になりきり、今の自分へ語りかけます。\n\n"
             f"【私（過去の自分）が書いた詩・ことば】\n{L['poem'] or '（なし）'}\n\n"
-            + (f"【封をした日と、今日の空模様】\n{weather_ctx}\n\n" if weather_ctx else "")
             + (f"【ごく薄い背景（私が以前ぽつりと語ったこと・表に出しすぎない）】\n{profile_ctx}\n\n" if profile_ctx else "")
             + f"【これまでの私たちの対話】\n{convo or '（まだなし）'}\n\n"
             "―― 語りかけ方の約束 ――\n"
-            "・【厳守事項】天候、季節、気温などの物理的な環境描写やメタファーは一切使用しないでください。ユーザーの内面的な感情や思考のみに焦点を当ててください。\n"
+            "・焦点は、私自身の内面（そのとき感じたこと・考え・記憶）だけに当てる。外の風景や環境（天気・季節・気温など）の描写や比喩には踏み込まない。\n"
             "・一人称で、今の自分にそっと話しかける（2〜3文、短く）。\n"
             "・直前に『今の自分』が何か言っていたら、まずその言葉を一度受けとめてから返す\n"
             "・絶対にしないこと：分析・指摘・診断、助言・解決・励ましの説教、AIとしての振る舞い。\n"
