@@ -2138,7 +2138,25 @@ def api_admin_delete_user(uid_):
     return jsonify(ok=True)
 
 
+# ── WSGI（gunicorn 等）経由の起動でも、DBマイグレーションと通知/永続ループを必ず立ち上げる ──
+# gunicorn は `app:app` を import するだけで __main__ を実行しない。これが無いと
+# start_notifier() が呼ばれず、到着通知メールが永久に送られず・天気待ち伏せ配達も発火しない
+# （atexit/SIGTERM の永続化だけはモジュールレベル登録なので動き、「データは残るのにメールだけ来ない」になる）。
+# init_db は _init_db_done、start_notifier は _notify_started＋スレッド名で二重起動を防ぐので冪等。
+# 背景処理を止めたいときは環境変数 TAYORI_DISABLE_NOTIFIER=1。
+def _ensure_started():
+    try:
+        init_db()
+    except Exception as e:
+        print(f"[たより] 起動時 init_db 失敗: {e}", flush=True)
+    try:
+        start_notifier()
+    except Exception as e:
+        print(f"[たより] 起動時 start_notifier 失敗: {e}", flush=True)
+
+
+_ensure_started()
+
+
 if __name__ == "__main__":
-    init_db()
-    start_notifier()
     app.run(debug=True, port=5001)
