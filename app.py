@@ -552,6 +552,24 @@ def terms_page():
 def privacy_page():
     return render_template("privacy.html")
 
+# 紙＋封筒＋朱の蝋封。実ユーザーの /favicon.ico 404 を消す（ボットの探索404とは別物）。
+_FAVICON_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
+    "<rect width='32' height='32' rx='6' fill='#F2EBDD'/>"
+    "<rect x='6' y='9' width='20' height='15' rx='2' fill='none' stroke='#3A2E25' stroke-width='1.6'/>"
+    "<path d='M6.8 10.5 L16 18 L25.2 10.5' fill='none' stroke='#3A2E25' "
+    "stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/>"
+    "<circle cx='16' cy='17' r='3.2' fill='#B5543A'/>"
+    "</svg>"
+)
+
+@app.route("/favicon.ico")
+@app.route("/favicon.svg")
+def favicon():
+    resp = Response(_FAVICON_SVG, mimetype="image/svg+xml")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
 @app.route("/api/onboarding", methods=["GET"])
 @login_required
 def api_get_onboarding():
