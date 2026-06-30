@@ -344,6 +344,33 @@
     font-size:14px;color:var(--ink-soft);letter-spacing:0.1em;padding:12px;border-radius:3px;transition:.2s}
   .onb-skip:hover{color:var(--seal);border-color:var(--seal)}
 
+  /* ── あなたの肖像（人物分析オーバーレイ） ── */
+  .portrait-ov{position:fixed;inset:0;z-index:88;background:var(--paper);overflow-y:auto;padding:52px 22px 40px;display:none}
+  .portrait-ov.on{display:block}
+  .portrait-inner{max-width:480px;margin:0 auto}
+  .portrait-mark{font-family:'Courier Prime',monospace;font-size:8px;line-height:1.5;letter-spacing:0.2em;color:var(--seal);
+    text-align:center;text-transform:uppercase;opacity:0.7;margin-bottom:14px}
+  .portrait-title{font-family:'Shippori Mincho',serif;font-size:25px;letter-spacing:0.14em;color:var(--ink);text-align:center;margin:0 0 12px}
+  .portrait-lead{font-family:'Shippori Mincho',serif;font-size:12.5px;line-height:2;letter-spacing:0.05em;color:var(--ink-soft);text-align:center;margin-bottom:26px}
+  .portrait-body{min-height:40px}
+  .portrait-body p{font-family:'Shippori Mincho',serif;font-size:15px;line-height:2.15;letter-spacing:0.04em;color:var(--ink);margin:0 0 20px;
+    text-align:justify;word-break:break-word;overflow-wrap:anywhere}
+  .portrait-body .placeholder{font-family:'Shippori Mincho',serif;font-size:13px;line-height:2;color:var(--ink-soft);text-align:center;opacity:0.85}
+  .portrait-body.loading{position:relative;min-height:120px}
+  .portrait-loading{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--ink-soft);
+    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;padding:30px 0}
+  .portrait-loading svg{width:26px;height:26px;opacity:0.8}
+  .portrait-meta{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-soft);text-align:center;opacity:0.7;margin:2px 0 22px;min-height:12px}
+  .portrait-actions{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:0 auto}
+  .portrait-go{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:15px;letter-spacing:0.18em;padding:14px;border-radius:2px;transition:.2s}
+  .portrait-go:hover{background:var(--seal);transform:translateY(-1px)}
+  .portrait-go:active{transform:translateY(0)}
+  .portrait-go:disabled{opacity:0.45;cursor:default;background:var(--line);transform:none}
+  .portrait-close{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:13px;color:var(--ink-soft);letter-spacing:0.1em;padding:11px;border-radius:3px;transition:.2s}
+  .portrait-close:hover{color:var(--seal);border-color:var(--seal)}
+
   /* ── 開封時の気分タグ（差分オーバーレイ内） ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
 </style>
@@ -411,6 +438,20 @@
   </div>
 </div>
 
+<div class="portrait-ov" id="portraitOv">
+  <div class="portrait-inner">
+    <div class="portrait-mark">JP<br>たより<br>Portrait</div>
+    <h2 class="portrait-title">あなたの肖像</h2>
+    <div class="portrait-lead">あなたが遺した言葉・写真・声、そして「初めの問い」への答えから、<br>いまのAIが「あなたという人」を、そっと描きます。</div>
+    <div class="portrait-body" id="portraitBody"></div>
+    <div class="portrait-meta" id="portraitMeta"></div>
+    <div class="portrait-actions">
+      <button class="portrait-go" id="portraitGen">肖像を描く</button>
+      <button class="portrait-close" id="portraitClose">とじる</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap app-hidden" id="app">
   <header>
     <div class="stamp">JP<br>たより<br>POST</div>
@@ -422,6 +463,7 @@
       <span class="acct-id">差出人</span><b id="acctName">—</b>
       <div class="acct-actions">
         <button id="profileBtn" title="初めの問いに、いつでも書き足せます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 8.4 14a3.6 3.6 0 1 0 7.2 0L12 2.5Z"/><path d="M12 9v6.5"/></svg>初めの問い</button>
+        <button id="portraitBtn" title="あなたが遺したものから、いまのAIが「あなたという人」を描きます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9.2" r="3.1"/><path d="M5.8 19c0-3.1 2.8-4.9 6.2-4.9s6.2 1.8 6.2 4.9"/></svg>あなたの肖像</button>
         <button id="emailBtn" title="届いたお知らせメールの設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="1.5"/><path d="m3.6 7 8.4 5.6L20.4 7"/></svg><span id="emailStatus">メール未設定</span></button>
         <button id="logoutBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H14"/><path d="M10 12h9"/><path d="m16 8.5 3.5 3.5-3.5 3.5"/></svg>ログアウト</button>
       </div>
@@ -1433,10 +1475,85 @@ async function detectWeather(){
   });
   document.getElementById('logoutBtn').addEventListener('click',async()=>{
     await api('/api/logout',{method:'POST'});
-    appEl.classList.add('app-hidden');onb.classList.remove('on');concept.classList.remove('on');gate.classList.remove('hidden');
+    appEl.classList.add('app-hidden');onb.classList.remove('on');concept.classList.remove('on');portraitOv.classList.remove('on');gate.classList.remove('hidden');
     goTab('compose');
     document.querySelector('.gate-tab[data-g="login"]').click();
   });
+
+  // ── あなたの肖像（人物分析オーバーレイ） ──
+  const portraitOv=document.getElementById('portraitOv');
+  const portraitBody=document.getElementById('portraitBody');
+  const portraitMeta=document.getElementById('portraitMeta');
+  const portraitGen=document.getElementById('portraitGen');
+  const portraitClose=document.getElementById('portraitClose');
+  const _portraitSpin='<svg class="ink-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 4a8 8 0 1 0 8 8"/></svg>';
+
+  function _renderPortrait(text){
+    portraitBody.classList.remove('loading');
+    portraitBody.innerHTML='';
+    let paras=String(text||'').split(/\n{2,}|\n/).map(s=>s.trim()).filter(Boolean);
+    // モデルが改行を入れず1段落で返した長文は、句点で2文ごとに区切って読みやすくする
+    if(paras.length<=1 && String(text||'').length>200){
+      const sents=String(text).split('。').map(s=>s.trim()).filter(Boolean).map(s=>s+'。');
+      paras=[];
+      for(let i=0;i<sents.length;i+=2){paras.push(sents.slice(i,i+2).join(''));}
+    }
+    if(!paras.length){portraitBody.innerHTML='<div class="placeholder">まだ何も描けていません。</div>';return;}
+    paras.forEach(p=>{const el=document.createElement('p');el.textContent=p;portraitBody.appendChild(el);});
+  }
+  function _fmtPortraitWhen(iso){
+    if(!iso)return'';
+    const d=new Date(iso); if(isNaN(d))return'';
+    return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' に描かれた肖像';
+  }
+  async function openPortrait(){
+    portraitOv.classList.add('on');portraitOv.scrollTop=0;
+    portraitBody.classList.remove('loading');
+    portraitBody.innerHTML='<div class="placeholder">読み込んでいます…</div>';
+    portraitMeta.textContent='';
+    const d=await api('/api/portrait',{method:'GET'})||{};
+    if(d.portrait){
+      _renderPortrait(d.portrait);
+      portraitMeta.textContent=_fmtPortraitWhen(d.generated_at);
+      portraitGen.textContent='描き直す';
+    }else{
+      portraitBody.innerHTML='<div class="placeholder">まだ、あなたの肖像はありません。<br>下のボタンで、いまのあなたを描いてみてください。</div>';
+      portraitGen.textContent='肖像を描く';
+    }
+    if(d.ai_available===false){portraitGen.disabled=true;portraitMeta.textContent='いまは分析を準備できません';}
+    else{portraitGen.disabled=false;}
+  }
+  async function _portraitPost(){
+    // 肖像生成は写真・声込みで15秒を超え得るので、api()(15秒)ではなく専用の長めタイムアウトで叩く
+    const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),60000);
+    try{
+      const r=await fetch('/api/portrait',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},signal:ctrl.signal});
+      clearTimeout(t);
+      return await r.json().catch(()=>({}));
+    }catch(e){clearTimeout(t);return{error:'時間がかかりすぎました。写真や声が多いと長くなります。もう一度お試しください。'};}
+  }
+  async function generatePortrait(){
+    portraitGen.disabled=true;
+    const prev=portraitGen.textContent;
+    portraitGen.textContent='描いています…';
+    portraitBody.classList.add('loading');
+    portraitBody.innerHTML='<div class="portrait-loading">'+_portraitSpin+'<span>あなたが遺したものを、読み解いています…<br>（写真や声があると、少し時間がかかります）</span></div>';
+    portraitMeta.textContent='';
+    const d=await _portraitPost();
+    portraitBody.classList.remove('loading');
+    if(d&&d.portrait){
+      _renderPortrait(d.portrait);
+      portraitMeta.textContent=_fmtPortraitWhen(d.generated_at);
+      portraitGen.textContent='描き直す';
+    }else{
+      portraitBody.innerHTML='<div class="placeholder">'+((d&&d.error)||'うまく描けませんでした。少し時間をおいて、もう一度お試しください。')+'</div>';
+      portraitGen.textContent=prev;
+    }
+    portraitGen.disabled=false;
+  }
+  document.getElementById('portraitBtn').addEventListener('click',openPortrait);
+  portraitGen.addEventListener('click',generatePortrait);
+  portraitClose.addEventListener('click',()=>portraitOv.classList.remove('on'));
 
   // check existing session on load
   (async function boot(){

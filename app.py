@@ -392,6 +392,8 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN notify_attempts INTEGER DEFAULT 0",
             "ALTER TABLE letters ADD COLUMN notify_failed INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN onboarding TEXT",
+            "ALTER TABLE users ADD COLUMN portrait TEXT",
+            "ALTER TABLE users ADD COLUMN portrait_at TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -1470,6 +1472,186 @@ def _claude_question(prompt, api_key):
     msg = client.messages.create(model=model, max_tokens=1000,
                                  messages=[{"role": "user", "content": prompt}])
     return "".join(b.text for b in msg.content if b.type == "text").strip() or None
+
+
+def _gemini_multimodal(parts, api_key, temperature=0.75, max_tokens=1600):
+    """parts は Gemini の contents.parts 形式（{"text":...} / {"inline_data":{...}}）。
+    写真・音声を含む人物分析に使う。モデルfallbackは _gemini_question と同様。
+    マルチモーダルに強い flash を優先。媒体が原因の 400 は呼び出し側で素材を減らして再試行する。"""
+    import urllib.request
+    import urllib.error
+    if ("…" in api_key or "..." in api_key or "（" in api_key
+            or "ここ" in api_key or "鍵" in api_key):
+        raise ValueError(".env の GEMINI_API_KEY が例文（プレースホルダ）のままです。")
+    try:
+        api_key.encode("ascii")
+    except UnicodeEncodeError:
+        raise ValueError("GEMINI_API_KEY に非ASCII文字が含まれています。")
+    preferred = os.environ.get("TAYORI_GEMINI_MODEL")
+    fallbacks = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+    models = ([preferred] if preferred else []) + [m for m in fallbacks if m != preferred]
+    body = json.dumps({
+        "contents": [{"parts": parts}],
+        "generationConfig": {"temperature": temperature, "topP": 0.9, "maxOutputTokens": max_tokens},
+    }).encode("utf-8")
+    last_err = None
+    for model in models:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent")
+        for attempt in range(2):
+            req = urllib.request.Request(
+                url, data=body, method="POST",
+                headers={"Content-Type": "application/json", "X-goog-api-key": api_key})
+            try:
+                with urllib.request.urlopen(req, timeout=45) as resp:
+                    data = json.loads(resp.read().decode())
+                cands = data.get("candidates") or []
+                ps = (cands[0].get("content") or {}).get("parts") or [] if cands else []
+                text = "".join(p.get("text", "") for p in ps).strip()
+                if text:
+                    return text
+                break
+            except urllib.error.HTTPError as e:
+                last_err = e
+                if e.code in (400, 401, 403):
+                    raise           # 400=媒体不正の可能性。呼び出し側で素材を減らす。
+                if e.code in (429, 503) and attempt == 0:
+                    time.sleep(2)
+                    continue
+                break
+    if last_err:
+        raise last_err
+    return None
+
+
+def _split_data_url(durl):
+    """'data:image/jpeg;base64,XXXX' → ('image/jpeg', 'XXXX')。違う形式なら None。"""
+    if not durl or not isinstance(durl, str) or not durl.startswith("data:"):
+        return None
+    try:
+        head, b64 = durl.split(",", 1)
+    except ValueError:
+        return None
+    mime = head[5:].split(";")[0].strip() or "application/octet-stream"
+    if not b64:
+        return None
+    return mime, b64
+
+
+PORTRAIT_PROMPT = (
+    "あなたは、ある人が遺した言葉・写真・声、そして『初めの問い』への答えから、"
+    "その人がどんな人かを静かに読み解く聞き手です。下の素材だけを根拠に、"
+    "その人の人物像を日本語で描いてください。\n\n"
+    "― 描き方 ―\n"
+    "・二人称（「あなたは…」）で、本人にそっと差し出す手紙のように。\n"
+    "・素材から読み取れることだけに根ざす。素材に無いことは断定しない。\n"
+    "・価値観、ものの考え方の癖、何に心が動くか、そして“抱えやすい悩みの傾向”に静かに触れる。\n"
+    "・占いや性格診断のような決めつけ、励まし・助言の説教はしない。\n"
+    "・写真や声があれば、その雰囲気も手がかりにしてよい（写っているものの単なる羅列はしない）。\n"
+    "・3〜4段落、全体で500〜700字程度。静かで、温かく、誠実な筆致で。\n"
+    "・段落と段落のあいだは、必ず空行（改行を2つ）で区切る。\n"
+    "・見出しや箇条書き、メタな注釈はつけず、地の文だけで書く。\n\n"
+    "素材は次のとおりです。"
+)
+
+
+def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
+    """肖像分析の素材を集める。戻り値: (テキスト素材, 画像parts, 音声parts, 件数dict)。"""
+    db = get_db()
+    urow = db.execute("SELECT onboarding FROM users WHERE id=?", (user_id,)).fetchone()
+    answers = _load_onboarding(urow["onboarding"] if urow else None)
+    ob_lines = []
+    for q in sorted(a for a in (answers or {}) if 0 <= a < len(ONBOARDING_QUESTIONS)):
+        ans = (answers[q] or "").strip()
+        if ans:
+            ob_lines.append(f"・{ONBOARDING_QUESTIONS[q]} → {ans}")
+
+    rows = db.execute(
+        "SELECT poem, photo, voice, sent_date FROM letters WHERE user_id=? ORDER BY sent_date DESC, id DESC",
+        (user_id,)).fetchall()
+    poems, image_parts, audio_parts = [], [], []
+    for r in rows:
+        p = (r["poem"] or "").strip()
+        if p and len(poems) < max_poems:
+            poems.append(f"（{r['sent_date']}）{p}")
+        if len(image_parts) < max_photos:
+            d = _split_data_url(r["photo"])
+            if d and d[0].startswith("image/"):
+                image_parts.append({"inline_data": {"mime_type": d[0], "data": d[1]}})
+        if len(audio_parts) < max_voices:
+            d = _split_data_url(r["voice"])
+            if d and d[0].startswith("audio/"):
+                audio_parts.append({"inline_data": {"mime_type": d[0], "data": d[1]}})
+
+    blocks = []
+    if ob_lines:
+        blocks.append("【初めの問いへの答え】\n" + "\n".join(ob_lines))
+    if poems:
+        blocks.append("【遺した言葉（便り）】\n" + "\n".join(poems))
+    if image_parts or audio_parts:
+        media_note = []
+        if image_parts:
+            media_note.append(f"写真{len(image_parts)}枚")
+        if audio_parts:
+            media_note.append(f"声{len(audio_parts)}件")
+        blocks.append("（このあとに、この人が遺した" + "・".join(media_note) + "を添えます）")
+    text_block = "\n\n".join(blocks) if blocks else "（素材はまだほとんどありません）"
+    counts = {"onboarding": len(ob_lines), "poems": len(poems),
+              "photos": len(image_parts), "voices": len(audio_parts)}
+    return text_block, image_parts, audio_parts, counts
+
+
+@app.route("/api/portrait", methods=["GET"])
+@login_required
+def api_get_portrait():
+    row = get_db().execute("SELECT portrait, portrait_at FROM users WHERE id=?", (uid(),)).fetchone()
+    ai_ok = bool(NETWORK_ENABLED and os.environ.get("GEMINI_API_KEY"))
+    return jsonify(
+        portrait=(row["portrait"] if row and "portrait" in row.keys() else None),
+        generated_at=(row["portrait_at"] if row and "portrait_at" in row.keys() else None),
+        ai_available=ai_ok)
+
+
+@app.route("/api/portrait", methods=["POST"])
+@login_required
+def api_make_portrait():
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if not (NETWORK_ENABLED and gemini_key):
+        return jsonify(error="いまは肖像を描けません（AI接続が無効です）。"), 503
+
+    text_block, image_parts, audio_parts, counts = _gather_portrait_inputs(uid())
+    if not any(counts.values()):
+        return jsonify(error="まだ材料がありません。便りを綴るか、初めの問いに答えてみてください。"), 400
+
+    instruction = {"text": PORTRAIT_PROMPT}
+    materials = {"text": text_block}
+
+    def build(media):
+        # 指示 → テキスト素材 → 媒体（写真・声）の順で渡す
+        return [instruction, materials] + media
+
+    # 媒体つきで試し、媒体が原因で 400 等になったら 音声→画像 の順に外して再試行する
+    attempts = [image_parts + audio_parts, image_parts, []]
+    text = None
+    last_e = None
+    for media in attempts:
+        try:
+            text = _gemini_multimodal(build(media), gemini_key)
+            if text:
+                break
+        except Exception as e:
+            last_e = e
+            print(f"[肖像生成リトライ] 媒体{len(media)}件で失敗: {e}", flush=True)
+            continue
+    if not text:
+        print(f"[肖像生成 最終失敗] {last_e}", flush=True)
+        return jsonify(error="肖像の生成に失敗しました。少し時間をおいて、もう一度お試しください。"), 502
+
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with _WRITE_LOCK:
+        get_db().execute("UPDATE users SET portrait=?, portrait_at=? WHERE id=?", (text, now_iso, uid()))
+        get_db().commit()
+    return jsonify(portrait=text, generated_at=now_iso, counts=counts)
 
 
 @app.route("/api/letters/<lid>/ask", methods=["POST"])
