@@ -28,6 +28,7 @@ import urllib.request   # 関数内で遅延importすると、複数スレッド
 import urllib.error     # 「cannot access submodule 'request'（循環import）」で失敗する。
                         # 起動時にモジュールレベルで1回だけimportして競合を防ぐ。
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr, parseaddr, make_msgid, formatdate
 from functools import wraps
 from datetime import datetime, date, timedelta
@@ -802,7 +803,29 @@ def _smtp_config():
     }
 
 
-def send_email(to_addr, subject, body):
+def _html_email(body, unsubscribe_url=None):
+    """プレーン本文から、素朴で清潔なHTML版を作る（URLはリンク化）。到達率と見た目のため。"""
+    safe = html.escape(body)
+    safe = re.sub(r'https?://[^\s<]+',
+                  lambda m: f'<a href="{m.group(0)}" style="color:#B5543A;text-decoration:underline">{m.group(0)}</a>',
+                  safe).replace("\n", "<br>")
+    foot = ""
+    if unsubscribe_url:
+        foot = (f'<div style="margin-top:24px;font-size:12px;color:#9c8f7c">'
+                f'このお知らせを止める：<a href="{unsubscribe_url}" style="color:#9c8f7c">配信を停止</a></div>')
+    return (
+        '<div style="background:#F2EBDD;padding:30px 16px;'
+        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#3A2E25\">"
+        '<div style="max-width:480px;margin:0 auto;background:#EDE3D1;border:1px solid #CBBBA0;'
+        'border-radius:4px;padding:30px 26px">'
+        '<div style="font-size:25px;letter-spacing:0.18em;margin-bottom:16px">たより</div>'
+        f'<div style="font-size:15px;line-height:2.0">{safe}</div>'
+        f'{foot}'
+        '</div></div>'
+    )
+
+
+def send_email(to_addr, subject, body, unsubscribe_url=None):
     cfg = _smtp_config()
     if not cfg:
         print("\n―― [メール通知・擬似送信] ――――――――――――")
@@ -812,7 +835,8 @@ def send_email(to_addr, subject, body):
         print("――――――――――――――――――――――――\n")
         return True
     try:
-        msg = MIMEText(body, "plain", "utf-8")
+        # text + HTML のマルチパート（プレーン単体よりスパム判定されにくく、見た目も整う）
+        msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         from_name, from_addr = parseaddr(cfg["from"])
         msg["From"] = formataddr((from_name, from_addr)) if from_addr else cfg["from"]
@@ -822,6 +846,12 @@ def send_email(to_addr, subject, body):
         msg["Message-ID"] = make_msgid(domain=_dom) if _dom else make_msgid()
         if from_addr:
             msg["Reply-To"] = from_addr
+        # 配信停止ヘッダ（Gmail/iCloud が信頼の手がかりにする。ワンクリック対応）
+        if unsubscribe_url:
+            msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+            msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        msg.attach(MIMEText(_html_email(body, unsubscribe_url), "html", "utf-8"))
         ctx = ssl.create_default_context()
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=15) as s:
             s.starttls(context=ctx)
@@ -1097,6 +1127,7 @@ def _check_and_notify():
                 except ValueError:
                     continue
             open_url = f"{BASE_URL}/open/{r['lid']}"
+            unsub_url = f"{BASE_URL}/unsubscribe/{r['unsub']}" if r["unsub"] else None
             subject = "たより — 便りが、届きました"
             body = (
                 f"{r['username']} さんへ。\n"
@@ -1105,8 +1136,9 @@ def _check_and_notify():
                 "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
                 f"{open_url}\n\n"
                 "tayori ーたより\n"
+                + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
             )
-            if send_email(r["email"], subject, body):
+            if send_email(r["email"], subject, body, unsubscribe_url=unsub_url):
                 with _WRITE_LOCK:
                     db.execute("UPDATE letters SET notified=1 WHERE id=?", (r["lid"],))
                     db.commit()
