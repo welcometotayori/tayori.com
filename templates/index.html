@@ -414,7 +414,7 @@
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
       <div class="gate-hint" style="text-align: center; margin-top: 16px;">
-        登録により、<a href="/terms" target="_blank" style="color:#B5543A;">利用規約</a>と<a href="/privacy" target="_blank" style="color:#B5543A;">プライバシーポリシー</a>に<br>同意したものとみなされます。
+        <a href="/terms" target="_blank" style="color:#B5543A;">利用規約</a>　<a href="/privacy" target="_blank" style="color:#B5543A;">プライバシーポリシー</a>
       </div>
     </div>
   </div>
@@ -1112,7 +1112,7 @@ async function detectWeather(){
     h+='<div class="letter-body">';
     if(L.poem){
       h+='<div class="letter-poem" id="poem-'+L.id+'">'+esc(L.poem)+'</div>';
-      if(L.has_trace)h+='<button class="trace-play" data-lid="'+L.id+'" data-target="poem-'+L.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>書いていた時を、再生する</button>';
+      if(L.has_trace)h+='<button class="trace-play" data-lid="'+L.id+'" data-target="poem-'+L.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>もう一度、書いていた時を</button>';
     }
     if(L.voice)h+='<div class="letter-voice"><audio controls src="'+L.voice+'"></audio></div>';
     if(L.emos&&L.emos.length)h+='<div class="emo-tags">'+L.emos.map(e=>'<span class="emo-tag">'+esc(e)+'</span>').join('')+'</div>';
@@ -1189,7 +1189,11 @@ async function detectWeather(){
 
   // 💡 【機能3：差分演出オーバーレイの表示処理＋開封時の気分タグ】
   const dOver=document.getElementById('diffOverlay'), dSealVal=document.getElementById('diffSealVal'), dOpenVal=document.getElementById('diffOpenVal');
-  document.getElementById('diffClose').addEventListener('click', ()=>{ dOver.classList.remove('on'); });
+  let _autoPlayLid=null;   // 開封直後に自動でタイプ再生する便りID（天気の差分を閉じた後に発火）
+  document.getElementById('diffClose').addEventListener('click', ()=>{
+    dOver.classList.remove('on');
+    if(_autoPlayLid){const lid=_autoPlayLid;_autoPlayLid=null;setTimeout(()=>autoPlayTrace(lid),300);}
+  });
 
   const diffTitle=document.getElementById('diffTitle'), diffRow=document.getElementById('diffRow');
   function showDiffOverlay(seal_env, open_env, letterId){
@@ -1223,11 +1227,15 @@ async function detectWeather(){
 
     await loadMail(); // 再読み込みして描画
     // 開封成功なら差分オーバーレイ＋気分タグを表示（このときだけ気分を尋ねる）
+    _autoPlayLid=null;
     if(res && res.ok){
       const seal=res.seal_env?(typeof res.seal_env==='string'?JSON.parse(res.seal_env):res.seal_env):null;
       const open=res.open_env?(typeof res.open_env==='string'?JSON.parse(res.open_env):res.open_env):null;
       showDiffOverlay(seal, open, id);
     }
+    // タイプ再生を「天気のように」自動で：天気の差分が出たならそれを閉じた後、無ければ今すぐ
+    if(dOver.classList.contains('on')){ _autoPlayLid=id; }
+    else { setTimeout(()=>autoPlayTrace(id), 500); }
   }
 
   // 「送る」（返信送信後）から呼ばれ、過去の自分が問いを返す
@@ -1404,8 +1412,8 @@ async function detectWeather(){
       ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';updateOnbProgress();scheduleOnbAutosave();});
       onbList.appendChild(wrap);
     });
-    onbSkip.textContent=onbFirstRun?'あとで':'閉じる';
-    onbSkip.style.display=onbFirstRun?'none':'';   // 初回はスキップ不可（10問必須）
+    onbSkip.textContent=onbFirstRun?'あとで答える':'閉じる';
+    onbSkip.style.display='';   // 初回も「あとで答える」で抜けられる導線を残す（一方通行にしない・後で初めの問いから再訪可）
     onbSave.textContent=onbFirstRun?'保存して、はじめる':'保存する';
     updateOnbProgress();
     // textareaの初期高さを内容に合わせる
@@ -1577,15 +1585,16 @@ async function detectWeather(){
   portraitClose.addEventListener('click',()=>portraitOv.classList.remove('on'));
 
   // ── タイプ再生（TypeTrace）：書いていた時の迷い・書き直し・間をそのまま再生 ──
-  async function playTrace(btn){
-    if(btn._playing)return;
-    const target=document.getElementById(btn.dataset.target);
-    if(!target)return;
-    btn._playing=true;btn.disabled=true;
+  // 再生本体：便りID と表示先を直接受ける（クリックからも自動再生からも呼べる）
+  async function runTrace(lid, target, btn){
+    if(!target || target._tracing)return;
+    if(btn){ if(btn._playing)return; btn._playing=true; btn.disabled=true; }
+    target._tracing=true;
     const finalText=target.textContent;
-    const d=await api('/api/letters/'+btn.dataset.lid+'/trace',{method:'GET'})||{};
+    const done=()=>{ if(btn){btn._playing=false;btn.disabled=false;} target._tracing=false; };
+    const d=await api('/api/letters/'+lid+'/trace',{method:'GET'})||{};
     const steps=d.trace;
-    if(!Array.isArray(steps)||steps.length<2){btn._playing=false;btn.disabled=false;return;}
+    if(!Array.isArray(steps)||steps.length<2){done();return;}
     // 個々の「間」は最大1.2sに丸め、全体は最大14秒に収める（長すぎる空白で退屈させない）
     const norm=[];let prev=0,acc=0;
     for(const s of steps){let gap=Math.max(0,(s.t||0)-prev);prev=s.t||0;gap=Math.min(gap,1200);acc+=gap;norm.push({at:acc,v:String(s.v==null?'':s.v)});}
@@ -1598,12 +1607,21 @@ async function detectWeather(){
       const el=now-t0;
       while(idx<norm.length&&norm[idx].at*scale<=el){target.innerHTML=esc(norm[idx].v)+caret;idx++;}
       if(idx<norm.length){requestAnimationFrame(frame);}
-      else{target.classList.remove('tracing');target.textContent=finalText;btn._playing=false;btn.disabled=false;}
+      else{target.classList.remove('tracing');target.textContent=finalText;done();}
     }
     target.innerHTML=esc(norm[0].v)+caret;
     requestAnimationFrame(frame);
   }
-  document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.trace-play');if(b)playTrace(b);});
+  // 開いた瞬間に「天気のように」自動で書き起こす（クリック不要）。traceを持つ便りだけ。
+  function autoPlayTrace(lid){
+    const target=document.getElementById('poem-'+lid);
+    if(!target)return;
+    const btn=document.querySelector('.trace-play[data-lid="'+lid+'"]');
+    if(!btn)return;
+    try{ target.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+    setTimeout(()=>runTrace(lid, target, btn), 260);
+  }
+  document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.trace-play');if(b)runTrace(b.dataset.lid, document.getElementById(b.dataset.target), b);});
 
   // check existing session on load
   (async function boot(){
