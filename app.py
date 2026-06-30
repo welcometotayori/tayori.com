@@ -1147,7 +1147,16 @@ def start_notifier(interval=None):
     except ValueError:
         backup_hours = 24.0
 
+    # 起動直後の猶予。デプロイ直後はワーカー起動と新規登録が重なりやすく、背景のDB処理が
+    # 登録/オンボの読み書きと競合すると「設問0件」等になり得る。背景ループの最初の一手を
+    # この秒数だけ遅らせ、起動直後の数十秒は登録処理にDBを譲る。
+    try:
+        grace = float(os.environ.get("TAYORI_STARTUP_GRACE", "12"))
+    except ValueError:
+        grace = 12.0
+
     def notify_loop():
+        time.sleep(grace)
         while True:
             try:
                 _check_weather_events()
@@ -1157,7 +1166,10 @@ def start_notifier(interval=None):
             time.sleep(interval)
 
     def maintenance_loop():
-        last_backup = 0.0
+        # 起動直後にいきなりS3バックアップを走らせない（従来は last_backup=0 で初回即実行→
+        # 起動直後の登録とDBで競合する温床だった）。初回は起動から約5分後にずらす。
+        last_backup = time.time() - backup_hours * 3600 + 300
+        time.sleep(grace + 8)   # persist は notifier より少し後ろにずらす
         while True:
             try:
                 if _LOCAL_CACHE:
