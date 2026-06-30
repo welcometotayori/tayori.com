@@ -734,6 +734,46 @@ def api_set_email():
     return jsonify(ok=True, email=None, email_verified=False)
 
 
+@app.route("/api/account/name", methods=["POST"])
+@login_required
+def api_change_name():
+    new = (request.get_json(force=True).get("username") or "").strip()
+    if not USERNAME_RE.match(new):
+        return jsonify(error="名前は2〜24文字で。漢字・かな・英数字と _ . - が使えます。"), 400
+    db = get_db()
+    cur = db.execute("SELECT username FROM users WHERE id=?", (uid(),)).fetchone()
+    if not cur:
+        return jsonify(error="ユーザーが見つかりません。"), 404
+    if cur["username"] == "admin":
+        return jsonify(error="管理者アカウントの名前は変更できません。"), 403
+    if cur["username"] == new:
+        return jsonify(ok=True, username=new)
+    if db.execute("SELECT 1 FROM users WHERE username=? AND id<>?", (new, uid())).fetchone():
+        return jsonify(error="その名前はもう使われています。"), 409
+    with _WRITE_LOCK:
+        db.execute("UPDATE users SET username=? WHERE id=?", (new, uid()))
+        db.commit()
+    return jsonify(ok=True, username=new)
+
+
+@app.route("/api/account/password", methods=["POST"])
+@login_required
+def api_change_password():
+    data = request.get_json(force=True)
+    current = data.get("current") or ""
+    new = data.get("new") or ""
+    db = get_db()
+    row = db.execute("SELECT pw_hash FROM users WHERE id=?", (uid(),)).fetchone()
+    if not row or not check_password_hash(row["pw_hash"], current):
+        return jsonify(error="いまのパスワードが違います。"), 401
+    if len(new) < 8:
+        return jsonify(error="新しいパスワードは8文字以上にしてください。"), 400
+    with _WRITE_LOCK:
+        db.execute("UPDATE users SET pw_hash=? WHERE id=?", (_hash_pw(new), uid()))
+        db.commit()
+    return jsonify(ok=True)
+
+
 def _is_arrived(row):
     keys = row.keys() if hasattr(row, "keys") else []
     if "weather_event" in keys and row["weather_event"]:

@@ -385,6 +385,16 @@
   .portrait-close{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:13px;color:var(--ink-soft);letter-spacing:0.1em;padding:11px;border-radius:3px;transition:.2s}
   .portrait-close:hover{color:var(--seal);border-color:var(--seal)}
+  /* ── アカウント設定（名前・パスワード） ── */
+  .acct-sec{max-width:360px;margin:0 auto 22px;text-align:left}
+  .acct-label{display:block;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft);margin-bottom:7px}
+  .acct-input{width:100%;background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:11px 13px;margin-bottom:9px;
+    font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink)}
+  .acct-input:focus{outline:none;border-color:var(--seal)}
+  .acct-save{width:100%;background:transparent;border:1px solid var(--line);color:var(--ink-soft);cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;padding:10px;border-radius:3px;transition:.2s}
+  .acct-save:hover{color:var(--seal);border-color:var(--seal)}
+  .acct-hint{max-width:360px;margin:0 auto 22px;font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-soft);opacity:0.85;letter-spacing:0.03em}
 
   /* ── 開封時の気分タグ（差分オーバーレイ内） ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
@@ -428,7 +438,7 @@
 <div class="concept" id="concept">
   <div class="concept-inner">
     <div class="concept-mark">JP<br>たより<br>Post</div>
-    <h2 class="concept-title">これは、<br>過去の自分と対話するツールです</h2>
+    <h2 class="concept-title"><span style="font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.42em;color:var(--ink-soft);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
     <div class="concept-body">
       <p>ここに置いた言葉や写真、声は、いますぐ誰かに届くものではありません。<br>時間をおいて、あなたのもとへ返ってきます。</p>
       <p>返ってくる言葉に、正解や情報を求めないでください。<br>それらは検索の答えではなく、かつてのあなたからの問いかけです。</p>
@@ -467,6 +477,28 @@
   </div>
 </div>
 
+<div class="portrait-ov" id="acctOv">
+  <div class="portrait-inner">
+    <div class="portrait-mark">JP<br>たより<br>Account</div>
+    <h2 class="portrait-title">設定</h2>
+    <div class="acct-sec">
+      <label class="acct-label">名前</label>
+      <input type="text" id="setName" class="acct-input" autocomplete="username" placeholder="2〜24文字">
+      <button class="acct-save" id="setNameBtn">名前を変更</button>
+    </div>
+    <div class="acct-sec">
+      <label class="acct-label">パスワードの変更</label>
+      <input type="password" id="setPwCur" class="acct-input" autocomplete="current-password" placeholder="いまのパスワード">
+      <input type="password" id="setPwNew" class="acct-input" autocomplete="new-password" placeholder="新しいパスワード（8文字以上）">
+      <button class="acct-save" id="setPwBtn">パスワードを変更</button>
+    </div>
+    <div class="acct-hint">※確認メール・通知メールが迷惑メール（スパム）に入ることがあります。その場合は「迷惑メールではない」を押すと、次から届きやすくなります。</div>
+    <div class="portrait-actions">
+      <button class="portrait-close" id="acctClose">とじる</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap app-hidden" id="app">
   <header>
     <div class="stamp">JP<br>たより<br>POST</div>
@@ -480,6 +512,7 @@
         <button id="profileBtn" title="初めの問いに、いつでも書き足せます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 8.4 14a3.6 3.6 0 1 0 7.2 0L12 2.5Z"/><path d="M12 9v6.5"/></svg>初めの問い</button>
         <button id="portraitBtn" title="あなたが遺したものから、いまのAIが「あなたという人」を描きます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9.2" r="3.1"/><path d="M5.8 19c0-3.1 2.8-4.9 6.2-4.9s6.2 1.8 6.2 4.9"/></svg>あなたについて</button>
         <button id="emailBtn" title="届いたお知らせメールの設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="1.5"/><path d="m3.6 7 8.4 5.6L20.4 7"/></svg><span id="emailStatus">メール未設定</span></button>
+        <button id="settingsBtn" title="名前・パスワードの変更"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></svg>設定</button>
         <button id="logoutBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H14"/><path d="M10 12h9"/><path d="m16 8.5 3.5 3.5-3.5 3.5"/></svg>ログアウト</button>
       </div>
     </div>
@@ -1516,15 +1549,36 @@ async function detectWeather(){
     const res=await api('/api/email',{method:'POST',body:JSON.stringify({email:v.trim()})});
     if(res&&res.ok){
       setEmailStatus(res.email,res.email_verified);
-      flash(res.email?(res.email_pending?'確認メールを送りました。リンクを開くと通知が有効になります。':'メールを設定しました。'):'メール通知をオフにしました。');
+      flash(res.email?(res.email_pending?'確認メールを送りました。リンクを開くと通知が有効に。迷惑メールに入ることがあるのでご確認を。':'メールを設定しました。'):'メール通知をオフにしました。');
     }
     else{flash((res&&res.error)||'設定できませんでした。');}
   });
   document.getElementById('logoutBtn').addEventListener('click',async()=>{
     await api('/api/logout',{method:'POST'});
-    appEl.classList.add('app-hidden');onb.classList.remove('on');concept.classList.remove('on');portraitOv.classList.remove('on');gate.classList.remove('hidden');
+    appEl.classList.add('app-hidden');onb.classList.remove('on');concept.classList.remove('on');portraitOv.classList.remove('on');acctOv.classList.remove('on');gate.classList.remove('hidden');
     goTab('compose');
     document.querySelector('.gate-tab[data-g="login"]').click();
+  });
+
+  // ── アカウント設定（名前・パスワードの変更） ──
+  const acctOv=document.getElementById('acctOv');
+  document.getElementById('settingsBtn').addEventListener('click',()=>{
+    document.getElementById('setName').value=document.getElementById('acctName').textContent||'';
+    document.getElementById('setPwCur').value='';document.getElementById('setPwNew').value='';
+    acctOv.classList.add('on');acctOv.scrollTop=0;
+  });
+  document.getElementById('acctClose').addEventListener('click',()=>acctOv.classList.remove('on'));
+  document.getElementById('setNameBtn').addEventListener('click',async()=>{
+    const v=(document.getElementById('setName').value||'').trim();
+    const res=await api('/api/account/name',{method:'POST',body:JSON.stringify({username:v})});
+    if(res&&res.ok){document.getElementById('acctName').textContent=res.username;flash('名前を変えました。');}
+    else{flash((res&&res.error)||'変更できませんでした。');}
+  });
+  document.getElementById('setPwBtn').addEventListener('click',async()=>{
+    const cur=document.getElementById('setPwCur').value||'',nw=document.getElementById('setPwNew').value||'';
+    const res=await api('/api/account/password',{method:'POST',body:JSON.stringify({current:cur,new:nw})});
+    if(res&&res.ok){document.getElementById('setPwCur').value='';document.getElementById('setPwNew').value='';flash('パスワードを変えました。');}
+    else{flash((res&&res.error)||'変更できませんでした。');}
   });
 
   // ── あなたの肖像（人物分析オーバーレイ） ──
