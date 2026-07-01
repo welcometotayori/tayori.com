@@ -36,7 +36,7 @@ services:
       - key: TAYORI_SMTP_USER
         value: resend                 # Resend のSMTPユーザー名は固定で "resend"
       - key: TAYORI_MAIL_FROM
-        value: たより <no-reply@tayori-letter.com>  # 認証済みドメインのアドレス必須（これ以外だとResendが拒否）
+        value: tayori-たより- <no-reply@tayori-letter.com>  # 表示名のみ変更。アドレスは認証済みドメイン必須（これ以外だとResendが拒否）
       - key: TAYORI_SMTP_PASS
         sync: false                   # Resend APIキー（re_… で始まる）をダッシュボードで手入力
       # --- オフサイト自動バックアップ（Cloudflare R2 / S3互換。4つ揃うと日次で自動実行） ---

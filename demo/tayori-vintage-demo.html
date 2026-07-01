@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>たより — vintage analog demo v3（UI/UX Pro Max適用 · 実アプリ未反映）</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime:wght@400;700&family=Zen+Kurenaido&family=Abril+Fatface&family=Caveat:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{--paper:#F2EBDD;--paper2:#EDE3D1;--card:#F5EEDE;--card2:#E9DEC9;--ink:#352A20;--ink2:#5E4F40;
+  --seal:#B5543A;--seal2:#C25A3C;--teal:#4A7B7C;--line:#CBBBA0;--violet:#2c3566;--kraft:#C4A77D;
+  --sepia:20%;--contrast:1.1;--sat:.82;--grain:.14;--leak:rgba(255,200,100,.22);
+  font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;color:var(--ink);min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;padding:34px 14px;overflow-x:hidden;position:relative;
+  background:radial-gradient(circle at 14% 8%,rgba(181,84,58,.05),transparent 36%),radial-gradient(circle at 86% 92%,rgba(74,123,124,.07),transparent 42%),#ddd0b6}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,label.voice-btn,.chip,.stamp-opt,.tl-card,.slide-track,.seal-future{cursor:pointer}
+button:focus-visible,[role="tab"]:focus-visible,textarea:focus-visible,input:focus-visible,.tl-card:focus-visible{outline:2px solid var(--seal);outline-offset:2px;border-radius:3px}
+button:not(.tab):active{transform:translateY(1px)}
+
+.desk{position:fixed;inset:0;z-index:0;pointer-events:none}
+.ph{position:absolute;filter:grayscale(.7) sepia(var(--sepia)) contrast(var(--contrast)) saturate(var(--sat));opacity:.45}
+.ph-a{width:260px;height:180px;top:-20px;left:-40px;transform:rotate(-3deg);background:linear-gradient(165deg,#b7a98f,#857a67 55%,#9a8e78)}
+.ph-b{width:280px;height:150px;top:30px;right:-50px;transform:rotate(3deg);background:linear-gradient(120deg,#a6b3ad,#8a9fa3 50%,#c0b196)}
+.leak{position:absolute;mix-blend-mode:screen;filter:blur(40px)}
+.leak-1{top:-60px;right:-40px;width:320px;height:260px;background:radial-gradient(circle,var(--leak),transparent 70%)}
+.leak-2{bottom:-50px;left:-60px;width:260px;height:240px;background:radial-gradient(circle,rgba(181,84,58,.16),transparent 70%)}
+
+.stage{position:relative;z-index:1;width:540px;max-width:100%;padding:0 22px 30px;
+  background:linear-gradient(165deg,#f6efe1,#f0e6d3 60%,#f3ecdd);border:1px solid #d9cab0;border-radius:3px;
+  box-shadow:0 40px 90px -46px rgba(40,30,20,.62),0 2px 0 rgba(255,255,255,.4) inset}
+.grain{position:absolute;inset:0;pointer-events:none;z-index:5;mix-blend-mode:multiply;opacity:var(--grain);border-radius:3px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E")}
+.stage>*{position:relative;z-index:1}
+
+.hd{text-align:center;padding:42px 0 24px;position:relative}
+.hd-stamp{position:absolute;top:34px;right:0;width:60px;height:60px;border:1.4px solid var(--seal);border-radius:50%;color:var(--seal);font-family:'Courier Prime';font-size:8px;letter-spacing:.06em;line-height:1.4;display:flex;align-items:center;justify-content:center;text-align:center;transform:rotate(-11deg);opacity:.72}
+.hd-mark{font-weight:600;font-size:44px;letter-spacing:.18em;margin-bottom:2px}
+.hd-romaji{font-family:'Abril Fatface',serif;font-size:22px;letter-spacing:.14em;color:var(--ink2);font-style:italic;opacity:.82}
+.hd-tag{margin-top:16px;font-size:13.5px;color:var(--ink2);letter-spacing:.07em}
+.hd-rule{height:1px;background:var(--line);margin-top:14px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent)}
+.acct{margin-top:16px;text-align:center}
+.acct-id{font-family:'Courier Prime';font-size:10px;letter-spacing:.16em;color:var(--ink2);text-transform:uppercase}
+.acct b{display:block;font-size:22px;color:var(--ink);letter-spacing:.04em;margin:3px 0 12px;font-weight:500}
+.acct-actions{display:flex;justify-content:center;gap:6px 18px;flex-wrap:wrap}
+.acct-actions button{display:inline-flex;align-items:center;gap:6px;background:none;border:0;font-family:'Shippori Mincho';font-size:12px;color:var(--ink2);letter-spacing:.06em;padding:5px 2px;transition:color .2s}
+.acct-actions button svg{width:13px;height:13px;opacity:.8}
+.acct-actions button:hover{color:var(--seal)}
+
+.tabs{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:8px 0 22px}
+.tab{flex:1;background:transparent;border:0;font-family:'Shippori Mincho';font-size:13px;letter-spacing:.12em;color:var(--ink2);padding:13px 0;transition:background .25s,color .25s;cursor:pointer}
+.tab+.tab{border-left:1px solid var(--line)}
+.tab.on{background:var(--ink);color:var(--paper)}
+.tab .sub{display:block;font-family:'Courier Prime';font-size:8px;letter-spacing:.2em;margin-top:2px;opacity:.6}
+
+.panel{display:none;animation:fd .5s ease both}
+.panel.on{display:block}
+@keyframes fd{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.washi{position:absolute;width:96px;height:26px;background:repeating-linear-gradient(90deg,rgba(196,167,125,.34),rgba(196,167,125,.34) 6px,rgba(181,84,58,.16) 6px,rgba(181,84,58,.16) 12px);border-left:1px dashed rgba(120,90,50,.25);border-right:1px dashed rgba(120,90,50,.25);box-shadow:0 2px 6px -3px rgba(40,30,20,.4);z-index:4;pointer-events:none}
+.washi-tl{top:-11px;left:24px;transform:rotate(-5deg)}
+.washi-top{top:-12px;left:50%;margin-left:-48px;transform:rotate(2deg)}
+.washi-wax{width:70px;top:-2px;left:50%;margin-left:-35px;transform:rotate(-7deg)}
+
+.envelope{background:var(--card2);border:1px solid var(--line);border-radius:3px;position:relative;overflow:visible;box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 14px 34px -20px rgba(58,46,37,.5)}
+.env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--line);font-size:12px;letter-spacing:.08em;color:var(--ink2)}
+.env-head .today{font-family:'Caveat';font-size:16px;letter-spacing:.02em;color:var(--ink)}
+.poem{margin:16px 18px 4px}
+.poem textarea{width:100%;min-height:120px;background:transparent;border:0;resize:none;color:var(--violet);font-family:'Zen Kurenaido',cursive;font-size:17px;line-height:34px;letter-spacing:.01em;background-image:repeating-linear-gradient(transparent 0 33px,var(--line) 33px 34px);background-attachment:local}
+.poem textarea:focus{outline:none}
+.poem textarea::placeholder{color:var(--ink2);opacity:.55}
+.poem-count{text-align:right;font-family:'Courier Prime';font-size:11px;color:var(--ink2);margin-top:3px}
+.poem-count.near{color:var(--seal)}
+.voice-row{margin:4px 18px 10px}
+.voice-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:transparent;color:var(--ink2);font-family:'Shippori Mincho';font-size:13px;letter-spacing:.06em;padding:8px 14px;border-radius:24px;transition:border-color .2s,color .2s}
+.voice-btn:hover{border-color:var(--seal);color:var(--seal)}
+.voice-dot{width:8px;height:8px;border-radius:50%;background:var(--seal)}
+.env-foot{padding:14px 18px 20px;border-top:1px dashed var(--line)}
+.field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.field-row>label{white-space:nowrap;padding-top:6px;font-size:12px;letter-spacing:.06em;color:var(--ink2)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;flex:1}
+.chip{font-family:'Shippori Mincho';font-size:11px;border:1px solid var(--line);background:transparent;color:var(--ink2);padding:5px 11px;border-radius:20px;transition:background .2s,border-color .2s,color .2s}
+.chip:hover{border-color:var(--seal);color:var(--seal)}
+.chip.on{background:var(--seal);border-color:var(--seal);color:#fff}
+.when-readout{font-size:12.5px;color:var(--seal);letter-spacing:.06em;margin:2px 0 16px;text-align:center;min-height:18px}
+.when-readout.hidden-mode{color:var(--ink2);font-style:italic}
+.stamps{display:flex;gap:7px;flex-wrap:wrap}
+.stamp-opt{width:44px;height:52px;border:1px dashed var(--line);border-radius:2px;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:border-color .2s,transform .2s,background .2s;padding:0}
+.stamp-opt:hover{border-color:var(--seal)}
+.stamp-opt .m{color:var(--ink2);line-height:0;transition:color .2s}.stamp-opt .m svg{width:24px;height:24px;display:block}
+.stamp-opt .l{font-family:'Courier Prime';font-size:6.5px;letter-spacing:.08em;color:var(--ink2);opacity:.7}
+.stamp-opt.on{border-style:solid;border-color:var(--seal);background:var(--paper);box-shadow:0 4px 12px -6px rgba(58,46,37,.4);transform:translateY(-1px) rotate(-2deg)}
+.stamp-opt.on .m{color:var(--seal)}.stamp-opt.on .l{color:var(--seal);opacity:.85}
+.send{width:100%;margin-top:6px;background:var(--ink);color:var(--paper);border:0;font-family:'Shippori Mincho';font-size:15px;letter-spacing:.06em;padding:16px;border-radius:2px;transition:background .25s}
+.send:hover{background:var(--seal)}.send:active{transform:translateY(1px) scale(.995)}
+.note{text-align:center;font-size:12px;color:var(--ink2);margin-top:16px;line-height:1.9;letter-spacing:.05em}
+
+.wx-banner{font-size:12px;color:var(--ink2);letter-spacing:.05em;text-align:center;margin-bottom:16px;line-height:1.8}
+.wx-banner b{color:var(--seal);font-weight:500}
+.wx-cycle{display:block;margin:8px auto 0;background:var(--paper2);border:1px solid var(--line);border-radius:20px;font-family:'Shippori Mincho';font-size:11px;color:var(--ink2);letter-spacing:.06em;padding:5px 14px;transition:border-color .2s,color .2s}
+.wx-cycle:hover{border-color:var(--seal);color:var(--seal)}
+.mail-intro{text-align:center;font-size:13px;color:var(--ink2);margin-bottom:22px;letter-spacing:.05em;line-height:1.9}
+.letter{background:var(--card2);border:1px solid var(--line);border-radius:3px;margin-bottom:20px;overflow:visible;position:relative;box-shadow:0 8px 24px -18px rgba(58,46,37,.5);transition:transform .25s,box-shadow .25s}
+#openLetter{transform:rotate(-.8deg)}
+#openLetter:hover{transform:rotate(0) translateY(-2px);box-shadow:0 26px 50px -26px rgba(58,46,37,.55)}
+.letter-stamp{position:absolute;top:10px;left:12px;width:40px;height:48px;border:1px solid var(--line);border-radius:2px;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transform:rotate(-3deg);box-shadow:0 3px 8px -5px rgba(58,46,37,.5);z-index:3}
+.letter-stamp .m{color:var(--seal);line-height:0}.letter-stamp .m svg{width:22px;height:22px;display:block}
+.letter-stamp .l{font-family:'Courier Prime';font-size:5.5px;letter-spacing:.04em;color:var(--ink2)}
+.postmark{display:flex;justify-content:space-between;align-items:center;padding:13px 16px 13px 64px;border-bottom:1px dashed var(--line);font-size:11px;letter-spacing:.08em;color:var(--ink2)}
+.pm-circle{position:relative;border:1px solid var(--teal);color:var(--teal);border-radius:50%;width:48px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:'Courier Prime';font-size:7px;line-height:1.2;transform:rotate(-8deg)}
+.pm-en{font-size:8px}
+.pm-bar{position:absolute;left:-15px;top:20px;width:78px;height:7px;background:repeating-linear-gradient(transparent 0 1px,var(--teal) 1px 2px,transparent 2px 4px);opacity:.5}
+.polaroid{width:200px;margin:20px auto 4px;background:#fbf7ee;padding:9px 9px 32px;transform:rotate(-2deg);position:relative;box-shadow:0 12px 26px -14px rgba(40,30,20,.55),0 1px 0 rgba(255,255,255,.6) inset}
+.polaroid-img{height:150px;background:linear-gradient(150deg,#9fb0ad,#7d9296 45%,#c2b69c);filter:sepia(var(--sepia)) contrast(var(--contrast)) saturate(var(--sat))}
+.polaroid-cap{font-family:'Caveat';font-size:18px;color:#4a4036;text-align:center;margin-top:7px;letter-spacing:.02em}
+.letter-body{padding:18px 22px 22px}
+.letter-poem{font-family:'Zen Kurenaido',cursive;font-size:18px;line-height:2.25;white-space:pre-wrap;color:var(--violet);word-break:break-word}
+.wx-night .letter-poem{color:#2c2118;text-shadow:0 0 7px rgba(214,178,120,.55),0 0 17px rgba(181,84,58,.2);transition:color 2.2s,text-shadow 2.2s}
+.wx-rain .letter-poem{color:#26406a;text-shadow:0 0 4px rgba(60,90,120,.5),0 1px 9px rgba(60,90,120,.32);transition:.6s}
+.wx-rain .polaroid-img{filter:sepia(var(--sepia)) contrast(.97) blur(1px) brightness(.96)}
+.wx-noon .letter-poem{color:#9c8f7c;text-shadow:0 0 1px rgba(255,255,255,.85);opacity:.92;transition:color 2.2s}
+.letter-poem.tracing{color:var(--ink2)}
+.trace-caret{display:inline-block;width:2px;height:1.05em;background:var(--seal);margin-left:1px;vertical-align:-.16em;animation:cb .9s steps(1) infinite}
+@keyframes cb{0%,49%{opacity:1}50%,100%{opacity:0}}
+.trace-play{display:inline-flex;align-items:center;gap:6px;margin-top:12px;background:transparent;border:1px solid var(--line);font-family:'Shippori Mincho';font-size:11.5px;letter-spacing:.06em;color:var(--ink2);padding:6px 12px;border-radius:20px;transition:color .2s,border-color .2s}
+.trace-play:hover{color:var(--seal);border-color:var(--seal)}.trace-play svg{width:13px;height:13px}.trace-play:disabled{opacity:.5;cursor:not-allowed}
+.strata{margin:18px 0 4px;padding:12px 14px;border:1px solid var(--line);border-radius:3px;background:repeating-linear-gradient(180deg,transparent,transparent 21px,rgba(203,187,160,.1) 21px,rgba(203,187,160,.1) 22px)}
+.strata-row{display:flex;align-items:center;gap:10px;font-family:'Courier Prime';font-size:10px;letter-spacing:.06em;color:var(--ink2);padding:3px 0}
+.strata-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.strata-dot.seal{background:var(--seal)}.strata-dot.open{background:var(--teal)}.strata-dot.reflect{background:var(--line);border:1px solid var(--ink2)}
+.strata-when{min-width:84px;color:var(--ink)}.strata-what{font-family:'Shippori Mincho';font-size:12px}
+.thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
+.thread-label{font-family:'Courier Prime';font-size:9px;letter-spacing:.18em;color:var(--ink2);text-transform:uppercase;text-align:center;margin-bottom:16px;opacity:.8}
+.msg{margin-bottom:14px;display:flex;flex-direction:column}
+.msg .who{font-family:'Courier Prime';font-size:9px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:5px;color:var(--ink2)}
+.msg .bubble{font-size:15px;line-height:1.95;padding:11px 15px;border-radius:3px;max-width:90%;word-break:break-word}
+.msg.now{align-items:flex-end}.msg.now .who{color:var(--seal)}.msg.now .bubble{background:rgba(181,84,58,.12);border-right:2px solid var(--seal)}
+.msg.question{align-items:flex-start}.msg.question .who{color:var(--seal)}
+.msg.question .bubble.q{background:rgba(181,84,58,.07);border-left:3px solid var(--seal);font-style:italic;color:var(--ink);position:relative;padding:14px 18px 14px 20px;font-size:16px;line-height:2.05}
+.msg.question .bubble.q::before{content:"問";position:absolute;left:-1px;top:-10px;font-size:11px;color:var(--paper);background:var(--seal);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.reply-row{display:flex;gap:8px;margin-top:14px;align-items:flex-end}
+.reply-row textarea{flex:1;background:var(--paper);border:1px solid var(--line);border-radius:3px;resize:none;font-family:'Shippori Mincho';font-size:15px;line-height:1.8;color:var(--ink);padding:10px 12px;min-height:46px}
+.reply-row textarea:focus{outline:none;border-color:var(--seal)}
+.reply-row button{background:var(--ink);color:var(--paper);border:0;font-family:'Shippori Mincho';font-size:14px;letter-spacing:.1em;padding:0 16px;height:46px;border-radius:3px;transition:background .2s}
+.reply-row button:hover{background:var(--seal)}
+.seal-future{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:12px;color:var(--ink2);line-height:1.7}
+.seal-future input{margin-top:2px;width:15px;height:15px;accent-color:var(--seal);flex-shrink:0}
+.seal-future:hover{color:var(--ink)}.seal-future .hint{display:block;font-size:10.5px;opacity:.7}
+.unopened-tease{padding:32px 22px 30px;text-align:center;user-select:none;position:relative}
+.unopened-tease .wax{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 38% 34%,#c85a40,#9c3c28);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:var(--paper);font-size:22px;box-shadow:0 6px 18px -6px rgba(181,84,58,.6),0 1px 0 rgba(255,255,255,.25) inset}
+.unopened-tease .from{font-size:15px;color:var(--ink);letter-spacing:.06em;margin-bottom:5px}
+.unopened-tease .ago{font-family:'Courier Prime';font-size:10px;letter-spacing:.06em;color:var(--ink2)}
+.unopened-tease .seal-to{font-family:'Shippori Mincho';color:var(--seal);margin-top:4px}
+.slide-track{margin:18px auto 0;max-width:260px;height:44px;border:1px solid var(--line);border-radius:24px;background:var(--paper);position:relative;overflow:hidden}
+.slide-track.grab{cursor:grabbing}
+.slide-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(181,84,58,.14);width:0}
+.slide-knob{position:absolute;left:3px;top:3px;width:38px;height:38px;border-radius:50%;background:var(--seal);color:var(--paper);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 10px -3px rgba(181,84,58,.6);touch-action:none;cursor:grab}
+.slide-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:.14em;color:var(--ink2);pointer-events:none;padding-left:30px}
+.transit-head{font-family:'Courier Prime';font-size:9px;letter-spacing:.2em;color:var(--ink2);text-transform:uppercase;text-align:center;margin:28px 0 18px;opacity:.7}
+.sealed-transit{border-style:dashed;background:repeating-linear-gradient(45deg,var(--card2),var(--card2) 13px,rgba(203,187,160,.16) 13px,rgba(203,187,160,.16) 14px)}
+.transit-inner{padding:28px 22px;text-align:center}
+.transit-inner .wax.dim{width:48px;height:48px;border-radius:50%;background:var(--line);color:var(--card);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.transit-when{font-size:17px;color:var(--seal);letter-spacing:.1em;margin-bottom:8px}
+.transit-meta{font-size:11px;letter-spacing:.06em;color:var(--ink2);margin-bottom:4px}
+.transit-note{font-size:12px;color:var(--ink2);margin-top:12px;opacity:.85}
+.tl-intro{text-align:center;font-size:13px;color:var(--ink2);margin-bottom:24px;letter-spacing:.05em;line-height:1.9}
+.tl{position:relative;margin-left:14px;padding-left:26px;border-left:1.5px solid var(--line)}
+.tl-node{position:relative;margin-bottom:26px}
+.tl-node::before{content:"";position:absolute;left:-33px;top:5px;width:11px;height:11px;border-radius:50%;background:var(--paper);border:2px solid var(--seal)}
+.tl-node.is-now::before{background:var(--seal)}
+.tl-node.is-future::before{border-color:var(--teal);border-style:dashed}
+.tl-when{font-family:'Courier Prime';font-size:10px;letter-spacing:.12em;color:var(--ink2);text-transform:uppercase;margin-bottom:4px}
+.tl-card{background:var(--card2);border:1px solid var(--line);border-radius:3px;padding:12px 15px;transition:border-color .2s,transform .2s}
+.tl-card:hover{border-color:var(--seal);transform:translateX(2px)}
+.tl-text{font-size:14px;line-height:1.9;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tl-meta{font-family:'Courier Prime';font-size:9px;letter-spacing:.08em;color:var(--ink2);margin-top:6px;text-transform:uppercase}
+.tl-card.hl{border-color:var(--seal)}.tl-future .tl-card{border-style:dashed;opacity:.78}
+.ft{text-align:center;margin-top:42px;font-family:'Shippori Mincho';font-size:12px;letter-spacing:.18em;color:var(--ink2);opacity:.6}
+
+.sealing{position:fixed;inset:0;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(242,235,221,.92);backdrop-filter:blur(2px)}
+.sealing.on{display:flex}
+.seal-mark{width:118px;height:118px;border-radius:50%;background:radial-gradient(circle at 38% 34%,#c85a40,#9c3c28);display:flex;align-items:center;justify-content:center;color:var(--paper);font-size:40px;box-shadow:0 14px 40px -10px rgba(181,84,58,.6),0 2px 0 rgba(255,255,255,.25) inset;animation:press 1.6s ease forwards;transform:scale(0)}
+@keyframes press{0%{transform:scale(0) rotate(-30deg);opacity:0}35%{transform:scale(1.15) rotate(-8deg);opacity:1}50%{transform:scale(.96) rotate(-8deg)}70%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1) rotate(-8deg);opacity:0}}
+.seal-cap{margin-top:24px;font-size:15px;letter-spacing:.2em;color:var(--ink2);opacity:0;animation:capin 1.6s ease forwards}
+@keyframes capin{0%,40%{opacity:0}60%{opacity:1}100%{opacity:0}}
+.demo-cap{position:relative;z-index:1;margin-top:14px;font-family:'Courier Prime';font-size:10.5px;letter-spacing:.05em;color:#6a5a42;text-align:center}
+
+@media(max-width:560px){.hd-mark{font-size:36px}.stage{padding:0 16px 26px}.postmark{padding-left:60px}.polaroid{width:170px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.grain{opacity:.08}}
+</style>
+</head>
+<body>
+<h2 class="sr-only">「たより」ビンテージ・アナログ調デモ v3（UI/UX Pro Max適用）</h2>
+<div class="desk"><div class="ph ph-a"></div><div class="ph ph-b"></div><div class="leak leak-1"></div><div class="leak leak-2"></div></div>
+
+<div class="stage" id="tyStage">
+  <div class="grain"></div>
+  <header class="hd">
+    <div class="hd-stamp">JP<br>たより<br>POST</div>
+    <h1 class="hd-mark">たより</h1>
+    <div class="hd-romaji">tayori</div>
+    <div class="hd-tag">投げる。封をする。忘れた頃に、自分から届く。</div>
+    <div class="hd-rule"></div>
+    <div class="acct"><span class="acct-id">差出人</span><b>三月の旅人</b>
+      <div class="acct-actions">
+        <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 8.4 14a3.6 3.6 0 1 0 7.2 0L12 2.5Z"/><path d="M12 9v6.5"/></svg>初めの問い</button>
+        <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9.2" r="3.1"/><path d="M5.8 19c0-3.1 2.8-4.9 6.2-4.9s6.2 1.8 6.2 4.9"/></svg>あなたについて</button>
+        <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></svg>設定</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-p="compose" role="tab">投函<span class="sub">compose</span></button>
+    <button class="tab" data-p="mailbox" role="tab">受信<span class="sub">received</span></button>
+    <button class="tab" data-p="timeline" role="tab">年表<span class="sub">timeline</span></button>
+  </nav>
+
+  <section class="panel on" id="compose">
+    <div class="envelope">
+      <span class="washi washi-tl"></span>
+      <div class="env-head"><span>差出人 — 今日のあなた</span><span class="today" id="todayStamp">Mar 29 · 2026 · 21:18</span></div>
+      <div class="poem"><textarea id="poemIn" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea><div class="poem-count"><span id="poemN">0</span> / 80</div></div>
+      <div class="voice-row"><button class="voice-btn"><span class="voice-dot"></span>声を録る</button></div>
+      <div class="env-foot">
+        <div class="field-row"><label>届く頃：</label>
+          <div class="chips" id="whenChips">
+            <button class="chip" data-d="">日付を選ぶ</button><button class="chip" data-d="7">1週間後</button><button class="chip" data-d="30">1ヶ月後</button><button class="chip on" data-d="90">3ヶ月後</button><button class="chip" data-d="180">半年後</button><button class="chip" data-d="365">1年後</button><button class="chip" data-d="event">出来事で</button><button class="chip" data-d="surprise">いつか、突然</button>
+          </div>
+        </div>
+        <div class="when-readout" id="whenReadout">→ 2026年6月27日 に届きます</div>
+        <div class="field-row stamp-row"><label>切手：</label><div class="stamps" id="stampPicker"></div></div>
+        <button class="send" id="sendBtn">切 手 を 貼 っ て 封 を す る</button>
+      </div>
+    </div>
+    <p class="note">送った瞬間、これは見えなくなります。<br>いいねも、既読も、ここにはありません。</p>
+  </section>
+
+  <section class="panel" id="mailbox">
+    <div class="wx-banner" id="wxBanner">いま、あなたのいる場所は <b>夜・晴れ 16℃</b>。便りの見え方が、少し揺らいでいます。<button class="wx-cycle" id="wxCycle">天気を変える ↻</button></div>
+    <p class="mail-intro">過去のあなたから、便りが届いています。<br>封を開いて、今のあなたから返事を。</p>
+
+    <div class="letter wx-night" id="openLetter">
+      <span class="washi washi-top"></span>
+      <div class="letter-stamp" id="letterStamp"></div>
+      <div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br><span class="pm-en">MAR</span><br>2025<i class="pm-bar"></i></div></div>
+      <div class="polaroid"><div class="polaroid-img"></div><div class="polaroid-cap">march, the last train</div></div>
+      <div class="letter-body">
+        <div class="letter-poem" id="letterPoem">三月の駅で、君を待っていた。
+電車はもう来ないのに、
+まだ少し、春のにおいがした。</div>
+        <button class="trace-play" id="traceBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>もう一度、書いていた時を</button>
+        <div class="strata">
+          <div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">Mar 29 · 2025</span><span class="strata-what">封をした</span></div>
+          <div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">6/27 21:18</span><span class="strata-what">封を開けた</span></div>
+          <div class="strata-row"><span class="strata-dot reflect"></span><span class="strata-when">これまで</span><span class="strata-what">3回 向き合った</span></div>
+        </div>
+        <div class="thread">
+          <div class="thread-label">― 過去の自分と、今の自分の対話 ―</div>
+          <div class="thread-msgs" id="threadMsgs">
+            <div class="msg question"><div class="who">過去のあなたからの問い · 2025.03.30</div><div class="bubble q">あの日、なぜ改札を出なかったの？</div></div>
+            <div class="msg now"><div class="who">今のあなた · 6/27</div><div class="bubble">出てしまったら、終わってしまう気がして。</div></div>
+          </div>
+          <div class="reply-row"><textarea id="replyIn" placeholder="今のあなたから、返事を書く…"></textarea><button id="replySend">送る</button></div>
+          <label class="seal-future"><input type="checkbox"><span>この返事を、新しい便りとして未来へ封印する<span class="hint">封をすると、数ヶ月後のあなたに、いまの言葉がもう一度届きます。</span></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="letter" id="unopened">
+      <div class="unopened-tease">
+        <span class="washi washi-wax"></span>
+        <div class="wax">緘</div><div class="from">過去のあなたから</div>
+        <div class="ago">SENT Jan 04 · 2026</div><div class="ago seal-to">届け先 → 次の雪の日に</div>
+        <div class="slide-track" id="slideTrack"><div class="slide-fill" id="slideFill"></div><div class="slide-label">スワイプして封を破る →</div><div class="slide-knob" id="slideKnob">緘</div></div>
+      </div>
+    </div>
+
+    <div class="transit-head">― 封の中 · まだ届かない便り ―</div>
+    <div class="letter sealed-transit"><div class="transit-inner"><div class="wax dim">緘</div><div class="transit-when" id="countdown">あと 64日</div><div class="transit-meta">投函 Dec 12 · 2025 · 23:40 · 届け先 2026年8月29日</div><div class="transit-meta">写真・声 が入っています</div><div class="transit-note">届く時まで、中身はあなたにも見られません。</div></div></div>
+  </section>
+
+  <section class="panel" id="timeline">
+    <p class="tl-intro">あなたの便りの、全部。<br>過去から、まだ届いていない未来まで。</p>
+    <div class="tl">
+      <div class="tl-node"><div class="tl-when">Mar 29 · 2025</div><div class="tl-card"><div class="tl-text">三月の駅で、君を待っていた。電車はもう来ないのに…</div><div class="tl-meta">開封済み · 春・別れ</div></div></div>
+      <div class="tl-node is-now"><div class="tl-when">Jun 27 · 2026 — いま</div><div class="tl-card hl"><div class="tl-text">言葉を置く。詩でも、断片でも、声にならなかったことでも。</div><div class="tl-meta">投函したばかり</div></div></div>
+      <div class="tl-node is-future tl-future"><div class="tl-when">未来 · 2026年8月29日に届く</div><div class="tl-card"><div class="tl-text">封の中 — 届く時を待っています</div><div class="tl-meta">封の中</div></div></div>
+      <div class="tl-node is-future tl-future"><div class="tl-when">未来 · 次の雪の日</div><div class="tl-card"><div class="tl-text">封の中 — 天気を待っています</div><div class="tl-meta">封の中</div></div></div>
+    </div>
+  </section>
+
+  <footer class="ft">遅 れ て 届 く 自 分 へ の 手 紙</footer>
+</div>
+
+<div class="sealing" id="sealing"><div class="seal-mark">緘</div><div class="seal-cap" id="sealCap">封をしました</div></div>
+<p class="demo-cap">demo v3 · UI/UX Pro Max 適用（Vintage Analog + Anti-Polish + UXチェックリスト）／実アプリ未反映</p>
+
+<script>
+(function(){
+  var $=function(s){return document.querySelector(s)},$$=function(s){return document.querySelectorAll(s)};
+  var STAMPS=[
+    {id:'tsuki',l:'MOON',m:'<svg viewBox="0 0 24 24"><path d="M14.5 3a9 9 0 1 0 6 15.4A7 7 0 0 1 14.5 3z" fill="currentColor"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>'},
+    {id:'hana',l:'BLOOM',m:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.6" r="2.7"/><circle cx="18.1" cy="10.1" r="2.7"/><circle cx="15.7" cy="17.2" r="2.7"/><circle cx="8.3" cy="17.2" r="2.7"/><circle cx="5.9" cy="10.1" r="2.7"/><circle cx="12" cy="12" r="1.7" opacity="0.45"/></svg>'},
+    {id:'nami',l:'WAVE',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 9c2.2 0 2.2 2.6 4.5 2.6S8.7 9 11 9s2.2 2.6 4.5 2.6S17.8 9 20 9"/><path d="M2 15c2.2 0 2.2 2.6 4.5 2.6S8.7 15 11 15s2.2 2.6 4.5 2.6S17.8 15 20 15"/></svg>'},
+    {id:'hi',l:'SUN',m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/></g></svg>'},
+    {id:'yuki',l:'SNOW',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2.5v19M3.7 7.25l16.6 9.5M20.3 7.25 3.7 16.75"/><path d="M9.7 4.6 12 6.9l2.3-2.3M9.7 19.4 12 17.1l2.3 2.3"/></svg>'},
+    {id:'tori',l:'BIRD',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2.5 12.5c3.4 0 3.9-5 6.5-5s3.1 5 6.5 5" stroke-width="1.8"/><path d="M14 16.5c1.8 0 2.1-2.8 3.5-2.8s1.7 2.8 3.5 2.8" stroke-width="1.3"/></svg>'}
+  ];
+  var picked='tsuki',box=$('#stampPicker');
+  STAMPS.forEach(function(s){var b=document.createElement('button');b.type='button';b.className='stamp-opt'+(s.id===picked?' on':'');b.setAttribute('aria-label',s.l);b.innerHTML='<span class="m">'+s.m+'</span><span class="l">'+s.l+'</span>';b.addEventListener('click',function(){picked=s.id;$$('.stamp-opt').forEach(function(x,i){x.classList.toggle('on',STAMPS[i].id===s.id)})});box.appendChild(b)});
+  (function(){var s=STAMPS[0];$('#letterStamp').innerHTML='<span class="m">'+s.m+'</span><span class="l">'+s.l+'</span>'})();
+
+  $$('.tab').forEach(function(t){t.addEventListener('click',function(){$$('.tab').forEach(function(x){x.classList.remove('on')});t.classList.add('on');['compose','mailbox','timeline'].forEach(function(id){$('#'+id).classList.toggle('on',id===t.dataset.p)})})});
+
+  var pi=$('#poemIn'),pn=$('#poemN');
+  pi.addEventListener('input',function(){pn.textContent=pi.value.length;pn.parentElement.classList.toggle('near',pi.value.length>=72)});
+  var ro=$('#whenReadout');
+  function jp(days){var d=new Date(2026,5,27);d.setDate(d.getDate()+(days-90));return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'}
+  $$('#whenChips .chip').forEach(function(c){c.addEventListener('click',function(){$$('#whenChips .chip').forEach(function(x){x.classList.remove('on')});c.classList.add('on');var d=c.dataset.d;ro.classList.remove('hidden-mode');
+    if(d===''){ro.textContent='届けたい日を選んでください'}else if(d==='surprise'){ro.classList.add('hidden-mode');ro.textContent='いつ届くかは、あなたにも分かりません'}else if(d==='event'){ro.classList.add('hidden-mode');ro.textContent='☁ 次に「その天気」が来た時、ふっと届きます'}else{ro.textContent='→ '+jp(parseInt(d))+' に届きます'}})});
+
+  var sealing=$('#sealing');
+  function playSeal(cap,after){$('#sealCap').textContent=cap;sealing.classList.add('on');var m=sealing.querySelector('.seal-mark'),c=sealing.querySelector('.seal-cap');m.style.animation='none';c.style.animation='none';void m.offsetWidth;m.style.animation='';c.style.animation='';setTimeout(function(){sealing.classList.remove('on');if(after)after()},1700)}
+  $('#sendBtn').addEventListener('click',function(){playSeal('封をしました',function(){pi.value='';pn.textContent='0';$$('.tab').forEach(function(x){x.classList.remove('on')});$('.tab[data-p="mailbox"]').classList.add('on');['compose','mailbox','timeline'].forEach(function(id){$('#'+id).classList.toggle('on',id==='mailbox')})})});
+
+  var modes=[['wx-night','夜・晴れ 16℃'],['wx-rain','雨 12℃'],['wx-noon','晴れた真昼 27℃'],['','曇り 19℃']],mi=0,letter=$('#openLetter');
+  $('#wxCycle').addEventListener('click',function(){letter.classList.remove('wx-night','wx-rain','wx-noon');mi=(mi+1)%modes.length;if(modes[mi][0])letter.classList.add(modes[mi][0]);$('#wxBanner').querySelector('b').textContent=modes[mi][1]});
+
+  var poemEl=$('#letterPoem'),traceBtn=$('#traceBtn'),FINAL=poemEl.textContent;
+  var sc=[[0,'三月の'],[400,'三月の駅で、'],[300,'三月の駅で、君を'],[700,'三月の駅で、君を待っていた。'],[500,'三月の駅で、君を待っていた。\n電車は'],[900,'三月の駅で、君を待っていた。\n電車はもう来ないのに、'],[600,'三月の駅で、君を待っていた。\n電車はもう来ないのに、\nまだ少し、'],[400,'三月の駅で、君を待っていた。\n電車はもう来ないのに、\nまだ少し、春の'],[600,'三月の駅で、君を待っていた。\n電車はもう来ないのに、\nまだ少し、春のにおいがした。']];
+  function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+  traceBtn.addEventListener('click',function(){if(poemEl._t)return;poemEl._t=true;traceBtn.disabled=true;poemEl.classList.add('tracing');var caret='<span class="trace-caret"></span>',i=0,t0=performance.now(),acc=[],at=0;sc.forEach(function(s){at+=s[0];acc.push([at,s[1]])});
+    function fr(now){var el=now-t0;while(i<acc.length&&acc[i][0]<=el){poemEl.innerHTML=esc(acc[i][1]).replace(/\n/g,'<br>')+caret;i++}if(i<acc.length)requestAnimationFrame(fr);else{poemEl.classList.remove('tracing');poemEl.textContent=FINAL;poemEl._t=false;traceBtn.disabled=false}}
+    poemEl.innerHTML=esc(acc[0][1])+caret;requestAnimationFrame(fr)});
+
+  var QS=['その「終わってしまう」は、何が終わると思っていたの？','いまのきみなら、改札を出られる？','一年経って、その春のにおいはまだ残ってる？'];
+  $('#replySend').addEventListener('click',function(){var ta=$('#replyIn'),v=ta.value.trim();if(!v)return;var msgs=$('#threadMsgs');var n=document.createElement('div');n.className='msg now';n.innerHTML='<div class="who">今のあなた · いま</div><div class="bubble">'+esc(v)+'</div>';msgs.appendChild(n);ta.value='';ta.style.height='auto';var q=document.createElement('div');q.className='msg question';q.innerHTML='<div class="who">過去のあなたからの問い · …</div><div class="bubble q">…</div>';msgs.appendChild(q);q.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){q.querySelector('.who').textContent='過去のあなたからの問い · いま';q.querySelector('.q').textContent=QS[Math.floor(Math.random()*QS.length)]},1100)});
+  $('#replyIn').addEventListener('input',function(){this.style.height='auto';this.style.height=this.scrollHeight+'px'});
+
+  var track=$('#slideTrack'),knob=$('#slideKnob'),fill=$('#slideFill'),drag=false,sx=0,max=0;
+  function down(x){drag=true;sx=x;max=track.clientWidth-knob.clientWidth-6;track.classList.add('grab')}
+  function move(x){if(!drag)return;var dx=Math.max(0,Math.min(max,x-sx));knob.style.left=(3+dx)+'px';fill.style.width=(dx+38)+'px';if(dx>=max-2){drag=false;openUn()}}
+  function up(){drag=false;track.classList.remove('grab');knob.style.left='3px';fill.style.width='0'}
+  function openUn(){playSeal('封を、開けました',function(){$('#unopened').innerHTML='<span class="washi washi-top"></span><div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br><span class="pm-en">JAN</span><br>2026<i class="pm-bar"></i></div></div><div class="letter-body"><div class="letter-poem">雪の日に開くきみへ。<br>窓のそとは、白いだろうか。<br>こちらは、まだ降っていない。</div><div class="strata"><div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">Jan 04 · 2026</span><span class="strata-what">封をした</span></div><div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">いま</span><span class="strata-what">封を開けた</span></div></div></div>';$('#unopened').style.transform='rotate(.6deg)'})}
+  knob.addEventListener('mousedown',function(e){down(e.clientX)});window.addEventListener('mousemove',function(e){move(e.clientX)});window.addEventListener('mouseup',up);
+  knob.addEventListener('touchstart',function(e){down(e.touches[0].clientX)},{passive:true});window.addEventListener('touchmove',function(e){if(drag)move(e.touches[0].clientX)},{passive:true});window.addEventListener('touchend',up);
+
+  var cd=$('#countdown'),secs=64*86400;setInterval(function(){secs-=1;cd.textContent='あと '+Math.ceil(secs/86400)+'日'},1000);
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function tick(){var d=new Date();$('#todayStamp').textContent=MON[d.getMonth()]+' '+String(d.getDate()).padStart(2,'0')+' · '+d.getFullYear()+' · '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+  tick();setInterval(tick,30000);
+})();
+</script>
+</body>
+</html>

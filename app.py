@@ -22,6 +22,7 @@ import signal
 import smtplib
 import sqlite3
 import secrets
+import hashlib
 import tempfile
 import threading
 import urllib.request   # 関数内で遅延importすると、複数スレッドが同時に初回importを走らせた際
@@ -396,6 +397,9 @@ def init_db():
             "ALTER TABLE users ADD COLUMN portrait TEXT",
             "ALTER TABLE users ADD COLUMN portrait_at TEXT",
             "ALTER TABLE letters ADD COLUMN trace TEXT",
+            "ALTER TABLE users ADD COLUMN persona TEXT",
+            "ALTER TABLE users ADD COLUMN persona_at TEXT",
+            "ALTER TABLE users ADD COLUMN persona_src TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -839,7 +843,7 @@ def _smtp_config():
         "port": int(os.environ.get("TAYORI_SMTP_PORT", "587")),
         "user": user,
         "pw": pw,
-        "from": os.environ.get("TAYORI_MAIL_FROM") or formataddr(("たより", user)),
+        "from": os.environ.get("TAYORI_MAIL_FROM") or formataddr(("tayori-たより-", user)),
     }
 
 
@@ -854,11 +858,11 @@ def _html_email(body, unsubscribe_url=None):
         foot = (f'<div style="margin-top:24px;font-size:12px;color:#9c8f7c">'
                 f'このお知らせを止める：<a href="{unsubscribe_url}" style="color:#9c8f7c">配信を停止</a></div>')
     return (
-        '<div style="background:#F2EBDD;padding:30px 16px;'
-        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#3A2E25\">"
-        '<div style="max-width:480px;margin:0 auto;background:#EDE3D1;border:1px solid #CBBBA0;'
+        '<div style="background:#FCFBF9;padding:30px 16px;'
+        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#2C2622\">"
+        '<div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #E3DDD1;'
         'border-radius:4px;padding:30px 26px">'
-        '<div style="font-size:25px;letter-spacing:0.18em;margin-bottom:16px">たより</div>'
+        '<div style="font-size:25px;letter-spacing:0.14em;margin-bottom:16px">tayori-たより-</div>'
         f'<div style="font-size:15px;line-height:2.0">{safe}</div>'
         f'{foot}'
         '</div></div>'
@@ -917,10 +921,10 @@ def _issue_email_verification(db, user_id, email, username):
         )
         db.commit()
     verify_url = f"{BASE_URL}/verify/{token}"
-    subject = "たより — メールアドレスの確認"
+    subject = "tayori-たより- — メールアドレスの確認"
     body = (
         f"{username} さんへ。\n"
-        "たより の通知メールを、このアドレスで受け取る設定をしました。\n"
+        "tayori-たより- の通知メールを、このアドレスで受け取る設定をしました。\n"
         "下のリンクを開いて、確認を完了してください（7日間有効）。\n"
         f"{verify_url}\n"
     )
@@ -934,11 +938,11 @@ def _landing_page(title, message, ok=True):
     return (
         "<!doctype html><html lang=ja><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>{title} — たより</title><style>"
-        "body{background:#F2EBDD;color:#3A2E25;font-family:'Hiragino Mincho ProN',serif;"
+        f"<title>{title} — tayori-たより-</title><style>"
+        "body{background:#FCFBF9;color:#2C2622;font-family:'Hiragino Mincho ProN',serif;"
         "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}"
-        ".card{max-width:380px;text-align:center;background:#EDE3D1;border:1px solid #CBBBA0;"
-        "border-radius:4px;padding:36px 28px;box-shadow:0 10px 30px -18px rgba(58,46,37,.5)}"
+        ".card{max-width:380px;text-align:center;background:#ffffff;border:1px solid #E3DDD1;"
+        "border-radius:4px;padding:36px 28px;box-shadow:0 10px 30px -18px rgba(44,38,34,.35)}"
         "h1{font-size:34px;letter-spacing:.18em;margin:0 0 6px}"
         f".m{{color:{color};font-size:15px;letter-spacing:.05em;line-height:1.95;margin-top:14px}}"
         "a{color:#B5543A}</style></head><body><div class=card><h1>たより</h1>"
@@ -1587,10 +1591,12 @@ def _claude_question(prompt, api_key):
     return "".join(b.text for b in msg.content if b.type == "text").strip() or None
 
 
-def _gemini_multimodal(parts, api_key, temperature=0.75, max_tokens=1600):
+def _gemini_multimodal(parts, api_key, temperature=0.75, max_tokens=1600, thinking_budget=None):
     """parts は Gemini の contents.parts 形式（{"text":...} / {"inline_data":{...}}）。
     写真・音声を含む人物分析に使う。モデルfallbackは _gemini_question と同様。
-    マルチモーダルに強い flash を優先。媒体が原因の 400 は呼び出し側で素材を減らして再試行する。"""
+    マルチモーダルに強い flash を優先。媒体が原因の 400 は呼び出し側で素材を減らして再試行する。
+    thinking_budget=0 で思考トークンを止める（gemini-2.5系は既定で思考が maxOutputTokens を食い潰し、
+    出力が途中で切れるため、まとまった本文が要る用途では 0 を渡す）。"""
     import urllib.request
     import urllib.error
     if ("…" in api_key or "..." in api_key or "（" in api_key
@@ -1603,9 +1609,12 @@ def _gemini_multimodal(parts, api_key, temperature=0.75, max_tokens=1600):
     preferred = os.environ.get("TAYORI_GEMINI_MODEL")
     fallbacks = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
     models = ([preferred] if preferred else []) + [m for m in fallbacks if m != preferred]
+    gen_cfg = {"temperature": temperature, "topP": 0.9, "maxOutputTokens": max_tokens}
+    if thinking_budget is not None:
+        gen_cfg["thinkingConfig"] = {"thinkingBudget": thinking_budget}
     body = json.dumps({
         "contents": [{"parts": parts}],
-        "generationConfig": {"temperature": temperature, "topP": 0.9, "maxOutputTokens": max_tokens},
+        "generationConfig": gen_cfg,
     }).encode("utf-8")
     last_err = None
     for model in models:
@@ -1673,6 +1682,33 @@ PORTRAIT_PROMPT = (
 )
 
 
+# 内部用の人物プロファイル。ユーザーには見せず、「過去の自分からの問い」の“奥行き”を作るために使う。
+PERSONA_PROMPT = (
+    "あなたは、ある人物の心の輪郭を読み解く、静かで洞察の深い分析者です。"
+    "この人が遺した言葉・写真・声、そして『初めの問い』への答えを手がかりに、"
+    "「この人はどのような価値観と背景を持った人物なのか」を分析した“人物プロファイル”を作成してください。\n\n"
+    "― 目的 ―\n"
+    "このプロファイルは本人には見せません。のちに『過去の自分』が本人へ問いを投げかけるとき、"
+    "その問いが本人の芯に触れるための、内なる理解として使われます。だから体裁より“核心”を優先してください。\n\n"
+    "― 分析の視点（できる範囲で、決めつけずに）―\n"
+    "・核となる価値観／ゆずれないもの\n"
+    "・世界の見方、ものの考え方の癖（何にこだわり、何を軽んじるか）\n"
+    "・心が動く対象、琴線に触れるもの\n"
+    "・人との距離の取り方、関係の結び方\n"
+    "・繰り返し現れる主題・行動のパターン\n"
+    "・抱えやすい葛藤・迷い・恐れ\n"
+    "・言葉づかい、語り口の特徴\n"
+    "・いまの関心と、その人の現在地\n\n"
+    "― 書き方 ―\n"
+    "・個々の事実を並べるのではなく、複数の素材の“あいだ”に共通して流れるものを束ねる。\n"
+    "・占いや性格類型の決めつけ、診断名、断定は避け、「〜の傾向がうかがえる」のように含みを持たせる。\n"
+    "・素材が薄い項目は無理に埋めず、確かに読み取れることだけを書く。\n"
+    "・上記の視点を見出し（・）で整理してよい。全体で400〜700字。\n"
+    "・これは分析メモであり、本人への手紙ではない。二人称の語りかけにはしない。\n\n"
+    "手がかりとなる素材は次のとおりです。"
+)
+
+
 def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
     """肖像分析の素材を集める。戻り値: (テキスト素材, 画像parts, 音声parts, 件数dict)。"""
     db = get_db()
@@ -1717,6 +1753,76 @@ def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
     counts = {"onboarding": len(ob_lines), "poems": len(poems),
               "photos": len(image_parts), "voices": len(audio_parts)}
     return text_block, image_parts, audio_parts, counts
+
+
+def _persona_fingerprint(user_id):
+    """人物プロファイルの材料の指紋。材料（初めの問いの回答＋便りの詩・写真・声）が変われば再生成する判断に使う。"""
+    db = get_db()
+    urow = db.execute("SELECT onboarding FROM users WHERE id=?", (user_id,)).fetchone()
+    answers = _load_onboarding(urow["onboarding"] if urow else None)
+    parts = [f"{q}:{(answers[q] or '').strip()}" for q in sorted(answers or {})]
+    rows = db.execute(
+        "SELECT sent_date, poem, photo, voice FROM letters WHERE user_id=? ORDER BY id",
+        (user_id,)).fetchall()
+    for r in rows:
+        p = (r["poem"] or "").strip()
+        has_media = (1 if (r["photo"] or "") else 0, 1 if (r["voice"] or "") else 0)
+        parts.append(f"{r['sent_date']}|{len(p)}|{p[:24]}|{has_media[0]}{has_media[1]}")
+    return hashlib.sha1("".join(parts).encode("utf-8")).hexdigest()
+
+
+def _get_or_make_persona(user_id, allow_generate=True):
+    """内部用の人物プロファイルを返す。材料が変わっていなければキャッシュを、変わっていてAIが使えるなら生成し直す。
+    生成できない場合は、古いキャッシュがあればそれを、無ければ None を返す（呼び出し側は軽い文脈にフォールバック）。"""
+    db = get_db()
+    row = db.execute("SELECT persona, persona_src FROM users WHERE id=?", (user_id,)).fetchone()
+    cached = row["persona"] if row and "persona" in row.keys() else None
+    cached_src = row["persona_src"] if row and "persona_src" in row.keys() else None
+
+    fp = _persona_fingerprint(user_id)
+    if cached and cached_src == fp:
+        return cached
+    if not allow_generate:
+        return cached
+
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    claude_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not (NETWORK_ENABLED and (gemini_key or claude_key)):
+        return cached
+
+    text_block, image_parts, audio_parts, counts = _gather_portrait_inputs(user_id)
+    if not any(counts.values()):
+        return cached  # 材料がまだ無い
+
+    text = None
+    if gemini_key:
+        instruction = {"text": PERSONA_PROMPT}
+        materials = {"text": text_block}
+        # 媒体つきで試し、媒体が原因で失敗したら 音声→画像 の順に外して再試行
+        for media in (image_parts + audio_parts, image_parts, []):
+            try:
+                text = _gemini_multimodal([instruction, materials] + media, gemini_key,
+                                          temperature=0.6, max_tokens=1400, thinking_budget=0)
+                if text:
+                    break
+            except Exception as e:
+                print(f"[プロファイル生成リトライ] 媒体{len(media)}件で失敗: {e}", flush=True)
+                continue
+    if not text and claude_key:
+        try:
+            text = _claude_question(PERSONA_PROMPT + "\n\n" + text_block, claude_key)
+        except Exception as e:
+            print(f"[プロファイル生成 Claude失敗] {e}", flush=True)
+
+    if not text:
+        return cached  # 生成できなければ古いキャッシュ（無ければ None）
+
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with _WRITE_LOCK:
+        get_db().execute("UPDATE users SET persona=?, persona_at=?, persona_src=? WHERE id=?",
+                         (text, now_iso, fp, user_id))
+        get_db().commit()
+    return text
 
 
 @app.route("/api/portrait", methods=["GET"])
@@ -1788,13 +1894,14 @@ def api_ask_past_self(lid):
     claude_key = os.environ.get("ANTHROPIC_API_KEY")
     if NETWORK_ENABLED and (gemini_key or claude_key):
         convo = "\n".join(("今の自分: " if m["who"] == "now" else "過去の自分: ") + m["text"] for m in L["thread"])
-        profile_ctx = _profile_context_text(uid())
+        # 材料から生成・キャッシュした“人物プロファイル”（価値観・背景の理解）。無ければ従来の軽い文脈に。
+        profile_ctx = _get_or_make_persona(uid()) or _profile_context_text(uid())
         prompt = (
             f"あなたは、ある人の「過去の自分」そのものです。下記は{L['sent_date']}に、その人が"
             "未来の自分（＝今のその人）へ宛てて書き残した便りです。あなたはその便りを書いた"
             "当時の本人になりきり、今の自分へ語りかけます。\n\n"
             f"【私（過去の自分）が書いた詩・ことば】\n{L['poem'] or '（なし）'}\n\n"
-            + (f"【ごく薄い背景（私が以前ぽつりと語ったこと・表に出しすぎない）】\n{profile_ctx}\n\n" if profile_ctx else "")
+            + (f"【“私”という人の輪郭（内なる理解。口には出さず、問いの奥行きにだけ使う）】\n{profile_ctx}\n\n" if profile_ctx else "")
             + f"【これまでの私たちの対話】\n{convo or '（まだなし）'}\n\n"
             "―― 語りかけ方の約束 ――\n"
             "・焦点は、私自身の内面（そのとき感じたこと・考え・記憶）だけに当てる。外の風景や環境（天気・季節・気温など）の描写や比喩には踏み込まない。\n"
@@ -1802,7 +1909,7 @@ def api_ask_past_self(lid):
             "・直前に『今の自分』が何か言っていたら、まずその言葉を一度受けとめてから返す\n"
             "・絶対にしないこと：分析・指摘・診断、助言・解決・励ましの説教、AIとしての振る舞い。\n"
             "・思いがけない角度から。でもまずは“私が書いた詩・ことば”と直前の対話に根ざすこと。\n"
-            "・『ごく薄い背景』は表に出しすぎない。\n"
+            "・『“私”という人の輪郭』は、その人の価値観や芯に問いを触れさせるための内なる理解であり、口に出して語ったり、言い当てたりしない。\n"
             "・今の自分が、ふと立ち止まって『あの頃とは変わったな』と感じる“ズレ”に、静かに触れる。\n"
             "・口調は静かで、ウェットで、ノスタルジック。\n"
             "・【最重要】必ず最後を“ひとつの問いかけ”で終える。\n\n"

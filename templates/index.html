@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>たより — tayori</title>
+<title>tayori-たより-｜遅れて届く、自分への手紙</title>
+<meta name="description" content="tayori-たより- は、いまのあなたが綴った言葉や写真、声を、時をおいて未来のあなたへ届けるサービスです。「便り（手紙）」と「（自分に）頼る」のダブルミーニング。">
+<meta property="og:title" content="tayori-たより-">
+<meta property="og:description" content="遅れて届く、自分への手紙。便り（手紙）と、（自分に）頼る。">
+<meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
@@ -11,7 +15,7 @@
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
-    --paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--teal:#6B8478;--shadow:#D9CDB8;--line:#CBBBA0}
+    --paper:#FCFBF9;--paper-2:#F5F2EC;--ink:#2C2622;--ink-soft:#7A6E63;--seal:#B5543A;--teal:#6B8478;--shadow:#E8E4DC;--line:#E3DDD1}
   *{box-sizing:border-box;margin:0;padding:0}
   html{-webkit-text-size-adjust:100%}
   body{background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;
@@ -57,26 +61,48 @@
   .voice-btn.rec{background:var(--seal);border-color:var(--seal);color:var(--paper)}
   .voice-dot{width:8px;height:8px;border-radius:50%;background:var(--seal)}
   .voice-btn.rec .voice-dot{background:var(--paper);animation:pulse 1s infinite}
-  /* ---- 切手を選ぶ（封をする＝儀式化） ---- */
+  /* ---- 切手を選ぶ（封をする＝儀式化）。実物の郵便切手に寄せる：白い縁＝ミシン目、内側に刷り色の意匠・額面・NIPPON ---- */
   .stamp-row{align-items:flex-start}
-  .stamps{display:flex;gap:8px;flex-wrap:wrap}
-  .stamp-opt{width:44px;height:52px;border:1px dashed var(--line);border-radius:2px;background:var(--paper-2);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;transition:.2s;flex:0 0 auto}
-  .stamp-opt:hover{border-color:var(--seal)}
-  .stamp-opt .m{color:var(--ink-soft);line-height:0;transition:color .2s}
-  .stamp-opt .m svg{width:24px;height:24px;display:block}
-  .stamp-opt .l{font-family:'Courier Prime',monospace;font-size:6.5px;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7}
-  .stamp-opt.on{border-style:solid;border-color:var(--seal);background:var(--paper);
-    box-shadow:0 4px 12px -6px rgba(58,46,37,0.4);transform:translateY(-1px) rotate(-2deg)}
-  .stamp-opt.on .m{color:var(--seal)}
-  .stamp-opt.on .l{color:var(--seal);opacity:0.85}
-  /* 受信した便りに貼られた切手 */
-  .letter-stamp{position:absolute;top:10px;left:12px;width:40px;height:48px;border:1px solid var(--line);border-radius:2px;
-    background:var(--paper-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-    transform:rotate(-3deg);box-shadow:0 3px 8px -5px rgba(58,46,37,0.5)}
-  .letter-stamp .m{color:var(--seal);line-height:0}
-  .letter-stamp .m svg{width:22px;height:22px;display:block}
-  .letter-stamp .l{font-family:'Courier Prime',monospace;font-size:5.5px;letter-spacing:0.06em;color:var(--ink-soft)}
+  .stamps{display:flex;gap:10px;flex-wrap:wrap}
+  /* .stamp = 切手の紙（白）。padding が周囲の白フチ、その境目にミシン目（白い半円）を刻む */
+  .stamp-opt{width:50px;height:60px;padding:5px;background:#fff;border-radius:2px;cursor:pointer;flex:0 0 auto;
+    transition:transform .2s,box-shadow .2s;box-shadow:0 2px 7px -3px rgba(44,38,34,0.4)}
+  .stamp-opt .panel{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+    color:var(--seal);background-color:#f7e6df;
+    background-image:
+      radial-gradient(circle 2.2px at 50% 0%,#fff 55%,transparent 58%),
+      radial-gradient(circle 2.2px at 50% 100%,#fff 55%,transparent 58%),
+      radial-gradient(circle 2.2px at 0% 50%,#fff 55%,transparent 58%),
+      radial-gradient(circle 2.2px at 100% 50%,#fff 55%,transparent 58%);
+    background-repeat:repeat-x,repeat-x,repeat-y,repeat-y;
+    background-size:6px 6px,6px 6px,6px 6px,6px 6px;
+    background-position:top,bottom,left,right;
+    box-shadow:inset 0 0 0 1px rgba(181,84,58,0.28)}
+  .stamp-opt .m{line-height:0}
+  .stamp-opt .m svg{width:22px;height:22px;display:block}
+  .stamp-opt .deno{font-family:'Courier Prime',monospace;font-size:7px;font-weight:700;letter-spacing:0.02em;line-height:1;margin-top:1px}
+  .stamp-opt .cty{font-family:'Courier Prime',monospace;font-size:5px;letter-spacing:0.18em;line-height:1;opacity:0.75}
+  .stamp-opt:hover{transform:translateY(-1px)}
+  .stamp-opt.on{transform:translateY(-2px) rotate(-3deg);box-shadow:0 0 0 2px var(--seal),0 7px 15px -6px rgba(44,38,34,0.45)}
+  .stamp-opt.on .panel{background-color:#fbeee9}
+  /* 受信した便りに貼られた切手（同じ意匠を少し小さく） */
+  .letter-stamp{position:absolute;top:10px;left:12px;width:42px;height:50px;padding:4px;background:#fff;border-radius:2px;
+    transform:rotate(-4deg);box-shadow:0 3px 8px -5px rgba(44,38,34,0.5)}
+  .letter-stamp .panel{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+    color:var(--seal);background-color:#f7e6df;
+    background-image:
+      radial-gradient(circle 1.9px at 50% 0%,#fff 55%,transparent 58%),
+      radial-gradient(circle 1.9px at 50% 100%,#fff 55%,transparent 58%),
+      radial-gradient(circle 1.9px at 0% 50%,#fff 55%,transparent 58%),
+      radial-gradient(circle 1.9px at 100% 50%,#fff 55%,transparent 58%);
+    background-repeat:repeat-x,repeat-x,repeat-y,repeat-y;
+    background-size:5px 5px,5px 5px,5px 5px,5px 5px;
+    background-position:top,bottom,left,right;
+    box-shadow:inset 0 0 0 1px rgba(181,84,58,0.28)}
+  .letter-stamp .m{line-height:0}
+  .letter-stamp .m svg{width:19px;height:19px;display:block}
+  .letter-stamp .deno{font-family:'Courier Prime',monospace;font-size:6px;font-weight:700;line-height:1}
+  .letter-stamp .cty{font-family:'Courier Prime',monospace;font-size:4px;letter-spacing:0.16em;line-height:1;opacity:0.75}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .voice-have{color:var(--teal)}
   .voice-clear{cursor:pointer;text-decoration:underline;color:var(--ink-soft);font-size:11px}
@@ -129,7 +155,7 @@
   .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:.25s}
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
-  .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(242,235,221,0.92);backdrop-filter:blur(2px)}
+  .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(252,251,249,0.94);backdrop-filter:blur(2px)}
   .sealing.on{display:flex}
   .seal-mark{width:120px;height:120px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:38px;box-shadow:0 12px 40px -10px rgba(181,84,58,0.6);animation:press 1.6s ease forwards;transform:scale(0)}
   @keyframes press{0%{transform:scale(0) rotate(-30deg);opacity:0}35%{transform:scale(1.15) rotate(-8deg);opacity:1}50%{transform:scale(0.96) rotate(-8deg)}70%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1) rotate(-8deg);opacity:0}}
@@ -292,6 +318,8 @@
   .gate-submit:hover{background:var(--seal)}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   .gate-hint{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);margin-top:18px;opacity:0.8}
+  .gate-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-soft);margin-top:9px;padding:9px 11px;border:1px solid var(--line);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-2)}
+  .gate-note b{color:var(--seal);font-weight:600}
 
   /* account bar */
   /* 案A：差出人の氏名を中央で主役に、その下に操作ボタンを横並び */
@@ -425,6 +453,7 @@
       <div class="gate-field" id="gEmailField" style="display:none">
         <label>Email（通知用 · 任意）</label>
         <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com（後からでもOK）">
+        <div class="gate-note">※確認・通知メールが<b>迷惑メール（スパム）フォルダ</b>に振り分けられることがあります。届かない場合はそちらをご確認のうえ、「迷惑メールではない」に設定してください。</div>
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
@@ -858,13 +887,15 @@
   // STAMPS は受信描画でも使うので、idから引けるようにグローバルに置く。
   // 切手モチーフは小さな線画（SVG）。currentColor を使うので、選択時に封蝋色へ発色する。
   const STAMPS=[
-    {id:'tsuki',l:'MOON', m:'<svg viewBox="0 0 24 24"><path d="M14.5 3a9 9 0 1 0 6 15.4A7 7 0 0 1 14.5 3z" fill="currentColor"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>'},
-    {id:'hana', l:'BLOOM',m:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.6" r="2.7"/><circle cx="18.1" cy="10.1" r="2.7"/><circle cx="15.7" cy="17.2" r="2.7"/><circle cx="8.3" cy="17.2" r="2.7"/><circle cx="5.9" cy="10.1" r="2.7"/><circle cx="12" cy="12" r="1.7" opacity="0.45"/></svg>'},
-    {id:'nami', l:'WAVE', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 9c2.2 0 2.2 2.6 4.5 2.6S8.7 9 11 9s2.2 2.6 4.5 2.6S17.8 9 20 9"/><path d="M2 15c2.2 0 2.2 2.6 4.5 2.6S8.7 15 11 15s2.2 2.6 4.5 2.6S17.8 15 20 15"/></svg>'},
-    {id:'hi',   l:'SUN',  m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/></g></svg>'},
-    {id:'yuki', l:'SNOW', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2.5v19M3.7 7.25l16.6 9.5M20.3 7.25 3.7 16.75"/><path d="M9.7 4.6 12 6.9l2.3-2.3M9.7 19.4 12 17.1l2.3 2.3"/></svg>'},
-    {id:'tori', l:'BIRD', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2.5 12.5c3.4 0 3.9-5 6.5-5s3.1 5 6.5 5" stroke-width="1.8"/><path d="M14 16.5c1.8 0 2.1-2.8 3.5-2.8s1.7 2.8 3.5 2.8" stroke-width="1.3"/></svg>'},
+    {id:'tsuki',l:'MOON', deno:'¥52', m:'<svg viewBox="0 0 24 24"><path d="M14.5 3a9 9 0 1 0 6 15.4A7 7 0 0 1 14.5 3z" fill="currentColor"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>'},
+    {id:'hana', l:'BLOOM',deno:'¥63', m:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.6" r="2.7"/><circle cx="18.1" cy="10.1" r="2.7"/><circle cx="15.7" cy="17.2" r="2.7"/><circle cx="8.3" cy="17.2" r="2.7"/><circle cx="5.9" cy="10.1" r="2.7"/><circle cx="12" cy="12" r="1.7" opacity="0.45"/></svg>'},
+    {id:'nami', l:'WAVE', deno:'¥84', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 9c2.2 0 2.2 2.6 4.5 2.6S8.7 9 11 9s2.2 2.6 4.5 2.6S17.8 9 20 9"/><path d="M2 15c2.2 0 2.2 2.6 4.5 2.6S8.7 15 11 15s2.2 2.6 4.5 2.6S17.8 15 20 15"/></svg>'},
+    {id:'hi',   l:'SUN',  deno:'¥94', m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/></g></svg>'},
+    {id:'yuki', l:'SNOW', deno:'¥110',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2.5v19M3.7 7.25l16.6 9.5M20.3 7.25 3.7 16.75"/><path d="M9.7 4.6 12 6.9l2.3-2.3M9.7 19.4 12 17.1l2.3 2.3"/></svg>'},
+    {id:'tori', l:'BIRD', deno:'¥120',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2.5 12.5c3.4 0 3.9-5 6.5-5s3.1 5 6.5 5" stroke-width="1.8"/><path d="M14 16.5c1.8 0 2.1-2.8 3.5-2.8s1.7 2.8 3.5 2.8" stroke-width="1.3"/></svg>'},
   ];
+  // 切手の内側パネル（額面・意匠・国名）を組み立てる。受信描画でも使う。
+  window.stampPanelHTML=(s)=>'<span class="panel"><span class="deno">'+(s.deno||'')+'</span><span class="m">'+s.m+'</span><span class="cty">NIPPON</span></span>';
   window.STAMP_BY_ID=Object.fromEntries(STAMPS.map(s=>[s.id,s]));
   let pickedStamp=STAMPS[0].id;  // 既定で一つ選んでおく（必ず切手が貼られる）
   (function renderStampPicker(){
@@ -873,8 +904,8 @@
     STAMPS.forEach(s=>{
       const b=document.createElement('button');
       b.type='button';b.className='stamp-opt'+(s.id===pickedStamp?' on':'');
-      b.dataset.stamp=s.id;b.title=s.l;
-      b.innerHTML='<span class="m">'+s.m+'</span><span class="l">'+s.l+'</span>';
+      b.dataset.stamp=s.id;b.title=s.l+'（'+(s.deno||'')+'）';
+      b.innerHTML=window.stampPanelHTML(s);
       b.addEventListener('click',()=>{
         pickedStamp=s.id;
         box.querySelectorAll('.stamp-opt').forEach(x=>x.classList.toggle('on',x.dataset.stamp===s.id));
@@ -933,7 +964,7 @@
   
 
   function flash(msg){const n=document.createElement('div');n.textContent=msg;
-    n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#3A2E25;color:#F2EBDD;'+
+    n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#2C2622;color:#FCFBF9;'+
       'font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
       'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:.3s;text-align:center;max-width:80%';
     document.body.appendChild(n);requestAnimationFrame(()=>n.style.opacity='1');
@@ -1150,7 +1181,7 @@ async function detectWeather(){
     let h='';
     // 封をする時に貼った切手（あれば便りの右上に見える）
     const st=window.STAMP_BY_ID&&window.STAMP_BY_ID[L.stamp];
-    if(st)h+='<div class="letter-stamp"><span class="m">'+st.m+'</span><span class="l">'+st.l+'</span></div>';
+    if(st)h+='<div class="letter-stamp">'+window.stampPanelHTML(st)+'</div>';
     h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'">';
     h+='<div class="letter-body">';
