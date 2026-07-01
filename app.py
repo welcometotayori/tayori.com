@@ -858,9 +858,9 @@ def _html_email(body, unsubscribe_url=None):
         foot = (f'<div style="margin-top:24px;font-size:12px;color:#9c8f7c">'
                 f'このお知らせを止める：<a href="{unsubscribe_url}" style="color:#9c8f7c">配信を停止</a></div>')
     return (
-        '<div style="background:#FCFBF9;padding:30px 16px;'
-        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#2C2622\">"
-        '<div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #E3DDD1;'
+        '<div style="background:#F2EBDD;padding:30px 16px;'
+        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#3A2E25\">"
+        '<div style="max-width:480px;margin:0 auto;background:#EDE3D1;border:1px solid #CBBBA0;'
         'border-radius:4px;padding:30px 26px">'
         '<div style="font-size:25px;letter-spacing:0.14em;margin-bottom:16px">tayori-たより-</div>'
         f'<div style="font-size:15px;line-height:2.0">{safe}</div>'
@@ -939,10 +939,10 @@ def _landing_page(title, message, ok=True):
         "<!doctype html><html lang=ja><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         f"<title>{title} — tayori-たより-</title><style>"
-        "body{background:#FCFBF9;color:#2C2622;font-family:'Hiragino Mincho ProN',serif;"
+        "body{background:#F2EBDD;color:#3A2E25;font-family:'Hiragino Mincho ProN',serif;"
         "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}"
-        ".card{max-width:380px;text-align:center;background:#ffffff;border:1px solid #E3DDD1;"
-        "border-radius:4px;padding:36px 28px;box-shadow:0 10px 30px -18px rgba(44,38,34,.35)}"
+        ".card{max-width:380px;text-align:center;background:#EDE3D1;border:1px solid #CBBBA0;"
+        "border-radius:4px;padding:36px 28px;box-shadow:0 10px 30px -18px rgba(58,46,37,.5)}"
         "h1{font-size:34px;letter-spacing:.18em;margin:0 0 6px}"
         f".m{{color:{color};font-size:15px;letter-spacing:.05em;line-height:1.95;margin-top:14px}}"
         "a{color:#B5543A}</style></head><body><div class=card><h1>たより</h1>"
@@ -1860,7 +1860,8 @@ def api_make_portrait():
     last_e = None
     for media in attempts:
         try:
-            text = _gemini_multimodal(build(media), gemini_key)
+            # thinking_budget=0：gemini-2.5系の思考トークンが出力枠を食い潰し肖像が途中で切れるのを防ぐ
+            text = _gemini_multimodal(build(media), gemini_key, max_tokens=1800, thinking_budget=0)
             if text:
                 break
         except Exception as e:

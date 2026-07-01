@@ -15,7 +15,7 @@
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
-    --paper:#FCFBF9;--paper-2:#F5F2EC;--ink:#2C2622;--ink-soft:#7A6E63;--seal:#B5543A;--teal:#6B8478;--shadow:#E8E4DC;--line:#E3DDD1}
+    --paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--teal:#6B8478;--shadow:#D9CDB8;--line:#CBBBA0}
   *{box-sizing:border-box;margin:0;padding:0}
   html{-webkit-text-size-adjust:100%}
   body{background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;
@@ -122,21 +122,23 @@
   .weather-note{margin:-6px 0 16px;text-align:center;display:none}
   .weather-note.show{display:block}
 
-  /* ---- 天気・時間帯連動：開封したいまの環境で便りの見え方が揺らぐ ---- */
-  /* 雨の日は文字がにじむ（インクが滲むように） */
-  .wx-rain .letter-poem{ text-shadow:0 0 4px rgba(60,90,120,0.45), 0 1px 9px rgba(60,90,120,0.30); transition:text-shadow 2s; }
-  .wx-rain .letter-photo{ filter:sepia(0.18) contrast(0.97) blur(1.2px) brightness(0.96); }
+  /* ---- 天気・時間帯連動：開封したいまの環境で便りの見え方が揺らぐ（＝一回性の体験） ---- */
+  .letter-body{ position:relative; }
+  /* 雨の日は文字がにじみ、便り面に雨脚が走る（インクが水に滲むように） */
+  .wx-rain .letter-poem{ text-shadow:0 0 8px rgba(60,90,120,0.6), 0 2px 13px rgba(60,90,120,0.5); filter:blur(0.6px); transition:text-shadow 2s, filter 2s; }
+  .wx-rain .letter-photo{ filter:sepia(0.24) contrast(0.94) blur(2.4px) brightness(0.92); }
   .wx-rain .letter-body::after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(180deg,rgba(80,110,140,0.05),transparent 40%);}
-  .wx-hot .letter-poem{ color:#23405e; text-shadow:0 0 10px rgba(40,110,220,0.30); transition:color 2s, text-shadow 2s; }
-  .wx-cold .letter-poem{ color:#3a4a55; letter-spacing:0.04em; }
-  .wx-snow .letter-body{ position:relative; }
-  .wx-snow .letter-poem{ color:#37474f; text-shadow:0 0 12px rgba(255,255,255,0.7); }
-  .wx-fog .letter-poem{ filter:blur(0.4px); opacity:0.92; }
-  /* 夜（21時〜5時）に開くと、文字がほのかに発光する */
-  .wx-night .letter-poem{ color:#2c2118; text-shadow:0 0 7px rgba(214,178,120,0.55), 0 0 17px rgba(181,84,58,0.20); transition:color 2.5s, text-shadow 2.5s; }
-  /* 晴れた真昼（11時〜15時）は、コントラストが下がって白く飛んで見える */
-  .wx-noon .letter-poem{ color:#9c8f7c; text-shadow:0 0 1px rgba(255,255,255,0.85); opacity:0.9; transition:color 2.5s, opacity 2.5s; }
+    background:linear-gradient(180deg,rgba(80,110,140,0.14),rgba(80,110,140,0.03) 45%),
+    repeating-linear-gradient(101deg,transparent 0 8px,rgba(90,120,150,0.06) 8px 9px);}
+  .wx-hot .letter-poem{ color:#173a63; text-shadow:0 0 16px rgba(40,110,220,0.42); transition:color 2s, text-shadow 2s; }
+  .wx-cold .letter-poem{ color:#2c4453; letter-spacing:0.07em; text-shadow:0 0 7px rgba(120,150,175,0.4); transition:color 2s, letter-spacing 2s; }
+  .wx-snow .letter-poem{ color:#37474f; text-shadow:0 0 18px rgba(255,255,255,0.98), 0 0 34px rgba(205,228,245,0.6); transition:text-shadow 2s; }
+  .wx-fog .letter-poem{ filter:blur(1.2px); opacity:0.8; transition:filter 2s, opacity 2s; }
+  /* 夜（21時〜5時）に開くと、文字がともし火のように発光する */
+  .wx-night .letter-poem{ color:#3a2c1c; text-shadow:0 0 11px rgba(226,190,122,0.9), 0 0 26px rgba(214,140,80,0.55), 0 0 46px rgba(181,84,58,0.3); transition:color 2.5s, text-shadow 2.5s; }
+  /* 晴れた真昼（11時〜15時）は、光にさらされてコントラストが落ち、白く飛んで見える */
+  .wx-noon .letter-poem{ color:#bcb3a3; text-shadow:0 0 3px rgba(255,255,255,0.98); opacity:0.7; transition:color 2.5s, opacity 2.5s; }
+  .wx-noon .letter-body::after{content:"";position:absolute;inset:0;pointer-events:none;background:rgba(255,255,255,0.18);}
   .wx-banner{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);
     letter-spacing:0.06em;text-align:center;margin-bottom:18px;opacity:0.85}
   .wx-banner b{color:var(--seal);font-weight:500}
@@ -155,7 +157,7 @@
   .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:.25s}
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
-  .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(252,251,249,0.94);backdrop-filter:blur(2px)}
+  .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(242,235,221,0.92);backdrop-filter:blur(2px)}
   .sealing.on{display:flex}
   .seal-mark{width:120px;height:120px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:38px;box-shadow:0 12px 40px -10px rgba(181,84,58,0.6);animation:press 1.6s ease forwards;transform:scale(0)}
   @keyframes press{0%{transform:scale(0) rotate(-30deg);opacity:0}35%{transform:scale(1.15) rotate(-8deg);opacity:1}50%{transform:scale(0.96) rotate(-8deg)}70%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1) rotate(-8deg);opacity:0}}
@@ -886,13 +888,14 @@
   // ---- 切手（封をする＝儀式）。選んだ切手は便りに貼られ、届いた時に見える ----
   // STAMPS は受信描画でも使うので、idから引けるようにグローバルに置く。
   // 切手モチーフは小さな線画（SVG）。currentColor を使うので、選択時に封蝋色へ発色する。
+  // 版画（凹版）調モチーフ。細い線＋ハッチングで彫刻風の質感を出す。currentColorで刷り色に発色。
   const STAMPS=[
-    {id:'tsuki',l:'MOON', deno:'¥52', m:'<svg viewBox="0 0 24 24"><path d="M14.5 3a9 9 0 1 0 6 15.4A7 7 0 0 1 14.5 3z" fill="currentColor"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>'},
-    {id:'hana', l:'BLOOM',deno:'¥63', m:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.6" r="2.7"/><circle cx="18.1" cy="10.1" r="2.7"/><circle cx="15.7" cy="17.2" r="2.7"/><circle cx="8.3" cy="17.2" r="2.7"/><circle cx="5.9" cy="10.1" r="2.7"/><circle cx="12" cy="12" r="1.7" opacity="0.45"/></svg>'},
-    {id:'nami', l:'WAVE', deno:'¥84', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 9c2.2 0 2.2 2.6 4.5 2.6S8.7 9 11 9s2.2 2.6 4.5 2.6S17.8 9 20 9"/><path d="M2 15c2.2 0 2.2 2.6 4.5 2.6S8.7 15 11 15s2.2 2.6 4.5 2.6S17.8 15 20 15"/></svg>'},
-    {id:'hi',   l:'SUN',  deno:'¥94', m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/></g></svg>'},
-    {id:'yuki', l:'SNOW', deno:'¥110',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2.5v19M3.7 7.25l16.6 9.5M20.3 7.25 3.7 16.75"/><path d="M9.7 4.6 12 6.9l2.3-2.3M9.7 19.4 12 17.1l2.3 2.3"/></svg>'},
-    {id:'tori', l:'BIRD', deno:'¥120',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2.5 12.5c3.4 0 3.9-5 6.5-5s3.1 5 6.5 5" stroke-width="1.8"/><path d="M14 16.5c1.8 0 2.1-2.8 3.5-2.8s1.7 2.8 3.5 2.8" stroke-width="1.3"/></svg>'},
+    {id:'tsuki',l:'MOON', deno:'¥52', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M16.3 3.4a8.3 8.3 0 1 0 4.3 12.9 6.6 6.6 0 0 1-4.3-12.9Z" fill="currentColor" stroke="none"/><g stroke="rgba(247,230,223,0.55)" stroke-width="0.7"><path d="M14.6 6.2a5.6 5.6 0 0 0 0 11.2"/><path d="M13 7.4a4 4 0 0 0 0 8.8"/></g><path d="M6.4 6.3l.55 1.3 1.3.55-1.3.55L6.4 10l-.55-1.3L4.55 8.15l1.3-.55z" fill="currentColor" stroke="none"/><circle cx="8.2" cy="13.6" r=".5" fill="currentColor" stroke="none"/><circle cx="5.4" cy="11.6" r=".4" fill="currentColor" stroke="none"/></svg>'},
+    {id:'hana', l:'BLOOM',deno:'¥63', m:'<svg viewBox="0 0 24 24"><g fill="currentColor"><path d="M12 3.2c1.6 0 2.9 1.6 2.4 3.4-.3 1.1-1.3 1.9-2.4 1.9s-2.1-.8-2.4-1.9C9.1 4.8 10.4 3.2 12 3.2Z"/><path d="M20.3 9.3c.5 1.5-.5 3.2-2.1 3.5-1.1.2-2.2-.4-2.6-1.4-.6-1.5.3-2.9 1.6-3.6 1.4-.7 2.7 0 3.1 1.5Z"/><path d="M17.1 19.2c-1.3 1-3.2.5-3.7-1-.4-1.1 0-2.2 1-2.7 1.5-.8 3 0 3.5 1.4.4 1.1-.1 1.9-.8 2.3Z"/><path d="M6.9 19.2c-.7-.4-1.2-1.2-.8-2.3.5-1.4 2-2.2 3.5-1.4 1 .5 1.4 1.6 1 2.7-.5 1.5-2.4 2-3.7 1Z"/><path d="M3.7 9.3c.4-1.5 1.7-2.2 3.1-1.5 1.3.7 2.2 2.1 1.6 3.6-.4 1-1.5 1.6-2.6 1.4-1.6-.3-2.6-2-2.1-3.5Z"/></g><g stroke="rgba(247,230,223,0.6)" stroke-width=".7" stroke-linecap="round"><path d="M12 12v-2.3M12 12l2.2 1.2M12 12l-2.2 1.2M12 12l2.2-.9M12 12l-2.2-.9"/></g><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>'},
+    {id:'nami', l:'WAVE', deno:'¥84', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 14.5c2.8-.3 4.4-3.9 3.8-6.8 2.5 3.1 6.2 3.5 8.8 1.4-1.3 2.6.6 5.4 4.4 4.1 1.1-.4 1.9-1.3 3-1.5"/><path d="M5.5 16.6c2 .2 3.1 1.3 5 1.3s3-1.1 5-1.1 2.6 1 3.9 1"/><path d="M6 8.4c.8-.3 1.6-.2 2.2.3M8.8 10.9c.7-.2 1.4-.1 2 .3M12 8.2c.7-.2 1.4 0 1.9.4" stroke-width=".85"/></svg>'},
+    {id:'hi',   l:'SUN',  deno:'¥94', m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="9.6" r="4" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M12 2.2v2.1M4.3 9.6H6.4M17.6 9.6h2.1M6.1 3.7l1.5 1.5M17.9 3.7l-1.5 1.5"/><path d="M3 17.4h18M4.6 19.7h14.8M6.4 21.8h11.2" stroke-width=".85" opacity=".85"/></g></svg>'},
+    {id:'yuki', l:'SNOW', deno:'¥110',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.4v19.2M3.7 7.2l16.6 9.6M20.3 7.2 3.7 16.8"/><path d="M12 5.6l-2 2M12 5.6l2 2M12 18.4l-2-2M12 18.4l2-2"/><path d="M5.6 8.6l.4 2.7M5.6 8.6l2.7.4M18.4 15.4l-.4-2.7M18.4 15.4l-2.7-.4"/><path d="M18.4 8.6l-2.7.4M18.4 8.6l-.4 2.7M5.6 15.4l2.7-.4M5.6 15.4l.4 2.7"/></svg>'},
+    {id:'tori', l:'CRANE',deno:'¥120',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9c3.3 1.3 5.3 2.4 7.8 2.4 2 0 3.4-1.6 5.4-2.2"/><path d="M15.7 9.2c1.2.5 2.9.2 3.6-1.1.4-.8.2-1.7-.5-2.1"/><path d="M18.8 6c-.5-.2-1.1 0-1.3.5"/><path d="M6 15.6c2.4-1 3.9-1.9 5.9-1.9 2.1 0 3.6 1 6 1.1"/><path d="M10.4 11c.5 1.3.5 2.6 0 4" stroke-width=".9"/></svg>'},
   ];
   // 切手の内側パネル（額面・意匠・国名）を組み立てる。受信描画でも使う。
   window.stampPanelHTML=(s)=>'<span class="panel"><span class="deno">'+(s.deno||'')+'</span><span class="m">'+s.m+'</span><span class="cty">NIPPON</span></span>';
@@ -964,7 +967,7 @@
   
 
   function flash(msg){const n=document.createElement('div');n.textContent=msg;
-    n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#2C2622;color:#FCFBF9;'+
+    n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#3A2E25;color:#F2EBDD;'+
       'font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
       'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:.3s;text-align:center;max-width:80%';
     document.body.appendChild(n);requestAnimationFrame(()=>n.style.opacity='1');
