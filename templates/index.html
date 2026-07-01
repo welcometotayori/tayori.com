@@ -398,68 +398,6 @@
 
   /* ── 開封時の気分タグ（差分オーバーレイ内） ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
-
-  /* ════════════════════════════════════════════════════════════════
-     Vintage Ephemera 装飾レイヤー v2（追記CSSのみ・フォント/機能/JSは不変）
-     UI/UX Pro Max: Vintage Analog(#49)+Anti-Polish(#40)+UXチェックリスト由来
-     ════════════════════════════════════════════════════════════════ */
-  /* 1a) 全面の周辺減光（ヴィネット）＋粒状感を強める。既存 body::before を上書き（背面・操作不可） */
-  body::before{opacity:0.72;background-repeat:no-repeat,repeat;background-size:cover,180px 180px;
-    background-image:
-      radial-gradient(135% 125% at 50% 40%, transparent 56%, rgba(70,54,36,0.22) 100%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");}
-  /* 1b) 光漏れ（Vintage Analog / Retro Film）。screen合成で角に光を「足す」だけ */
-  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;mix-blend-mode:screen;
-    background:
-      radial-gradient(120% 85% at 102% -8%, rgba(255,196,108,0.32), transparent 52%),
-      radial-gradient(115% 82% at -8% 106%, rgba(203,110,70,0.22), transparent 55%);}
-  /* 1c) 紙のシーン（上部の照り）＋アンティークな内側の陰。既存の背景色は保持し画像層のみ足す */
-  .envelope,.letter:not(.sealed-transit),.onb-q,.gate-form{
-    background-image:linear-gradient(158deg, rgba(255,251,242,0.55), rgba(203,187,160,0) 44%, rgba(150,120,80,0.07));}
-  .envelope{box-shadow:0 1px 0 rgba(255,255,255,0.55) inset,0 20px 46px -22px rgba(58,46,37,0.62),inset 0 0 48px rgba(120,90,50,0.05)}
-  .letter:not(.sealed-transit){box-shadow:0 16px 40px -24px rgba(58,46,37,0.62),inset 0 0 48px rgba(120,90,50,0.045)}
-  .gate-form{box-shadow:0 16px 40px -22px rgba(58,46,37,0.55),inset 0 0 46px rgba(120,90,50,0.05)}
-  /* 1d) 題字にごく淡い活版のような陰影（フォントは変えない） */
-  header h1{text-shadow:0 1px 0 rgba(255,255,255,0.45),0 -1px 1px rgba(58,46,37,0.10)}
-  /* 2) ポラロイド調の写真フレーム（白マット＋下重ね＋退色）。要素・JSは変えずCSSで額装 */
-  .letter-photo{box-sizing:border-box;border:8px solid #F6EFE1;border-bottom-width:24px;border-radius:1px;
-    filter:sepia(0.22) contrast(1.05) saturate(0.88);
-    box-shadow:0 12px 26px -16px rgba(58,46,37,0.55),0 1px 0 rgba(255,255,255,0.5) inset}
-  .photo-slot.has{box-shadow:0 12px 26px -16px rgba(58,46,37,0.5)}
-  .photo-slot.has img{box-sizing:border-box;border:6px solid #F6EFE1;border-bottom-width:16px;border-radius:1px;filter:sepia(0.18) contrast(1.03) saturate(0.92)}
-  /* 3) 紙の重なりを強める柔らかい影＋クリッカブルの浮き上がり（アフォーダンス） */
-  .tl-card{transition:transform .2s, border-color .2s, box-shadow .2s}
-  .tl-card:hover{transform:translateY(-1px);box-shadow:0 10px 22px -16px rgba(58,46,37,0.5)}
-  .stamp-opt{transition:transform .2s, border-color .2s, background .2s, box-shadow .2s}
-  /* 3b) マスキングテープ（Anti-Polish）。便り・封筒の上端に半透明の帯を貼る（擬似要素のみ・フォント不変） */
-  .letter{overflow:visible}
-  .letter::before{content:"";position:absolute;top:-12px;left:50%;width:104px;height:25px;z-index:3;pointer-events:none;
-    transform:translateX(-50%) rotate(-2.4deg);
-    background:repeating-linear-gradient(90deg,rgba(210,190,150,0.42),rgba(210,190,150,0.42) 7px,rgba(181,84,58,0.13) 7px,rgba(181,84,58,0.13) 14px);
-    border-left:1px dashed rgba(120,90,50,0.22);border-right:1px dashed rgba(120,90,50,0.22);
-    box-shadow:0 2px 6px -3px rgba(40,30,20,0.4)}
-  .envelope{overflow:visible}
-  .envelope::before{content:"";position:absolute;top:-11px;left:26px;width:96px;height:24px;z-index:3;pointer-events:none;
-    transform:rotate(-5deg);
-    background:repeating-linear-gradient(90deg,rgba(210,190,150,0.42),rgba(210,190,150,0.42) 7px,rgba(181,84,58,0.13) 7px,rgba(181,84,58,0.13) 14px);
-    border-left:1px dashed rgba(120,90,50,0.22);border-right:1px dashed rgba(120,90,50,0.22);
-    box-shadow:0 2px 6px -3px rgba(40,30,20,0.4)}
-  /* 3c) 消印の抹消線。「たより」丸印を横切る平行線で郵便物らしさを出す（擬似要素のみ） */
-  .pm-circle{position:relative}
-  .pm-circle::after{content:"";position:absolute;left:-15px;right:-15px;top:44%;height:8px;pointer-events:none;
-    transform:rotate(3deg);opacity:0.5;
-    background:repeating-linear-gradient(transparent 0 1px,var(--teal) 1px 2px,transparent 2px 4px)}
-  /* 4) a11y：キーボードのフォーカスリング（UXチェックリスト・重要度High。欠落していた） */
-  :focus-visible{outline:2px solid var(--seal);outline-offset:2px}
-  .gate-field input:focus-visible,.acct-input:focus-visible,.reply-row textarea:focus-visible,
-  .poem textarea:focus-visible,.onb-q textarea:focus-visible,.date-pick:focus-visible,
-  .pw-wrap input:focus-visible{outline:2px solid var(--seal);outline-offset:1px}
-  /* 5) 押下フィードバック（active）。未設定の主要ボタンにのみ追加 */
-  .send:active,.gate-submit:active,.diff-btn:active,.portrait-go:active,.acct-save:active{transform:translateY(1px)}
-  /* 6) reduced-motion 配慮（粒状・演出を控える） */
-  @media(prefers-reduced-motion:reduce){
-    *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
-  }
 </style>
 </head>
 <body>
