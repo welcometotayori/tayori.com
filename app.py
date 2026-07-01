@@ -400,6 +400,8 @@ def init_db():
             "ALTER TABLE users ADD COLUMN persona TEXT",
             "ALTER TABLE users ADD COLUMN persona_at TEXT",
             "ALTER TABLE users ADD COLUMN persona_src TEXT",
+            "ALTER TABLE users ADD COLUMN weekly TEXT",
+            "ALTER TABLE users ADD COLUMN gen_questions TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -523,6 +525,42 @@ ONBOARDING_QUESTIONS = [
     "今日のあなたから、未来のあなたへ、1行だけ。",
 ]
 
+# 初回に必須で答えてもらう「はじめの問い」の数。0〜(CORE_ONBOARDING-1) がこれに当たる。
+# 残り（CORE_ONBOARDING 以降）は「今夜の問い」として、少しずつ受信箱へ届ける。
+CORE_ONBOARDING = 10
+
+# 問いの配信ペース。コードを触らず環境変数で毎日／毎週を切り替えられる。
+#   TAYORI_Q_INTERVAL_DAYS=1 … 何日ごとに配るか（1=毎日, 7=毎週）
+#   TAYORI_Q_BATCH=1          … 一度に届ける問いの数（毎日なら1推奨）
+#   TAYORI_Q_HOUR=21          … その日ぶんが「開封」できるようになる時刻（利用者の端末の時刻で判定）
+def _q_int(name, default, lo, hi):
+    try:
+        return max(lo, min(hi, int(os.environ.get(name, default))))
+    except (ValueError, TypeError):
+        return default
+
+QUESTION_INTERVAL_DAYS = _q_int("TAYORI_Q_INTERVAL_DAYS", 1, 1, 60)
+QUESTION_BATCH         = _q_int("TAYORI_Q_BATCH", 1, 1, 5)
+QUESTION_RELEASE_HOUR  = _q_int("TAYORI_Q_HOUR", 21, 0, 23)
+
+# 静的な問い(ONBOARDING_QUESTIONS)を配り切った後は、AIがその人向けに新しい問いを生成し続ける。
+# 生成された問いは gen_questions 列に本文を保存し、id はこの基準値から採番して静的idと衝突させない。
+GEN_ID_BASE = 100000
+
+# AIが使えない／生成に失敗したときの予備の問い（枯れさせないための常緑の問い）。
+FALLBACK_QUESTIONS = [
+    "最近、誰にも言っていない小さな願いは何ですか。",
+    "今日、心がふっとほどけた瞬間はありましたか。",
+    "いま、いちばん会いたい人の顔を思い浮かべてみてください。誰でしたか。",
+    "この頃、繰り返し考えてしまうことは何ですか。",
+    "最後に声を出して笑ったのは、いつ、どんなときでしたか。",
+    "手放したいのに、まだ手放せずにいるものはありますか。",
+    "最近見た夢や、ふと浮かんだ空想を、ひとつ教えてください。",
+    "今の自分に、ひとつだけ優しい言葉をかけるとしたら。",
+    "この一週間で、いちばん静かだった時間はいつでしたか。",
+    "今、少しだけ怖いと感じていることは何ですか。",
+]
+
 
 def _load_onboarding(raw):
     try:
@@ -530,6 +568,200 @@ def _load_onboarding(raw):
         return {int(k): v for k, v in data.items() if str(v).strip()}
     except (ValueError, TypeError, AttributeError):
         return {}
+
+
+def _load_weekly(raw):
+    """問いの配信状態。batch=いま届いている問いのid, issued=これまで配信済みの全id,
+    last_batch=最後に配信した日(ISO)。"""
+    try:
+        data = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    batch = [int(x) for x in data.get("batch", []) if isinstance(x, (int, str)) and str(x).isdigit()]
+    issued = [int(x) for x in data.get("issued", []) if isinstance(x, (int, str)) and str(x).isdigit()]
+    return {"batch": batch, "issued": issued, "last_batch": data.get("last_batch")}
+
+
+def _weekly_pool():
+    """配信する問いのプール（初回必須ぶんを除いた残り全部）。"""
+    return list(range(CORE_ONBOARDING, len(ONBOARDING_QUESTIONS)))
+
+
+def _load_gen(raw):
+    """AI生成した問い。[{id:int, text:str}] のリスト。"""
+    try:
+        data = json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        data = []
+    out = []
+    if isinstance(data, list):
+        for it in data:
+            if isinstance(it, dict) and "id" in it and it.get("text"):
+                try:
+                    out.append({"id": int(it["id"]), "text": str(it["text"])})
+                except (ValueError, TypeError):
+                    pass
+    return out
+
+
+def _gen_map(user_id):
+    row = get_db().execute("SELECT gen_questions FROM users WHERE id=?", (user_id,)).fetchone()
+    return {g["id"]: g["text"] for g in _load_gen(row["gen_questions"] if row else None)}
+
+
+def _question_text(qid, gen_map=None):
+    """id から問い文を引く。静的idなら ONBOARDING_QUESTIONS、それ以外は生成問い(gen_map)から。"""
+    if 0 <= qid < len(ONBOARDING_QUESTIONS):
+        return ONBOARDING_QUESTIONS[qid]
+    if gen_map and qid in gen_map:
+        return gen_map[qid]
+    return None
+
+
+def _issue_weekly_if_due(user_id):
+    """必要なら次の問いを配り、状態を返す。
+    ・現バッチが未回答なら、それを出し続ける（積み増さない＝せかさない）
+    ・現バッチを答え終え、前回配信から QUESTION_INTERVAL_DAYS 日たっていたら次を配る
+    ・onboarded 直後は、その日ぶんをすぐ配る（初回だけは時刻ゲート無し）
+    ・プールが尽きたら新規は配らない
+    返り値: {batch:[id...], issued_at: 配信日ISO, exhausted: bool}
+    ※「21時開封」の時刻ゲートは、端末の時刻で判定するためクライアント側で行う。
+      サーバはその日ぶんを"発行"し、issued_at と release_hour をクライアントに渡す。"""
+    db = get_db()
+    row = db.execute("SELECT onboarding, weekly, onboarded FROM users WHERE id=?", (user_id,)).fetchone()
+    if not row or not row["onboarded"]:
+        return {"batch": [], "issued_at": None, "gated": False, "exhausted": False}
+    answers = _load_onboarding(row["onboarding"])
+    wk = _load_weekly(row["weekly"])
+    pool_left = [q for q in _weekly_pool() if q not in wk["issued"] and q not in answers]
+
+    def _persist(new_batch):
+        wk["batch"] = new_batch
+        wk["issued"] = sorted(set(wk["issued"]) | set(new_batch))
+        wk["last_batch"] = date.today().isoformat()
+        try:
+            with _WRITE_LOCK:
+                db.execute("UPDATE users SET weekly=? WHERE id=?",
+                           (json.dumps(wk, ensure_ascii=False), user_id))
+                db.commit()
+        except sqlite3.OperationalError as e:
+            print(f"[たより] weekly 書き込み失敗（再試行可）: {e}", flush=True)
+
+    def _gated(batch):
+        # 初回バッチ（過去に配ったものが無い）は時刻ゲート無しで即見せる。以降は21時ゲートを効かせる。
+        return bool(set(wk["issued"]) - set(batch))
+
+    pending = [q for q in wk["batch"] if q not in answers]  # まだ答えていない現バッチ
+    if pending:
+        return {"batch": pending, "issued_at": wk["last_batch"], "gated": _gated(pending), "exhausted": False}
+
+    # 次を配ってよいか（間隔を空ける。ただし一度も配っていなければ即配る）
+    due = True
+    if wk["last_batch"]:
+        try:
+            last = date.fromisoformat(str(wk["last_batch"])[:10])
+            due = (date.today() - last).days >= QUESTION_INTERVAL_DAYS
+        except ValueError:
+            due = True
+    if not due:
+        return {"batch": [], "issued_at": wk["last_batch"], "gated": False, "exhausted": False}
+
+    # まず静的プールから。足りなければ、その人向けの問いをAIで生成して補う（枯れさせない）。
+    new_batch = pool_left[:QUESTION_BATCH]
+    if len(new_batch) < QUESTION_BATCH:
+        new_batch += _generate_weekly_questions(user_id, QUESTION_BATCH - len(new_batch))
+    if not new_batch:
+        return {"batch": [], "issued_at": wk["last_batch"], "gated": False, "exhausted": True}
+    _persist(new_batch)
+    return {"batch": new_batch, "issued_at": wk["last_batch"], "gated": _gated(new_batch),
+            "exhausted": False}
+
+
+def _generate_weekly_questions(user_id, n):
+    """その人向けの新しい問いを n 個作り、gen_questions 列に保存して、採番した id のリストを返す。
+    AIが使えれば persona と既出の問いを踏まえて生成、使えなければ常緑の予備から重複を避けて選ぶ。"""
+    if n <= 0:
+        return []
+    db = get_db()
+    row = db.execute("SELECT gen_questions, onboarding FROM users WHERE id=?", (user_id,)).fetchone()
+    gen = _load_gen(row["gen_questions"] if row else None)
+    answers = _load_onboarding(row["onboarding"] if row else None)
+
+    # すでに尋ねた問い（静的＋生成）の文面一覧。重複回避に使う。
+    asked = [ONBOARDING_QUESTIONS[q] for q in sorted(answers) if 0 <= q < len(ONBOARDING_QUESTIONS)]
+    asked += [g["text"] for g in gen]
+    asked_set = set(asked)
+
+    def _clean(t):
+        t = (t or "").strip().splitlines()[0].strip() if (t or "").strip() else ""
+        return t.strip("「」\"'　 ").strip()[:60]
+
+    made = []
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    claude_key = os.environ.get("ANTHROPIC_API_KEY")
+    if NETWORK_ENABLED and (gemini_key or claude_key):
+        persona = _get_or_make_persona(user_id) or _profile_context_text(user_id)
+        for _ in range(n):
+            recent = asked[-12:]
+            prompt = (
+                "あなたは、ある人が自分自身と静かに向き合うための『問い』を、そっと一つ差し出す存在です。"
+                "下記のその人の輪郭と、これまで尋ねた問いを踏まえ、まだ触れていない角度から新しい問いを1つだけ作ってください。\n\n"
+                + (f"【その人の輪郭（内なる理解。問いの奥行きにだけ使い、言い当てない）】\n{persona}\n\n" if persona else "")
+                + ("【すでに尋ねた問い（主題が重ならないように）】\n" + "\n".join("・" + q for q in recent) + "\n\n" if recent else "")
+                + "―― 問いの約束 ――\n"
+                "・その人の主観・記憶・感情に、そっと触れる問い。答えたくなるやわらかさで。\n"
+                "・分析・診断・助言・励ましはしない。AIらしさを出さない。\n"
+                "・抽象論ではなく、具体的な場面や情景を思い出させる問い。\n"
+                "・過去の問いと似た主題・言い回しは避け、新しい入り口から。\n"
+                "・40字以内、静かな敬体で1文（例：〜はありますか。／〜を、ひとつ。）。\n\n"
+                "出力は、問いの文だけ。メタな注釈はつけないこと。"
+            )
+            text = None
+            if gemini_key:
+                try:
+                    text = _gemini_question(prompt, gemini_key)
+                except Exception as e:
+                    print(f"[問い生成 Gemini失敗→フォールバック] {e}", flush=True)
+            if not text and claude_key:
+                try:
+                    text = _claude_question(prompt, claude_key)
+                except Exception as e:
+                    print(f"[問い生成 Claude失敗→フォールバック] {e}", flush=True)
+            text = _clean(text)
+            if text and text not in asked_set:
+                made.append(text)
+                asked.append(text)
+                asked_set.add(text)
+
+    # AIで足りない/使えないぶんは、常緑の予備から重複を避けて補う。
+    if len(made) < n:
+        for q in FALLBACK_QUESTIONS:
+            if len(made) >= n:
+                break
+            if q not in asked_set:
+                made.append(q)
+                asked_set.add(q)
+
+    if not made:
+        return []
+
+    base = GEN_ID_BASE + len(gen)
+    new_ids = []
+    for i, text in enumerate(made):
+        qid = base + i
+        gen.append({"id": qid, "text": text})
+        new_ids.append(qid)
+    try:
+        with _WRITE_LOCK:
+            db.execute("UPDATE users SET gen_questions=? WHERE id=?",
+                       (json.dumps(gen, ensure_ascii=False), user_id))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] gen_questions 書き込み失敗（再試行可）: {e}", flush=True)
+        return []
+    return new_ids
 
 
 def login_required(f):
@@ -585,9 +817,11 @@ def api_get_onboarding():
         "SELECT onboarding,onboarded FROM users WHERE id=?", (uid(),)
     ).fetchone()
     answers = _load_onboarding(row["onboarding"] if row else None)
+    # 「はじめの問い」は初回必須ぶん（先頭 CORE_ONBOARDING 問）だけを出す。
+    # 残りは「今週の問い」として受信箱へ少しずつ届く（過去の問いに固執させない）。
     return jsonify(
-        questions=[{"id": i, "text": q} for i, q in enumerate(ONBOARDING_QUESTIONS)],
-        answers={str(k): v for k, v in answers.items()},
+        questions=[{"id": i, "text": q} for i, q in enumerate(ONBOARDING_QUESTIONS[:CORE_ONBOARDING])],
+        answers={str(k): v for k, v in answers.items() if k < CORE_ONBOARDING},
         onboarded=bool(row["onboarded"]) if row else False,
     )
 
@@ -625,6 +859,64 @@ def api_save_onboarding():
         return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
     now_onboarded = db.execute("SELECT onboarded FROM users WHERE id=?", (uid(),)).fetchone()["onboarded"]
     return jsonify(ok=True, answered=len(answers), onboarded=bool(now_onboarded))
+
+
+@app.route("/api/weekly", methods=["GET"])
+@login_required
+def api_get_weekly():
+    """いま届いている「今夜の問い」を返す。時刻ゲート(21時)は端末時刻で見せ方を変えるため、
+    release_hour と issued_at をクライアントへ渡す。"""
+    state = _issue_weekly_if_due(uid())
+    gm = _gen_map(uid())
+    qs = [{"id": q, "text": _question_text(q, gm)}
+          for q in state["batch"] if _question_text(q, gm)]
+    return jsonify(
+        questions=qs,
+        issued_at=state["issued_at"],
+        gated=state.get("gated", True),
+        release_hour=QUESTION_RELEASE_HOUR,
+        exhausted=state["exhausted"],
+    )
+
+
+@app.route("/api/weekly/answer", methods=["POST"])
+@login_required
+def api_answer_weekly():
+    """今夜の問いへの答えを保存する。保存先は onboarding と同じ辞書（personaが自動で厚くなる）。"""
+    data = request.get_json(force=True)
+    try:
+        qid = int(data.get("qid"))
+    except (ValueError, TypeError):
+        return jsonify(error="問いが指定されていません。"), 400
+    # 週次の静的問い(10〜)か、AI生成問い(gen_questionsに存在)だけ答えられる。初回必須(0〜9)は不可。
+    is_weekly_static = (CORE_ONBOARDING <= qid < len(ONBOARDING_QUESTIONS))
+    is_generated = qid in _gen_map(uid())
+    if not (is_weekly_static or is_generated):
+        return jsonify(error="その問いには答えられません。"), 400
+    text = (str(data.get("text") or "")).strip()[:300]
+    if not text:
+        return jsonify(error="ことばが空です。"), 400
+    db = get_db()
+    row = db.execute("SELECT onboarding FROM users WHERE id=?", (uid(),)).fetchone()
+    answers = _load_onboarding(row["onboarding"] if row else None)
+    answers[qid] = text
+    try:
+        with _WRITE_LOCK:
+            db.execute("UPDATE users SET onboarding=? WHERE id=?",
+                       (json.dumps(answers, ensure_ascii=False), uid()))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] weekly answer 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
+    # 答え終えたら、次の配信が来ているか判定して返す（時刻・間隔次第では空）
+    state = _issue_weekly_if_due(uid())
+    gm = _gen_map(uid())
+    nxt = [{"id": q, "text": _question_text(q, gm)}
+           for q in state["batch"] if _question_text(q, gm)]
+    return jsonify(ok=True, questions=nxt, issued_at=state["issued_at"],
+                   gated=state.get("gated", True),
+                   release_hour=QUESTION_RELEASE_HOUR, exhausted=state["exhausted"])
+
 
 USERNAME_RE = re.compile(
     r"^[A-Za-z0-9_.\-"
@@ -1522,9 +1814,10 @@ def _profile_context_text(user_id, limit=3):
     answers = _load_onboarding(row["onboarding"] if row else None)
     if not answers:
         return ""
-    qids = [q for q in answers if 0 <= q < len(ONBOARDING_QUESTIONS)]
+    gm = _gen_map(user_id)  # AI生成問いへの答えも輪郭の材料に含める
+    qids = [q for q in answers if _question_text(q, gm)]
     random.shuffle(qids)
-    lines = [f"・{ONBOARDING_QUESTIONS[q]} → {answers[q]}" for q in qids[:limit]]
+    lines = [f"・{_question_text(q, gm)} → {answers[q]}" for q in qids[:limit]]
     return "\n".join(lines)
 
 
@@ -1714,11 +2007,12 @@ def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
     db = get_db()
     urow = db.execute("SELECT onboarding FROM users WHERE id=?", (user_id,)).fetchone()
     answers = _load_onboarding(urow["onboarding"] if urow else None)
+    gm = _gen_map(user_id)  # 初めの問い＋今夜の問い（AI生成ぶんも含む）を肖像の材料に
     ob_lines = []
-    for q in sorted(a for a in (answers or {}) if 0 <= a < len(ONBOARDING_QUESTIONS)):
+    for q in sorted(a for a in (answers or {}) if _question_text(a, gm)):
         ans = (answers[q] or "").strip()
         if ans:
-            ob_lines.append(f"・{ONBOARDING_QUESTIONS[q]} → {ans}")
+            ob_lines.append(f"・{_question_text(q, gm)} → {ans}")
 
     rows = db.execute(
         "SELECT poem, photo, voice, sent_date FROM letters WHERE user_id=? ORDER BY sent_date DESC, id DESC",

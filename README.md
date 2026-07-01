@@ -72,6 +72,9 @@ export TAYORI_ADMIN_TOKEN="好きな文字列"
 | `ANTHROPIC_API_KEY` | Claude で問いを AI 生成（有料。Gemini の鍵が無いときの代替） |
 | `TAYORI_AI_MODEL` | Claude のモデル（既定 `claude-opus-4-8`。例: `claude-sonnet-4-6`） |
 | `TAYORI_CHECK_INTERVAL` | 天気判定・通知チェックの間隔（秒・既定30） |
+| `TAYORI_Q_INTERVAL_DAYS` | 「今夜の問い」を配る間隔（日・既定1＝毎日。7で毎週） |
+| `TAYORI_Q_BATCH` | 一度に届ける問いの数（既定1。毎日なら1推奨） |
+| `TAYORI_Q_HOUR` | その日ぶんの問いが開封できる時刻（0〜23・既定21。端末の時刻で判定） |
 
 天気とメールは `TAYORI_ENABLE_NETWORK=1` を立てないと動かない（無料ホスティングの外部通信遮断対策で既定OFF）。
 天気は既定で **Open-Meteo**（無料・APIキー不要）。`TAYORI_OWM_KEY` を設定すると **OpenWeatherMap** を優先し、失敗時は自動で Open-Meteo に切り替わる。

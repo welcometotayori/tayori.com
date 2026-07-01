@@ -232,6 +232,18 @@
   .msg.question .bubble.q::before{content:"問";position:absolute;left:-1px;top:-10px;
     font-family:'Shippori Mincho',serif;font-size:11px;color:var(--paper);background:var(--seal);
     width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+  /* ── 今夜の問い（受信箱に一通、届く問い） ── */
+  .q-head{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--seal);text-transform:uppercase;text-align:center;margin:6px 0 18px;opacity:0.85}
+  .qletter{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;margin-bottom:20px;padding:26px 22px 22px;position:relative;box-shadow:0 8px 24px -18px rgba(58,46,37,0.5)}
+  .qletter .q-seal{width:44px;height:44px;border-radius:50%;background:var(--seal);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:19px;box-shadow:0 6px 18px -6px rgba(181,84,58,0.6)}
+  .qletter .q-from{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--ink-soft);text-align:center;margin-bottom:14px}
+  .qletter .q-text{font-family:'Shippori Mincho',serif;font-size:17px;line-height:2.1;letter-spacing:0.04em;color:var(--ink);text-align:center;margin-bottom:18px}
+  .qletter textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:3px;background:var(--paper);padding:12px 14px;font-family:'Shippori Mincho',serif;font-size:15px;line-height:1.9;color:var(--ink);resize:none;min-height:64px}
+  .qletter .q-send{margin-top:12px;width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.1em;padding:12px;border-radius:3px;transition:background .15s}
+  .qletter .q-send:hover{background:var(--seal)}
+  .qletter .q-send:disabled{opacity:0.45;cursor:default}
+  .qletter.locked{text-align:center}
+  .qletter .q-wait{font-family:'Shippori Mincho',serif;font-size:13px;line-height:2;color:var(--ink-soft)}
   .thread-empty{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);
     text-align:center;line-height:1.95;margin-bottom:16px;opacity:0.85}
   /* 届いた時の自分の記録 ── 時間の層 */
@@ -540,7 +552,6 @@
     <div class="acct" id="acctBar">
       <span class="acct-id">差出人</span><b id="acctName">—</b>
       <div class="acct-actions">
-        <button id="profileBtn" title="初めの問いに、いつでも書き足せます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 8.4 14a3.6 3.6 0 1 0 7.2 0L12 2.5Z"/><path d="M12 9v6.5"/></svg>初めの問い</button>
         <button id="portraitBtn" title="あなたが遺したものから、いまのAIが「あなたという人」を描きます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9.2" r="3.1"/><path d="M5.8 19c0-3.1 2.8-4.9 6.2-4.9s6.2 1.8 6.2 4.9"/></svg>あなたについて</button>
         <button id="emailBtn" title="届いたお知らせメールの設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="1.5"/><path d="m3.6 7 8.4 5.6L20.4 7"/></svg><span id="emailStatus">メール未設定</span></button>
         <button id="settingsBtn" title="名前・パスワードの変更"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></svg>設定</button>
@@ -1040,7 +1051,49 @@ async function detectWeather(){
   async function loadMail(){
     await detectWeather();
     const data=await api('/api/letters');received=data.received||[];inTransit=data.in_transit||[];
+    // 今夜の問い（受信箱に一通、届く）。取得失敗しても受信描画は止めない。
+    try{const w=await api('/api/weekly');if(w)weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,gated:w.gated!==false,release_hour:w.release_hour||21,exhausted:!!w.exhausted};}catch(e){}
     applyWeatherTint();renderMail();
+  }
+
+  // ── 今夜の問い ──
+  let weeklyState={questions:[],issued_at:null,gated:true,release_hour:21,exhausted:false};
+  // 21時ゲート：その日ぶんは端末時刻で「夜21時」以降に開封できる。過去日ぶん・初回ぶん(gated=false)は待たせずに出す。
+  function weeklyLocked(){
+    if(!weeklyState.gated)return false;
+    if(!weeklyState.issued_at)return false;
+    const now=new Date();
+    return weeklyState.issued_at===isoDate(now) && now.getHours()<(weeklyState.release_hour||21);
+  }
+  function renderWeekly(){
+    const qs=weeklyState.questions||[];
+    if(!qs.length)return;
+    const head=document.createElement('div');head.className='q-head';head.textContent='― 今夜の問い ―';mailList.appendChild(head);
+    if(weeklyLocked()){
+      const c=document.createElement('div');c.className='qletter locked';
+      c.innerHTML='<div class="q-seal">問</div><div class="q-wait">今夜 '+(weeklyState.release_hour||21)+':00 に、<br>便りが一通、届きます。</div>';
+      mailList.appendChild(c);return;
+    }
+    qs.forEach(q=>{
+      const c=document.createElement('div');c.className='qletter';c.dataset.qid=q.id;
+      c.innerHTML='<div class="q-seal">問</div><div class="q-from">たより</div>'+
+        '<div class="q-text">'+esc(q.text)+'</div>'+
+        '<textarea placeholder="いまのことばで、そっと。"></textarea>'+
+        '<button class="q-send">封をして、返す</button>';
+      const ta=c.querySelector('textarea'),btn=c.querySelector('.q-send');
+      ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';});
+      btn.addEventListener('click',async()=>{
+        const v=ta.value.trim();if(!v){flash('ことばを、ひとつ。');return;}
+        btn.disabled=true;
+        const res=await api('/api/weekly/answer',{method:'POST',body:JSON.stringify({qid:q.id,text:v})});
+        if(res&&res.ok){
+          weeklyState={questions:res.questions||[],issued_at:res.issued_at||null,gated:res.gated!==false,release_hour:res.release_hour||21,exhausted:!!res.exhausted};
+          flash('封をしました。ことばが、あなたの輪郭に足されました。');
+          renderMail();
+        }else{btn.disabled=false;}
+      });
+      mailList.appendChild(c);
+    });
   }
 
   // 許可状態が変わった（allow⇄not allow）時に、キャッシュを捨てて取り直し＆画面に反映する。
@@ -1095,8 +1148,13 @@ async function detectWeather(){
       };
       mailList.appendChild(b);
     }
-    if(!received.length && !inTransit.length){const p=document.createElement('p');p.className='mail-intro';
-      p.innerHTML='まだ届いた便りはありません。<br>投函した便りは、届く時が来たらここに。';mailList.appendChild(p);return;}
+    // 今夜の問いは、受信箱のいちばん上に（新しく届いた一通として）
+    renderWeekly();
+    const hasWeekly=!!(weeklyState.questions&&weeklyState.questions.length);
+    if(!received.length && !inTransit.length){
+      if(!hasWeekly){const p=document.createElement('p');p.className='mail-intro';
+        p.innerHTML='まだ届いた便りはありません。<br>投函した便りは、届く時が来たらここに。';mailList.appendChild(p);}
+      return;}
     if(received.length){const intro=document.createElement('p');intro.className='mail-intro';
       intro.innerHTML='過去のあなたから、便りが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
     else if(inTransit.length){const intro=document.createElement('p');intro.className='mail-intro';
@@ -1555,7 +1613,7 @@ async function detectWeather(){
     await saveOnboarding(true);
     onb.classList.remove('on');
   });
-  document.getElementById('profileBtn').addEventListener('click',()=>openOnboarding(false));
+  // 「初めの問い」の再訪導線は撤去（過去の問いに固執させない）。以降の問いは「今夜の問い」として受信箱へ届く。
   // 指定IDの便りまでスクロールして、ふわっと光らせる
   function focusLetter(id){
     setTimeout(()=>{
