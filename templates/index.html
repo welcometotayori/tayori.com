@@ -1051,13 +1051,23 @@ async function detectWeather(){
   async function loadMail(){
     await detectWeather();
     const data=await api('/api/letters');received=data.received||[];inTransit=data.in_transit||[];
-    // 今夜の問い（受信箱に一通、届く）。取得失敗しても受信描画は止めない。
-    try{const w=await api('/api/weekly');if(w)weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,gated:w.gated!==false,release_hour:w.release_hour||21,exhausted:!!w.exhausted};}catch(e){}
-    applyWeatherTint();renderMail();
+    applyWeatherTint();renderMail();     // 受信箱はすぐ描画（weeklyの取得/生成で待たせない）
+    loadWeekly();                        // 今夜の問いは非同期で取りにいき、届き次第あとから差し込む
   }
 
   // ── 今夜の問い ──
   let weeklyState={questions:[],issued_at:null,gated:true,release_hour:21,exhausted:false};
+  let _weeklyLoading=false;
+  // 受信箱の描画とは切り離して取得。AI生成で数秒かかっても受信箱は固まらない。
+  async function loadWeekly(){
+    if(_weeklyLoading)return; _weeklyLoading=true;
+    try{
+      const w=await api('/api/weekly');
+      if(w){weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,gated:w.gated!==false,release_hour:w.release_hour||21,exhausted:!!w.exhausted};
+        if(panels.mailbox.classList.contains('on'))renderMail();}  // 受信タブ表示中なら差し込み再描画
+    }catch(e){}
+    finally{_weeklyLoading=false;}
+  }
   // 21時ゲート：その日ぶんは端末時刻で「夜21時」以降に開封できる。過去日ぶん・初回ぶん(gated=false)は待たせずに出す。
   function weeklyLocked(){
     if(!weeklyState.gated)return false;
