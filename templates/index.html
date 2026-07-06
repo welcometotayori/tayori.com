@@ -332,8 +332,8 @@
   .gate-submit:hover{background:var(--seal)}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   .gate-hint{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);margin-top:18px;opacity:0.8}
-  .gate-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-soft);margin-top:9px;padding:9px 11px;border:1px solid var(--line);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-2)}
-  .gate-note b{color:var(--seal);font-weight:600}
+  /* 注記は「警告ボックス」ではなく、欄の下にそっと添えるキャプションに */
+  .gate-note{font-family:'Shippori Mincho',serif;font-size:11px;line-height:1.8;letter-spacing:0.04em;color:var(--ink-soft);opacity:0.85;margin-top:6px;padding-left:2px}
 
   /* account bar */
   /* 案A：差出人の氏名を中央で主役に、その下に操作ボタンを横並び */
@@ -489,7 +489,7 @@
       <div class="gate-field">
         <label>名前</label>
         <input type="text" id="gUser" autocomplete="username" placeholder="漢字・かな・英数字でOK">
-        <div class="gate-note" id="gNameNote" style="display:none">未来の自分に届く手紙の、差出人の名前になります。本名や、ふだん呼ばれている名前がおすすめです。</div>
+        <div class="gate-note" id="gNameNote" style="display:none">手紙の差出人になる名前。本名や、ふだん呼ばれている名前を。</div>
       </div>
       <div class="gate-field">
         <label>パスワード</label>
@@ -499,9 +499,9 @@
         </div>
       </div>
       <div class="gate-field" id="gEmailField" style="display:none">
-        <label>Email（便りの到着をお知らせします）</label>
+        <label>Email（たよりの到着をお知らせします）</label>
         <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com">
-        <div class="gate-note">※確認・通知メールが<b>迷惑メール（スパム）フォルダ</b>に振り分けられることがあります。届かない場合はそちらをご確認のうえ、「迷惑メールではない」に設定してください。</div>
+        <div class="gate-note">確認メールが迷惑メールフォルダに入ることがあります。</div>
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
@@ -1545,7 +1545,7 @@ async function detectWeather(){
     gPass.autocomplete=gMode==='login'?'current-password':'new-password';
     if(gHint)gHint.style.display=gMode==='login'?'block':'none'; // gHint要素は無い場合があるのでガード
     gEmailField.style.display=gMode==='register'?'block':'none'; // 登録時だけメアド欄
-    gUser.placeholder=gMode==='register'?'例：山田花子（本名がおすすめ）':'漢字・かな・英数字でOK';
+    gUser.placeholder=gMode==='register'?'例：田中太郎':'漢字・かな・英数字でOK';
     const nameNote=document.getElementById('gNameNote');
     if(nameNote)nameNote.style.display=gMode==='register'?'block':'none';
   }));
