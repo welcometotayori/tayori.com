@@ -32,6 +32,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr, parseaddr, make_msgid, formatdate
 from functools import wraps
+from collections import Counter
 from datetime import datetime, date, timedelta
 
 from flask import Flask, request, jsonify, render_template, g, session, Response
@@ -402,6 +403,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN persona_src TEXT",
             "ALTER TABLE users ADD COLUMN weekly TEXT",
             "ALTER TABLE users ADD COLUMN gen_questions TEXT",
+            "ALTER TABLE users ADD COLUMN chapters TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -935,11 +937,15 @@ def api_register():
         return jsonify(error="名前は2〜24文字で。漢字・かな・英数字と _ . - が使えます。"), 400
     if len(password) < 8:
         return jsonify(error="パスワードは8文字以上にしてください。"), 400
-    if email and not EMAIL_RE.match(email):
+    if not email:
+        return jsonify(error="メールアドレスを入力してください。便りの到着をお知らせするために使います。"), 400
+    if not EMAIL_RE.match(email):
         return jsonify(error="メールアドレスの形式が正しくありません。"), 400
     db = get_db()
     if db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         return jsonify(error="その名前はもう使われています。"), 409
+    if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+        return jsonify(error="そのメールアドレスはすでに使われています。"), 409
     new_id = secrets.token_hex(8)
     pw_hash = _hash_pw(password)
     got = _WRITE_LOCK.acquire(timeout=20)
@@ -2338,6 +2344,203 @@ def api_timeline():
             nodes.append(dict(date=t_arrive[:10], kind="future", id=d["id"], poem=None, photo=False, voice=False, emos=[], opened=False, hidden=d["arrive_hidden"], sealed=True))
     nodes.sort(key=lambda n: n["date"])
     return jsonify(nodes=nodes)
+
+
+# ── 三ヶ月ごとの章（あなたの変遷）──
+# 届いた便りを四半期ごとに束ね、よく使った言葉の傾向＋AIが編む章題・本文で
+# 「自分がどういう人だったか」を振り返れるようにする。ログの羅列とは別のキュレーション層。
+
+_CH_WORD_RE = re.compile(
+    r"[一-鿿々ヶ]{1,8}"   # 漢字（々・ヶ含む）
+    r"|[ァ-ヴー]{2,10}"        # カタカナ
+    r"|[A-Za-z]{3,20}"
+)
+_CH_WORD_STOP = {"中", "時", "日", "事", "為", "様", "達", "今日", "明日", "自分"}
+
+
+def _quarter_of(date_str):
+    return f"{date_str[:4]}-Q{(int(date_str[5:7]) - 1) // 3 + 1}"
+
+
+def _quarter_label(qkey):
+    y, q = qkey.split("-Q")
+    q = int(q)
+    months = {1: "1月 – 3月", 2: "4月 – 6月", 3: "7月 – 9月", 4: "10月 – 12月"}
+    seasons = {1: "冬", 2: "春", 3: "夏", 4: "秋"}
+    return f"{y}年 {months[q]}", seasons[q]
+
+
+def _chapter_materials(user_id):
+    """届いた便りを封をした日の四半期ごとに束ねる。封の中の便りは言葉が漏れるので含めない。"""
+    db = get_db()
+    rows = db.execute("SELECT * FROM letters WHERE user_id=? ORDER BY sent_date, id", (user_id,)).fetchall()
+    quarters = {}
+    for r in rows:
+        if not _is_arrived(r):
+            continue
+        keys = r.keys()
+        qk = _quarter_of(r["sent_date"])
+        q = quarters.setdefault(qk, {"poems": [], "moods": [], "sent": 0, "opened": 0, "photos": 0, "voices": 0})
+        q["sent"] += 1
+        if r["opened"]:
+            q["opened"] += 1
+        p = (r["poem"] or "").strip()
+        if p:
+            q["poems"].append((r["sent_date"], p))
+        if r["photo"]:
+            q["photos"] += 1
+        if r["voice"]:
+            q["voices"] += 1
+        try:
+            q["moods"].extend(json.loads(r["emos"] or "[]"))
+        except Exception:
+            pass
+        if "open_mood" in keys and r["open_mood"]:
+            q["moods"].append(r["open_mood"])
+    return quarters
+
+
+# 単漢字の直後がこの文字（助詞・句読点・空白）なら「語」とみなす。
+# 「夜の」「海を」「雨。」は語だが、「見て」「走る」「増えた」のような動詞の語幹は拾わない。
+_CH_PARTICLE_AFTER = set("のをがはにへともでや、。．，！？…・　 ")
+
+
+def _top_words(poems, top=6):
+    c = Counter()
+    for p in poems:
+        for m in _CH_WORD_RE.finditer(p):
+            w = m.group(0)
+            if w in _CH_WORD_STOP:
+                continue
+            if len(w) == 1:
+                nxt = p[m.end():m.end() + 1]
+                if nxt and nxt not in _CH_PARTICLE_AFTER:
+                    continue
+            c[w] += 1
+    return [{"w": w, "n": n} for w, n in c.most_common(top)]
+
+
+def _chapter_stats(user_id):
+    quarters = _chapter_materials(user_id)
+    stats = []
+    for qk in sorted(quarters):
+        q = quarters[qk]
+        label, season = _quarter_label(qk)
+        stats.append(dict(key=qk, label=label, season=season,
+                          sent=q["sent"], opened=q["opened"],
+                          words=_top_words(p for _, p in q["poems"]),
+                          moods=[m for m, _ in Counter(q["moods"]).most_common(4)]))
+    return stats, quarters
+
+
+def _chapters_fingerprint(quarters):
+    parts = []
+    for qk in sorted(quarters):
+        q = quarters[qk]
+        parts.append(f"{qk}|{q['sent']}|" + "".join(d + p[:20] for d, p in q["poems"]))
+    return hashlib.sha1("".join(parts).encode("utf-8")).hexdigest()
+
+
+CHAPTERS_PROMPT = (
+    "あなたは、ある人が自分に宛てて書き溜めた言葉を、3ヶ月ごとの「章」として編む編集者です。\n"
+    "各章について、次の2つを書いてください。\n"
+    "・title：その時期のその人を象徴する短い章題（8〜14字。詩的だが、飾りすぎない）\n"
+    "・body：その時期の言葉から読み取れる関心や心の動きを描く本文（80〜140字。"
+    "前の章がある場合は、そこからの変化・更新にも触れる）\n\n"
+    "― 心がけ ―\n"
+    "・診断や決めつけはせず、言葉に現れていることだけを手がかりに。\n"
+    "・語りかけ（二人称）にはせず、「〜だった」「〜が増えていった」のような静かな常体で書く。"
+    "です・ます調は使わない。\n"
+    "・言葉が残っていない章は、便りの数や写真・声の気配から、無理のない範囲で短く。\n\n"
+    "出力は次の形式のJSON配列のみ。コードフェンスや説明文は付けない。\n"
+    '[{"key":"2026-Q1","title":"…","body":"…"}]\n\n'
+    "素材は次のとおりです。\n"
+)
+
+
+def _parse_chapters_json(raw):
+    if not raw:
+        return None
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
+    m = re.search(r"\[.*\]", t, re.S)
+    if not m:
+        return None
+    try:
+        arr = json.loads(m.group(0))
+    except Exception:
+        return None
+    out = {}
+    for it in arr if isinstance(arr, list) else []:
+        if isinstance(it, dict) and (it.get("key") or "").strip():
+            out[it["key"].strip()] = {"title": (it.get("title") or "").strip(),
+                                      "body": (it.get("body") or "").strip()}
+    return out or None
+
+
+def _generate_chapters(stats, quarters, gemini_key):
+    blocks = []
+    for s in stats:
+        q = quarters[s["key"]]
+        lines = [f"・（{d}）{p}" for d, p in q["poems"][:30]]
+        mood = f"　気分タグ: {'、'.join(s['moods'])}" if s["moods"] else ""
+        media = []
+        if q["photos"]:
+            media.append(f"写真{q['photos']}枚")
+        if q["voices"]:
+            media.append(f"声{q['voices']}件")
+        media_line = f"　残したもの: {'・'.join(media)}" if media else ""
+        body = "\n".join(lines) if lines else "（言葉は残っていない時期）"
+        blocks.append(f"【{s['key']}｜{s['label']}】便り{s['sent']}通{mood}{media_line}\n{body}")
+    prompt = CHAPTERS_PROMPT + "\n\n".join(blocks)
+    raw = _gemini_multimodal([{"text": prompt}], gemini_key, temperature=0.7,
+                             max_tokens=min(240 * len(stats) + 400, 4000), thinking_budget=0)
+    return _parse_chapters_json(raw)
+
+
+@app.route("/api/chapters", methods=["GET"])
+@login_required
+def api_get_chapters():
+    stats, quarters = _chapter_stats(uid())
+    row = get_db().execute("SELECT chapters FROM users WHERE id=?", (uid(),)).fetchone()
+    try:
+        cache = json.loads(row["chapters"]) if row and row["chapters"] else {}
+    except Exception:
+        cache = {}
+    items = cache.get("items") or {}
+    for s in stats:
+        c = items.get(s["key"]) or {}
+        s["title"], s["body"] = c.get("title"), c.get("body")
+    stale = (cache.get("fp") != _chapters_fingerprint(quarters)) if items else bool(stats)
+    return jsonify(chapters=stats, generated_at=cache.get("at"), stale=stale,
+                   ai_available=bool(NETWORK_ENABLED and os.environ.get("GEMINI_API_KEY")))
+
+
+@app.route("/api/chapters", methods=["POST"])
+@login_required
+def api_make_chapters():
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if not (NETWORK_ENABLED and gemini_key):
+        return jsonify(error="いまは章を編めません（AI接続が無効です）。"), 503
+    stats, quarters = _chapter_stats(uid())
+    if not stats:
+        return jsonify(error="まだ材料がありません。届いた便りが増えると、章を編めるようになります。"), 400
+    try:
+        items = _generate_chapters(stats, quarters, gemini_key)
+    except Exception as e:
+        print(f"[章生成 失敗] {e}", flush=True)
+        items = None
+    if not items:
+        return jsonify(error="章の生成に失敗しました。少し時間をおいて、もう一度お試しください。"), 502
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    payload = json.dumps({"fp": _chapters_fingerprint(quarters), "at": now_iso, "items": items},
+                         ensure_ascii=False)
+    with _WRITE_LOCK:
+        get_db().execute("UPDATE users SET chapters=? WHERE id=?", (payload, uid()))
+        get_db().commit()
+    for s in stats:
+        c = items.get(s["key"]) or {}
+        s["title"], s["body"] = c.get("title"), c.get("body")
+    return jsonify(chapters=stats, generated_at=now_iso, stale=False)
 
 
 def _admin_ok():

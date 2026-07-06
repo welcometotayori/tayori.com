@@ -427,6 +427,39 @@
   .portrait-close{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:13px;color:var(--ink-soft);letter-spacing:0.1em;padding:11px;border-radius:3px;transition:.2s}
   .portrait-close:hover{color:var(--seal);border-color:var(--seal)}
+  /* ── 三ヶ月ごとの章（年表タブ上部のキュレーション） ── */
+  .chapters{margin:6px 0 40px}
+  .ch-mark{font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.24em;color:var(--seal);
+    text-transform:uppercase;text-align:center;opacity:0.7;margin-bottom:10px}
+  .ch-title{font-family:'Shippori Mincho',serif;font-size:19px;letter-spacing:0.14em;color:var(--ink);
+    text-align:center;margin:0 0 6px;font-weight:600}
+  .ch-lead{font-family:'Shippori Mincho',serif;font-size:12px;line-height:1.9;letter-spacing:0.04em;
+    color:var(--ink-soft);text-align:center;margin-bottom:22px}
+  .ch-list{position:relative;padding-left:48px}
+  .ch-list::before{content:'';position:absolute;left:17px;top:8px;bottom:8px;width:1px;background:var(--line)}
+  .ch-item{position:relative;margin-bottom:26px}
+  .ch-season{position:absolute;left:-48px;top:0;width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--seal);color:var(--seal);display:flex;align-items:center;justify-content:center;
+    font-family:'Shippori Mincho',serif;font-size:14px;background:var(--paper);
+    transform:rotate(-6deg);box-shadow:0 0 0 4px var(--paper)}
+  .ch-when{font-family:'Courier Prime',monospace;font-size:10.5px;letter-spacing:0.12em;color:var(--ink-soft);margin-bottom:5px}
+  .ch-card{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:14px 15px 12px;
+    box-shadow:0 6px 20px -16px rgba(58,46,37,0.5)}
+  .ch-card h4{font-family:'Shippori Mincho',serif;font-size:15.5px;letter-spacing:0.1em;color:var(--ink);margin:0 0 8px;font-weight:600}
+  .ch-body{font-family:'Shippori Mincho',serif;font-size:13px;line-height:2;letter-spacing:0.03em;color:var(--ink);
+    margin-bottom:10px;text-align:justify;word-break:break-word}
+  .ch-body.empty{color:var(--ink-soft);opacity:0.8;margin-bottom:8px}
+  .ch-words{display:flex;flex-wrap:wrap;align-items:center;gap:6px 7px;margin-bottom:9px}
+  .ch-word{font-family:'Shippori Mincho',serif;border:1px solid var(--line);border-radius:999px;
+    padding:2px 10px;color:var(--ink);background:var(--paper);letter-spacing:0.04em}
+  .ch-stats{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.85}
+  .ch-actions{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:2px}
+  .ch-gen{background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:13px;color:var(--ink-soft);letter-spacing:0.12em;padding:10px 26px;border-radius:3px;transition:.2s}
+  .ch-gen:hover{color:var(--seal);border-color:var(--seal)}
+  .ch-gen:disabled{opacity:0.45;cursor:default}
+  .ch-meta{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-soft);opacity:0.7;min-height:12px}
+
   /* ── アカウント設定（名前・パスワード） ── */
   .acct-sec{max-width:360px;margin:0 auto 22px;text-align:left}
   .acct-label{display:block;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft);margin-bottom:7px}
@@ -456,6 +489,7 @@
       <div class="gate-field">
         <label>名前</label>
         <input type="text" id="gUser" autocomplete="username" placeholder="漢字・かな・英数字でOK">
+        <div class="gate-note" id="gNameNote" style="display:none">未来の自分に届く手紙の、差出人の名前になります。本名や、ふだん呼ばれている名前がおすすめです。</div>
       </div>
       <div class="gate-field">
         <label>パスワード</label>
@@ -465,8 +499,8 @@
         </div>
       </div>
       <div class="gate-field" id="gEmailField" style="display:none">
-        <label>Email（通知用 · 任意）</label>
-        <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com（後からでもOK）">
+        <label>Email（便りの到着をお知らせします）</label>
+        <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com">
         <div class="gate-note">※確認・通知メールが<b>迷惑メール（スパム）フォルダ</b>に振り分けられることがあります。届かない場合はそちらをご確認のうえ、「迷惑メールではない」に設定してください。</div>
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
@@ -646,6 +680,16 @@
   </section>
 
   <section class="panel" id="timeline">
+    <div class="chapters" id="chaptersSec" style="display:none">
+      <div class="ch-mark">JP · たより · Chronicle</div>
+      <h3 class="ch-title">三ヶ月ごとの、あなた</h3>
+      <div class="ch-lead">その頃よく使っていた言葉と、AIが編む章題。<br>あなた自身の、更新の歴史。</div>
+      <div class="ch-list" id="chList"></div>
+      <div class="ch-actions">
+        <button class="ch-gen" id="chGen">章を編む</button>
+        <div class="ch-meta" id="chMeta"></div>
+      </div>
+    </div>
     <p class="tl-intro">あなたの便りの、全部。<br>過去から、まだ届いていない未来まで。</p>
     <div class="tl" id="tlList"></div>
   </section>
@@ -1412,7 +1456,55 @@ async function detectWeather(){
   document.querySelectorAll('#tlFilter .chip').forEach(c=>c.addEventListener('click',()=>{
     document.querySelectorAll('#tlFilter .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');tlFilter=c.dataset.emo;renderTimeline();}));
   let tlNodes=[];
-  async function loadTimeline(){const {nodes}=await api('/api/timeline');tlNodes=nodes;renderTimeline();}
+  async function loadTimeline(){loadChapters();const {nodes}=await api('/api/timeline');tlNodes=nodes;renderTimeline();}
+
+  // ── 三ヶ月ごとの章（あなたの変遷） ──
+  async function loadChapters(){
+    const sec=document.getElementById('chaptersSec');
+    const d=await api('/api/chapters',{method:'GET'});
+    if(!d||!Array.isArray(d.chapters)||!d.chapters.length){sec.style.display='none';return;}
+    sec.style.display='block';
+    renderChapters(d);
+  }
+  function renderChapters(d){
+    const list=document.getElementById('chList');list.innerHTML='';
+    let hasTitle=false;
+    d.chapters.forEach(c=>{
+      if(c.title)hasTitle=true;
+      const div=document.createElement('div');div.className='ch-item';
+      let words='';
+      (c.words||[]).forEach(w=>{words+='<span class="ch-word" style="font-size:'+(10.5+Math.min(w.n,6))+'px">'+esc(w.w)+'</span>';});
+      const body=c.title
+        ?'<h4>'+esc(c.title)+'</h4><div class="ch-body">'+esc(c.body||'')+'</div>'
+        :'<div class="ch-body empty">この頃の章は、まだ編まれていません。</div>';
+      const stats='便り '+c.sent+'通'+(c.opened?' · 開封 '+c.opened:'')+((c.moods&&c.moods.length)?' · '+c.moods.join('・'):'');
+      div.innerHTML='<div class="ch-season">'+esc(c.season)+'</div><div class="ch-when">'+esc(c.label)+'</div>'+
+        '<div class="ch-card">'+body+(words?'<div class="ch-words">'+words+'</div>':'')+'<div class="ch-stats">'+stats+'</div></div>';
+      list.appendChild(div);
+    });
+    const gen=document.getElementById('chGen'),meta=document.getElementById('chMeta');
+    if(d.ai_available===false){gen.style.display='none';}
+    else{gen.style.display='';gen.textContent=hasTitle?'編み直す':'章を編む';}
+    meta.textContent=d.generated_at?(_fmtChWhen(d.generated_at)+(d.stale?' · そのあと、便りが増えています':'')):'';
+  }
+  function _fmtChWhen(iso){
+    const d=new Date(iso);if(isNaN(d))return'';
+    return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' に編まれた章';
+  }
+  document.getElementById('chGen').addEventListener('click',async()=>{
+    const gen=document.getElementById('chGen');
+    gen.disabled=true;const prev=gen.textContent;gen.textContent='編んでいます…';
+    // 章の生成は四半期が多いと15秒を超え得るので、api()(15秒)ではなく長めのタイムアウトで叩く
+    const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),60000);
+    let d;
+    try{
+      const r=await fetch('/api/chapters',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},signal:ctrl.signal});
+      clearTimeout(t);d=await r.json().catch(()=>({}));
+    }catch(e){clearTimeout(t);d={error:'時間がかかりすぎました。もう一度お試しください。'};}
+    gen.disabled=false;gen.textContent=prev;
+    if(d&&Array.isArray(d.chapters)){renderChapters(d);flash('章を編みました。');}
+    else{flash((d&&d.error)||'うまく編めませんでした。少し時間をおいてお試しください。');}
+  });
   function renderTimeline(){const tl=document.getElementById('tlList');tl.innerHTML='';
     const nodes=tlNodes.filter(n=>tlFilter==='all'||(n.emos||[]).includes(tlFilter));
     if(!nodes.length){tl.innerHTML='<p class="tl-intro">該当する便りがありません。</p>';return;}
@@ -1453,6 +1545,9 @@ async function detectWeather(){
     gPass.autocomplete=gMode==='login'?'current-password':'new-password';
     if(gHint)gHint.style.display=gMode==='login'?'block':'none'; // gHint要素は無い場合があるのでガード
     gEmailField.style.display=gMode==='register'?'block':'none'; // 登録時だけメアド欄
+    gUser.placeholder=gMode==='register'?'例：山田花子（本名がおすすめ）':'漢字・かな・英数字でOK';
+    const nameNote=document.getElementById('gNameNote');
+    if(nameNote)nameNote.style.display=gMode==='register'?'block':'none';
   }));
   async function doAuth(){
     gErr.textContent='';
@@ -1460,7 +1555,12 @@ async function detectWeather(){
     if(!username||!password){gErr.textContent='名前とパスワードを入れてください。';return;}
     const url=gMode==='login'?'/api/login':'/api/register';
     const payload={username,password};
-    if(gMode==='register'&&gEmail.value.trim())payload.email=gEmail.value.trim();
+    if(gMode==='register'){
+      const em=gEmail.value.trim();
+      if(!em){gErr.textContent='メールアドレスを入れてください。便りの到着をお知らせするために使います。';return;}
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){gErr.textContent='メールアドレスの形式が正しくありません。';return;}
+      payload.email=em;
+    }
     const orig=gSubmit.textContent;
     gSubmit.disabled=true;gSubmit.textContent='送信中…';
     const res=await api(url,{method:'POST',body:JSON.stringify(payload)});
