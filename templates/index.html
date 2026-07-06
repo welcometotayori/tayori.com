@@ -489,7 +489,7 @@
       <div class="gate-field">
         <label>名前</label>
         <input type="text" id="gUser" autocomplete="username" placeholder="漢字・かな・英数字でOK">
-        <div class="gate-note" id="gNameNote" style="display:none">手紙の差出人になる名前。本名や、普段呼ばれている名前を。</div>
+        <div class="gate-note" id="gNameNote" style="display:none">本名や、普段呼ばれている名前を推奨</div>
       </div>
       <div class="gate-field">
         <label>パスワード</label>
@@ -1541,7 +1541,7 @@ async function detectWeather(){
     document.querySelectorAll('.gate-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
     gMode=t.dataset.g;gErr.textContent='';
     gSubmit.textContent=gMode==='login'?'ログイン':'始める';
-    gPass.placeholder=gMode==='login'?'合言葉':'8文字以上';
+    gPass.placeholder=gMode==='login'?'パスワード':'8文字以上';
     gPass.autocomplete=gMode==='login'?'current-password':'new-password';
     if(gHint)gHint.style.display=gMode==='login'?'block':'none'; // gHint要素は無い場合があるのでガード
     gEmailField.style.display=gMode==='register'?'block':'none'; // 登録時だけメアド欄
