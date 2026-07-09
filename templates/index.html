@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>tayori-たより-｜遅れて届く、自分への手紙</title>
-<meta name="description" content="tayori-たより- は、いまのあなたが綴った言葉や写真、声を、時をおいて未来のあなたへ届けるサービスです。「便り（手紙）」と「（自分に）頼る」のダブルミーニング。">
+<meta name="description" content="tayori-たより- は、いまのあなたが綴った言葉や写真、声を、時をおいて未来のあなたへ届けるサービスです。「たより（手紙）」と「（自分に）頼る」のダブルミーニング。">
 <meta property="og:title" content="tayori-たより-">
-<meta property="og:description" content="遅れて届く、自分への手紙。便り（手紙）と、（自分に）頼る。">
+<meta property="og:description" content="遅れて届く、自分への手紙。たより（手紙）と、（自分に）頼る。">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
@@ -85,7 +85,7 @@
   .stamp-opt:hover{transform:translateY(-1px)}
   .stamp-opt.on{transform:translateY(-2px) rotate(-3deg);box-shadow:0 0 0 2px var(--seal),0 7px 15px -6px rgba(44,38,34,0.45)}
   .stamp-opt.on .panel{background-color:#fbeee9}
-  /* 受信した便りに貼られた切手（同じ意匠を少し小さく） */
+  /* 受信したたよりに貼られた切手（同じ意匠を少し小さく） */
   .letter-stamp{position:absolute;top:10px;left:12px;width:42px;height:50px;padding:4px;background:#fff;border-radius:2px;
     transform:rotate(-4deg);box-shadow:0 3px 8px -5px rgba(44,38,34,0.5)}
   .letter-stamp .panel{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
@@ -247,7 +247,7 @@
   .reply-row button:hover{background:var(--seal)}
   .reply-emos{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
   .reply-emos .chip{font-size:11px;padding:4px 10px}
-  /* 「この返事を未来へ封印する」チェックボックス（返信が新しい便りになる選択） */
+  /* 「この返事を未来へ封印する」チェックボックス（返信が新しいたよりになる選択） */
   .seal-future{display:flex;align-items:flex-start;gap:8px;margin-top:10px;cursor:pointer;
     font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.04em;color:var(--ink-soft);line-height:1.7}
   .seal-future input{margin-top:2px;width:15px;height:15px;accent-color:var(--seal);cursor:pointer;flex-shrink:0}
@@ -520,7 +520,7 @@
         </div>
       </div>
       <div class="gate-field" id="gEmailField" style="display:none">
-        <label>Email（たよりの到着をお知らせします）</label>
+        <label>Email（通知用）</label>
         <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com">
         <div class="gate-note">※確認・通知メールが<b>迷惑メール（スパム）フォルダ</b>に振り分けられることがあります。届かない場合はそちらをご確認のうえ、「迷惑メールではない」に設定してください。</div>
       </div>
@@ -550,7 +550,7 @@
   <div class="onb-inner">
     <div class="onb-head">
       <h2 id="onbTitle">はじめの、問い</h2>
-      <div class="onb-lead">これから届く便りに、過去のあなた自身が答えるための小さな手がかりです。<br>答えられるものだけで構いません。あとからでも書けます。</div>
+      <div class="onb-lead">これから届くたよりに、過去のあなた自身が答えるための小さな手がかりです。<br>答えられるものだけで構いません。あとからでも書けます。</div>
     </div>
     <div class="onb-prog" id="onbProg">回答 <b>0</b> / 0</div>
     <div id="onbList"></div>
@@ -565,7 +565,7 @@
   <div class="portrait-inner">
     <div class="portrait-mark">JP<br>たより<br>About You</div>
     <h2 class="portrait-title">あなたについて</h2>
-    <div class="portrait-lead">これまで綴った言葉や写真、声、そして「初めの問い」への答え。<br>そのひとつひとつを手がかりに、あなたがどんな人なのかを、そっと書き出します。</div>
+    <div class="portrait-lead">これまで綴った言葉や写真、声、そして「初めの10の問い」への答え。<br>それらを手がかりに、あなたがどのような人なのかを、書き出します。</div>
     <div class="portrait-body" id="portraitBody"></div>
     <div class="portrait-meta" id="portraitMeta"></div>
     <div class="portrait-actions">
@@ -635,7 +635,7 @@
         <input type="text" id="ippText" maxlength="60" autocomplete="off">
       </div>
       <div class="ipp-actions">
-        <span class="ipp-note">通知もリマインドもありません。<br>置いた色は、いつか便りを開く日に、点になって流れます。</span>
+        <span class="ipp-note">通知もリマインドもありません。<br>置いた色は、いつかたよりを開く日に、点になって流れます。</span>
         <button class="ipp-send" id="ippSend">そっと、置く</button>
       </div>
     </div>
@@ -735,7 +735,7 @@
         <div class="ch-meta" id="chMeta"></div>
       </div>
     </div>
-    <p class="tl-intro">あなたの便りの、全部。<br>過去から、まだ届いていない未来まで。</p>
+    <p class="tl-intro">あなたのたよりの、全部。<br>過去から、まだ届いていない未来まで。</p>
     <div class="tl" id="tlList"></div>
   </section>
 
@@ -759,7 +759,7 @@
   const WEVENT_LABEL={snow:'雪の日',rain:'雨の日',hot:'暑い日',cold:'寒い日'};
   let today=new Date();  // 日付を跨いでも古くならないよう、下で随時 new Date() に取り直す
 
-  // メールの開封リンク（/open/便りID）から来た場合、その便りIDがここに入る
+  // メールの開封リンク（/open/たよりID）から来た場合、そのたよりIDがここに入る
   let pendingOpenId = "{{ open_letter_id }}" || null;
   
   // 💡 【ログイン問題を解決する通信強化】
@@ -974,7 +974,7 @@
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
 
-  // ---- 切手（封をする＝儀式）。選んだ切手は便りに貼られ、届いた時に見える ----
+  // ---- 切手（封をする＝儀式）。選んだ切手はたよりに貼られ、届いた時に見える ----
   // STAMPS は受信描画でも使うので、idから引けるようにグローバルに置く。
   // 切手モチーフは小さな線画（SVG）。currentColor を使うので、選択時に封蝋色へ発色する。
   // 版画（凹版）調モチーフ。細い線＋ハッチングで彫刻風の質感を出す。currentColorで刷り色に発色。
@@ -1087,7 +1087,7 @@
     if(!poem&&!photoData&&!voiceData){flash('写真か言葉、声をひとつ。');return;}
     if(whenMode==='date'&&!pickedDate){flash('届けたい日を選んでください。');return;}
 
-    const wEvent=selectedWeatherEvent(); // 天気待ち伏せ便りか
+    const wEvent=selectedWeatherEvent(); // 天気待ち伏せたよりか
 
     // 天気イベント以外で、今日＋過去時刻になってないかチェック
     if(!wEvent){
@@ -1102,7 +1102,7 @@
 
     // 天気イベントは位置情報が要る。取れてなければ知らせる
     if(wEvent && !currentWeather){
-      flash('天気の便りには位置情報が必要です。位置の許可をお願いします。');
+      flash('天気のたよりには位置情報が必要です。位置の許可をお願いします。');
     }
 
     const arrival=resolveArrival();const hidden=(whenMode==='surprise');
@@ -1139,7 +1139,7 @@
   // mailbox
   const mailList=document.getElementById('mailList');
   let received=[],inTransit=[];
-  const threadCollapsed=new Set();  // 会話を「しまう」便りIDを保持（再描画でも維持）
+  const threadCollapsed=new Set();  // 会話を「しまう」たよりIDを保持（再描画でも維持）
   let currentWeather=null; // {temp, condition, temp_tag}
   let lastGeoError=null;   // 失敗理由: denied/timeout/unavailable/unsupported/serveroff/fetchfail
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
@@ -1260,12 +1260,12 @@ async function detectWeather(){
     }
     if(!received.length && !inTransit.length){
       const p=document.createElement('p');p.className='mail-intro';
-      p.innerHTML='まだ届いた便りはありません。<br>投函した便りは、届く時が来たらここに。';mailList.appendChild(p);
+      p.innerHTML='まだ届いたたよりはありません。<br>投函したたよりは、届く時が来たらここに。';mailList.appendChild(p);
       return;}
     if(received.length){const intro=document.createElement('p');intro.className='mail-intro';
-      intro.innerHTML='過去のあなたから、便りが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
+      intro.innerHTML='過去のあなたから、たよりが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
     else if(inTransit.length){const intro=document.createElement('p');intro.className='mail-intro';
-      intro.innerHTML='まだ届いた便りはありません。<br>封の中の便りが、届く時を静かに待っています。';mailList.appendChild(intro);}
+      intro.innerHTML='まだ届いたたよりはありません。<br>封の中のたよりが、届く時を静かに待っています。';mailList.appendChild(intro);}
     
     received.forEach((L,i)=>{const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
       const sent=parseISO(L.sent_date);
@@ -1286,12 +1286,12 @@ async function detectWeather(){
     
     if(inTransit.length){
       const head=document.createElement('div');head.className='transit-head';
-      head.textContent='― 封の中 · まだ届かない便り ―';mailList.appendChild(head);
+      head.textContent='― 封の中 · まだ届かないたより ―';mailList.appendChild(head);
       inTransit.forEach(S=>{
         const el=document.createElement('div');el.className='letter sealed-transit';
         const sent=parseISO(S.sent_date);
         const extras=[];if(S.has_photo)extras.push('写真');if(S.has_voice)extras.push('声');
-        // 天気待ち伏せ便りは時刻ではなく「天気待ち」を見せる
+        // 天気待ち伏せたよりは時刻ではなく「天気待ち」を見せる
         let whenHtml;
         if(S.waiting_weather){
           whenHtml='<div class="transit-when">'+esc(WEVENT_LABEL[S.weather_event]||'天気')+'を待っています</div>'+
@@ -1377,7 +1377,7 @@ async function detectWeather(){
 
   function renderOpenLetter(L,i,sent){
     let h='';
-    // 封をする時に貼った切手（あれば便りの右上に見える）
+    // 封をする時に貼った切手（あればたよりの右上に見える）
     const st=window.STAMP_BY_ID&&window.STAMP_BY_ID[L.stamp];
     if(st)h+='<div class="letter-stamp">'+window.stampPanelHTML(st)+'</div>';
     h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
@@ -1448,9 +1448,9 @@ async function detectWeather(){
     h+='</div>';// .thread-msgs
     // 返信入力＋送信（会話の下に置く）
     h+='<div class="reply-row"><textarea placeholder="今のあなたから、返事を書く…" data-i="'+i+'"></textarea><button class="reply-send" data-reply="'+i+'">送る</button></div>';
-    // 要件4：この返事を「新しい便り」として未来へ封印するかの選択（チェックで送信時に封印）
+    // 要件4：この返事を「新しいたより」として未来へ封印するかの選択（チェックで送信時に封印）
     h+='<label class="seal-future"><input type="checkbox" data-sealfut="'+i+'">'+
-       '<span>この返事を、新しい便りとして未来へ封印する<span class="hint">封をすると、数ヶ月後のあなたに、いまの言葉がもう一度届きます。</span></span></label>';
+       '<span>この返事を、新しいたよりとして未来へ封印する<span class="hint">封をすると、数ヶ月後のあなたに、いまの言葉がもう一度届きます。</span></span></label>';
     // 折りたたみトグルは各会話の下・中央に（押しやすいピル型ボタン）
     if(thread.length)
       h+='<button class="thread-toggle'+(collapsed?' collapsed':'')+'" data-thtoggle="'+L.id+'">'+
@@ -1470,7 +1470,7 @@ async function detectWeather(){
       b.disabled=true;
       // まずは対話スレッドへ返信を保存
       await api('/api/letters/'+lid+'/reply',{method:'POST',body:JSON.stringify({text:v})});
-      // 「未来へ封印」チェックが入っていれば、その返事を新しい便りとして未来へ（問いは返さず封印演出へ）
+      // 「未来へ封印」チェックが入っていれば、その返事を新しいたよりとして未来へ（問いは返さず封印演出へ）
       const sealFut=mailList.querySelector('[data-sealfut="'+i+'"]');
       if(sealFut&&sealFut.checked){await sealTextToFuture(v);return;}
       // 送る ＝ 過去の自分から問いをもらう：返信を反映したうえで、過去の自分が問いを返す
@@ -1478,7 +1478,7 @@ async function detectWeather(){
       askPastSelfById(lid);}));
     // 会話の折りたたみトグル（再描画しても状態が残るよう threadCollapsed で保持）
     mailList.querySelectorAll('[data-thtoggle]').forEach(b=>b.addEventListener('click',()=>{
-      const id=b.dataset.thtoggle;  // 便りIDは16進文字列。数値化(+)するとNaNになり状態が壊れる
+      const id=b.dataset.thtoggle;  // たよりIDは16進文字列。数値化(+)するとNaNになり状態が壊れる
       if(threadCollapsed.has(id))threadCollapsed.delete(id);else threadCollapsed.add(id);
       const c=threadCollapsed.has(id);
       b.querySelector('.tt-chev').textContent=c?'開く':'閉じる';
@@ -1524,7 +1524,7 @@ async function detectWeather(){
     await loadMail(); // 再描画：ここで初めて封入インクと「あの日と今日」の差分が現れる
     if(res&&res.ok){
       focusLetter(id);
-      setTimeout(()=>autoPlayTrace(id),900);  // 書いていた時間のタイプ再生（traceがある便りだけ）
+      setTimeout(()=>autoPlayTrace(id),900);  // 書いていた時間のタイプ再生（traceがあるたよりだけ）
     }
   }
 
@@ -1540,7 +1540,7 @@ async function detectWeather(){
     if(data&&data.used_ai===false){/* AIなしでも問いは返る。静かに表示するだけ */}
   }
 
-  // 任意のテキストを「新しい便り」として未来（数ヶ月後）へ封印する。
+  // 任意のテキストを「新しいたより」として未来（数ヶ月後）へ封印する。
   // 返信送信時に「未来へ封印」チェックが入っていたら、その返事の本文を渡して呼ぶ。
   async function sealTextToFuture(text){
     const t=(text||'').trim();
@@ -1577,7 +1577,7 @@ async function detectWeather(){
       const body=c.title
         ?'<h4>'+esc(c.title)+'</h4><div class="ch-body">'+esc(c.body||'')+'</div>'
         :'<div class="ch-body empty">この頃の章は、まだ編まれていません。</div>';
-      const stats='便り '+c.sent+'通'+(c.opened?' · 開封 '+c.opened:'')+((c.moods&&c.moods.length)?' · '+c.moods.join('・'):'');
+      const stats='たより '+c.sent+'通'+(c.opened?' · 開封 '+c.opened:'')+((c.moods&&c.moods.length)?' · '+c.moods.join('・'):'');
       div.innerHTML='<div class="ch-season">'+esc(c.season)+'</div><div class="ch-when">'+esc(c.label)+'</div>'+
         '<div class="ch-card">'+body+(words?'<div class="ch-words">'+words+'</div>':'')+'<div class="ch-stats">'+stats+'</div></div>';
       list.appendChild(div);
@@ -1585,7 +1585,7 @@ async function detectWeather(){
     const gen=document.getElementById('chGen'),meta=document.getElementById('chMeta');
     if(d.ai_available===false){gen.style.display='none';}
     else{gen.style.display='';gen.textContent=hasTitle?'編み直す':'章を編む';}
-    meta.textContent=d.generated_at?(_fmtChWhen(d.generated_at)+(d.stale?' · そのあと、便りが増えています':'')):'';
+    meta.textContent=d.generated_at?(_fmtChWhen(d.generated_at)+(d.stale?' · そのあと、たよりが増えています':'')):'';
   }
   function _fmtChWhen(iso){
     const d=new Date(iso);if(isNaN(d))return'';
@@ -1607,7 +1607,7 @@ async function detectWeather(){
   });
   function renderTimeline(){const tl=document.getElementById('tlList');tl.innerHTML='';
     const nodes=tlNodes.filter(n=>tlFilter==='all'||(n.emos||[]).includes(tlFilter));
-    if(!nodes.length){tl.innerHTML='<p class="tl-intro">該当する便りがありません。</p>';return;}
+    if(!nodes.length){tl.innerHTML='<p class="tl-intro">該当するたよりがありません。</p>';return;}
     nodes.forEach(n=>{const d=parseISO(n.date);const isNow=Math.abs(daysBetween(d,today))<2&&n.kind==='sent';
       const cls='tl-node'+(n.kind==='future'?' tl-future is-future':'')+(isNow?' is-now':'')+(n.sealed?' tl-sealed':'');
       const div=document.createElement('div');div.className=cls;
@@ -1617,7 +1617,7 @@ async function detectWeather(){
         text= n.kind==='future' ? '封の中 — 届く時を待っています' : '封をした — 中身はまだ見られません';
         meta='封の中';
       }else{
-        text=n.poem||(n.photo?'（写真の便り）':'（声の便り）');
+        text=n.poem||(n.photo?'（写真のたより）':'（声のたより）');
         meta=(n.opened?'開封済み':'未開封')+((n.emos&&n.emos.length)?' · '+n.emos.join('・'):'');
       }
       div.innerHTML='<div class="tl-when">'+when+'</div><div class="tl-card"><div class="tl-text">'+esc(text)+'</div><div class="tl-meta">'+meta+'</div></div>';
@@ -1657,7 +1657,7 @@ async function detectWeather(){
     const payload={username,password};
     if(gMode==='register'){
       const em=gEmail.value.trim();
-      if(!em){gErr.textContent='メールアドレスを入れてください。便りの到着をお知らせするために使います。';return;}
+      if(!em){gErr.textContent='メールアドレスを入れてください。たよりの到着をお知らせするために使います。';return;}
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){gErr.textContent='メールアドレスの形式が正しくありません。';return;}
       payload.email=em;
     }
@@ -1696,7 +1696,7 @@ async function detectWeather(){
     watchGeoPermission(); // 位置情報の許可 allow⇄not allow の変化を監視して即反映
     loadWeekly();         // その日の問い（便箋・一筆箋の透かし）を取りにいく
 
-    // メールの開封リンクから来ていたら、受信タブを開いてその便りへ
+    // メールの開封リンクから来ていたら、受信タブを開いてそのたよりへ
     if(pendingOpenId){
       goTab('mailbox');
       loadMail().then(()=>focusLetter(pendingOpenId));
@@ -1808,7 +1808,7 @@ async function detectWeather(){
       return;
     }
     await saveOnboarding(true);
-    if(onbFirstRun){flash('ありがとう。これからの便りに、そっと活きてきます。');enterAppBody();}
+    if(onbFirstRun){flash('ありがとう。これからのたよりに、そっと活きてきます。');enterAppBody();}
     else{onb.classList.remove('on');flash('書き足しました。');}
   });
   onbSkip.addEventListener('click',async()=>{
@@ -1825,11 +1825,11 @@ async function detectWeather(){
     onb.classList.remove('on');
   });
   // 「初めの問い」の再訪導線は撤去（過去の問いに固執させない）。以降の問いは「今夜の問い」として受信箱へ届く。
-  // 指定IDの便りまでスクロールして、ふわっと光らせる
+  // 指定IDのたよりまでスクロールして、ふわっと光らせる
   function focusLetter(id){
     setTimeout(()=>{
       const card=document.querySelector('.letter[data-lid="'+id+'"]');
-      if(!card){flash('その便りが見つかりませんでした。');return;}
+      if(!card){flash('そのたよりが見つかりませんでした。');return;}
       card.scrollIntoView({behavior:'smooth',block:'center'});
       card.classList.add('letter-highlight');
       setTimeout(()=>card.classList.remove('letter-highlight'),2600);
@@ -1960,7 +1960,7 @@ async function detectWeather(){
   portraitClose.addEventListener('click',()=>portraitOv.classList.remove('on'));
 
   // ── タイプ再生（TypeTrace）：書いていた時の迷い・書き直し・間をそのまま再生 ──
-  // 再生本体：便りID と表示先を直接受ける（クリックからも自動再生からも呼べる）
+  // 再生本体：たよりID と表示先を直接受ける（クリックからも自動再生からも呼べる）
   async function runTrace(lid, target, btn){
     if(!target || target._tracing)return;
     if(btn){ if(btn._playing)return; btn._playing=true; btn.disabled=true; }
@@ -1987,7 +1987,7 @@ async function detectWeather(){
     target.innerHTML=esc(norm[0].v)+caret;
     requestAnimationFrame(frame);
   }
-  // 開いた瞬間に「天気のように」自動で書き起こす（クリック不要）。traceを持つ便りだけ。
+  // 開いた瞬間に「天気のように」自動で書き起こす（クリック不要）。traceを持つたよりだけ。
   function autoPlayTrace(lid){
     const target=document.getElementById('poem-'+lid);
     if(!target)return;
