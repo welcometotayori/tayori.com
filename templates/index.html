@@ -287,9 +287,14 @@
 
   /* ---- エモーショナル・カラー・ピッカー：曖昧なグラデーションから「今の気分に近い場所」をタップ ---- */
   .color-band{position:relative;height:32px;border-radius:18px;border:1px solid var(--line);cursor:pointer;flex:1;min-width:150px;
-    background:linear-gradient(90deg,#54617a,#6B8478,#b9a06a,#B5543A,#8a6e8c,#54463B);opacity:0.9}
-  .color-band .cb-cursor{position:absolute;top:-5px;width:2px;height:42px;background:var(--ink);opacity:0;transform:translateX(-1px);transition:opacity .2s}
+    background:linear-gradient(90deg,#54617a,#6B8478,#b9a06a,#B5543A,#8a6e8c,#54463B);opacity:0.9;
+    touch-action:none;user-select:none;-webkit-user-select:none}
+  /* カーソルは left ではなく transform で動かす（GPU合成でなめらか）。
+     タップ時はスッと滑り（transition）、ドラッグ中(.dragging)は指に1:1で追従させる */
+  .color-band .cb-cursor{position:absolute;left:0;top:-5px;width:2px;height:42px;background:var(--ink);opacity:0;
+    transform:translateX(-1px);transition:opacity .2s,transform .28s cubic-bezier(.22,1,.36,1);will-change:transform}
   .color-band.picked .cb-cursor{opacity:0.75}
+  .color-band.dragging .cb-cursor{transition:opacity .2s}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
   .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(58,46,37,0.25);box-shadow:0 2px 6px -3px rgba(58,46,37,0.5);vertical-align:middle}
 
@@ -1016,19 +1021,31 @@
     const a=_hex2rgb(MOOD_STOPS[i]),b=_hex2rgb(MOOD_STOPS[i+1]);
     return '#'+a.map((v,k)=>Math.round(v+(b[k]-v)*t).toString(16).padStart(2,'0')).join('');
   }
-  // バンドをタップ→色を確定して cb(color) を呼ぶ。カーソルとチップも追従させる。
+  // タップでもドラッグ（スワイプ）でも色を探せるようにする。
+  // ドラッグ中はカーソル(.cb-cursor)とプレビュー(チップ)をリアルタイム更新し、
+  // 色の確定 cb(color) は指を離した瞬間に一度だけ呼ぶ（開封時のバンドはcbがAPI送信のため）。
   function wireColorBand(band,chip,cb){
     if(!band)return;
-    band.addEventListener('click',e=>{
+    const cur=band.querySelector('.cb-cursor');
+    let dragging=false,lastColor=null;
+    const apply=clientX=>{
       const rect=band.getBoundingClientRect();
-      const x=Math.max(0,Math.min(rect.width,e.clientX-rect.left));
-      const color=moodColorAt(x/rect.width);
-      const cur=band.querySelector('.cb-cursor');
-      if(cur)cur.style.left=x+'px';
+      const x=Math.max(0,Math.min(rect.width,clientX-rect.left));
+      lastColor=moodColorAt(rect.width?x/rect.width:0);
+      if(cur)cur.style.transform='translateX('+(x-1)+'px)';  // leftではなくtransformで滑らかに
       band.classList.add('picked');
-      if(chip){chip.style.visibility='visible';chip.style.background=color;}
-      cb(color);
-    });
+      if(chip){chip.style.visibility='visible';chip.style.background=lastColor;}
+    };
+    const down=x=>{dragging=true;apply(x);};
+    // .dragging は動き始めてから付ける：単タップはtransitionでスッと滑り、ドラッグは1:1追従
+    const move=x=>{if(!dragging)return;band.classList.add('dragging');apply(x);};
+    const up=()=>{if(!dragging)return;dragging=false;band.classList.remove('dragging');if(lastColor)cb(lastColor);};
+    band.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX);});
+    window.addEventListener('mousemove',e=>move(e.clientX));
+    window.addEventListener('mouseup',up);
+    band.addEventListener('touchstart',e=>down(e.touches[0].clientX),{passive:true});
+    window.addEventListener('touchmove',e=>{if(dragging)move(e.touches[0].clientX);},{passive:true});
+    window.addEventListener('touchend',up);
   }
   let sealColor=null;   // 投函時に選んだ「いまの気分の色」（手紙に封入される）
   wireColorBand(document.getElementById('sealBand'),document.getElementById('sealChip'),c=>{sealColor=c;});

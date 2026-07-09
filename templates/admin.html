@@ -435,7 +435,8 @@
     <div class="container">
         <div class="header">
             <h1>ユーザー管理ダッシュボード</h1>
-            <a href="/" class="back-link">← アプリに戻る</a>
+            <!-- adminセッションのまま "/" へ行くと管理画面へ戻されるため、先にログアウトしてからゲートへ -->
+            <a href="/" class="back-link" id="backToLogin">← ログイン画面へ戻る</a>
         </div>
         <p class="subtitle">アプリケーションに登録されているユーザーアカウント、および関連する全てのデータ（便り・下書き・対話）を一元管理・閲覧・削除できます。</p>
 
@@ -627,6 +628,17 @@
     </div>
 
     <script>
+        // 「ログイン画面へ戻る」：adminセッションを破棄してからゲート（トップ）へ。
+        // 単純遷移だと "/" がadminを管理画面へリダイレクトし直すため、必ず先にログアウトする。
+        document.getElementById('backToLogin').addEventListener('click', async function(e){
+            e.preventDefault();
+            try{
+                await fetch('/api/logout', {method:'POST', credentials:'same-origin',
+                                            headers:{'Content-Type':'application/json'}});
+            }catch(err){ /* 通信に失敗しても遷移は続行（サーバ側セッションは次回アクセスで弾かれる） */ }
+            window.location.href = '/';
+        });
+
         // 棒グラフの高さを data-h から反映（インラインstyleにロジックを置かないため）
         document.querySelectorAll('.trend-bar[data-h]').forEach(function(el){
             el.style.height = el.getAttribute('data-h') + '%';
