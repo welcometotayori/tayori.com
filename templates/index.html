@@ -1073,6 +1073,7 @@
 
   // ---- 便箋の透かし問い：白紙が怖い人への「最初の一行」。書き始めたら消える ----
   let composeWmQ=null;  // いま便箋に透けている問い（投函時に seal_q として封入される）
+  const POEM_PH=poemEl.placeholder;  // 既定のプレースホルダー（透かしが無い時だけ使う）
   function updateWatermarks(){
     const q=(weeklyState.questions&&weeklyState.questions[0])?weeklyState.questions[0].text:null;
     composeWmQ=q||null;
@@ -1080,6 +1081,8 @@
     if(wm){
       if(q)wm.innerHTML=esc(q)+'<span class="wm-sub">— 書き出せない時は、この問いから。書き始めたら消えます。</span>';
       wm.classList.toggle('hide',!q||!!poemEl.value);
+      // 透かしの問いが出ている間はプレースホルダーを消す（二重に重なって読めなくなるため）
+      poemEl.placeholder=q?'':POEM_PH;
     }
     if(ippWm){
       if(q)ippWm.textContent=q;
