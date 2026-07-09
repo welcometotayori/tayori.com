@@ -35,7 +35,7 @@ from functools import wraps
 from collections import Counter
 from datetime import datetime, date, timedelta
 
-from flask import Flask, request, jsonify, render_template, g, session, Response
+from flask import Flask, request, jsonify, render_template, g, session, Response, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # サーバーのタイムゾーンを日本時間に固定する。
@@ -369,6 +369,14 @@ def init_db():
                 voice   TEXT,
                 created TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS notes (
+                id      TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                color   TEXT,
+                text    TEXT,
+                env     TEXT,
+                created TEXT NOT NULL
+            );
             """
         )
         for stmt in (
@@ -404,6 +412,9 @@ def init_db():
             "ALTER TABLE users ADD COLUMN weekly TEXT",
             "ALTER TABLE users ADD COLUMN gen_questions TEXT",
             "ALTER TABLE users ADD COLUMN chapters TEXT",
+            "ALTER TABLE letters ADD COLUMN seal_color TEXT",
+            "ALTER TABLE letters ADD COLUMN open_color TEXT",
+            "ALTER TABLE letters ADD COLUMN seal_q TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -623,14 +634,12 @@ def _question_text(qid, gen_map=None):
 
 
 def _issue_weekly_if_due(user_id):
-    """必要なら次の問いを配り、状態を返す。
-    ・現バッチが未回答なら、それを出し続ける（積み増さない＝せかさない）
-    ・現バッチを答え終え、前回配信から QUESTION_INTERVAL_DAYS 日たっていたら次を配る
-    ・onboarded 直後は、その日ぶんをすぐ配る（初回だけは時刻ゲート無し）
-    ・プールが尽きたら新規は配らない
-    返り値: {batch:[id...], issued_at: 配信日ISO, exhausted: bool}
-    ※「21時開封」の時刻ゲートは、端末の時刻で判定するためクライアント側で行う。
-      サーバはその日ぶんを"発行"し、issued_at と release_hour をクライアントに渡す。"""
+    """その日の問いを配り、状態を返す。
+    問いは「毎日の宿題」ではなく、便箋にそっと透ける“書き出しの呼び水”。
+    ・答えるかどうかは任意。回答の有無に関係なく QUESTION_INTERVAL_DAYS 日ごとに次へ進む
+    ・onboarded 直後は、その日ぶんをすぐ配る
+    ・静的プールが尽きたらAIが生成して補う
+    返り値: {batch:[id...], issued_at: 配信日ISO, exhausted: bool}"""
     db = get_db()
     row = db.execute("SELECT onboarding, weekly, onboarded FROM users WHERE id=?", (user_id,)).fetchone()
     if not row or not row["onboarded"]:
@@ -655,11 +664,8 @@ def _issue_weekly_if_due(user_id):
         # 初回バッチ（過去に配ったものが無い）は時刻ゲート無しで即見せる。以降は21時ゲートを効かせる。
         return bool(set(wk["issued"]) - set(batch))
 
-    pending = [q for q in wk["batch"] if q not in answers]  # まだ答えていない現バッチ
-    if pending:
-        return {"batch": pending, "issued_at": wk["last_batch"], "gated": _gated(pending), "exhausted": False}
-
-    # 次を配ってよいか（間隔を空ける。ただし一度も配っていなければ即配る）
+    # 次を配ってよいか（間隔を空ける。ただし一度も配っていなければ即配る）。
+    # 透かしの問いは、答えなくても日々そっと入れ替わる（義務化しない・過去の問いに固執させない）。
     due = True
     if wk["last_batch"]:
         try:
@@ -668,7 +674,8 @@ def _issue_weekly_if_due(user_id):
         except ValueError:
             due = True
     if not due:
-        return {"batch": [], "issued_at": wk["last_batch"], "gated": False, "exhausted": False}
+        cur = list(wk["batch"])
+        return {"batch": cur, "issued_at": wk["last_batch"], "gated": _gated(cur), "exhausted": False}
 
     # まず静的プールから。足りなければ、その人向けの問いをAIで生成して補う（枯れさせない）。
     new_batch = pool_left[:QUESTION_BATCH]
@@ -779,6 +786,10 @@ def uid():
 
 @app.route("/")
 def index():
+    # Adminは一般ユーザーUI（投函・受信・年表）を使わない。管理ダッシュボードへ直行させる。
+    u = current_user()
+    if u and u["username"] == "admin":
+        return redirect("/admin.welcometotayori")
     return render_template("index.html", open_letter_id="")
 
 @app.route("/open/<lid>")
@@ -1009,6 +1020,7 @@ def api_me():
     if not u:
         return jsonify(auth=False, weather_enabled=NETWORK_ENABLED)
     return jsonify(auth=True, username=u["username"],
+                   is_admin=(u["username"] == "admin"),
                    email=u["email"] if "email" in u.keys() else None,
                    email_verified=bool(u["email_verified"]) if "email_verified" in u.keys() else False,
                    onboarded=bool(u["onboarded"]) if "onboarded" in u.keys() else True,
@@ -1292,13 +1304,16 @@ def _temp_tag(temp):
 
 def _fetch_weather_open_meteo(lat, lon):
     import urllib.request
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+    # current= 形式で湿度も取る（湿度は封入インクの「滲み」の素になる）
+    url = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+           f"&current=temperature_2m,relative_humidity_2m,weather_code")
     req = urllib.request.Request(url, headers={"User-Agent": "tayori/1.0"})
     with urllib.request.urlopen(req, timeout=4) as response:
         data = json.loads(response.read().decode())
-    cw = data.get("current_weather", {})
-    code = cw.get("weathercode", 0)
-    temp = cw.get("temperature", 20.0)
+    cw = data.get("current", {})
+    code = cw.get("weather_code", 0)
+    temp = cw.get("temperature_2m", 20.0)
+    humidity = cw.get("relative_humidity_2m")
     condition = "clear"
     if code in [71, 73, 75, 77, 85, 86]:
         condition = "snow"
@@ -1308,7 +1323,8 @@ def _fetch_weather_open_meteo(lat, lon):
         condition = "fog"
     elif code in [1, 2, 3]:
         condition = "cloud"
-    return {"condition": condition, "temp": temp, "tag": _temp_tag(temp)}
+    return {"condition": condition, "temp": temp, "tag": _temp_tag(temp),
+            "humidity": humidity}
 
 
 def _fetch_weather_owm(lat, lon, api_key):
@@ -1319,6 +1335,7 @@ def _fetch_weather_owm(lat, lon, api_key):
     with urllib.request.urlopen(req, timeout=4) as response:
         data = json.loads(response.read().decode())
     temp = (data.get("main") or {}).get("temp", 20.0)
+    humidity = (data.get("main") or {}).get("humidity")
     wid = ((data.get("weather") or [{}])[0]).get("id", 800)
     if 600 <= wid < 700:
         condition = "snow"
@@ -1330,7 +1347,8 @@ def _fetch_weather_owm(lat, lon, api_key):
         condition = "cloud"
     else:
         condition = "clear"
-    return {"condition": condition, "temp": temp, "tag": _temp_tag(temp)}
+    return {"condition": condition, "temp": temp, "tag": _temp_tag(temp),
+            "humidity": humidity}
 
 
 def fetch_weather(lat, lon):
@@ -1595,7 +1613,7 @@ def api_weather():
     if not wx:
         return jsonify(ok=False, error="天気が取得できませんでした"), 500
     return jsonify(ok=True, temp=wx["temp"], condition=wx["condition"], temp_tag=wx["tag"],
-                   approx=approx, city=city)
+                   humidity=wx.get("humidity"), approx=approx, city=city)
 
 
 @app.route("/api/locate", methods=["POST"])
@@ -1667,6 +1685,9 @@ def api_create_letter():
     lid = secrets.token_hex(8)
     seal_env = json.dumps(data.get("seal_env")) if data.get("seal_env") else None
     stamp = (data.get("stamp") or "")[:16] or None
+    # 封入する「その時」の記録：気分の色（カラー・ピッカー）と、便箋に透けていた問い
+    seal_color = (data.get("seal_color") or "").strip()[:32] or None
+    seal_q = (data.get("seal_q") or "").strip()[:80] or None
 
     # タイプ再生（TypeTrace）の打鍵スナップショット列。JSON文字列で保存。暴走サイズは捨てる。
     trace = data.get("trace")
@@ -1680,11 +1701,12 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
-             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace),
+             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
+             seal_color, seal_q),
         )
         db.commit()
     return jsonify(id=lid, ok=True)
@@ -1738,7 +1760,28 @@ def api_open_letter(lid):
                                  (open_env, lid, uid()))
         get_db().commit()
 
-    return jsonify(ok=True, seal_env=row["seal_env"], open_env=open_env, open_mood=open_mood)
+    keys = row.keys()
+    return jsonify(ok=True, seal_env=row["seal_env"], open_env=open_env, open_mood=open_mood,
+                   seal_color=(row["seal_color"] if "seal_color" in keys else None),
+                   seal_q=(row["seal_q"] if "seal_q" in keys else None),
+                   sent_date=row["sent_date"])
+
+
+@app.route("/api/letters/<lid>/color", methods=["POST"])
+@login_required
+def api_set_open_color(lid):
+    """開封時に選び直した「今の気分の色」を記録する（封をした日の色との差分になる）。"""
+    row = own_letter(lid)
+    if not row:
+        return jsonify(error="便りが見つかりません。"), 404
+    if not _is_arrived(row):
+        return jsonify(error="まだ封の中です。"), 403
+    color = (request.get_json(force=True).get("color") or "").strip()[:32] or None
+    with _WRITE_LOCK:
+        get_db().execute("UPDATE letters SET open_color=? WHERE id=? AND user_id=?",
+                         (color, lid, uid()))
+        get_db().commit()
+    return jsonify(ok=True, open_color=color)
 
 
 @app.route("/api/letters/<lid>/mood", methods=["POST"])
@@ -1790,6 +1833,54 @@ def api_reply(lid):
         get_db().commit()
     return jsonify(ok=True)
 
+# ── 一筆箋：超軽量な日々の記録レイヤー ──
+# 入力は「気分の色1タップ＋一行（任意）」だけ。気象スナップショットを自動で封入する。
+# 通知・リマインド・ストリーク・空白日の可視化・日常的な分析は一切しない。
+# 蓄積された点群が参照されるのは、便りの開封時（色の点群）とAI対話の文脈だけ。
+NOTE_TEXT_MAX = 60
+
+
+@app.route("/api/notes", methods=["POST"])
+@login_required
+def api_create_note():
+    data = request.get_json(force=True)
+    color = (data.get("color") or "").strip()[:32] or None
+    text = (data.get("text") or "").strip()[:NOTE_TEXT_MAX]
+    if not color and not text:
+        return jsonify(error="色かことばを、ひとつ。"), 400
+    env = json.dumps(data.get("env")) if data.get("env") else None
+    nid = secrets.token_hex(8)
+    db = get_db()
+    try:
+        with _WRITE_LOCK:
+            db.execute(
+                "INSERT INTO notes (id,user_id,color,text,env,created) VALUES (?,?,?,?,?,?)",
+                (nid, uid(), color, text or None, env,
+                 datetime.now().isoformat(timespec="seconds")))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 一筆箋 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
+    return jsonify(ok=True, id=nid)
+
+
+@app.route("/api/notes")
+@login_required
+def api_list_notes():
+    rows = get_db().execute(
+        "SELECT id,color,text,env,created FROM notes WHERE user_id=? ORDER BY created DESC LIMIT 500",
+        (uid(),)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["env"] = json.loads(d["env"]) if d["env"] else None
+        except (TypeError, ValueError):
+            d["env"] = None
+        out.append(d)
+    return jsonify(notes=out)
+
+
 _WX_JP = {"snow": "雪", "rain": "雨", "fog": "霧", "cloud": "曇り", "clear": "晴れ"}
 
 
@@ -1813,6 +1904,36 @@ def _weather_context_text(seal_env, open_env):
     if o:
         return f"これを開けている今日は「{o}」。"
     return ""
+
+
+def _notes_context_text(user_id, since_iso=None, limit=30):
+    """一筆箋の点群をAI対話の文脈に変換する。「日付・天気・色・一行」の時系列の点。
+    点が多いほど、対話は浅い相槌から『本人も気づいていない変化の指摘』に近づく。"""
+    q = "SELECT color,text,env,created FROM notes WHERE user_id=?"
+    args = [user_id]
+    if since_iso:
+        q += " AND created>=?"
+        args.append(since_iso)
+    q += " ORDER BY created DESC LIMIT ?"
+    args.append(limit)
+    rows = get_db().execute(q, args).fetchall()
+    lines = []
+    for r in reversed(rows):
+        try:
+            env = json.loads(r["env"]) if r["env"] else None
+        except (TypeError, ValueError):
+            env = None
+        bits = [(r["created"] or "")[:10]]
+        wx = _env_phrase(env)
+        if wx:
+            bits.append(wx)
+        if r["color"]:
+            bits.append(f"気分の色{r['color']}")
+        line = "・" + "、".join(b for b in bits if b)
+        if r["text"]:
+            line += f"「{r['text']}」"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _profile_context_text(user_id, limit=3):
@@ -2054,11 +2175,19 @@ def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
             if d and d[0].startswith("audio/"):
                 audio_parts.append({"inline_data": {"mime_type": d[0], "data": d[1]}})
 
+    # 一筆箋（日々のひとこと）も人物の手がかりに含める
+    nrows = db.execute(
+        "SELECT text, created FROM notes WHERE user_id=? AND text IS NOT NULL AND text<>'' "
+        "ORDER BY created DESC LIMIT 30", (user_id,)).fetchall()
+    note_lines = [f"（{(r['created'] or '')[:10]}）{r['text']}" for r in reversed(nrows)]
+
     blocks = []
     if ob_lines:
         blocks.append("【初めの問いへの答え】\n" + "\n".join(ob_lines))
     if poems:
         blocks.append("【遺した言葉（便り）】\n" + "\n".join(poems))
+    if note_lines:
+        blocks.append("【一筆箋（日々のひとこと）】\n" + "\n".join(note_lines))
     if image_parts or audio_parts:
         media_note = []
         if image_parts:
@@ -2068,7 +2197,8 @@ def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
         blocks.append("（このあとに、この人が遺した" + "・".join(media_note) + "を添えます）")
     text_block = "\n\n".join(blocks) if blocks else "（素材はまだほとんどありません）"
     counts = {"onboarding": len(ob_lines), "poems": len(poems),
-              "photos": len(image_parts), "voices": len(audio_parts)}
+              "photos": len(image_parts), "voices": len(audio_parts),
+              "notes": len(note_lines)}
     return text_block, image_parts, audio_parts, counts
 
 
@@ -2085,6 +2215,9 @@ def _persona_fingerprint(user_id):
         p = (r["poem"] or "").strip()
         has_media = (1 if (r["photo"] or "") else 0, 1 if (r["voice"] or "") else 0)
         parts.append(f"{r['sent_date']}|{len(p)}|{p[:24]}|{has_media[0]}{has_media[1]}")
+    nrow = db.execute("SELECT COUNT(*) AS c, MAX(created) AS m FROM notes WHERE user_id=?",
+                      (user_id,)).fetchone()
+    parts.append(f"notes:{nrow['c']}:{nrow['m'] or ''}")
     return hashlib.sha1("".join(parts).encode("utf-8")).hexdigest()
 
 
@@ -2216,12 +2349,15 @@ def api_ask_past_self(lid):
         convo = "\n".join(("今の自分: " if m["who"] == "now" else "過去の自分: ") + m["text"] for m in L["thread"])
         # 材料から生成・キャッシュした“人物プロファイル”（価値観・背景の理解）。無ければ従来の軽い文脈に。
         profile_ctx = _get_or_make_persona(uid()) or _profile_context_text(uid())
+        # 封をしてから今日までの一筆箋の点群（日付・天気・色・一行）。変化の手がかりとして渡す。
+        notes_ctx = _notes_context_text(uid(), since_iso=(L.get("sent_date") or "")[:19] or None)
         prompt = (
             f"あなたは、ある人の「過去の自分」そのものです。下記は{L['sent_date']}に、その人が"
             "未来の自分（＝今のその人）へ宛てて書き残した便りです。あなたはその便りを書いた"
             "当時の本人になりきり、今の自分へ語りかけます。\n\n"
             f"【私（過去の自分）が書いた詩・ことば】\n{L['poem'] or '（なし）'}\n\n"
             + (f"【“私”という人の輪郭（内なる理解。口には出さず、問いの奥行きにだけ使う）】\n{profile_ctx}\n\n" if profile_ctx else "")
+            + (f"【封をしてから今日までに、その人が日々残した一筆箋（気分の色とひとこと。口に出して列挙せず、変化を感じ取る手がかりにだけ使う）】\n{notes_ctx}\n\n" if notes_ctx else "")
             + f"【これまでの私たちの対話】\n{convo or '（まだなし）'}\n\n"
             "―― 語りかけ方の約束 ――\n"
             "・焦点は、私自身の内面（そのとき感じたこと・考え・記憶）だけに当てる。外の風景や環境（天気・季節・気温など）の描写や比喩には踏み込まない。\n"

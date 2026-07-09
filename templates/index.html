@@ -122,23 +122,17 @@
   .weather-note{margin:-6px 0 16px;text-align:center;display:none}
   .weather-note.show{display:block}
 
-  /* ---- 天気・時間帯連動：開封したいまの環境で便りの見え方が揺らぐ（＝一回性の体験） ---- */
+  /* ---- 封入インク：書いた日の空気（湿度・気温）が、開封の時に紙の上へ再現される ----
+       リアルタイムの天気連動はしない。気象は投函の瞬間にスナップショットとして手紙へ封入され、
+       レンダリングは開封時。湿度→染みの滲み(blur)と濃さ、気温→染みの色温度。
+       演出は装飾レイヤー（紙の染み）だけに掛け、本文テキストの可読性は常に守る。 */
   .letter-body{ position:relative; }
-  /* 雨の日は文字がにじみ、便り面に雨脚が走る（インクが水に滲むように） */
-  .wx-rain .letter-poem{ text-shadow:0 0 8px rgba(60,90,120,0.6), 0 2px 13px rgba(60,90,120,0.5); filter:blur(0.6px); transition:text-shadow 2s, filter 2s; }
-  .wx-rain .letter-photo{ filter:sepia(0.24) contrast(0.94) blur(2.4px) brightness(0.92); }
-  .wx-rain .letter-body::after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(180deg,rgba(80,110,140,0.14),rgba(80,110,140,0.03) 45%),
-    repeating-linear-gradient(101deg,transparent 0 8px,rgba(90,120,150,0.06) 8px 9px);}
-  .wx-hot .letter-poem{ color:#173a63; text-shadow:0 0 16px rgba(40,110,220,0.42); transition:color 2s, text-shadow 2s; }
-  .wx-cold .letter-poem{ color:#2c4453; letter-spacing:0.07em; text-shadow:0 0 7px rgba(120,150,175,0.4); transition:color 2s, letter-spacing 2s; }
-  .wx-snow .letter-poem{ color:#37474f; text-shadow:0 0 18px rgba(255,255,255,0.98), 0 0 34px rgba(205,228,245,0.6); transition:text-shadow 2s; }
-  .wx-fog .letter-poem{ filter:blur(1.2px); opacity:0.8; transition:filter 2s, opacity 2s; }
-  /* 夜（21時〜5時）に開くと、文字がともし火のように発光する */
-  .wx-night .letter-poem{ color:#3a2c1c; text-shadow:0 0 11px rgba(226,190,122,0.9), 0 0 26px rgba(214,140,80,0.55), 0 0 46px rgba(181,84,58,0.3); transition:color 2.5s, text-shadow 2.5s; }
-  /* 晴れた真昼（11時〜15時）は、光にさらされてコントラストが落ち、白く飛んで見える */
-  .wx-noon .letter-poem{ color:#bcb3a3; text-shadow:0 0 3px rgba(255,255,255,0.98); opacity:0.7; transition:color 2.5s, opacity 2.5s; }
-  .wx-noon .letter-body::after{content:"";position:absolute;inset:0;pointer-events:none;background:rgba(255,255,255,0.18);}
+  .letter.inked .letter-body::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 62% 42% at var(--stain-x,68%) var(--stain-y,18%),var(--stain-c,rgba(96,112,128,0.5)),transparent 72%),
+      radial-gradient(ellipse 46% 30% at calc(100% - var(--stain-x,68%)) 86%,var(--stain-c,rgba(96,112,128,0.4)),transparent 70%);
+    opacity:var(--stain-op,0);filter:blur(var(--stain-blur,6px));mix-blend-mode:multiply}
+  .letter.inked .letter-body>*{position:relative}
   .wx-banner{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);
     letter-spacing:0.06em;text-align:center;margin-bottom:18px;opacity:0.85}
   .wx-banner b{color:var(--seal);font-weight:500}
@@ -232,18 +226,6 @@
   .msg.question .bubble.q::before{content:"問";position:absolute;left:-1px;top:-10px;
     font-family:'Shippori Mincho',serif;font-size:11px;color:var(--paper);background:var(--seal);
     width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-  /* ── 今夜の問い（受信箱に一通、届く問い） ── */
-  .q-head{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--seal);text-transform:uppercase;text-align:center;margin:6px 0 18px;opacity:0.85}
-  .qletter{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;margin-bottom:20px;padding:26px 22px 22px;position:relative;box-shadow:0 8px 24px -18px rgba(58,46,37,0.5)}
-  .qletter .q-seal{width:44px;height:44px;border-radius:50%;background:var(--seal);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:19px;box-shadow:0 6px 18px -6px rgba(181,84,58,0.6)}
-  .qletter .q-from{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--ink-soft);text-align:center;margin-bottom:14px}
-  .qletter .q-text{font-family:'Shippori Mincho',serif;font-size:17px;line-height:2.1;letter-spacing:0.04em;color:var(--ink);text-align:center;margin-bottom:18px}
-  .qletter textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:3px;background:var(--paper);padding:12px 14px;font-family:'Shippori Mincho',serif;font-size:15px;line-height:1.9;color:var(--ink);resize:none;min-height:64px}
-  .qletter .q-send{margin-top:12px;width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.1em;padding:12px;border-radius:3px;transition:background .15s}
-  .qletter .q-send:hover{background:var(--seal)}
-  .qletter .q-send:disabled{opacity:0.45;cursor:default}
-  .qletter.locked{text-align:center}
-  .qletter .q-wait{font-family:'Shippori Mincho',serif;font-size:13px;line-height:2;color:var(--ink-soft)}
   .thread-empty{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);
     text-align:center;line-height:1.95;margin-bottom:16px;opacity:0.85}
   /* 届いた時の自分の記録 ── 時間の層 */
@@ -288,18 +270,28 @@
   .tl-meta{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:6px;text-transform:uppercase}
   .tl-future .tl-card{border-style:dashed;opacity:0.75}
   
-  /* 開封時の差分演出オーバーレイ */
-  .diff-overlay{position:fixed;inset:0;z-index:70;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;opacity:0;pointer-events:none;transition:opacity 0.8s ease}
-  .diff-overlay.on{opacity:1;pointer-events:auto}
-  .diff-title{font-family:'Shippori Mincho',serif;font-size:24px;letter-spacing:0.1em;color:var(--ink);margin-bottom:40px}
-  .diff-row{display:flex;align-items:center;justify-content:center;gap:30px;margin-bottom:40px}
-  .diff-box{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:20px 24px;width:160px;box-shadow:0 8px 24px -10px rgba(58,46,37,0.3)}
-  .diff-lbl{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.14em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:12px;border-bottom:1px dashed var(--line);padding-bottom:6px}
-  .diff-val{font-family:'Shippori Mincho',serif;font-size:18px;color:var(--seal);line-height:1.6}
-  .diff-val.now{color:var(--teal)}
-  .diff-arrow{font-family:'Shippori Mincho',serif;font-size:24px;color:var(--ink-soft);opacity:0.6}
-  .diff-btn{background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.12em;padding:12px 30px;border-radius:3px;transition:.2s}
-  .diff-btn:hover{background:var(--seal)}
+  /* ---- 開封の差分：本文を読み終えたあとに「あの日と今日」が静かに並ぶ ---- */
+  .letter-diff{position:relative;border-top:1px dashed var(--line);margin-top:20px;padding-top:18px;overflow:hidden}
+  .ld-row{position:relative;display:flex;align-items:stretch;justify-content:center;gap:14px;margin-bottom:14px}
+  .ld-box{flex:1;max-width:180px;background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:12px 12px 10px;text-align:center}
+  .ld-lbl{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.14em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:8px;border-bottom:1px dashed var(--line);padding-bottom:5px}
+  .ld-val{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--seal);line-height:1.6}
+  .ld-val.now{color:var(--teal)}
+  .ld-arrow{align-self:center;font-family:'Shippori Mincho',serif;font-size:18px;color:var(--ink-soft);opacity:0.6}
+  .ld-q{position:relative;font-family:'Shippori Mincho',serif;font-size:12.5px;line-height:2;color:var(--ink-soft);text-align:center;letter-spacing:0.04em;margin:2px 0 6px}
+  .ld-q b{color:var(--ink);font-weight:normal}
+  /* 投函から開封までの一筆箋の色が、点になって背景をゆっくり流れる */
+  .ld-dots{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .ld-dot{position:absolute;bottom:-12px;width:9px;height:9px;border-radius:50%;opacity:0;animation:dotDrift linear infinite}
+  @keyframes dotDrift{0%{transform:translateY(0);opacity:0}18%{opacity:0.32}82%{opacity:0.32}100%{transform:translateY(-220px);opacity:0}}
+
+  /* ---- エモーショナル・カラー・ピッカー：曖昧なグラデーションから「今の気分に近い場所」をタップ ---- */
+  .color-band{position:relative;height:32px;border-radius:18px;border:1px solid var(--line);cursor:pointer;flex:1;min-width:150px;
+    background:linear-gradient(90deg,#54617a,#6B8478,#b9a06a,#B5543A,#8a6e8c,#54463B);opacity:0.9}
+  .color-band .cb-cursor{position:absolute;top:-5px;width:2px;height:42px;background:var(--ink);opacity:0;transform:translateX(-1px);transition:opacity .2s}
+  .color-band.picked .cb-cursor{opacity:0.75}
+  .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
+  .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(58,46,37,0.25);box-shadow:0 2px 6px -3px rgba(58,46,37,0.5);vertical-align:middle}
 
   footer{text-align:center;margin-top:50px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.24em;color:var(--ink-soft);opacity:0.6}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
@@ -332,8 +324,8 @@
   .gate-submit:hover{background:var(--seal)}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   .gate-hint{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);margin-top:18px;opacity:0.8}
-  /* 注記は「警告ボックス」ではなく、欄の下にそっと添えるキャプションに */
-  .gate-note{font-family:'Shippori Mincho',serif;font-size:11px;line-height:1.8;letter-spacing:0.04em;color:var(--ink-soft);opacity:0.85;margin-top:6px;padding-left:2px}
+  .gate-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-soft);margin-top:9px;padding:9px 11px;border:1px solid var(--line);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-2)}
+  .gate-note b{color:var(--seal);font-weight:600}
 
   /* account bar */
   /* 案A：差出人の氏名を中央で主役に、その下に操作ボタンを横並び */
@@ -471,8 +463,37 @@
   .acct-save:hover{color:var(--seal);border-color:var(--seal)}
   .acct-hint{max-width:360px;margin:0 auto 22px;font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-soft);opacity:0.85;letter-spacing:0.03em}
 
-  /* ── 開封時の気分タグ（差分オーバーレイ内） ── */
+  /* ── 開封時の気分タグ ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
+
+  /* ── 一筆箋：色1タップ＋一行だけの、超軽量な日々のしずく。通知もストリークも無い ── */
+  .ippitsu{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:14px 16px 12px;margin-bottom:20px;
+    box-shadow:0 6px 20px -16px rgba(58,46,37,0.5)}
+  .ipp-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;
+    font-family:'Shippori Mincho',serif;font-size:12.5px;letter-spacing:0.1em;color:var(--ink-soft)}
+  .ipp-head b{color:var(--ink);font-weight:500;letter-spacing:0.12em}
+  .ipp-head .sub{font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;opacity:0.6}
+  .ipp-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .ipp-text-wrap{position:relative;flex:1;margin-top:10px}
+  .ipp-text-wrap input{width:100%;background:var(--paper);border:0;border-bottom:1px solid var(--line);padding:8px 2px;
+    font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink);letter-spacing:0.04em}
+  .ipp-text-wrap input:focus{outline:none;border-bottom-color:var(--seal)}
+  .ipp-wm{position:absolute;left:2px;top:8px;right:60px;pointer-events:none;font-family:'Shippori Mincho',serif;
+    font-size:13px;color:var(--ink);opacity:0.26;letter-spacing:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:opacity .5s}
+  .ipp-wm.hide{opacity:0}
+  .ipp-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+  .ipp-send{background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:12.5px;color:var(--ink-soft);letter-spacing:0.12em;padding:8px 18px;border-radius:20px;transition:.2s}
+  .ipp-send:hover{color:var(--seal);border-color:var(--seal)}
+  .ipp-note{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.75;letter-spacing:0.03em;line-height:1.7}
+
+  /* ── 便箋の透かし問い：書き始められない人にだけ薄く現れ、書き始めたら消える ── */
+  .poem{position:relative}
+  .poem-wm{position:absolute;left:0;top:0;right:0;pointer-events:none;font-family:'Shippori Mincho',serif;
+    font-size:15px;line-height:36px;color:var(--ink);opacity:0.24;letter-spacing:0.06em;transition:opacity .6s}
+  .poem-wm .wm-sub{display:block;font-size:11px;opacity:0.8;letter-spacing:0.04em}
+  .poem-wm.hide{opacity:0}
 </style>
 </head>
 <body>
@@ -489,7 +510,7 @@
       <div class="gate-field">
         <label>名前</label>
         <input type="text" id="gUser" autocomplete="username" placeholder="漢字・かな・英数字でOK">
-        <div class="gate-note" id="gNameNote" style="display:none">手紙の差出人になる名前。本名や、ふだん呼ばれている名前を。</div>
+        <div class="gate-note" id="gNameNote" style="display:none">未来の自分に届く手紙の、差出人の名前になります。本名や、ふだん呼ばれている名前がおすすめです。</div>
       </div>
       <div class="gate-field">
         <label>パスワード</label>
@@ -501,7 +522,7 @@
       <div class="gate-field" id="gEmailField" style="display:none">
         <label>Email（たよりの到着をお知らせします）</label>
         <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com">
-        <div class="gate-note">確認メールが迷惑メールフォルダに入ることがあります。</div>
+        <div class="gate-note">※確認・通知メールが<b>迷惑メール（スパム）フォルダ</b>に振り分けられることがあります。届かない場合はそちらをご確認のうえ、「迷惑メールではない」に設定してください。</div>
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
@@ -601,6 +622,23 @@
   </div>
 
   <section class="panel on" id="compose">
+    <!-- 一筆箋：毎日書くべき、ではなく「毎日でも書ける」。色1タップ＋一行、10秒で完了 -->
+    <div class="ippitsu" id="ippitsu">
+      <div class="ipp-head"><span><b>一筆箋</b> — いまを、ひとしずく</span><span class="sub">one-line note</span></div>
+      <div class="ipp-row">
+        <div class="color-band" id="ippBand"><div class="cb-cursor"></div></div>
+        <span class="color-chip" id="ippChip" style="visibility:hidden"></span>
+      </div>
+      <div class="color-hint">いまの気分に近い色を、ひとつタップ</div>
+      <div class="ipp-text-wrap">
+        <div class="ipp-wm" id="ippWm"></div>
+        <input type="text" id="ippText" maxlength="60" autocomplete="off">
+      </div>
+      <div class="ipp-actions">
+        <span class="ipp-note">通知もリマインドもありません。<br>置いた色は、いつか便りを開く日に、点になって流れます。</span>
+        <button class="ipp-send" id="ippSend">そっと、置く</button>
+      </div>
+    </div>
     <div class="envelope">
       <div class="env-head"><span>差出人 — 今日のあなた</span><span id="todayDate"></span></div>
       <div class="photo-opts">
@@ -610,6 +648,7 @@
         </label>
       </div>
       <div class="poem">
+        <div class="poem-wm hide" id="poemWm"></div>
         <textarea id="poemInput" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
         <div class="poem-count"><span id="poemCount">0</span> / 80</div>
       </div>
@@ -665,6 +704,12 @@
           </div>
         </div>
         <div class="when-readout" id="whenReadout"></div>
+        <div class="field-row">
+          <label>いまの色：</label>
+          <div class="color-band" id="sealBand"><div class="cb-cursor"></div></div>
+          <span class="color-chip" id="sealChip" style="visibility:hidden"></span>
+        </div>
+        <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。開封の日に、もう一度選んで見比べます</div>
         <div class="field-row stamp-row">
           <label>切手：</label>
           <div class="stamps" id="stampPicker"></div>
@@ -706,22 +751,6 @@
 <div class="sealing" id="sealing">
   <div class="seal-mark">緘</div>
   <div class="seal-cap" id="sealCap">封をしました</div>
-</div>
-
-<div class="diff-overlay" id="diffOverlay">
-  <div class="diff-title" id="diffTitle">封をした日から、今日まで</div>
-  <div class="diff-row" id="diffRow">
-    <div class="diff-box">
-      <div class="diff-lbl">封をした日</div>
-      <div class="diff-val" id="diffSealVal">—<br>—℃</div>
-    </div>
-    <div class="diff-arrow">→</div>
-    <div class="diff-box">
-      <div class="diff-lbl">開けた今日</div>
-      <div class="diff-val now" id="diffOpenVal">—<br>—℃</div>
-    </div>
-  </div>
-  <button class="diff-btn" id="diffClose">便りを読む</button>
 </div>
 
 <script>
@@ -780,6 +809,11 @@
   }
 
   function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+  // 値を特定の範囲から別の範囲へ変換する（クランプ付き線形補間）。封入インクの変換に使う。
+  function mapRange(v,inMin,inMax,outMin,outMax){
+    const c=Math.max(inMin,Math.min(v,inMax));
+    return (c-inMin)*(outMax-outMin)/(inMax-inMin)+outMin;
+  }
   // 差出人ヘッダの日付＋時刻を「いまの時刻」で表示し、固定値にならないよう毎分更新する
   function refreshTodayStamp(){
     const el=document.getElementById('todayDate');
@@ -972,7 +1006,79 @@
     });
   })();
 
-  function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();}
+  // ---- エモーショナル・カラー・ピッカー ----
+  // 曖昧なグラデーションから「今の気分に近い場所」をタップ。選ばれた位置の色を封入する。
+  const MOOD_STOPS=['#54617a','#6B8478','#b9a06a','#B5543A','#8a6e8c','#54463B'];
+  function _hex2rgb(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+  function moodColorAt(r){ // r: 0..1 → グラデーション上の色
+    r=Math.max(0,Math.min(1,r));
+    const seg=r*(MOOD_STOPS.length-1),i=Math.min(MOOD_STOPS.length-2,Math.floor(seg)),t=seg-i;
+    const a=_hex2rgb(MOOD_STOPS[i]),b=_hex2rgb(MOOD_STOPS[i+1]);
+    return '#'+a.map((v,k)=>Math.round(v+(b[k]-v)*t).toString(16).padStart(2,'0')).join('');
+  }
+  // バンドをタップ→色を確定して cb(color) を呼ぶ。カーソルとチップも追従させる。
+  function wireColorBand(band,chip,cb){
+    if(!band)return;
+    band.addEventListener('click',e=>{
+      const rect=band.getBoundingClientRect();
+      const x=Math.max(0,Math.min(rect.width,e.clientX-rect.left));
+      const color=moodColorAt(x/rect.width);
+      const cur=band.querySelector('.cb-cursor');
+      if(cur)cur.style.left=x+'px';
+      band.classList.add('picked');
+      if(chip){chip.style.visibility='visible';chip.style.background=color;}
+      cb(color);
+    });
+  }
+  let sealColor=null;   // 投函時に選んだ「いまの気分の色」（手紙に封入される）
+  wireColorBand(document.getElementById('sealBand'),document.getElementById('sealChip'),c=>{sealColor=c;});
+
+  // ---- 一筆箋：色1タップ＋一行（任意）。気象スナップショットを自動封入 ----
+  let ippColor=null;
+  const ippText=document.getElementById('ippText'),ippWm=document.getElementById('ippWm');
+  wireColorBand(document.getElementById('ippBand'),document.getElementById('ippChip'),c=>{ippColor=c;});
+  ippText.addEventListener('input',()=>{ippWm.classList.toggle('hide',!!ippText.value);});
+  document.getElementById('ippSend').addEventListener('click',async()=>{
+    const t=ippText.value.trim();
+    if(!ippColor&&!t){flash('色かことばを、ひとつ。');return;}
+    const btn=document.getElementById('ippSend');btn.disabled=true;
+    await detectWeather();  // その瞬間の空気を封入
+    const res=await api('/api/notes',{method:'POST',body:JSON.stringify({color:ippColor,text:t,env:currentWeather||null})});
+    btn.disabled=false;
+    if(res&&res.ok){
+      ippText.value='';ippColor=null;
+      document.getElementById('ippBand').classList.remove('picked');
+      document.getElementById('ippChip').style.visibility='hidden';
+      ippWm.classList.remove('hide');
+      flash('そっと、置きました。いつかの開封の日に。');
+    }else{flash((res&&res.error)||'置けませんでした。');}
+  });
+
+  // ---- 便箋の透かし問い：白紙が怖い人への「最初の一行」。書き始めたら消える ----
+  let composeWmQ=null;  // いま便箋に透けている問い（投函時に seal_q として封入される）
+  function updateWatermarks(){
+    const q=(weeklyState.questions&&weeklyState.questions[0])?weeklyState.questions[0].text:null;
+    composeWmQ=q||null;
+    const wm=document.getElementById('poemWm');
+    if(wm){
+      if(q)wm.innerHTML=esc(q)+'<span class="wm-sub">— 書き出せない時は、この問いから。書き始めたら消えます。</span>';
+      wm.classList.toggle('hide',!q||!!poemEl.value);
+    }
+    if(ippWm){
+      if(q)ippWm.textContent=q;
+      ippWm.classList.toggle('hide',!q||!!ippText.value);
+    }
+  }
+  poemEl.addEventListener('input',()=>{
+    const wm=document.getElementById('poemWm');
+    if(wm)wm.classList.toggle('hide',!composeWmQ||!!poemEl.value);
+  });
+
+  function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
+    sealColor=null;
+    const sb=document.getElementById('sealBand'),sc=document.getElementById('sealChip');
+    if(sb)sb.classList.remove('picked');if(sc)sc.style.visibility='hidden';
+    updateWatermarks();}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
@@ -1013,6 +1119,8 @@
       arrive_at:isoDateTime(arrival),arrive_label:label,arrive_hidden:hidden,
       weather_event:wEvent||null,
       seal_env: currentWeather || null,
+      seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
+      seal_q: (poem&&composeWmQ)?composeWmQ:null,  // 便箋に透けていた問い（開封時に再提示）
       stamp: pickedStamp
     })});
     setTimeout(()=>{sealing.classList.remove('on');clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
@@ -1035,24 +1143,6 @@
   let currentWeather=null; // {temp, condition, temp_tag}
   let lastGeoError=null;   // 失敗理由: denied/timeout/unavailable/unsupported/serveroff/fetchfail
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
-
-  function applyWeatherTint(){
-    const app=document.getElementById('app');
-    ['wx-rain','wx-hot','wx-cold','wx-snow','wx-fog','wx-night','wx-noon'].forEach(c=>app.classList.remove(c));
-    // 「いま開いたこの瞬間」の時間帯で見え方を変える：夜は文字が発光し、晴れた真昼は白く飛ぶ。
-    const hr=new Date().getHours();
-    const night=(hr>=21||hr<5), noon=(hr>=11&&hr<15);
-    if(night)app.classList.add('wx-night');
-    const cond=currentWeather?currentWeather.condition:null, tag=currentWeather?currentWeather.temp_tag:null;
-    // 真昼の白飛びは、雨・雪・霧でない昼だけ（悪天はそちらの演出を優先）
-    if(noon && !night && cond!=='rain' && cond!=='snow' && cond!=='fog')app.classList.add('wx-noon');
-    if(!currentWeather)return;
-    if(cond==='snow')app.classList.add('wx-snow');
-    else if(cond==='rain')app.classList.add('wx-rain');
-    else if(cond==='fog')app.classList.add('wx-fog');
-    if(tag==='hot')app.classList.add('wx-hot');
-    else if(tag==='cold')app.classList.add('wx-cold');
-  }
 
 async function detectWeather(){
     if(currentWeather!==null)return;
@@ -1092,69 +1182,35 @@ async function detectWeather(){
     }catch(e){ currentWeather=false; lastGeoError='fetchfail'; console.warn('[たより] IP推定 例外', e); }
   }
 
+  let notesCache=[];  // 一筆箋の点群。開封時の差分表示で「その間の色」として流れる
   async function loadMail(){
     await detectWeather();
-    const data=await api('/api/letters');received=data.received||[];inTransit=data.in_transit||[];
-    applyWeatherTint();renderMail();     // 受信箱はすぐ描画（weeklyの取得/生成で待たせない）
-    loadWeekly();                        // 今夜の問いは非同期で取りにいき、届き次第あとから差し込む
+    const [data,nd]=await Promise.all([api('/api/letters'),api('/api/notes')]);
+    received=data.received||[];inTransit=data.in_transit||[];
+    notesCache=(nd&&nd.notes)||[];
+    renderMail();
+    loadWeekly();  // その日の問い（透かし用）は非同期で
   }
 
-  // ── 今夜の問い ──
-  let weeklyState={questions:[],issued_at:null,gated:true,release_hour:21,exhausted:false};
+  // ── その日の問い ──
+  // 受信箱に「答えるべき一通」としては置かない（デイリー習慣にしない）。
+  // 問いは便箋・一筆箋の透かしとして薄く現れ、書き始めたら消える呼び水になる。
+  let weeklyState={questions:[],issued_at:null,exhausted:false};
   let _weeklyLoading=false;
-  // 受信箱の描画とは切り離して取得。AI生成で数秒かかっても受信箱は固まらない。
   async function loadWeekly(){
     if(_weeklyLoading)return; _weeklyLoading=true;
     try{
       const w=await api('/api/weekly');
-      if(w){weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,gated:w.gated!==false,release_hour:w.release_hour||21,exhausted:!!w.exhausted};
-        if(panels.mailbox.classList.contains('on'))renderMail();}  // 受信タブ表示中なら差し込み再描画
+      if(w&&!w.__neterror){weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,exhausted:!!w.exhausted};
+        updateWatermarks();}
     }catch(e){}
     finally{_weeklyLoading=false;}
-  }
-  // 21時ゲート：その日ぶんは端末時刻で「夜21時」以降に開封できる。過去日ぶん・初回ぶん(gated=false)は待たせずに出す。
-  function weeklyLocked(){
-    if(!weeklyState.gated)return false;
-    if(!weeklyState.issued_at)return false;
-    const now=new Date();
-    return weeklyState.issued_at===isoDate(now) && now.getHours()<(weeklyState.release_hour||21);
-  }
-  function renderWeekly(){
-    const qs=weeklyState.questions||[];
-    if(!qs.length)return;
-    const head=document.createElement('div');head.className='q-head';head.textContent='― 今夜の問い ―';mailList.appendChild(head);
-    if(weeklyLocked()){
-      const c=document.createElement('div');c.className='qletter locked';
-      c.innerHTML='<div class="q-seal">問</div><div class="q-wait">今夜 '+(weeklyState.release_hour||21)+':00 に、<br>便りが一通、届きます。</div>';
-      mailList.appendChild(c);return;
-    }
-    qs.forEach(q=>{
-      const c=document.createElement('div');c.className='qletter';c.dataset.qid=q.id;
-      c.innerHTML='<div class="q-seal">問</div><div class="q-from">たより</div>'+
-        '<div class="q-text">'+esc(q.text)+'</div>'+
-        '<textarea placeholder="いまのことばで、そっと。"></textarea>'+
-        '<button class="q-send">封をして、返す</button>';
-      const ta=c.querySelector('textarea'),btn=c.querySelector('.q-send');
-      ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';});
-      btn.addEventListener('click',async()=>{
-        const v=ta.value.trim();if(!v){flash('ことばを、ひとつ。');return;}
-        btn.disabled=true;
-        const res=await api('/api/weekly/answer',{method:'POST',body:JSON.stringify({qid:q.id,text:v})});
-        if(res&&res.ok){
-          weeklyState={questions:res.questions||[],issued_at:res.issued_at||null,gated:res.gated!==false,release_hour:res.release_hour||21,exhausted:!!res.exhausted};
-          flash('封をしました。ことばが、あなたの輪郭に足されました。');
-          renderMail();
-        }else{btn.disabled=false;}
-      });
-      mailList.appendChild(c);
-    });
   }
 
   // 許可状態が変わった（allow⇄not allow）時に、キャッシュを捨てて取り直し＆画面に反映する。
   async function refreshWeather(){
     currentWeather=null;                 // キャッシュ破棄（これが無いと再取得しない）
     await detectWeather();
-    applyWeatherTint();                  // 本文の色味（天気テイント）を更新
     if(panels.mailbox.classList.contains('on'))renderMail(); // 受信表示中ならバナーも描き直す
   }
   // ブラウザの位置情報パーミッションを監視。ユーザーが設定で allow / not allow を
@@ -1175,7 +1231,7 @@ async function detectWeather(){
       const t=(currentWeather.temp!=null)?Math.round(currentWeather.temp)+'℃':'';
       // IP推定（approx）のときは、おおよ藐の地域であることを添える
       const place=currentWeather.approx?('おおよそ '+esc(currentWeather.city||'現在地')+' あたり'):'あなたのいる場所';
-      b.innerHTML='いま、'+place+'は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。便りの見え方が、少し揺らいでいます。';
+      b.innerHTML='いま、'+place+'は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。この空気が、封と開封の記録にそっと残ります。';
       mailList.appendChild(b);
     } else if(currentWeather===false){
       // 失敗理由（lastGeoError）ごとに、状態と対処法を出し分ける。原因が見えないと直しようがないため。
@@ -1202,12 +1258,9 @@ async function detectWeather(){
       };
       mailList.appendChild(b);
     }
-    // 今夜の問いは、受信箱のいちばん上に（新しく届いた一通として）
-    renderWeekly();
-    const hasWeekly=!!(weeklyState.questions&&weeklyState.questions.length);
     if(!received.length && !inTransit.length){
-      if(!hasWeekly){const p=document.createElement('p');p.className='mail-intro';
-        p.innerHTML='まだ届いた便りはありません。<br>投函した便りは、届く時が来たらここに。';mailList.appendChild(p);}
+      const p=document.createElement('p');p.className='mail-intro';
+      p.innerHTML='まだ届いた便りはありません。<br>投函した便りは、届く時が来たらここに。';mailList.appendChild(p);
       return;}
     if(received.length){const intro=document.createElement('p');intro.className='mail-intro';
       intro.innerHTML='過去のあなたから、便りが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
@@ -1224,7 +1277,11 @@ async function detectWeather(){
           '<div class="slide-track" data-slide="'+i+'"><div class="slide-fill"></div>'+
           '<div class="slide-label">スワイプして封を破る →</div><div class="slide-knob">緘</div></div></div>';
         wireSlide(el.querySelector('[data-slide]'),L.id,i);
-      }else{el.innerHTML=renderOpenLetter(L,i,sent);}
+      }else{
+        el.innerHTML=renderOpenLetter(L,i,sent);
+        // 封入インク：書いた日のスナップショットから、開封時に一回だけレンダリング
+        if(L.seal_env){el.classList.add('inked');el.style.cssText=inkStyleVars(L);}
+      }
       mailList.appendChild(el);});
     
     if(inTransit.length){
@@ -1292,6 +1349,32 @@ async function detectWeather(){
     return fmt(d);
   }
 
+  // 封入インクの変換（最小実装）：湿度→染みの滲み(blur)と広がり、気温→墨の濃淡。
+  // 色相マッピング（寒=青/暑=赤）は最も予測可能でデジタル的な変換のため採らず、墨のモノトーンで通す。
+  // smoothstepで「極端な気象のときだけ表情が大きく動く」自然な粘りを出し、
+  // 手紙IDをシードに染みの位置を揺らして、一通ごとに微妙に違う表情にする。
+  function inkStyleVars(L){
+    const se=L.seal_env||{};
+    const hum=(se.humidity==null)?55:+se.humidity;
+    const temp=(se.temp==null)?18:+se.temp;
+    const ease=t=>t*t*(3-2*t);
+    const h=ease(mapRange(hum,15,100,0,1));          // 湿った日ほどインクが広がる
+    const blur=(3+h*11).toFixed(1);
+    const op=(0.08+h*0.30).toFixed(2);
+    const light=Math.round(mapRange(temp,-5,35,30,56)); // 寒い日は濃く、暑い日は淡く掠れる（墨の濃淡）
+    const seed=parseInt(String(L.id||'0').slice(0,6),16)||0;
+    const x=28+(seed%50), y=8+((seed>>4)%55);
+    return '--stain-blur:'+blur+'px;--stain-op:'+op+';--stain-c:hsl(28,10%,'+light+'%);--stain-x:'+x+'%;--stain-y:'+y+'%';
+  }
+  // 差分表示用：気象スナップショットを「晴れ / 24℃ · 湿度80%」の形に
+  function wxCell(env){
+    if(!env)return '—';
+    const c=WX_JP[env.condition]||'—';
+    const t=(env.temp!=null)?Math.round(env.temp)+'℃':'';
+    const hu=(env.humidity!=null)?' · 湿度'+Math.round(env.humidity)+'%':'';
+    return esc(c)+(t?'<br><span style="font-size:12px">'+t+hu+'</span>':'');
+  }
+
   function renderOpenLetter(L,i,sent){
     let h='';
     // 封をする時に貼った切手（あれば便りの右上に見える）
@@ -1314,6 +1397,32 @@ async function detectWeather(){
       h+='<div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">'+fmtDateTime(L.opened_at)+'</span><span class="strata-what">封を開けた</span></div>';
     if(L.reflect_count>0)
       h+='<div class="strata-row"><span class="strata-dot reflect"></span><span class="strata-when">これまで</span><span class="strata-what">'+L.reflect_count+'回 向き合った</span></div>';
+    h+='</div>';
+
+    // ── 差分の提示：本文を読み終えたあとに「あの日と今日」が静かに並ぶ ──
+    // 背景には、投函から開封までに置かれた一筆箋の色の点群が淡く流れる（wireOpenLettersで注入）
+    h+='<div class="letter-diff"><div class="ld-dots" data-dots="'+L.id+'"></div>';
+    h+='<div class="thread-label">― 封をした日と、今日 ―</div>';
+    if(L.seal_env||L.open_env){
+      h+='<div class="ld-row">'+
+         '<div class="ld-box"><div class="ld-lbl">封をした日</div><div class="ld-val">'+wxCell(L.seal_env)+'</div></div>'+
+         '<span class="ld-arrow">→</span>'+
+         '<div class="ld-box"><div class="ld-lbl">開けた日</div><div class="ld-val now">'+wxCell(L.open_env)+'</div></div></div>';
+    }
+    // 色の差分：封をした日に選んだ色と、開封のいま選び直す色
+    h+='<div class="ld-row">'+
+       '<div class="ld-box"><div class="ld-lbl">あの日の色</div>'+
+         (L.seal_color?'<span class="color-chip" style="background:'+esc(L.seal_color)+'"></span>':'<div class="ld-val" style="opacity:0.35">—</div>')+
+       '</div><span class="ld-arrow">→</span>';
+    if(L.open_color){
+      h+='<div class="ld-box"><div class="ld-lbl">今日の色</div><span class="color-chip" style="background:'+esc(L.open_color)+'"></span></div>';
+    }else{
+      h+='<div class="ld-box"><div class="ld-lbl">いまの気分の色は？</div><div class="color-band" data-oc="'+L.id+'" style="min-width:0"><div class="cb-cursor"></div></div></div>';
+    }
+    h+='</div>';
+    // 問いへの回答の差分：あの日の便箋に透けていた問いを、いまのあなたへもう一度
+    if(L.seal_q)
+      h+='<div class="ld-q">あの日、便箋に透けていた問い<br><b>「'+esc(L.seal_q)+'」</b><br>いまのあなたなら、なんと答えますか。</div>';
     h+='</div>';
 
     // 対話スレッド（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
@@ -1375,32 +1484,29 @@ async function detectWeather(){
       b.querySelector('.tt-chev').textContent=c?'開く':'閉じる';
       const msgs=b.parentElement.querySelector('.thread-msgs');
       if(msgs)msgs.classList.toggle('collapsed',c);}));
-    mailList.querySelectorAll('textarea').forEach(ta=>ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}));}
-
-  // 💡 【機能3：差分演出オーバーレイの表示処理＋開封時の気分タグ】
-  const dOver=document.getElementById('diffOverlay'), dSealVal=document.getElementById('diffSealVal'), dOpenVal=document.getElementById('diffOpenVal');
-  let _autoPlayLid=null;   // 開封直後に自動でタイプ再生する便りID（天気の差分を閉じた後に発火）
-  document.getElementById('diffClose').addEventListener('click', ()=>{
-    dOver.classList.remove('on');
-    if(_autoPlayLid){const lid=_autoPlayLid;_autoPlayLid=null;setTimeout(()=>autoPlayTrace(lid),300);}
-  });
-
-  const diffTitle=document.getElementById('diffTitle'), diffRow=document.getElementById('diffRow');
-  function showDiffOverlay(seal_env, open_env, letterId){
-    const hasWx=!!(seal_env || open_env);
-    // 天気情報があるときだけ「封をした日→今日」の差分を見せる。
-    // 無ければオーバーレイは出さず、すぐ便り本文へ（気持ち選択はカード内で尋ねる）。
-    if(!hasWx)return;
-    diffRow.style.display='flex';
-    diffTitle.style.display='block';
-    const sC = seal_env ? (WX_JP[seal_env.condition]||'—') : '—';
-    const sT = seal_env ? Math.round(seal_env.temp)+'℃' : '—℃';
-    const oC = open_env ? (WX_JP[open_env.condition]||'—') : '—';
-    const oT = open_env ? Math.round(open_env.temp)+'℃' : '—℃';
-    dSealVal.innerHTML = `${sC}<br>${sT}`;
-    dOpenVal.innerHTML = `${oC}<br>${oT}`;
-    dOver.classList.add('on');
-  }
+    mailList.querySelectorAll('textarea').forEach(ta=>ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}));
+    // 開封時の「いまの気分の色」：タップで記録し、封をした日の色との差分になる
+    mailList.querySelectorAll('.color-band[data-oc]').forEach(band=>{
+      wireColorBand(band,null,async c=>{
+        const id=band.dataset.oc;
+        const res=await api('/api/letters/'+id+'/color',{method:'POST',body:JSON.stringify({color:c})});
+        if(res&&res.ok){const L=received.find(x=>x.id===id);if(L)L.open_color=c;renderMail();}
+      });
+    });
+    // 一筆箋の点群：投函から開封までの期間の色が、差分の背景をゆっくり流れる
+    mailList.querySelectorAll('.ld-dots[data-dots]').forEach(box=>{
+      const L=received.find(x=>x.id===box.dataset.dots);if(!L)return;
+      const from=(L.sent_date||'').slice(0,19), to=L.opened_at||'9999';
+      const pts=notesCache.filter(n=>n.color&&n.created>=from&&n.created<=to).slice(0,40);
+      pts.forEach((n,k)=>{
+        const d=document.createElement('span');d.className='ld-dot';
+        d.style.background=n.color;
+        d.style.left=(4+((k*37)%92))+'%';
+        d.style.animationDuration=(9+(k%7)*2)+'s';
+        d.style.animationDelay=(-((k*17)%120)/10)+'s';
+        box.appendChild(d);
+      });
+    });}
 
   function wireSlide(track,id,i){const knob=track.querySelector('.slide-knob'),fill=track.querySelector('.slide-fill');
     let dragging=false,startX=0,max=0;
@@ -1412,20 +1518,14 @@ async function detectWeather(){
     knob.addEventListener('touchstart',e=>down(e.touches[0].clientX),{passive:true});
     window.addEventListener('touchmove',e=>{if(dragging)move(e.touches[0].clientX);},{passive:true});window.addEventListener('touchend',up);}
   
+  // 開封のシークエンス：封を切る → 本文（封入インクをまとって現れる）→ 差分（本文の下に静かに並ぶ）
   async function openLetter(id){
     const res=await api('/api/letters/'+id+'/open',{method:'POST',body:JSON.stringify({open_env:currentWeather})});
-
-    await loadMail(); // 再読み込みして描画
-    // 開封成功なら差分オーバーレイ＋気分タグを表示（このときだけ気分を尋ねる）
-    _autoPlayLid=null;
-    if(res && res.ok){
-      const seal=res.seal_env?(typeof res.seal_env==='string'?JSON.parse(res.seal_env):res.seal_env):null;
-      const open=res.open_env?(typeof res.open_env==='string'?JSON.parse(res.open_env):res.open_env):null;
-      showDiffOverlay(seal, open, id);
+    await loadMail(); // 再描画：ここで初めて封入インクと「あの日と今日」の差分が現れる
+    if(res&&res.ok){
+      focusLetter(id);
+      setTimeout(()=>autoPlayTrace(id),900);  // 書いていた時間のタイプ再生（traceがある便りだけ）
     }
-    // タイプ再生を「天気のように」自動で：天気の差分が出たならそれを閉じた後、無ければ今すぐ
-    if(dOver.classList.contains('on')){ _autoPlayLid=id; }
-    else { setTimeout(()=>autoPlayTrace(id), 500); }
   }
 
   // 「送る」（返信送信後）から呼ばれ、過去の自分が問いを返す
@@ -1541,11 +1641,11 @@ async function detectWeather(){
     document.querySelectorAll('.gate-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
     gMode=t.dataset.g;gErr.textContent='';
     gSubmit.textContent=gMode==='login'?'ログイン':'始める';
-    gPass.placeholder=gMode==='login'?'合言葉':'8文字以上';
+    gPass.placeholder=gMode==='login'?'パスワード':'8文字以上';
     gPass.autocomplete=gMode==='login'?'current-password':'new-password';
     if(gHint)gHint.style.display=gMode==='login'?'block':'none'; // gHint要素は無い場合があるのでガード
     gEmailField.style.display=gMode==='register'?'block':'none'; // 登録時だけメアド欄
-    gUser.placeholder=gMode==='register'?'例：田中太郎':'漢字・かな・英数字でOK';
+    gUser.placeholder=gMode==='register'?'例：田中太郎（本名がおすすめ）':'漢字・かな・英数字でOK';
     const nameNote=document.getElementById('gNameNote');
     if(nameNote)nameNote.style.display=gMode==='register'?'block':'none';
   }));
@@ -1594,6 +1694,7 @@ async function detectWeather(){
   function enterAppBody(){
     onb.classList.remove('on');
     watchGeoPermission(); // 位置情報の許可 allow⇄not allow の変化を監視して即反映
+    loadWeekly();         // その日の問い（便箋・一筆箋の透かし）を取りにいく
 
     // メールの開封リンクから来ていたら、受信タブを開いてその便りへ
     if(pendingOpenId){
@@ -1900,7 +2001,11 @@ async function detectWeather(){
   // check existing session on load
   (async function boot(){
     const me=await api('/api/me');
-    if(me.auth)enterApp(me.username,me.email,me.email_verified,me.onboarded);
+    if(me.auth){
+      // Adminは一般ユーザーUIを使わない（管理ダッシュボードへ直行）
+      if(me.is_admin){window.location.href='/admin.welcometotayori';return;}
+      enterApp(me.username,me.email,me.email_verified,me.onboarded);
+    }
   })();
 })();
 </script>
