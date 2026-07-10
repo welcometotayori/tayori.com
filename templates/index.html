@@ -60,21 +60,21 @@
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .envelope{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 10px 30px -18px rgba(58,46,37,0.5);position:relative;overflow:hidden}
   .env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--line);font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft)}
-  .photo-opts{display:flex;margin:18px;gap:12px;flex-wrap:wrap}
-  .photo-slot{flex:1;height:120px;border:1.5px dashed var(--line);border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft);gap:8px;position:relative;overflow:hidden;background:repeating-linear-gradient(45deg,transparent,transparent 11px,rgba(203,187,160,0.08) 11px,rgba(203,187,160,0.08) 12px);transition:.25s}
-  .photo-slot:hover{border-color:var(--seal);color:var(--seal)}
-  .photo-slot.has{border-style:solid;padding:0;height:auto;min-height:0;flex:100%}
-  .photo-slot img{width:100%;height:auto;display:block;object-fit:contain}
-  .photo-slot .ico{font-size:20px;font-family:'Shippori Mincho',serif}
-  .photo-slot .t{font-size:11px;letter-spacing:0.1em}
-  .photo-slot input{display:none}
+  /* 写真プレビュー（ボタンは voice-btn と同形にし、選んだ写真はここに表示） */
+  .photo-preview{margin:0 18px;display:none;position:relative}
+  .photo-preview.has{display:block}
+  .photo-preview img{width:100%;height:auto;display:block;border-radius:2px;border:1.5px solid var(--line)}
+  .photo-remove{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(43,40,36,0.55);color:var(--paper);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .photo-btn input[type=file]{display:none}
+  .photo-mark{font-size:14px;line-height:1;font-family:'Shippori Mincho',serif}
+  .photo-btn.on{background:var(--seal);border-color:var(--seal);color:var(--paper)}
   .poem{margin:0 18px 6px}
   .poem textarea{width:100%;background:transparent;border:0;resize:none;font-family:'Shippori Mincho',serif;font-size:17px;line-height:36px;color:var(--ink);min-height:144px;background-image:repeating-linear-gradient(transparent,transparent 35px,var(--line) 35px,var(--line) 36px);background-position:0 0;padding:0;word-break:break-word;overflow-wrap:anywhere}
   .poem textarea:focus{outline:none}
   .poem textarea::placeholder{color:var(--ink-soft);opacity:0.55}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
-  .voice-row{margin:4px 18px 10px;display:flex;align-items:center;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
+  .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
   .voice-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;padding:8px 14px;border-radius:24px;cursor:pointer;transition:.2s}
   .voice-btn:hover{border-color:var(--seal);color:var(--seal)}
   .voice-btn.rec{background:var(--seal);border-color:var(--seal);color:var(--paper)}
@@ -665,18 +665,14 @@
     </div>
     <div class="envelope">
       <div class="env-head"><span>差出人 — 今日のあなた</span><span id="todayDate"></span></div>
-      <div class="photo-opts">
-        <label class="photo-slot" id="photoSlotGallery">
-          <span class="ico">＋</span><span class="t">写真を入れる</span>
-          <input type="file" accept="image/*" id="photoInputGallery">
-        </label>
-      </div>
+      <div class="photo-preview" id="photoPreview"></div>
       <div class="poem">
         <div class="poem-wm hide" id="poemWm"></div>
         <textarea id="poemInput" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
         <div class="poem-count"><span id="poemCount">0</span> / 80</div>
       </div>
       <div class="voice-row">
+        <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark">＋</span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
         <button class="voice-btn" id="voiceBtn"><span class="voice-dot"></span><span id="voiceLabel">声を録る</span></button>
         <span id="voiceStatus"></span>
       </div>
@@ -859,7 +855,8 @@
 
   // photo (ギャラリーから選ぶ)
   let photoData=null;
-  const sGal=document.getElementById('photoSlotGallery'), pGal=document.getElementById('photoInputGallery');
+  const photoBtn=document.getElementById('photoBtn'), photoLabel=document.getElementById('photoLabel'),
+        photoPreview=document.getElementById('photoPreview'), pGal=document.getElementById('photoInputGallery');
 
   // 写真をブラウザ側で圧縮する。スマホ写真(3〜5MB)を長辺1280px＋JPEG品質0.72に
   // 縮小し、約150〜300KBに。DBにbase64保存するため、これで保存容量が10〜20分の1に。
@@ -882,23 +879,28 @@
 
   async function handlePhoto(e){
     const f=e.target.files[0];if(!f)return;
-    sGal.classList.add('has');
-    sGal.innerHTML='<span class="t" style="padding:24px;display:block">写真を整えています…</span>';
+    photoBtn.classList.add('on');
+    photoLabel.textContent='写真を整えています…';
     try{
       photoData=await compressPhoto(f);
     }catch(err){
       // 圧縮に失敗したら、従来どおり原本をそのまま使う（保険）
       photoData=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);});
     }
-    sGal.innerHTML='<img src="'+photoData+'" alt="添付した写真のプレビュー">';
+    photoLabel.textContent='写真を入れ直す';
+    photoPreview.innerHTML='<img src="'+photoData+'" alt="添付した写真のプレビュー"><button type="button" class="photo-remove" id="photoRemove" aria-label="写真を外す">×</button>';
+    photoPreview.classList.add('has');
+    document.getElementById('photoRemove').addEventListener('click', resetPhoto);
   }
   pGal.addEventListener('change', handlePhoto);
 
   function resetPhoto(){
     photoData=null;
-    sGal.classList.remove('has');
-    sGal.innerHTML='<span class="ico">＋</span><span class="t">写真を入れる</span>';
-    sGal.appendChild(pGal);
+    photoBtn.classList.remove('on');
+    photoLabel.textContent='写真を入れる';
+    photoPreview.classList.remove('has');
+    photoPreview.innerHTML='';
+    pGal.value='';
   }
 
   // char counter (80字制約)
