@@ -205,6 +205,19 @@ app.config.update(
     MAX_CONTENT_LENGTH=10 * 1024 * 1024, # 16MB -> 10MBに変更 (メモリ保護)
 )
 
+# ── SEO ─────────────────────────────────────────────────────────
+# canonical/OGP/sitemap の基準URL。本番は www に統一（apexは301→www）。
+SITE_URL = os.environ.get("SITE_URL", "https://www.tayori-letter.com").rstrip("/")
+# sitemap/robots に載せてよい「公開ページ」だけを集約（増えたらここに足す）。
+# 手紙(/open)・API・管理・認証系は絶対に載せない。
+PUBLIC_PATHS = ["/", "/terms", "/privacy"]
+
+
+@app.context_processor
+def inject_seo():
+    # 全テンプレートで canonical_url / SITE_URL を使えるようにする。
+    return {"SITE_URL": SITE_URL, "canonical_url": SITE_URL + request.path}
+
 @app.before_request
 def _perf_start():
     g._t0 = time.monotonic()
@@ -795,7 +808,8 @@ def index():
 @app.route("/open/<lid>")
 def open_letter_page(lid):
     safe = lid if re.fullmatch(r"[A-Za-z0-9]{1,32}", lid or "") else ""
-    return render_template("index.html", open_letter_id=safe)
+    # 手紙の中身はユーザーの内面そのもの。検索には絶対に載せない。
+    return render_template("index.html", open_letter_id=safe, robots="noindex,nofollow")
 
 @app.route("/terms")
 def terms_page():
@@ -820,6 +834,43 @@ _FAVICON_SVG = (
 @app.route("/favicon.svg")
 def favicon():
     resp = Response(_FAVICON_SVG, mimetype="image/svg+xml")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    # 公開ページだけ許可し、手紙・API・管理・認証系は明示的に拒否する。
+    body = (
+        "User-agent: *\n"
+        "Allow: /$\n"
+        "Allow: /terms\n"
+        "Allow: /privacy\n"
+        "Disallow: /open/\n"
+        "Disallow: /api/\n"
+        "Disallow: /admin.welcometotayori\n"
+        "Disallow: /verify/\n"
+        "Disallow: /unsubscribe/\n"
+        f"Sitemap: {SITE_URL}/sitemap.xml\n"
+    )
+    resp = Response(body, mimetype="text/plain")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    # PUBLIC_PATHS を唯一の情報源にして、公開URLだけを列挙する。
+    urls = "".join(
+        f"<url><loc>{SITE_URL}{p}</loc><changefreq>weekly</changefreq></url>"
+        for p in PUBLIC_PATHS
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{urls}</urlset>"
+    )
+    resp = Response(xml, mimetype="application/xml")
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
 

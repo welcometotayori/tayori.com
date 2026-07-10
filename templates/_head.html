@@ -1,0 +1,21 @@
+{# 共通の <head> メタ。各ページから page_title / page_desc / robots / og_type を渡す。 #}
+{# robots 既定は index,follow。非公開ページ(/open 等)はルート側で noindex を渡す。 #}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page_title }}</title>
+<meta name="description" content="{{ page_desc }}">
+<link rel="canonical" href="{{ canonical_url }}">
+<meta name="robots" content="{{ robots | default('index,follow') }}">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<meta property="og:site_name" content="tayori-たより-">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:type" content="{{ og_type | default('website') }}">
+<meta property="og:title" content="{{ page_title }}">
+<meta property="og:description" content="{{ page_desc }}">
+<meta property="og:url" content="{{ canonical_url }}">
+<meta property="og:image" content="{{ SITE_URL }}/static/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page_title }}">
+<meta name="twitter:description" content="{{ page_desc }}">
+<meta name="twitter:image" content="{{ SITE_URL }}/static/og.png">

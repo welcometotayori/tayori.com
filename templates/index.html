@@ -1,14 +1,31 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>tayori-たより-｜遅れて届く、自分への手紙</title>
-<meta name="description" content="tayori-たより- は、いまのあなたが綴った言葉や写真、声を、時をおいて未来のあなたへ届けるサービスです。「たより（手紙）」と「（自分に）頼る」のダブルミーニング。">
-<meta property="og:title" content="tayori-たより-">
-<meta property="og:description" content="遅れて届く、自分への手紙。たより（手紙）と、（自分に）頼る。">
-<meta property="og:type" content="website">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+{% set page_title = 'tayori-たより-｜遅れて届く、自分への手紙' %}
+{% set page_desc = 'tayori-たより- は、いまのあなたが綴った言葉や写真、声を、時をおいて未来のあなたへ届ける、自己対話のためのサービスです。' %}
+{% include '_head.html' %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "tayori-たより-",
+  "url": "{{ SITE_URL }}",
+  "applicationCategory": "LifestyleApplication",
+  "operatingSystem": "Web",
+  "inLanguage": "ja",
+  "description": "{{ page_desc }}",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "JPY"}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "tayori-たより-",
+  "url": "{{ SITE_URL }}",
+  "inLanguage": "ja"
+}
+</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
   :root{
@@ -17,6 +34,8 @@
     --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
     --paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--teal:#6B8478;--shadow:#D9CDB8;--line:#CBBBA0}
   *{box-sizing:border-box;margin:0;padding:0}
+  /* 視覚非表示（見た目は変えずクローラー/スクリーンリーダーにだけ伝える） */
+  .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   html{-webkit-text-size-adjust:100%}
   body{background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;
     background-image:radial-gradient(circle at 20% 10%,rgba(181,84,58,0.04),transparent 40%),radial-gradient(circle at 80% 80%,rgba(107,132,120,0.05),transparent 45%);overflow-x:hidden}
@@ -504,7 +523,7 @@
 <body>
 <div class="gate" id="gate">
   <div class="gate-card">
-    <h1>たより</h1>
+    <h1>たより<span class="vh"> — 遅れて届く、自分への手紙。いまの言葉・写真・声を、時をおいて未来のあなたへ届けます。</span></h1>
     <div class="romaji">tayori</div>
     <div class="gate-tag">遅れて届く、自分への手紙。<br>はじめに、あなたの名前を。</div>
     <div class="gate-form">
@@ -538,7 +557,7 @@
   </div>
 </div>
 
-<div class="concept" id="concept">
+<main class="concept" id="concept">
   <div class="concept-inner">
     <div class="concept-mark">JP<br>たより<br>Post</div>
     <h2 class="concept-title"><span style="font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.42em;color:var(--ink-soft);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
@@ -549,7 +568,7 @@
     </div>
     <button class="concept-go" id="conceptGo">はじめる</button>
   </div>
-</div>
+</main>
 
 <div class="onb" id="onb">
   <div class="onb-inner">
@@ -746,10 +765,10 @@
 
   <footer>
     遅 れ て 届 く 自 分 へ の 手 紙<br>
-    <div style="margin-top:16px; font-family:'Shippori Mincho', serif; letter-spacing:0.05em;">
+    <nav aria-label="フッター" style="margin-top:16px; font-family:'Shippori Mincho', serif; letter-spacing:0.05em;">
       <a href="/terms" target="_blank" style="color:var(--ink-soft); text-decoration:none; margin-right:16px;">利用規約</a>
       <a href="/privacy" target="_blank" style="color:var(--ink-soft); text-decoration:none;">プライバシーポリシー</a>
-    </div>
+    </nav>
   </footer>
 </div>
 
@@ -871,7 +890,7 @@
       // 圧縮に失敗したら、従来どおり原本をそのまま使う（保険）
       photoData=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);});
     }
-    sGal.innerHTML='<img src="'+photoData+'">';
+    sGal.innerHTML='<img src="'+photoData+'" alt="添付した写真のプレビュー">';
   }
   pGal.addEventListener('change', handlePhoto);
 
@@ -1401,7 +1420,7 @@ async function detectWeather(){
     const st=window.STAMP_BY_ID&&window.STAMP_BY_ID[L.stamp];
     if(st)h+='<div class="letter-stamp">'+window.stampPanelHTML(st)+'</div>';
     h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
-    if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'">';
+    if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'" alt="この便りに添えられた写真">';
     h+='<div class="letter-body">';
     if(L.poem){
       h+='<div class="letter-poem" id="poem-'+L.id+'">'+esc(L.poem)+'</div>';
