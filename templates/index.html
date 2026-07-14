@@ -80,48 +80,6 @@
   .voice-btn.rec{background:var(--seal);border-color:var(--seal);color:var(--paper)}
   .voice-dot{width:8px;height:8px;border-radius:50%;background:var(--seal)}
   .voice-btn.rec .voice-dot{background:var(--paper);animation:pulse 1s infinite}
-  /* ---- 切手を選ぶ（封をする＝儀式化）。実物の郵便切手に寄せる：白い縁＝ミシン目、内側に刷り色の意匠・額面・NIPPON ---- */
-  .stamp-row{align-items:flex-start}
-  .stamps{display:flex;gap:10px;flex-wrap:wrap}
-  /* .stamp = 切手の紙（白）。padding が周囲の白フチ、その境目にミシン目（白い半円）を刻む */
-  .stamp-opt{width:50px;height:60px;padding:5px;background:#fff;border-radius:2px;cursor:pointer;flex:0 0 auto;
-    transition:transform .2s,box-shadow .2s;box-shadow:0 2px 7px -3px rgba(44,38,34,0.4)}
-  .stamp-opt .panel{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
-    color:var(--seal);background-color:#f7e6df;
-    background-image:
-      radial-gradient(circle 2.2px at 50% 0%,#fff 55%,transparent 58%),
-      radial-gradient(circle 2.2px at 50% 100%,#fff 55%,transparent 58%),
-      radial-gradient(circle 2.2px at 0% 50%,#fff 55%,transparent 58%),
-      radial-gradient(circle 2.2px at 100% 50%,#fff 55%,transparent 58%);
-    background-repeat:repeat-x,repeat-x,repeat-y,repeat-y;
-    background-size:6px 6px,6px 6px,6px 6px,6px 6px;
-    background-position:top,bottom,left,right;
-    box-shadow:inset 0 0 0 1px rgba(181,84,58,0.28)}
-  .stamp-opt .m{line-height:0}
-  .stamp-opt .m svg{width:22px;height:22px;display:block}
-  .stamp-opt .deno{font-family:'Courier Prime',monospace;font-size:7px;font-weight:700;letter-spacing:0.02em;line-height:1;margin-top:1px}
-  .stamp-opt .cty{font-family:'Courier Prime',monospace;font-size:5px;letter-spacing:0.18em;line-height:1;opacity:0.75}
-  .stamp-opt:hover{transform:translateY(-1px)}
-  .stamp-opt.on{transform:translateY(-2px) rotate(-3deg);box-shadow:0 0 0 2px var(--seal),0 7px 15px -6px rgba(44,38,34,0.45)}
-  .stamp-opt.on .panel{background-color:#fbeee9}
-  /* 受信したたよりに貼られた切手（同じ意匠を少し小さく） */
-  .letter-stamp{position:absolute;top:10px;left:12px;width:42px;height:50px;padding:4px;background:#fff;border-radius:2px;
-    transform:rotate(-4deg);box-shadow:0 3px 8px -5px rgba(44,38,34,0.5)}
-  .letter-stamp .panel{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
-    color:var(--seal);background-color:#f7e6df;
-    background-image:
-      radial-gradient(circle 1.9px at 50% 0%,#fff 55%,transparent 58%),
-      radial-gradient(circle 1.9px at 50% 100%,#fff 55%,transparent 58%),
-      radial-gradient(circle 1.9px at 0% 50%,#fff 55%,transparent 58%),
-      radial-gradient(circle 1.9px at 100% 50%,#fff 55%,transparent 58%);
-    background-repeat:repeat-x,repeat-x,repeat-y,repeat-y;
-    background-size:5px 5px,5px 5px,5px 5px,5px 5px;
-    background-position:top,bottom,left,right;
-    box-shadow:inset 0 0 0 1px rgba(181,84,58,0.28)}
-  .letter-stamp .m{line-height:0}
-  .letter-stamp .m svg{width:19px;height:19px;display:block}
-  .letter-stamp .deno{font-family:'Courier Prime',monospace;font-size:6px;font-weight:700;line-height:1}
-  .letter-stamp .cty{font-family:'Courier Prime',monospace;font-size:4px;letter-spacing:0.16em;line-height:1;opacity:0.75}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .voice-have{color:var(--teal)}
   .voice-clear{cursor:pointer;text-decoration:underline;color:var(--ink-soft);font-size:11px}
@@ -490,28 +448,6 @@
   /* ── 開封時の気分タグ ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
 
-  /* ── 一筆箋：色1タップ＋一行だけの、超軽量な日々のしずく。通知もストリークも無い ── */
-  .ippitsu{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:14px 16px 12px;margin-bottom:20px;
-    box-shadow:0 6px 20px -16px rgba(58,46,37,0.5)}
-  .ipp-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;
-    font-family:'Shippori Mincho',serif;font-size:12.5px;letter-spacing:0.1em;color:var(--ink-soft)}
-  .ipp-head b{color:var(--ink);font-weight:500;letter-spacing:0.12em}
-  .ipp-head .sub{font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;opacity:0.6}
-  .ipp-row{display:flex;align-items:center;gap:10px;margin-top:10px}
-  .ipp-text-wrap{position:relative;flex:1;margin-top:10px}
-  .ipp-text-wrap input{width:100%;background:var(--paper);border:0;border-bottom:1px solid var(--line);padding:8px 2px;
-    font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink);letter-spacing:0.04em}
-  .ipp-text-wrap input:focus{outline:none;border-bottom-color:var(--seal)}
-  .ipp-wm{position:absolute;left:2px;top:8px;right:60px;pointer-events:none;font-family:'Shippori Mincho',serif;
-    font-size:13px;color:var(--ink);opacity:0.26;letter-spacing:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    transition:opacity .5s}
-  .ipp-wm.hide{opacity:0}
-  .ipp-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
-  .ipp-send{background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:12.5px;color:var(--ink-soft);letter-spacing:0.12em;padding:8px 18px;border-radius:20px;transition:.2s}
-  .ipp-send:hover{color:var(--seal);border-color:var(--seal)}
-  .ipp-note{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.75;letter-spacing:0.03em;line-height:1.7}
-
   /* ── 便箋の透かし問い：書き始められない人にだけ薄く現れ、書き始めたら消える ── */
   .poem{position:relative}
   .poem-wm{position:absolute;left:0;top:0;right:0;pointer-events:none;font-family:'Shippori Mincho',serif;
@@ -646,23 +582,6 @@
   </div>
 
   <section class="panel on" id="compose">
-    <!-- 一筆箋：毎日書くべき、ではなく「毎日でも書ける」。色1タップ＋一行、10秒で完了 -->
-    <div class="ippitsu" id="ippitsu">
-      <div class="ipp-head"><span><b>一筆箋</b> — いまを、ひとしずく</span><span class="sub">one-line note</span></div>
-      <div class="ipp-row">
-        <div class="color-band" id="ippBand"><div class="cb-cursor"></div></div>
-        <span class="color-chip" id="ippChip" style="visibility:hidden"></span>
-      </div>
-      <div class="color-hint">いまの気分に近い色を、ひとつタップ</div>
-      <div class="ipp-text-wrap">
-        <div class="ipp-wm" id="ippWm"></div>
-        <input type="text" id="ippText" maxlength="60" autocomplete="off">
-      </div>
-      <div class="ipp-actions">
-        <span class="ipp-note">通知もリマインドもありません。<br>置いた色は、いつかたよりを開く日に、点になって流れます。</span>
-        <button class="ipp-send" id="ippSend">そっと、置く</button>
-      </div>
-    </div>
     <div class="envelope">
       <div class="env-head"><span>差出人 — 今日のあなた</span><span id="todayDate"></span></div>
       <div class="photo-preview" id="photoPreview"></div>
@@ -730,11 +649,7 @@
           <span class="color-chip" id="sealChip" style="visibility:hidden"></span>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。開封の日に、もう一度選んで見比べます</div>
-        <div class="field-row stamp-row">
-          <label>切手：</label>
-          <div class="stamps" id="stampPicker"></div>
-        </div>
-        <button class="send" id="sendBtn">切 手 を 貼 っ て 封 を す る</button>
+        <button class="send" id="sendBtn">封 を す る</button>
       </div>
     </div>
     <p class="note">送った瞬間、これは見えなくなります。<br>いいねも、既読も、ここにはありません。</p>
@@ -1000,38 +915,6 @@
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
 
-  // ---- 切手（封をする＝儀式）。選んだ切手はたよりに貼られ、届いた時に見える ----
-  // STAMPS は受信描画でも使うので、idから引けるようにグローバルに置く。
-  // 切手モチーフは小さな線画（SVG）。currentColor を使うので、選択時に封蝋色へ発色する。
-  // 版画（凹版）調モチーフ。細い線＋ハッチングで彫刻風の質感を出す。currentColorで刷り色に発色。
-  const STAMPS=[
-    {id:'tsuki',l:'MOON', deno:'¥52', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M16.3 3.4a8.3 8.3 0 1 0 4.3 12.9 6.6 6.6 0 0 1-4.3-12.9Z" fill="currentColor" stroke="none"/><g stroke="rgba(247,230,223,0.55)" stroke-width="0.7"><path d="M14.6 6.2a5.6 5.6 0 0 0 0 11.2"/><path d="M13 7.4a4 4 0 0 0 0 8.8"/></g><path d="M6.4 6.3l.55 1.3 1.3.55-1.3.55L6.4 10l-.55-1.3L4.55 8.15l1.3-.55z" fill="currentColor" stroke="none"/><circle cx="8.2" cy="13.6" r=".5" fill="currentColor" stroke="none"/><circle cx="5.4" cy="11.6" r=".4" fill="currentColor" stroke="none"/></svg>'},
-    {id:'hana', l:'BLOOM',deno:'¥63', m:'<svg viewBox="0 0 24 24"><g fill="currentColor"><path d="M12 3.2c1.6 0 2.9 1.6 2.4 3.4-.3 1.1-1.3 1.9-2.4 1.9s-2.1-.8-2.4-1.9C9.1 4.8 10.4 3.2 12 3.2Z"/><path d="M20.3 9.3c.5 1.5-.5 3.2-2.1 3.5-1.1.2-2.2-.4-2.6-1.4-.6-1.5.3-2.9 1.6-3.6 1.4-.7 2.7 0 3.1 1.5Z"/><path d="M17.1 19.2c-1.3 1-3.2.5-3.7-1-.4-1.1 0-2.2 1-2.7 1.5-.8 3 0 3.5 1.4.4 1.1-.1 1.9-.8 2.3Z"/><path d="M6.9 19.2c-.7-.4-1.2-1.2-.8-2.3.5-1.4 2-2.2 3.5-1.4 1 .5 1.4 1.6 1 2.7-.5 1.5-2.4 2-3.7 1Z"/><path d="M3.7 9.3c.4-1.5 1.7-2.2 3.1-1.5 1.3.7 2.2 2.1 1.6 3.6-.4 1-1.5 1.6-2.6 1.4-1.6-.3-2.6-2-2.1-3.5Z"/></g><g stroke="rgba(247,230,223,0.6)" stroke-width=".7" stroke-linecap="round"><path d="M12 12v-2.3M12 12l2.2 1.2M12 12l-2.2 1.2M12 12l2.2-.9M12 12l-2.2-.9"/></g><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>'},
-    {id:'nami', l:'WAVE', deno:'¥84', m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 14.5c2.8-.3 4.4-3.9 3.8-6.8 2.5 3.1 6.2 3.5 8.8 1.4-1.3 2.6.6 5.4 4.4 4.1 1.1-.4 1.9-1.3 3-1.5"/><path d="M5.5 16.6c2 .2 3.1 1.3 5 1.3s3-1.1 5-1.1 2.6 1 3.9 1"/><path d="M6 8.4c.8-.3 1.6-.2 2.2.3M8.8 10.9c.7-.2 1.4-.1 2 .3M12 8.2c.7-.2 1.4 0 1.9.4" stroke-width=".85"/></svg>'},
-    {id:'hi',   l:'SUN',  deno:'¥94', m:'<svg viewBox="0 0 24 24"><circle cx="12" cy="9.6" r="4" fill="currentColor"/><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M12 2.2v2.1M4.3 9.6H6.4M17.6 9.6h2.1M6.1 3.7l1.5 1.5M17.9 3.7l-1.5 1.5"/><path d="M3 17.4h18M4.6 19.7h14.8M6.4 21.8h11.2" stroke-width=".85" opacity=".85"/></g></svg>'},
-    {id:'yuki', l:'SNOW', deno:'¥110',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.4v19.2M3.7 7.2l16.6 9.6M20.3 7.2 3.7 16.8"/><path d="M12 5.6l-2 2M12 5.6l2 2M12 18.4l-2-2M12 18.4l2-2"/><path d="M5.6 8.6l.4 2.7M5.6 8.6l2.7.4M18.4 15.4l-.4-2.7M18.4 15.4l-2.7-.4"/><path d="M18.4 8.6l-2.7.4M18.4 8.6l-.4 2.7M5.6 15.4l2.7-.4M5.6 15.4l.4 2.7"/></svg>'},
-    {id:'tori', l:'CRANE',deno:'¥120',m:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9c3.3 1.3 5.3 2.4 7.8 2.4 2 0 3.4-1.6 5.4-2.2"/><path d="M15.7 9.2c1.2.5 2.9.2 3.6-1.1.4-.8.2-1.7-.5-2.1"/><path d="M18.8 6c-.5-.2-1.1 0-1.3.5"/><path d="M6 15.6c2.4-1 3.9-1.9 5.9-1.9 2.1 0 3.6 1 6 1.1"/><path d="M10.4 11c.5 1.3.5 2.6 0 4" stroke-width=".9"/></svg>'},
-  ];
-  // 切手の内側パネル（額面・意匠・国名）を組み立てる。受信描画でも使う。
-  window.stampPanelHTML=(s)=>'<span class="panel"><span class="deno">'+(s.deno||'')+'</span><span class="m">'+s.m+'</span><span class="cty">NIPPON</span></span>';
-  window.STAMP_BY_ID=Object.fromEntries(STAMPS.map(s=>[s.id,s]));
-  let pickedStamp=STAMPS[0].id;  // 既定で一つ選んでおく（必ず切手が貼られる）
-  (function renderStampPicker(){
-    const box=document.getElementById('stampPicker');if(!box)return;
-    box.innerHTML='';
-    STAMPS.forEach(s=>{
-      const b=document.createElement('button');
-      b.type='button';b.className='stamp-opt'+(s.id===pickedStamp?' on':'');
-      b.dataset.stamp=s.id;b.title=s.l+'（'+(s.deno||'')+'）';
-      b.innerHTML=window.stampPanelHTML(s);
-      b.addEventListener('click',()=>{
-        pickedStamp=s.id;
-        box.querySelectorAll('.stamp-opt').forEach(x=>x.classList.toggle('on',x.dataset.stamp===s.id));
-      });
-      box.appendChild(b);
-    });
-  })();
-
   // ---- エモーショナル・カラー・ピッカー ----
   // 曖昧なグラデーションから「今の気分に近い場所」をタップ。選ばれた位置の色を封入する。
   const MOOD_STOPS=['#54617a','#6B8478','#b9a06a','#B5543A','#8a6e8c','#54463B'];
@@ -1071,27 +954,6 @@
   let sealColor=null;   // 投函時に選んだ「いまの気分の色」（手紙に封入される）
   wireColorBand(document.getElementById('sealBand'),document.getElementById('sealChip'),c=>{sealColor=c;});
 
-  // ---- 一筆箋：色1タップ＋一行（任意）。気象スナップショットを自動封入 ----
-  let ippColor=null;
-  const ippText=document.getElementById('ippText'),ippWm=document.getElementById('ippWm');
-  wireColorBand(document.getElementById('ippBand'),document.getElementById('ippChip'),c=>{ippColor=c;});
-  ippText.addEventListener('input',()=>{ippWm.classList.toggle('hide',!!ippText.value);});
-  document.getElementById('ippSend').addEventListener('click',async()=>{
-    const t=ippText.value.trim();
-    if(!ippColor&&!t){flash('色かことばを、ひとつ。');return;}
-    const btn=document.getElementById('ippSend');btn.disabled=true;
-    await detectWeather();  // その瞬間の空気を封入
-    const res=await api('/api/notes',{method:'POST',body:JSON.stringify({color:ippColor,text:t,env:currentWeather||null})});
-    btn.disabled=false;
-    if(res&&res.ok){
-      ippText.value='';ippColor=null;
-      document.getElementById('ippBand').classList.remove('picked');
-      document.getElementById('ippChip').style.visibility='hidden';
-      ippWm.classList.remove('hide');
-      flash('そっと、置きました。いつかの開封の日に。');
-    }else{flash((res&&res.error)||'置けませんでした。');}
-  });
-
   // ---- 便箋の透かし問い：白紙が怖い人への「最初の一行」。書き始めたら消える ----
   let composeWmQ=null;  // いま便箋に透けている問い（投函時に seal_q として封入される）
   const POEM_PH=poemEl.placeholder;  // 既定のプレースホルダー（透かしが無い時だけ使う）
@@ -1104,10 +966,6 @@
       wm.classList.toggle('hide',!q||!!poemEl.value);
       // 透かしの問いが出ている間はプレースホルダーを消す（二重に重なって読めなくなるため）
       poemEl.placeholder=q?'':POEM_PH;
-    }
-    if(ippWm){
-      if(q)ippWm.textContent=q;
-      ippWm.classList.toggle('hide',!q||!!ippText.value);
     }
   }
   poemEl.addEventListener('input',()=>{
@@ -1161,8 +1019,7 @@
       weather_event:wEvent||null,
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
-      seal_q: (poem&&composeWmQ)?composeWmQ:null,  // 便箋に透けていた問い（開封時に再提示）
-      stamp: pickedStamp
+      seal_q: (poem&&composeWmQ)?composeWmQ:null   // 便箋に透けていた問い（開封時に再提示）
     })});
     setTimeout(()=>{sealing.classList.remove('on');clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
   });
@@ -1418,9 +1275,6 @@ async function detectWeather(){
 
   function renderOpenLetter(L,i,sent){
     let h='';
-    // 封をする時に貼った切手（あればたよりの右上に見える）
-    const st=window.STAMP_BY_ID&&window.STAMP_BY_ID[L.stamp];
-    if(st)h+='<div class="letter-stamp">'+window.stampPanelHTML(st)+'</div>';
     h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'" alt="この便りに添えられた写真">';
     h+='<div class="letter-body">';
