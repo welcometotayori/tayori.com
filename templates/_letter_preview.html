@@ -1,0 +1,11 @@
+{# 手紙プレビュー。POST 応答では oob=True で hx-swap-oob により本体を差し替える。 #}
+<div class="paper" id="letter-preview"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <div class="paper-head">未来のあなたへ</div>
+  <div class="letter-body">
+    {% if fragments %}
+      {% for line in fragments %}<p>{{ line }}</p>{% endfor %}
+    {% else %}
+      <div class="letter-empty">まだ、なにも書かれていません。<br>ひとつ答えるごとに、ここに一文ずつ綴られていきます。</div>
+    {% endif %}
+  </div>
+</div>

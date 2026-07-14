@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>封をしました — たより</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
+  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
+  .seal-wrap{max-width:520px;width:100%;padding:52px 26px;text-align:center}
+
+  /* 蝋封の演出 */
+  .wax{width:96px;height:96px;margin:0 auto 34px;border-radius:50%;
+       background:radial-gradient(circle at 38% 34%,#c96a50,var(--seal) 60%,#8f3b28);
+       box-shadow:0 12px 30px -12px rgba(143,59,40,.7),inset 0 2px 6px rgba(255,255,255,.25);
+       display:flex;align-items:center;justify-content:center;color:#f2d9cf;
+       font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.16em;
+       transform:scale(0);animation:stamp .7s cubic-bezier(.2,1.4,.5,1) .15s forwards}
+  @keyframes stamp{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+  .sealed-msg{opacity:0;animation:fade .9s ease 1s forwards}
+  .sealed-title{font-size:22px;letter-spacing:0.14em;margin:0 0 14px}
+  .sealed-sub{font-size:14.5px;line-height:1.95;color:var(--ink-soft);margin:0 0 30px}
+  @keyframes fade{to{opacity:1}}
+
+  /* 封をした手紙の抜粋 */
+  .excerpt{opacity:0;animation:fade 1s ease 1.4s forwards;
+           background:var(--paper-2);border:1px solid var(--line);border-radius:3px;
+           padding:22px 22px;text-align:left;font-size:15.5px;line-height:32px;color:var(--ink);
+           box-shadow:0 10px 30px -22px rgba(58,46,37,.5);margin-bottom:36px}
+  .excerpt p{margin:0 0 4px}
+  .excerpt-empty{color:var(--ink-soft);opacity:.6;font-size:14px}
+
+  .home{opacity:0;animation:fade 1s ease 1.7s forwards;display:inline-block;
+        font-size:13px;letter-spacing:0.1em;color:var(--ink-soft);text-decoration:none;
+        border-bottom:1px solid var(--line);padding-bottom:2px}
+  .home:hover{color:var(--ink)}
+
+  {% if show_bookmark %}
+  /* リテンション：演出の余韻が落ち着いた数秒後に、ふわっと。ボタンではなくテキスト。操作方法は書かない。 */
+  .bookmark{margin-top:52px;font-size:13.5px;letter-spacing:0.06em;color:var(--ink-soft);line-height:2;
+            opacity:0;transform:translateY(6px);animation:bmIn 2.4s ease 3.6s forwards}
+  @keyframes bmIn{to{opacity:.82;transform:none}}
+  {% endif %}
+
+  @media (prefers-reduced-motion:reduce){
+    .wax,.sealed-msg,.excerpt,.home{animation:none !important;opacity:1 !important;transform:none !important}
+    {% if show_bookmark %}.bookmark{animation:none !important;opacity:.82 !important;transform:none !important}{% endif %}
+  }
+</style>
+</head>
+<body>
+  <div class="seal-wrap">
+    <div class="wax">tayori</div>
+    <div class="sealed-msg">
+      <h1 class="sealed-title">封をしました</h1>
+      <p class="sealed-sub">この手紙は、いまのあなたの手を離れました。<br>時をおいて、未来のあなたのもとへ。</p>
+    </div>
+
+    <div class="excerpt">
+      {% if fragments %}
+        {% for line in fragments %}<p>{{ line }}</p>{% endfor %}
+      {% else %}
+        <div class="excerpt-empty">言葉は綴られませんでしたが、この時間そのものが、たよりです。</div>
+      {% endif %}
+    </div>
+
+    <a class="home" href="/">とじる</a>
+
+    {% if show_bookmark %}
+    <div class="bookmark">また来たい時は、ブックマークに。</div>
+    {% endif %}
+  </div>
+</body>
+</html>

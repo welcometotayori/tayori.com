@@ -1,0 +1,23 @@
+{# 次の設問、または全問に触れ終えた後の「封をする」案内。#question-area を outerHTML で置き換える。 #}
+{% if q %}
+<form class="q-area" id="question-area"
+      hx-post="/letter/{{ lid }}/answer"
+      hx-target="#question-area"
+      hx-swap="outerHTML"
+      hx-disabled-elt="find button">
+  <div class="q-mark">問い{% if q.is_required %} <span class="q-req">＊</span>{% endif %}</div>
+  <p class="q-prompt">{{ q.prompt }}</p>
+  <input type="hidden" name="question_id" value="{{ q.id }}">
+  <textarea name="value" rows="3" autofocus
+            placeholder="{% if q.is_required %}言葉を置く。{% else %}答えても、答えなくても。{% endif %}"></textarea>
+  <div class="q-actions">
+    <button type="submit" class="btn">次へ</button>
+    <button type="submit" class="btn-ghost" name="skip" value="1" formnovalidate>いまは書かない</button>
+  </div>
+</form>
+{% else %}
+<div class="q-area seal-cta" id="question-area">
+  <p class="done-note">問いは、ここまで。<br>書けたぶんだけで、いい。<br>いつでも、封をしてかまいません。</p>
+  <a class="btn seal-link" href="/letter/{{ lid }}/seal">封をする</a>
+</div>
+{% endif %}

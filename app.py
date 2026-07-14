@@ -333,6 +333,35 @@ def _normalize_journal_mode():
             except OSError:
                 pass
 
+# ── 10問アンケートの設問と「回答→手紙の一文」テンプレート ──────────────
+# letter_fragment_template の {answer} が回答文に置き換わり、封をする時に ord 順で連結される。
+# is_required は「必須／任意」のやわらかな目印。回答は常に任意で、未完成でも封はできる（呼び水であって検査ではない）。
+SURVEY_QUESTIONS = [
+    (1,  "いま、いちばん心にかかっていることは何ですか。",       "いま、わたしの心をいちばん占めているのは、{answer}。", 1),
+    (2,  "今日、小さくても嬉しかったことは。",                   "その日、{answer}が、少しだけ嬉しかった。",             0),
+    (3,  "最近、誰のことをよく思い出しますか。",                 "この頃、よく思い出すのは、{answer}。",                   0),
+    (4,  "これからの自分に、続けていてほしいことは。",           "未来のあなたへ。どうか、{answer}を続けていて。",         1),
+    (5,  "いま、そろそろ手放していいと思うものは。",             "そして、{answer}は、もう手放していい。",                0),
+    (6,  "今日のあなたを、色でたとえると。",                     "今日という日は、{answer}のような色をしていた。",         0),
+    (7,  "最近、何にいちばん時間を使いましたか。",               "最近は、{answer}に、多くの時間を使っていた。",           0),
+    (8,  "ひそかに、楽しみにしていることは。",                   "ひそかに、{answer}を楽しみにしている。",                0),
+    (9,  "いまの自分に、ちゃんとあると感じるものは。",           "いまのわたしには、{answer}が、ちゃんとある。",           0),
+    (10, "未来のあなたへ、ひとことだけ。",                       "最後に、ひとこと。{answer}",                            1),
+]
+
+
+def _seed_questions(db):
+    """questions が空のときだけ10問を投入する（既存の回答・封をした手紙を壊さない冪等シード）。"""
+    try:
+        if db.execute("SELECT COUNT(*) AS c FROM questions").fetchone()["c"] == 0:
+            db.executemany(
+                "INSERT INTO questions (id,ord,prompt,letter_fragment_template,is_required) VALUES (?,?,?,?,?)",
+                [(o, o, p, t, r) for (o, p, t, r) in SURVEY_QUESTIONS],
+            )
+    except sqlite3.OperationalError:
+        pass
+
+
 _init_db_done = False
 
 def init_db():
@@ -428,11 +457,44 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN seal_color TEXT",
             "ALTER TABLE letters ADD COLUMN open_color TEXT",
             "ALTER TABLE letters ADD COLUMN seal_q TEXT",
+            # リテンション：初めて封をした時に一度だけ「ブックマークに」を出す。表示した瞬間にこの列を立てる。
+            "ALTER TABLE users ADD COLUMN bookmark_prompt_shown INTEGER DEFAULT 0",
         ):
             try:
                 db.execute(stmt)
             except sqlite3.OperationalError:
                 pass
+
+        # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
+        # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
+        # answers × questions.letter_fragment_template を封をする時に組み立てる（＝回答→一文の変換はDB側で管理）。
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS questions (
+                id          INTEGER PRIMARY KEY,
+                ord         INTEGER NOT NULL,
+                prompt      TEXT NOT NULL,
+                letter_fragment_template TEXT NOT NULL,
+                is_required INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS survey_letters (
+                id        TEXT PRIMARY KEY,
+                user_id   TEXT NOT NULL,
+                created   TEXT NOT NULL,
+                sealed    INTEGER DEFAULT 0,
+                sealed_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS answers (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                letter_id   TEXT NOT NULL,
+                question_id INTEGER NOT NULL,
+                value       TEXT,
+                created     TEXT NOT NULL,
+                UNIQUE(letter_id, question_id)
+            );
+            """
+        )
+        _seed_questions(db)
 
         try:
             db.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
@@ -1761,6 +1823,169 @@ def api_create_letter():
         )
         db.commit()
     return jsonify(id=lid, ok=True)
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  10問アンケート → 未来への手紙（HTMXの並行フロー）
+#  /letter/new → /letter/<id>/answer（hx-swap-oobで手紙プレビューと次の質問を同時差し替え）→ /letter/<id>/seal
+#  既存の投函SPA（letters テーブル）とは独立。survey_letters / questions / answers を使う。
+# ══════════════════════════════════════════════════════════════════════
+
+def _page_login_guard():
+    """HTMLページ用のログインガード。未ログインならトップへ返す redirect を返し、
+    ログイン済みなら None。API用の login_required（JSON 401）とは別に、ページは / へ誘導する。"""
+    if not session.get("uid"):
+        return redirect("/")
+    return None
+
+
+def _survey_letter(db, lid):
+    """本人の、まだ封をしていない手紙を返す。無ければ None。"""
+    return db.execute(
+        "SELECT * FROM survey_letters WHERE id=? AND user_id=?", (lid, session.get("uid"))
+    ).fetchone()
+
+
+def _survey_questions(db):
+    return db.execute(
+        "SELECT id,ord,prompt,letter_fragment_template,is_required FROM questions ORDER BY ord"
+    ).fetchall()
+
+
+def _survey_answers_map(db, lid):
+    """{question_id: value} を返す（skip は value='' で記録済み＝再出題しないため）。"""
+    rows = db.execute(
+        "SELECT question_id, value FROM answers WHERE letter_id=?", (lid,)
+    ).fetchall()
+    return {r["question_id"]: (r["value"] or "") for r in rows}
+
+
+def _assemble_fragments(db, lid):
+    """回答済み（空でない）設問を ord 順に手紙の一文へ変換して返す。回答→一文の変換はここ（DBのテンプレート）で行う。"""
+    rows = db.execute(
+        """SELECT q.letter_fragment_template AS tpl, a.value AS val
+           FROM answers a JOIN questions q ON q.id = a.question_id
+           WHERE a.letter_id = ? AND a.value IS NOT NULL AND TRIM(a.value) <> ''
+           ORDER BY q.ord""",
+        (lid,),
+    ).fetchall()
+    return [r["tpl"].replace("{answer}", r["val"].strip()) for r in rows]
+
+
+def _next_question(questions, answered_ids):
+    """まだ触れていない（回答も skip もしていない）最初の設問。全て触れ終えたら None。"""
+    for q in questions:
+        if q["id"] not in answered_ids:
+            return q
+    return None
+
+
+def _render_letter_parts(db, lid, oob=False):
+    """#question-area（次の設問 or 封をする案内）と #letter-preview を描画。
+    oob=True のとき preview に hx-swap-oob を付け、POST 応答で両方を同時差し替えする。"""
+    questions = _survey_questions(db)
+    amap = _survey_answers_map(db, lid)
+    nxt = _next_question(questions, set(amap.keys()))
+    fragments = _assemble_fragments(db, lid)
+    answered_count = sum(1 for v in amap.values() if v.strip())
+    question_html = render_template(
+        "_letter_question.html", lid=lid, q=nxt,
+        total=len(questions), answered=answered_count,
+    )
+    preview_html = render_template(
+        "_letter_preview.html", fragments=fragments, oob=oob,
+    )
+    return question_html, preview_html
+
+
+@app.route("/letter/new")
+def letter_new():
+    guard = _page_login_guard()
+    if guard:
+        return guard
+    db = get_db()
+    lid = secrets.token_hex(8)
+    with _WRITE_LOCK:
+        db.execute(
+            "INSERT INTO survey_letters (id,user_id,created,sealed) VALUES (?,?,?,0)",
+            (lid, uid(), datetime.now().isoformat(timespec="seconds")),
+        )
+        db.commit()
+    return redirect(f"/letter/{lid}/answer")
+
+
+@app.route("/letter/<lid>/answer", methods=["GET", "POST"])
+def letter_answer(lid):
+    guard = _page_login_guard()
+    if guard:
+        return guard
+    db = get_db()
+    row = _survey_letter(db, lid)
+    if row is None:
+        return redirect("/")
+    if row["sealed"]:
+        return redirect(f"/letter/{lid}/seal")
+
+    if request.method == "POST":
+        try:
+            qid = int(request.form.get("question_id", ""))
+        except (TypeError, ValueError):
+            qid = None
+        # skip も「触れた」として記録する（value=''）。回答は最大400文字。
+        value = "" if request.form.get("skip") else (request.form.get("value") or "").strip()[:400]
+        if qid is not None:
+            with _WRITE_LOCK:
+                db.execute(
+                    """INSERT INTO answers (letter_id,question_id,value,created)
+                       VALUES (?,?,?,?)
+                       ON CONFLICT(letter_id,question_id)
+                       DO UPDATE SET value=excluded.value, created=excluded.created""",
+                    (lid, qid, value, datetime.now().isoformat(timespec="seconds")),
+                )
+                db.commit()
+        question_html, preview_html = _render_letter_parts(db, lid, oob=True)
+        # 手紙プレビュー（oob）と次の設問を同時に返す
+        return Response(preview_html + "\n" + question_html, mimetype="text/html")
+
+    # GET：フル画面
+    question_html, preview_html = _render_letter_parts(db, lid, oob=False)
+    return render_template(
+        "letter.html", lid=lid,
+        question_area=question_html, preview=preview_html,
+    )
+
+
+@app.route("/letter/<lid>/seal", methods=["GET", "POST"])
+def letter_seal(lid):
+    guard = _page_login_guard()
+    if guard:
+        return guard
+    db = get_db()
+    row = _survey_letter(db, lid)
+    if row is None:
+        return redirect("/")
+
+    show_bookmark = False
+    if not row["sealed"]:
+        with _WRITE_LOCK:
+            db.execute(
+                "UPDATE survey_letters SET sealed=1, sealed_at=? WHERE id=? AND user_id=?",
+                (datetime.now().isoformat(timespec="seconds"), lid, uid()),
+            )
+            # リテンション：初めて封をした人にだけ「ブックマークに」を出す。
+            # クリック判定ではなく“表示した瞬間”にフラグを立てる（＝この封で見せたら二度と出さない）。
+            u = db.execute(
+                "SELECT COALESCE(bookmark_prompt_shown,0) AS shown FROM users WHERE id=?", (uid(),)
+            ).fetchone()
+            if u and not u["shown"]:
+                show_bookmark = True
+                db.execute("UPDATE users SET bookmark_prompt_shown=1 WHERE id=?", (uid(),))
+            db.commit()
+
+    fragments = _assemble_fragments(db, lid)
+    return render_template(
+        "seal.html", lid=lid, fragments=fragments, show_bookmark=show_bookmark,
+    )
 
 
 @app.route("/api/letters/<lid>/trace", methods=["GET"])
