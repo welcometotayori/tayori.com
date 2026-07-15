@@ -881,14 +881,12 @@ def terms_page():
 def privacy_page():
     return render_template("privacy.html")
 
-# 紙＋封筒＋朱の蝋封。実ユーザーの /favicon.ico 404 を消す（ボットの探索404とは別物）。
+# ピル型の紙＋朱の蝋封。ロゴ(static/img/logo.png)と同じ意匠。実ユーザーの /favicon.ico 404 を消す。
 _FAVICON_SVG = (
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
-    "<rect width='32' height='32' rx='6' fill='#F2EBDD'/>"
-    "<rect x='6' y='9' width='20' height='15' rx='2' fill='none' stroke='#3A2E25' stroke-width='1.6'/>"
-    "<path d='M6.8 10.5 L16 18 L25.2 10.5' fill='none' stroke='#3A2E25' "
-    "stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/>"
-    "<circle cx='16' cy='17' r='3.2' fill='#B5543A'/>"
+    "<rect width='32' height='32' fill='#EDE3D1'/>"
+    "<rect x='4' y='12' width='24' height='8' rx='4' fill='#F0E9DA' stroke='#3A2E25' stroke-width='0.9'/>"
+    "<circle cx='24' cy='16' r='5' fill='#B5543A'/>"
     "</svg>"
 )
 
