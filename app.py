@@ -881,12 +881,14 @@ def terms_page():
 def privacy_page():
     return render_template("privacy.html")
 
-# ピル型の紙＋朱の蝋封。ロゴ(static/img/logo.png)と同じ意匠。実ユーザーの /favicon.ico 404 を消す。
+# ピル型の紙＋朱の蝋封。ロゴ(static/img/logo.png)と同じ寸法・色。
+# 円(r13.29)はピル内半径(14.12-枠0.4)より小さく枠線の内側に収める＝はみ出さない。
 _FAVICON_SVG = (
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
-    "<rect width='32' height='32' fill='#EDE3D1'/>"
-    "<rect x='4' y='12' width='24' height='8' rx='4' fill='#F0E9DA' stroke='#3A2E25' stroke-width='0.9'/>"
-    "<circle cx='24' cy='16' r='5' fill='#B5543A'/>"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+    "<rect width='100' height='100' fill='#EDE3D1'/>"
+    "<rect x='10' y='35.88' width='80' height='28.24' rx='14.12' fill='#F2EBDD' "
+    "stroke='#3A2E25' stroke-width='0.8'/>"
+    "<circle cx='75.76' cy='50' r='13.29' fill='#AE5239'/>"
     "</svg>"
 )
 
@@ -894,7 +896,8 @@ _FAVICON_SVG = (
 @app.route("/favicon.svg")
 def favicon():
     resp = Response(_FAVICON_SVG, mimetype="image/svg+xml")
-    resp.headers["Cache-Control"] = "public, max-age=86400"
+    # ロゴ調整中は短めに（Cloudflare/ブラウザに旧版が長く残らないよう）。
+    resp.headers["Cache-Control"] = "public, max-age=3600"
     return resp
 
 
