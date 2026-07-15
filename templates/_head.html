@@ -6,10 +6,12 @@
 <meta name="description" content="{{ page_desc }}">
 <link rel="canonical" href="{{ canonical_url }}">
 <meta name="robots" content="{{ robots | default('index,follow') }}">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+{# アイコン/OG はキャッシュ更新用にバージョンを付ける。差し替え時はこの数字を上げる。 #}
+{% set av = '2' %}
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v={{ av }}">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png?v={{ av }}">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png?v={{ av }}">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png?v={{ av }}">
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#F2EBDD">
 <meta name="apple-mobile-web-app-title" content="たより">
@@ -20,8 +22,8 @@
 <meta property="og:title" content="{{ page_title }}">
 <meta property="og:description" content="{{ page_desc }}">
 <meta property="og:url" content="{{ canonical_url }}">
-<meta property="og:image" content="{{ SITE_URL }}/static/og.png">
+<meta property="og:image" content="{{ SITE_URL }}/static/og.png?v={{ av }}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ page_title }}">
 <meta name="twitter:description" content="{{ page_desc }}">
-<meta name="twitter:image" content="{{ SITE_URL }}/static/og.png">
+<meta name="twitter:image" content="{{ SITE_URL }}/static/og.png?v={{ av }}">
