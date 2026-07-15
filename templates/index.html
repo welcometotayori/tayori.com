@@ -133,15 +133,47 @@
   .seal-mark{width:120px;height:120px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:38px;box-shadow:0 12px 40px -10px rgba(181,84,58,0.6);animation:press 1.6s ease forwards;transform:scale(0)}
   @keyframes press{0%{transform:scale(0) rotate(-30deg);opacity:0}35%{transform:scale(1.15) rotate(-8deg);opacity:1}50%{transform:scale(0.96) rotate(-8deg)}70%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1) rotate(-8deg);opacity:0}}
   .seal-cap{position:absolute;bottom:34%;font-family:'Shippori Mincho',serif;font-size:15px;letter-spacing:0.2em;color:var(--ink-soft);opacity:0;animation:capin 1.6s ease forwards}
+  /* 問い直しの栞 */
+  .inquiry-ov{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(58,46,37,0.34);backdrop-filter:blur(3px)}
+  .inquiry-ov.on{display:flex;animation:iqFade .3s ease}
+  @keyframes iqFade{from{opacity:0}to{opacity:1}}
+  .inquiry-card{max-width:420px;width:100%;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:34px 28px 28px;text-align:center;box-shadow:0 26px 60px -22px rgba(58,46,37,0.7);animation:iqRise .42s cubic-bezier(.2,.9,.3,1)}
+  @keyframes iqRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .inquiry-mark{width:40px;height:40px;margin:0 auto 18px;border-radius:50%;border:1px solid var(--seal);color:var(--seal);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:17px;opacity:.9}
+  .inquiry-q{font-family:'Shippori Mincho',serif;font-size:16.5px;line-height:2.0;letter-spacing:0.03em;color:var(--ink);margin:0 0 26px}
+  .inquiry-actions{display:flex;flex-direction:column;gap:12px}
+  .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
+  .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
+  .inquiry-btn.primary:hover{opacity:.86}
+  .inquiry-btn.ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
+  .inquiry-btn.ghost:hover{color:var(--ink);border-color:var(--ink-soft)}
+  .inquiry-add{margin-top:16px;display:flex;flex-direction:column;gap:12px}
+  .inquiry-add textarea{width:100%;background:var(--paper-2);border:1px solid var(--line);border-radius:4px;resize:none;min-height:74px;
+    font-family:'Shippori Mincho',serif;font-size:15px;line-height:30px;color:var(--ink);padding:12px 14px}
+  .inquiry-add textarea:focus{outline:none;border-color:var(--ink-soft)}
+  .inquiry-add.hide{display:none}
   @keyframes capin{0%,40%{opacity:0}60%{opacity:1}100%{opacity:0}}
   .mail-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);text-align:center;margin-bottom:22px;letter-spacing:0.06em;line-height:1.9}
   .letter{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;margin-bottom:20px;overflow:hidden;position:relative;box-shadow:0 8px 24px -18px rgba(58,46,37,0.5)}
+  /* 天気の再会：封じた日と今日の天気が重なった時だけ、封筒にごくかすかな気配が差す。通知はしない */
+  .letter.wx-reunion::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:3px;z-index:2}
+  .letter.wx-reunion.wx-clear{box-shadow:0 8px 24px -18px rgba(58,46,37,0.5),0 0 26px -3px rgba(222,182,120,0.42)}
+  .letter.wx-reunion.wx-clear::after{background:radial-gradient(ellipse 120% 90% at 50% 0,rgba(240,206,140,0.16),transparent 62%)}
+  .letter.wx-reunion.wx-rain::after{background:linear-gradient(102deg,transparent 20%,rgba(118,138,158,0.12) 45%,transparent 58%),linear-gradient(78deg,transparent 55%,rgba(118,138,158,0.09) 78%,transparent 90%);filter:blur(.6px);mix-blend-mode:multiply}
+  .letter.wx-reunion.wx-snow::after{background:radial-gradient(ellipse 130% 100% at 50% 10%,rgba(255,255,255,0.28),transparent 66%);mix-blend-mode:screen}
+  .letter.wx-reunion.wx-cloud::after{background:linear-gradient(180deg,rgba(150,156,164,0.09),transparent 55%);mix-blend-mode:multiply}
+  .letter.wx-reunion.wx-fog::after{background:rgba(210,206,198,0.14);backdrop-filter:blur(.4px)}
   .letter-highlight{animation:letterGlow 2.6s ease}
   @keyframes letterGlow{0%{box-shadow:0 0 0 0 rgba(181,84,58,0)}25%{box-shadow:0 0 0 4px rgba(181,84,58,0.35),0 8px 30px -10px rgba(181,84,58,0.5)}100%{box-shadow:0 8px 24px -18px rgba(58,46,37,0.5)}}
   .transit-head{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin:30px 0 18px;opacity:0.7}
   .sealed-transit{border-style:dashed;background:repeating-linear-gradient(45deg,var(--paper-2),var(--paper-2) 13px,rgba(203,187,160,0.16) 13px,rgba(203,187,160,0.16) 14px)}
   .transit-inner{padding:28px 22px;text-align:center;user-select:none}
   .transit-inner .wax.dim{width:48px;height:48px;border-radius:50%;background:var(--line);color:var(--paper);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:20px;box-shadow:none}
+  /* 沈黙のフィードバック：まだ開かない封をタップすると、封蝋がわずかに沈んで戻るだけ（言葉は返さない） */
+  .sealed-transit{cursor:default}
+  .transit-inner .wax.dim.press{animation:waxSink .32s cubic-bezier(.32,.06,.4,1)}
+  @keyframes waxSink{0%{transform:none}42%{transform:translateY(3px) scale(.88);filter:brightness(.94)}100%{transform:none}}
+  @media (prefers-reduced-motion:reduce){.transit-inner .wax.dim.press{animation:none}}
   .transit-when{font-family:'Shippori Mincho',serif;font-size:17px;color:var(--seal);letter-spacing:0.1em;margin-bottom:8px}
   .transit-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft);margin-bottom:4px}
   .transit-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);letter-spacing:0.06em;margin-top:12px;opacity:0.85}
@@ -167,13 +199,16 @@
   .emo-tag{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;color:var(--teal);border:1px solid var(--teal);border-radius:16px;padding:2px 10px;opacity:0.85}
   .unopened-tease{padding:30px 22px;text-align:center;user-select:none}
   .unopened-tease .wax{width:54px;height:54px;border-radius:50%;background:var(--seal);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:22px;box-shadow:0 6px 18px -6px rgba(181,84,58,0.6);transition:transform .15s}
+  /* 剥がして開ける：封蝋そのものを摘まんで剥がす。触れる質感だけで伝える（説明テキストは置かない） */
+  .unopened-tease .wax.peel{cursor:grab;touch-action:none;margin:2px auto 20px;
+    transition:transform .34s cubic-bezier(.2,.9,.3,1),opacity .34s,box-shadow .2s;
+    box-shadow:0 7px 20px -6px rgba(181,84,58,0.62),inset 0 2px 5px rgba(255,255,255,0.22)}
+  .unopened-tease .wax.peel:hover{box-shadow:0 10px 24px -6px rgba(181,84,58,0.72),inset 0 2px 5px rgba(255,255,255,0.22)}
+  .unopened-tease .wax.peel.grab{cursor:grabbing;transition:none}
+  .unopened-tease .wax.peel.lift{transform:scale(.5) rotate(38deg) translateY(-24px);opacity:0;transition:transform .3s ease,opacity .3s ease}
+  @media (prefers-reduced-motion:reduce){.unopened-tease .wax.peel.lift{transition:none}}
   .unopened-tease .from{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.08em;margin-bottom:5px}
   .unopened-tease .ago{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft)}
-  .slide-track{margin:18px auto 0;max-width:260px;height:44px;border:1px solid var(--line);border-radius:24px;background:var(--paper);position:relative;overflow:hidden;cursor:grab}
-  .slide-track.grab{cursor:grabbing}
-  .slide-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(181,84,58,0.14);width:0}
-  .slide-knob{position:absolute;left:3px;top:3px;width:38px;height:38px;border-radius:50%;background:var(--seal);color:var(--paper);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:18px;box-shadow:0 4px 10px -3px rgba(181,84,58,0.6);touch-action:none}
-  .slide-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.16em;color:var(--ink-soft);pointer-events:none;padding-left:30px}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
   .thread-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:16px}
   /* 会話の折りたたみトグル（各会話の下・中央に置く押しやすいボタン。「開く／閉じる」） */
@@ -688,6 +723,22 @@
   <div class="seal-cap" id="sealCap">封をしました</div>
 </div>
 
+<!-- 問い直しの栞：封じる直前に一度だけ。選択肢は二つだけ。 -->
+<div class="inquiry-ov" id="inquiryOv">
+  <div class="inquiry-card">
+    <div class="inquiry-mark">栞</div>
+    <p class="inquiry-q" id="inquiryQ"></p>
+    <div class="inquiry-actions">
+      <button class="inquiry-btn primary" id="inquirySealBtn">このまま封じる</button>
+      <button class="inquiry-btn ghost" id="inquiryAddBtn">一言、書き足して封じる</button>
+    </div>
+    <div class="inquiry-add hide" id="inquiryAdd">
+      <textarea id="inquiryAddText" maxlength="80" placeholder="ひとこと、書き足す。"></textarea>
+      <button class="inquiry-btn primary" id="inquiryAddSeal">書き足して封じる</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   const MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -974,12 +1025,14 @@
   });
 
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
-    sealColor=null;
+    sealColor=null;inquiryAsked=false;
     const sb=document.getElementById('sealBand'),sc=document.getElementById('sealChip');
     if(sb)sb.classList.remove('picked');if(sc)sc.style.visibility='hidden';
     updateWatermarks();}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
+
+  let inquiryAsked=false;   // 「問い直しの栞」は封じるボタンの押下ごとに一度だけ
 
   document.getElementById('sendBtn').addEventListener('click',async()=>{
     const poem=poemEl.value.trim();
@@ -995,6 +1048,23 @@
         flash('届く時刻は、今より後にしてください。');return;
       }
     }
+
+    // 封じる直前に一度だけ、本文の「繰り返し／矛盾」を問いの形で返す（本文があるときのみ）。
+    // 該当がなければ問いは出ず、そのまま封じる。生成された問いは保存しない。
+    if(poem && !inquiryAsked){
+      inquiryAsked=true;
+      let q=null;
+      try{const r=await api('/api/compose/inquiry',{method:'POST',body:JSON.stringify({poem})});q=r&&r.question;}catch(e){/* 静かに素通り */}
+      if(q){showInquiry(q);return;}   // 栞を出す。封じるは栞のボタンから。
+    }
+
+    await doSeal();
+  });
+
+  // 実際に封をする処理（栞を経ても経なくても、最後はここに合流する）
+  async function doSeal(){
+    const poem=poemEl.value.trim();
+    const wEvent=selectedWeatherEvent();
 
     // 封じる瞬間の天気をAPIで取得（差分演出＋位置記録のため）
     await detectWeather();
@@ -1021,8 +1091,45 @@
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
       seal_q: (poem&&composeWmQ)?composeWmQ:null   // 便箋に透けていた問い（開封時に再提示）
     })});
-    setTimeout(()=>{sealing.classList.remove('on');clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
-  });
+    setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
+  }
+
+  // 問い直しの栞：AIの問いを一度だけ見せ、選択肢は「このまま封じる」「一言書き足して封じる」の二つだけ。
+  function showInquiry(q){
+    const ov=document.getElementById('inquiryOv');
+    document.getElementById('inquiryQ').textContent=q;
+    const add=document.getElementById('inquiryAdd');
+    const ta=document.getElementById('inquiryAddText');
+    add.classList.add('hide');ta.value='';
+    ov.classList.add('on');
+    // ふるまいはボタンのイベントで（下の wireInquiry で一度だけ結線）
+    setTimeout(()=>{const s=document.getElementById('inquirySealBtn');if(s)s.focus();},60);
+  }
+  function closeInquiry(){document.getElementById('inquiryOv').classList.remove('on');}
+  (function wireInquiry(){
+    const sealBtn=document.getElementById('inquirySealBtn');
+    const addBtn=document.getElementById('inquiryAddBtn');
+    const add=document.getElementById('inquiryAdd');
+    const ta=document.getElementById('inquiryAddText');
+    const confirmBtn=document.getElementById('inquiryAddSeal');
+    // ① このまま封じる
+    sealBtn.addEventListener('click',()=>{closeInquiry();doSeal();});
+    // ② 一言書き足して封じる → 小さな入力欄を開く
+    addBtn.addEventListener('click',()=>{
+      if(add.classList.contains('hide')){add.classList.remove('hide');setTimeout(()=>ta.focus(),40);return;}
+    });
+    // 書き足しを本文へ追記して封じる（保存されるのはユーザーの本文だけ）
+    confirmBtn.addEventListener('click',()=>{
+      const extra=ta.value.trim();
+      if(extra){
+        const cur=poemEl.value.trim();
+        let merged=cur?(cur+'\n'+extra):extra;
+        if(merged.length>80)merged=merged.slice(0,80);
+        poemEl.value=merged;updateCount();
+      }
+      closeInquiry();doSeal();
+    });
+  })();
 
   // WEVENT_LABEL は受信描画でも使うのでグローバルに置く
   
@@ -1168,18 +1275,19 @@ async function detectWeather(){
     received.forEach((L,i)=>{const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
       const sent=parseISO(L.sent_date);
       if(!L.opened){
-        el.innerHTML='<div class="unopened-tease"><div class="wax">緘</div><div class="from">過去のあなたから</div>'+
+        // 封蝋そのものを摘まんで剥がす。スワイプ用の帯や説明文は置かず、封蝋の質感だけで誘う。
+        el.innerHTML='<div class="unopened-tease"><div class="wax peel" data-peel>緘</div><div class="from">過去のあなたから</div>'+
           '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
           '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
           (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
-          '<div class="slide-track" data-slide="'+i+'"><div class="slide-fill"></div>'+
-          '<div class="slide-label">スワイプして封を破る →</div><div class="slide-knob">緘</div></div></div>';
-        wireSlide(el.querySelector('[data-slide]'),L.id,i);
+          '</div>';
+        wirePeel(el.querySelector('[data-peel]'),L.id);
       }else{
         el.innerHTML=renderOpenLetter(L,i,sent);
         // 封入インク：書いた日のスナップショットから、開封時に一回だけレンダリング
         if(L.seal_env){el.classList.add('inked');el.style.cssText=inkStyleVars(L);}
       }
+      applyWeatherReunion(el,L);   // 天気の再会：封じた日と今日が重なった時だけ、かすかに
       mailList.appendChild(el);});
     
     if(inTransit.length){
@@ -1207,10 +1315,66 @@ async function detectWeather(){
           '<div class="transit-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+'</div>'+
           (extras.length?'<div class="transit-meta">'+extras.join('・')+'が入っています</div>':'')+
           '<div class="transit-note">届く時まで、中身はあなたにも見られません。</div></div>';
+        wireSealedTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
         mailList.appendChild(el);});
     }
     startCountdownTicker();
     wireOpenLetters();}
+
+  // まだ開けられない封をタップした時：エラーも文言も出さず、封蝋がわずかに沈んで戻るだけ。
+  function wireSealedTap(el){
+    el.addEventListener('pointerdown',()=>{
+      const wax=el.querySelector('.wax.dim');if(!wax)return;
+      wax.classList.remove('press');void wax.offsetWidth;  // 連打でも毎回沈むよう再トリガ
+      wax.classList.add('press');
+      setTimeout(()=>wax.classList.remove('press'),340);
+    });
+  }
+
+  // 剥がして開ける：封蝋を摘まんでドラッグ／長押しすると開封が確定する（openable のみ）。
+  // Pointer Events でマウス・タッチを共通化。途中で離すと封蝋は元の位置へ戻る。
+  function wirePeel(wax,id){
+    if(!wax)return;
+    const CONFIRM_DIST=62;           // これだけ剥がしたら開封確定
+    let active=false,sx=0,sy=0,moved=false,done=false,lp=null;
+    function reset(){active=false;wax.classList.remove('grab');wax.style.transform='';wax.style.opacity='';}
+    function confirm(){
+      if(done)return;done=true;active=false;clearTimeout(lp);
+      if(navigator.vibrate){try{navigator.vibrate(50);}catch(e){}}  // 対応端末だけ・失敗しても無視
+      wax.classList.remove('grab');wax.classList.add('lift');
+      setTimeout(()=>openLetter(id),170);
+    }
+    wax.addEventListener('pointerdown',e=>{
+      if(done)return;e.preventDefault();
+      active=true;moved=false;sx=e.clientX;sy=e.clientY;
+      try{wax.setPointerCapture(e.pointerId);}catch(_){}
+      wax.classList.add('grab');
+      lp=setTimeout(()=>{if(active&&!moved)confirm();},520);  // 長押しフォールバック（PCでも成立）
+    });
+    wax.addEventListener('pointermove',e=>{
+      if(!active||done)return;
+      const dx=e.clientX-sx,dy=e.clientY-sy,dist=Math.hypot(dx,dy);
+      if(dist>6){moved=true;clearTimeout(lp);}   // 動き出したら長押し判定は解除
+      const rot=Math.max(-26,Math.min(26,dx*0.4));
+      wax.style.transform='translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px) rotate('+rot.toFixed(1)+'deg)';
+      wax.style.opacity=Math.max(0.28,1-dist/150).toFixed(2);
+      if(dist>=CONFIRM_DIST)confirm();
+    });
+    const end=()=>{if(!active||done)return;clearTimeout(lp);reset();};
+    wax.addEventListener('pointerup',end);
+    wax.addEventListener('pointercancel',end);
+  }
+
+  // 天気の再会：封じた日の天気カテゴリと今日の天気が一致した封筒だけ、かすかな気配を添える。
+  // 通知・バッジは出さない。天気が取れていない／一致しない時は通常表示のまま静かに素通り。
+  function applyWeatherReunion(el,L){
+    try{
+      if(!currentWeather||!currentWeather.condition)return;
+      const se=L.seal_env;if(!se||!se.condition)return;
+      if(se.condition!==currentWeather.condition)return;
+      el.classList.add('wx-reunion','wx-'+se.condition);
+    }catch(e){/* 静かにフォールバック */}
+  }
 
   // 封の中のカウントダウンを毎秒更新（0になったら受信を読み直して開封可能に）
   let countdownTimer=null;
@@ -1403,16 +1567,6 @@ async function detectWeather(){
       });
     });}
 
-  function wireSlide(track,id,i){const knob=track.querySelector('.slide-knob'),fill=track.querySelector('.slide-fill');
-    let dragging=false,startX=0,max=0;
-    function down(x){dragging=true;startX=x;max=track.clientWidth-knob.clientWidth-6;track.classList.add('grab');}
-    function move(x){if(!dragging)return;let dx=Math.max(0,Math.min(max,x-startX));knob.style.left=(3+dx)+'px';fill.style.width=(dx+38)+'px';
-      if(dx>=max-2){dragging=false;openLetter(id);}}
-    function up(){dragging=false;track.classList.remove('grab');knob.style.left='3px';fill.style.width='0';}
-    knob.addEventListener('mousedown',e=>down(e.clientX));window.addEventListener('mousemove',e=>move(e.clientX));window.addEventListener('mouseup',up);
-    knob.addEventListener('touchstart',e=>down(e.touches[0].clientX),{passive:true});
-    window.addEventListener('touchmove',e=>{if(dragging)move(e.touches[0].clientX);},{passive:true});window.addEventListener('touchend',up);}
-  
   // 開封のシークエンス：封を切る → 本文（封入インクをまとって現れる）→ 差分（本文の下に静かに並ぶ）
   async function openLetter(id){
     const res=await api('/api/letters/'+id+'/open',{method:'POST',body:JSON.stringify({open_env:currentWeather})});

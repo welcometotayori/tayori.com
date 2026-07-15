@@ -1825,6 +1825,76 @@ def api_create_letter():
     return jsonify(id=lid, ok=True)
 
 
+# ── 封じる直前の「問い直しの栞」 ─────────────────────────────────
+# 封じるボタンを押した瞬間に一度だけ、本文の「繰り返す言葉」か「矛盾」を
+# 事実＋開いた問いの形で返す。助言・解釈・共感は禁止。該当なしなら問いを作らない。
+# 生成した問いは一切保存しない（保存されるのはユーザーの本文だけ）。
+INQUIRY_SYSTEM = (
+    "あなたは、ある人が未来の自分へ宛てた手紙を封じる直前に、一度だけ言葉を返す存在です。\n"
+    "本文を読み、次のどちらかが明確にある時だけ、問いをひとつ返します。\n"
+    "（1）同じ言葉が繰り返し出てくる　（2）前半と後半で言っていることが食い違っている。\n\n"
+    "―― 出力の形（厳守） ――\n"
+    "・『事実の指摘 ＋ 開いた問い』の二部構成、一文だけ。\n"
+    "・例：「『仕方ない』が3回出てきています。仕方なかったのは、どれのことですか？」\n"
+    "・繰り返しなら言葉と回数を、矛盾ならどこが食い違うかを、事実として淡々と指摘する。\n"
+    "・そのうえで、答えを誘導しない開いた問いで終える。必ず『？』で終える。\n\n"
+    "―― 絶対に書かないこと ――\n"
+    "・助言・提案（「〜してみては」「〜するといいかもしれません」など）\n"
+    "・感情の解釈や診断（「〜という気持ちですね」「〜だったのですね」など）\n"
+    "・共感や相槌（「わかります」「つらかったですね」「大変でしたね」など）\n"
+    "・励まし、ねぎらい、褒め言葉の一切。\n\n"
+    "―― 該当がない時 ――\n"
+    "繰り返しも矛盾も見当たらなければ、無理に作らず、『なし』とだけ出力する。\n"
+    "出力は問いの一文、または『なし』のみ。注釈や前置きはつけない。"
+)
+
+
+def _clean_inquiry(text):
+    """AIの返答を検品し、問いとして成立するものだけ返す。該当なし・非問い形式は None。"""
+    if not text:
+        return None
+    # 前後の空白と“くくり”のクォートだけ落とす。日本語の「」は出力形式の一部なので残す。
+    q = text.strip().strip("\"'` 　\n").strip()
+    # 全体が「…」で丸ごと包まれている時だけ、その外側の一対をほどく（内側の指摘部分は保つ）。
+    if q.startswith("「") and q.endswith("」") and q.count("「") == 1 and q.count("」") == 1:
+        q = q[1:-1].strip()
+    if not q:
+        return None
+    if q in ("なし", "無し", "None", "none", "NONE") or q.startswith("なし"):
+        return None
+    if "？" not in q and "?" not in q:  # 問いの形になっていなければ捨てる
+        return None
+    return q[:120]
+
+
+@app.route("/api/compose/inquiry", methods=["POST"])
+@login_required
+def api_compose_inquiry():
+    data = request.get_json(force=True)
+    text = (data.get("poem") or "").strip()
+    # 短すぎる本文は繰り返しも矛盾も検出しにくい。問いを作らずそのまま封じさせる。
+    if len(text) < 12:
+        return jsonify(question=None)
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    claude_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not (NETWORK_ENABLED and (gemini_key or claude_key)):
+        return jsonify(question=None)
+    prompt = INQUIRY_SYSTEM + "\n\n【本文】\n" + text + "\n\n出力："
+    out = None
+    if gemini_key:
+        try:
+            out = _gemini_question(prompt, gemini_key)
+        except Exception as e:
+            print(f"[問い直し Gemini失敗→フォールバック] {e}", flush=True)
+    if not out and claude_key:
+        try:
+            out = _claude_question(prompt, claude_key)
+        except Exception as e:
+            print(f"[問い直し Claude失敗] {e}", flush=True)
+    # 問いはレスポンスで返すだけ。DBには一切保存しない。
+    return jsonify(question=_clean_inquiry(out))
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  10問アンケート → 未来への手紙（HTMXの並行フロー）
 #  /letter/new → /letter/<id>/answer（hx-swap-oobで手紙プレビューと次の質問を同時差し替え）→ /letter/<id>/seal
