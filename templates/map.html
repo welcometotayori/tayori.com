@@ -34,6 +34,22 @@
             box-shadow:0 6px 18px -10px rgba(58,46,37,.5)}
   .area-tip::before{display:none}
   .leaflet-container{font-family:inherit}
+  /* 位置情報がまだ許されていない時の、手紙のことばでの頼み（OS風の文言は使わない） */
+  .geo-ask{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1000;
+    width:min(420px,calc(100% - 32px));background:var(--paper-2);border:1px solid var(--line);border-radius:4px;
+    padding:18px 20px 16px;box-shadow:0 18px 44px -18px rgba(58,46,37,.6);
+    animation:geoIn .5s ease both;transition:opacity .4s,transform .4s}
+  .geo-ask.bye{opacity:0;transform:translateX(-50%) translateY(8px);pointer-events:none}
+  @keyframes geoIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
+  .geo-ask p{margin:0 0 14px;font-size:13px;line-height:2;letter-spacing:0.04em;color:var(--ink)}
+  .geo-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .geo-actions button{font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;font-size:12.5px;letter-spacing:0.08em;
+    cursor:pointer;border-radius:22px;padding:9px 18px;transition:.2s}
+  .geo-yes{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
+  .geo-yes:hover{opacity:.86}
+  .geo-no{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
+  .geo-no:hover{color:var(--ink);border-color:var(--ink-soft)}
+  @media (prefers-reduced-motion:reduce){.geo-ask{animation:none;transition:none}}
 </style>
 </head>
 <body>
@@ -42,6 +58,16 @@
     <a class="back" href="/">もどる</a>
   </header>
   <div id="map"></div>
+
+  <!-- 位置情報がまだ許されていない時だけ現れる、手紙からの小さな頼み -->
+  <div class="geo-ask" id="geoAsk" hidden>
+    <p>たよりは、封をした場所をしずかにおぼえています。<br>
+       いまの居場所を知らせておくと、つぎに封をしたとき、その土地の名まえがこの地図に残ります。</p>
+    <div class="geo-actions">
+      <button class="geo-yes" id="geoYes">居場所を、たよりに知らせる</button>
+      <button class="geo-no" id="geoNo">このままで</button>
+    </div>
+  </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -85,6 +111,27 @@
   }else{
     map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図（現在地は使わない）
   }
+
+  // ── 位置情報の許しがまだ無い時：手紙のことばで、そっと頼む ──
+  // OS標準風の「位置情報をオンにしてください」は使わない。断られたら（応答が無くても）
+  // エラーも文言も出さず、静かに引き下がる（憲法：拒否・失敗時は無言）。
+  (function(){
+    const card=document.getElementById('geoAsk');
+    if(!card||!navigator.geolocation)return;
+    const show=()=>{card.hidden=false;};
+    const hide=()=>{card.classList.add('bye');setTimeout(()=>{card.hidden=true;},450);};
+    if(navigator.permissions&&navigator.permissions.query){
+      navigator.permissions.query({name:'geolocation'})
+        .then(st=>{if(st.state!=='granted')show();})
+        .catch(show);  // 判定できないブラウザでは、とりあえず頼んでみる
+    }else{show();}
+    document.getElementById('geoYes').addEventListener('click',()=>{
+      let done=false;const fin=()=>{if(!done){done=true;hide();}};
+      navigator.geolocation.getCurrentPosition(fin,fin,{timeout:10000,maximumAge:600000,enableHighAccuracy:false});
+      setTimeout(fin,11000);  // 応答が無くても止まらない保険
+    });
+    document.getElementById('geoNo').addEventListener('click',hide);
+  })();
 })();
 </script>
 </body>

@@ -261,6 +261,9 @@ def _finalize_response(resp):
 
 
 NETWORK_ENABLED = bool(os.environ.get("TAYORI_ENABLE_NETWORK"))
+# AI機能のマスタースイッチ。AI要素（問い生成・対話・肖像・章編み）は停止中。
+# コードは将来のopt-inに備えて温存しており、再有効化は TAYORI_ENABLE_AI=1 の設定のみで行える。
+AI_ENABLED = bool(os.environ.get("TAYORI_ENABLE_AI"))
 BASE_URL = (os.environ.get("TAYORI_BASE_URL") or "http://127.0.0.1:5000").rstrip("/")
 
 _wal_ready = False
@@ -465,6 +468,8 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN area_lat REAL",
             "ALTER TABLE letters ADD COLUMN area_lng REAL",
             "ALTER TABLE letters ADD COLUMN time_bucket TEXT",
+            # 縦書きの手紙。書いた時の姿（縦/横）ごと封入し、開封時も同じ姿で届く。
+            "ALTER TABLE letters ADD COLUMN vertical INTEGER DEFAULT 0",
         ):
             try:
                 db.execute(stmt)
@@ -791,7 +796,7 @@ def _generate_weekly_questions(user_id, n):
     made = []
     gemini_key = os.environ.get("GEMINI_API_KEY")
     claude_key = os.environ.get("ANTHROPIC_API_KEY")
-    if NETWORK_ENABLED and (gemini_key or claude_key):
+    if AI_ENABLED and NETWORK_ENABLED and (gemini_key or claude_key):
         persona = _get_or_make_persona(user_id) or _profile_context_text(user_id)
         for _ in range(n):
             recent = asked[-12:]
@@ -1230,6 +1235,7 @@ def letter_to_dict(row, include_thread=True):
     d["arrive_hidden"] = bool(d["arrive_hidden"])
     d["opened"] = bool(d["opened"])
     d["from_reply"] = bool(d["from_reply"])
+    d["vertical"] = bool(d.get("vertical"))  # 縦書きで封入された手紙
     d["arrived"] = _is_arrived(row)
     
     if d.get("seal_env"): d["seal_env"] = json.loads(d["seal_env"])
@@ -1860,7 +1866,11 @@ def api_letters():
 @login_required
 def api_create_letter():
     data = request.get_json(force=True)
-    poem = (data.get("poem") or "").strip()[:80]
+    # 詩・断片の自由度を優先し、字数制限は事実上撤廃（暴走ペイロードだけ防ぐ上限）。
+    # 行頭の字下げや空行は意図した余白として保ち、末尾の余りだけ落とす。空判定のみtrimで行う。
+    poem = (data.get("poem") or "")[:8000].rstrip()
+    if not poem.strip():
+        poem = ""
     photo = data.get("photo")
     voice = data.get("voice")
     if not poem and not photo and not voice:
@@ -1911,17 +1921,20 @@ def api_create_letter():
             and -90.0 <= area_lat <= 90.0 and -180.0 <= area_lng <= 180.0):
         area_name = area_lat = area_lng = time_bucket = None
 
+    # 縦書きで書かれた手紙かどうか（書いた時の姿ごと封入する）
+    vertical = 1 if data.get("vertical") else 0
+
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
-             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket),
+             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical),
         )
         db.commit()
     return jsonify(id=lid, ok=True)
@@ -1979,7 +1992,7 @@ def api_compose_inquiry():
         return jsonify(question=None)
     gemini_key = os.environ.get("GEMINI_API_KEY")
     claude_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not (NETWORK_ENABLED and (gemini_key or claude_key)):
+    if not (AI_ENABLED and NETWORK_ENABLED and (gemini_key or claude_key)):
         return jsonify(question=None)
     prompt = INQUIRY_SYSTEM + "\n\n【本文】\n" + text + "\n\n出力："
     out = None
@@ -2685,7 +2698,7 @@ def _get_or_make_persona(user_id, allow_generate=True):
 
     gemini_key = os.environ.get("GEMINI_API_KEY")
     claude_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not (NETWORK_ENABLED and (gemini_key or claude_key)):
+    if not (AI_ENABLED and NETWORK_ENABLED and (gemini_key or claude_key)):
         return cached
 
     text_block, image_parts, audio_parts, counts = _gather_portrait_inputs(user_id)
@@ -2727,7 +2740,7 @@ def _get_or_make_persona(user_id, allow_generate=True):
 @login_required
 def api_get_portrait():
     row = get_db().execute("SELECT portrait, portrait_at FROM users WHERE id=?", (uid(),)).fetchone()
-    ai_ok = bool(NETWORK_ENABLED and os.environ.get("GEMINI_API_KEY"))
+    ai_ok = bool(AI_ENABLED and NETWORK_ENABLED and os.environ.get("GEMINI_API_KEY"))
     return jsonify(
         portrait=(row["portrait"] if row and "portrait" in row.keys() else None),
         generated_at=(row["portrait_at"] if row and "portrait_at" in row.keys() else None),
@@ -2738,7 +2751,7 @@ def api_get_portrait():
 @login_required
 def api_make_portrait():
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    if not (NETWORK_ENABLED and gemini_key):
+    if not (AI_ENABLED and NETWORK_ENABLED and gemini_key):
         return jsonify(error="いまは肖像を描けません（AI接続が無効です）。"), 503
 
     text_block, image_parts, audio_parts, counts = _gather_portrait_inputs(uid())
@@ -2793,7 +2806,7 @@ def api_ask_past_self(lid):
 
     gemini_key = os.environ.get("GEMINI_API_KEY")
     claude_key = os.environ.get("ANTHROPIC_API_KEY")
-    if NETWORK_ENABLED and (gemini_key or claude_key):
+    if AI_ENABLED and NETWORK_ENABLED and (gemini_key or claude_key):
         convo = "\n".join(("今の自分: " if m["who"] == "now" else "過去の自分: ") + m["text"] for m in L["thread"])
         # 材料から生成・キャッシュした“人物プロファイル”（価値観・背景の理解）。無ければ従来の軽い文脈に。
         profile_ctx = _get_or_make_persona(uid()) or _profile_context_text(uid())
@@ -3096,14 +3109,14 @@ def api_get_chapters():
         s["title"], s["body"] = c.get("title"), c.get("body")
     stale = (cache.get("fp") != _chapters_fingerprint(quarters)) if items else bool(stats)
     return jsonify(chapters=stats, generated_at=cache.get("at"), stale=stale,
-                   ai_available=bool(NETWORK_ENABLED and os.environ.get("GEMINI_API_KEY")))
+                   ai_available=bool(AI_ENABLED and NETWORK_ENABLED and os.environ.get("GEMINI_API_KEY")))
 
 
 @app.route("/api/chapters", methods=["POST"])
 @login_required
 def api_make_chapters():
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    if not (NETWORK_ENABLED and gemini_key):
+    if not (AI_ENABLED and NETWORK_ENABLED and gemini_key):
         return jsonify(error="いまは章を編めません（AI接続が無効です）。"), 503
     stats, quarters = _chapter_stats(uid())
     if not stats:

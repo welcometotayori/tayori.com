@@ -72,6 +72,17 @@
   .poem textarea{width:100%;background:transparent;border:0;resize:none;font-family:'Shippori Mincho',serif;font-size:17px;line-height:36px;color:var(--ink);min-height:144px;background-image:repeating-linear-gradient(transparent,transparent 35px,var(--line) 35px,var(--line) 36px);background-position:0 0;padding:0;word-break:break-word;overflow-wrap:anywhere}
   .poem textarea:focus{outline:none}
   .poem textarea::placeholder{color:var(--ink-soft);opacity:0.55}
+  /* ---- 縦書きの便箋：writing-mode を切り替え、罫線も縦罫に。書いた姿のまま封入される ---- */
+  .poem.vertical textarea{
+    writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+    font-feature-settings:"vert";line-break:strict;
+    height:340px;min-height:0;
+    background-image:repeating-linear-gradient(270deg,transparent,transparent 35px,var(--line) 35px,var(--line) 36px);
+    overflow-x:auto;overflow-y:hidden}
+  .poem.vertical .poem-wm{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+    font-feature-settings:"vert";height:340px;line-height:36px}
+  .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
+  .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
   .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
@@ -128,6 +139,10 @@
   .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:.25s}
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
+  /* 一筆箋（問いをたどって綴るモード）への静かな導線 */
+  .qmode-link{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:10px;letter-spacing:0.06em;opacity:0.85}
+  .qmode-link a{color:var(--ink-soft);text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:1px;transition:.2s}
+  .qmode-link a:hover{color:var(--seal);border-color:var(--seal)}
   .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(242,235,221,0.92);backdrop-filter:blur(2px)}
   .sealing.on{display:flex}
   .seal-mark{width:120px;height:120px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:38px;box-shadow:0 12px 40px -10px rgba(181,84,58,0.6);animation:press 1.6s ease forwards;transform:scale(0)}
@@ -140,7 +155,13 @@
   .inquiry-card{max-width:420px;width:100%;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:34px 28px 28px;text-align:center;box-shadow:0 26px 60px -22px rgba(58,46,37,0.7);animation:iqRise .42s cubic-bezier(.2,.9,.3,1)}
   @keyframes iqRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
   .inquiry-mark{width:40px;height:40px;margin:0 auto 18px;border-radius:50%;border:1px solid var(--seal);color:var(--seal);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:17px;opacity:.9}
-  .inquiry-q{font-family:'Shippori Mincho',serif;font-size:16.5px;line-height:2.0;letter-spacing:0.03em;color:var(--ink);margin:0 0 26px}
+  /* 栞に映すのは自分の言葉そのもの：改行・余白を崩さず、長いときは静かにスクロール */
+  .inquiry-q{font-family:'Shippori Mincho',serif;font-size:16.5px;line-height:2.0;letter-spacing:0.03em;color:var(--ink);margin:0 0 26px;
+    white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;text-align:left;max-height:44vh;overflow-y:auto}
+  /* 縦書きの便箋なら、栞に映る言葉も縦書きのまま */
+  .inquiry-q.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+    font-feature-settings:"vert";line-break:strict;
+    max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden}
   .inquiry-actions{display:flex;flex-direction:column;gap:12px}
   .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
@@ -175,6 +196,17 @@
   @keyframes waxSink{0%{transform:none}42%{transform:translateY(3px) scale(.88);filter:brightness(.94)}100%{transform:none}}
   @media (prefers-reduced-motion:reduce){.transit-inner .wax.dim.press{animation:none}}
   .transit-when{font-family:'Shippori Mincho',serif;font-size:17px;color:var(--seal);letter-spacing:0.1em;margin-bottom:8px}
+  /* 封の中の棚：投函（封をする）ボタンの直上に、封をした手紙が静かに並ぶ */
+  .sealed-shelf{margin:2px 0 16px;padding-top:14px;border-top:1px dashed var(--line)}
+  .shelf-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:12px;opacity:0.7}
+  .shelf-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px dashed var(--line);border-radius:3px;margin-bottom:8px;user-select:none;
+    background:repeating-linear-gradient(45deg,transparent,transparent 13px,rgba(203,187,160,0.14) 13px,rgba(203,187,160,0.14) 14px)}
+  .shelf-item .wax.mini{width:28px;height:28px;border-radius:50%;background:var(--line);color:var(--paper);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:13px;flex-shrink:0;box-shadow:none}
+  .shelf-item .wax.mini.press{animation:waxSink .32s cubic-bezier(.32,.06,.4,1)}
+  @media (prefers-reduced-motion:reduce){.shelf-item .wax.mini.press{animation:none}}
+  .shelf-body{min-width:0}
+  .shelf-when{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--seal);letter-spacing:0.06em}
+  .shelf-meta{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);letter-spacing:0.04em;margin-top:2px}
   .transit-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft);margin-bottom:4px}
   .transit-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);letter-spacing:0.06em;margin-top:12px;opacity:0.85}
   .postmark{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 12px 64px;border-bottom:1px dashed var(--line);font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
@@ -182,6 +214,15 @@
   .letter-photo{width:100%;height:auto;display:block;filter:sepia(0.18) contrast(0.97)}
   .letter-body{padding:20px 22px 22px}
   .letter-poem{font-family:'Shippori Mincho',serif;font-size:18px;line-height:2.3;white-space:pre-wrap;color:var(--ink);word-break:break-word;overflow-wrap:anywhere}
+  /* ---- 縦書きで封入された手紙は、開封の日も縦書きのまま届く ----
+     約物はフォントの縦組み字形(vert)に任せ、禁則はstrictで守る。
+     2〜3桁の数字だけ縦中横(.tcy)で正立させる（4桁以上・欧文は横倒しのまま＝紙の慣習に合わせる）。 */
+  .letter-poem.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+    font-feature-settings:"vert";line-break:strict;
+    height:min(60vh,380px);overflow-x:auto;overflow-y:hidden;margin-left:auto;padding-bottom:6px}
+  .letter-poem.vertical .tcy{text-combine-upright:all;-webkit-text-combine:horizontal}
+  /* タイプ再生のキャレット：縦書きでは寝かせる（文字の下で明滅する短い横線） */
+  .letter-poem.vertical .trace-caret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0;display:inline-block}
   /* タイプ再生（TypeTrace）：書いていた時の迷い・間をそのまま再生 */
   .trace-play{display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:transparent;border:1px solid var(--line);
     cursor:pointer;font-family:'Shippori Mincho',serif;font-size:11.5px;letter-spacing:0.08em;color:var(--ink-soft);
@@ -198,15 +239,20 @@
   .emo-tags{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
   .emo-tag{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;color:var(--teal);border:1px solid var(--teal);border-radius:16px;padding:2px 10px;opacity:0.85}
   .unopened-tease{padding:30px 22px;text-align:center;user-select:none}
-  .unopened-tease .wax{width:54px;height:54px;border-radius:50%;background:var(--seal);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:22px;box-shadow:0 6px 18px -6px rgba(181,84,58,0.6);transition:transform .15s}
-  /* 剥がして開ける：封蝋そのものを摘まんで剥がす。触れる質感だけで伝える（説明テキストは置かない） */
-  .unopened-tease .wax.peel{cursor:grab;touch-action:none;margin:2px auto 20px;
+  /* 剥がして開ける：封の帯の上で、封蝋「緘」を左から右へ滑らせて封を切る。
+     タップや長押しでは開かない。触れる質感だけで伝える（説明テキストは置かない） */
+  .peel-track{position:relative;width:min(250px,86%);height:62px;margin:2px auto 20px;border-radius:31px;
+    border:1px dashed var(--line);background:rgba(203,187,160,0.14)}
+  .peel-trail{position:absolute;left:3px;top:3px;bottom:3px;width:56px;border-radius:28px;
+    background:rgba(181,84,58,0.10);pointer-events:none;transition:width .3s ease}
+  .peel-track.grab .peel-trail{transition:none}
+  .unopened-tease .wax{width:54px;height:54px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:22px}
+  .unopened-tease .wax.peel{position:absolute;left:4px;top:4px;margin:0;cursor:grab;touch-action:none;
     transition:transform .34s cubic-bezier(.2,.9,.3,1),opacity .34s,box-shadow .2s;
     box-shadow:0 7px 20px -6px rgba(181,84,58,0.62),inset 0 2px 5px rgba(255,255,255,0.22)}
   .unopened-tease .wax.peel:hover{box-shadow:0 10px 24px -6px rgba(181,84,58,0.72),inset 0 2px 5px rgba(255,255,255,0.22)}
-  .unopened-tease .wax.peel.grab{cursor:grabbing;transition:none}
-  .unopened-tease .wax.peel.lift{transform:scale(.5) rotate(38deg) translateY(-24px);opacity:0;transition:transform .3s ease,opacity .3s ease}
-  @media (prefers-reduced-motion:reduce){.unopened-tease .wax.peel.lift{transition:none}}
+  .peel-track.grab .wax.peel{cursor:grabbing;transition:none}
+  @media (prefers-reduced-motion:reduce){.unopened-tease .wax.peel,.peel-trail{transition:none}}
   .unopened-tease .from{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.08em;margin-bottom:5px}
   .unopened-tease .ago{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft)}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
@@ -608,7 +654,10 @@
     <div class="acct" id="acctBar">
       <span class="acct-id">差出人</span><b id="acctName">—</b>
       <div class="acct-actions">
+        <!-- 「あなたについて」（AI人物分析）は v2.2 方針によりUIから撤去。将来のopt-inに備えてコードは温存。
         <button id="portraitBtn" title="あなたが遺したものから、いまのAIが「あなたという人」を描きます"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9.2" r="3.1"/><path d="M5.8 19c0-3.1 2.8-4.9 6.2-4.9s6.2 1.8 6.2 4.9"/></svg>あなたについて</button>
+        -->
+
         <button id="emailBtn" title="届いたお知らせメールの設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="1.5"/><path d="m3.6 7 8.4 5.6L20.4 7"/></svg><span id="emailStatus">メール未設定</span></button>
         <button id="settingsBtn" title="名前・パスワードの変更"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></svg>設定</button>
         <button id="logoutBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H14"/><path d="M10 12h9"/><path d="m16 8.5 3.5 3.5-3.5 3.5"/></svg>ログアウト</button>
@@ -628,12 +677,13 @@
       <div class="photo-preview" id="photoPreview"></div>
       <div class="poem">
         <div class="poem-wm hide" id="poemWm"></div>
-        <textarea id="poemInput" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
-        <div class="poem-count"><span id="poemCount">0</span> / 80</div>
+        <!-- 字数制限は置かない。改行も、行間も、余白も、そのまま手紙になる -->
+        <textarea id="poemInput" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
       </div>
       <div class="voice-row">
         <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark">＋</span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
         <button class="voice-btn" id="voiceBtn"><span class="voice-dot"></span><span id="voiceLabel">声を録る</span></button>
+        <button class="voice-btn vert-btn" id="vertBtn" title="便箋を縦書きにする。この姿のまま封をされ、開封の日も縦書きで届きます"><span class="vert-mark">縦</span>縦書き</button>
         <span id="voiceStatus"></span>
       </div>
       <div class="env-foot">
@@ -690,10 +740,17 @@
           <span class="color-chip" id="sealChip" style="visibility:hidden"></span>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。開封の日に、もう一度選んで見比べます</div>
+        <!-- 封をした手紙の一覧：「封をする → 投函」の動作フローに合わせ、投函ボタンの直上に置く -->
+        <div class="sealed-shelf" id="sealedShelf" style="display:none">
+          <div class="shelf-label">― 封の中 · まだ届かないたより ―</div>
+          <div id="sealedShelfList"></div>
+        </div>
         <button class="send" id="sendBtn">封 を す る</button>
       </div>
     </div>
     <p class="note">送った瞬間、これは見えなくなります。<br>いいねも、既読も、ここにはありません。</p>
+    <!-- 白紙が基本。問いに手を引かれて書きたい日のための、静かな別口（opt-in） -->
+    <p class="qmode-link">白紙が続かない日は、<a href="/letter/new">問いをたどって綴る一筆箋</a>から。</p>
   </section>
 
   <section class="panel" id="mailbox">
@@ -704,10 +761,12 @@
     <div class="chapters" id="chaptersSec" style="display:none">
       <div class="ch-mark">JP · たより · Chronicle</div>
       <h3 class="ch-title">三ヶ月ごとの、あなた</h3>
-      <div class="ch-lead">その頃よく使っていた言葉と、AIが編む章題。<br>あなた自身の、更新の歴史。</div>
+      <div class="ch-lead">その頃、よく使っていた言葉たち。<br>あなた自身の、更新の歴史。</div>
       <div class="ch-list" id="chList"></div>
       <div class="ch-actions">
+        <!-- 「章を編む」（AIが章題・本文を編む機能）はUIから撤去。将来のopt-inに備えてコードは温存。
         <button class="ch-gen" id="chGen">章を編む</button>
+        -->
         <div class="ch-meta" id="chMeta"></div>
       </div>
     </div>
@@ -876,15 +935,42 @@
     pGal.value='';
   }
 
-  // char counter (80字制約)
-  const poemEl=document.getElementById('poemInput'),poemCount=document.getElementById('poemCount');
-  function updateCount(){const n=poemEl.value.length;poemCount.textContent=n;poemCount.parentElement.classList.toggle('near', n >= 72);}
+  // 便箋：字数制限は置かない（80字制約とカウンターは撤廃）。
+  // 書いたぶんだけ便箋がすっと伸び、意図した改行・行間・余白がそのまま残る。
+  const poemEl=document.getElementById('poemInput');
+  const poemWrap=poemEl.closest('.poem');
+  function updateCount(){
+    // 縦書きの間は高さ固定（列は左へ増えていく）。横書きだけ高さを伸ばす。
+    if(poemWrap&&poemWrap.classList.contains('vertical')){poemEl.style.height='';return;}
+    poemEl.style.height='auto';poemEl.style.height=Math.max(144,poemEl.scrollHeight)+'px';
+  }
+
+  // ---- 縦書きトグル：便箋の姿（縦/横）はそのまま手紙に封入され、開封の日も同じ姿で届く ----
+  const vertBtn=document.getElementById('vertBtn');
+  let composeVertical=false;
+  try{composeVertical=localStorage.getItem('tayori_vert')==='1';}catch(e){}
+  function applyVertical(){
+    if(poemWrap)poemWrap.classList.toggle('vertical',composeVertical);
+    if(vertBtn)vertBtn.classList.toggle('on',composeVertical);
+    updateCount();
+  }
+  if(vertBtn)vertBtn.addEventListener('click',()=>{
+    composeVertical=!composeVertical;
+    try{localStorage.setItem('tayori_vert',composeVertical?'1':'0');}catch(e){}
+    applyVertical();poemEl.focus();
+  });
+  applyVertical();
+
+  // 縦中横：縦書きの本文で、2〜3桁の数字だけを正立させる（エスケープ済みテキストに適用する）
+  function tcy(escaped){
+    return escaped.replace(/\d+/g,m=>(m.length>=2&&m.length<=3)?'<span class="tcy">'+m+'</span>':m);
+  }
   // タイプ再生用：入力のたびに「その瞬間の全文＋経過ms」を記録（IME・モバイル安全）
   let poemTrace=[],traceStart=0;
   poemEl.addEventListener('input',()=>{
     const now=Date.now();
     if(!poemTrace.length)traceStart=now;
-    if(poemTrace.length<1000)poemTrace.push({t:now-traceStart,v:poemEl.value});
+    if(poemTrace.length<3000)poemTrace.push({t:now-traceStart,v:poemEl.value});
   });
   poemEl.addEventListener('input',updateCount);updateCount();
 
@@ -1042,7 +1128,8 @@
   let inquiryAsked=false;   // 「問い直しの栞」は封じるボタンの押下ごとに一度だけ
 
   document.getElementById('sendBtn').addEventListener('click',async()=>{
-    const poem=poemEl.value.trim();
+    // 行頭の字下げや空行（意図した余白）は保つ。空かどうかの判定にだけ trim を使う。
+    const poemRaw=poemEl.value.replace(/\s+$/,''),poem=poemRaw.trim();
     if(!poem&&!photoData&&!voiceData){flash('写真か言葉、声をひとつ。');return;}
     if(whenMode==='date'&&!pickedDate){flash('届けたい日を選んでください。');return;}
 
@@ -1056,13 +1143,14 @@
       }
     }
 
-    // 封じる直前に一度だけ、本文の「繰り返し／矛盾」を問いの形で返す（本文があるときのみ）。
-    // 該当がなければ問いは出ず、そのまま封じる。生成された問いは保存しない。
+    // 封じる直前に一度だけ「栞」を挟む：自分の言葉をもう一度だけ読み返し、
+    // 望むなら一言だけ彫り直してから封じる（本文があるときのみ）。
+    // ※かつてはここでAIが「繰り返し／矛盾」への問いを返していたが、AI要素は撤去。
+    //   将来のopt-in用にAPI呼び出しを温存：
+    //   try{const r=await api('/api/compose/inquiry',{method:'POST',body:JSON.stringify({poem})});q=r&&r.question;}catch(e){}
     if(poem && !inquiryAsked){
       inquiryAsked=true;
-      let q=null;
-      try{const r=await api('/api/compose/inquiry',{method:'POST',body:JSON.stringify({poem})});q=r&&r.question;}catch(e){/* 静かに素通り */}
-      if(q){showInquiry(q);return;}   // 栞を出す。封じるは栞のボタンから。
+      showInquiry(poemRaw);return;   // 栞を出す。封じるは栞のボタンから。
     }
 
     await doSeal();
@@ -1070,7 +1158,8 @@
 
   // 実際に封をする処理（栞を経ても経なくても、最後はここに合流する）
   async function doSeal(){
-    const poem=poemEl.value.trim();
+    // 行頭の字下げ・空行は意図した余白としてそのまま封入する（落とすのは末尾の余りだけ）
+    const poem=poemEl.value.replace(/\s+$/,'');
     const wEvent=selectedWeatherEvent();
 
     // 封じる瞬間の天気をAPIで取得（差分演出＋位置記録のため）
@@ -1099,15 +1188,19 @@
       weather_event:wEvent||null,
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
-      seal_q: (poem&&composeWmQ)?composeWmQ:null   // 便箋に透けていた問い（開封時に再提示）
+      seal_q: (poem&&composeWmQ)?composeWmQ:null,  // 便箋に透けていた問い（開封時に再提示）
+      vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
     },areaPayload()))});
-    setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
+    // 封をしたら投函の画面に留まる。封をした手紙は、すぐ下の「封の中」の棚に並ぶ（動線と配置の一致）。
+    setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();loadMail();flash('封をしました。');},1700);
   }
 
-  // 問い直しの栞：AIの問いを一度だけ見せ、選択肢は「このまま封じる」「一言書き足して封じる」の二つだけ。
+  // 栞：封じる直前に、自分の書いた言葉をそのまま映す。選択肢は「このまま封じる」「一言書き足して封じる」の二つだけ。
   function showInquiry(q){
     const ov=document.getElementById('inquiryOv');
-    document.getElementById('inquiryQ').textContent=q;
+    const iq=document.getElementById('inquiryQ');
+    iq.textContent=q;
+    iq.classList.toggle('vertical',composeVertical);  // 縦書きの便箋なら、栞の中でも縦書きのまま
     const add=document.getElementById('inquiryAdd');
     const ta=document.getElementById('inquiryAddText');
     add.classList.add('hide');ta.value='';
@@ -1133,9 +1226,8 @@
       const extra=ta.value.trim();
       if(extra){
         const cur=poemEl.value.trim();
-        let merged=cur?(cur+'\n'+extra):extra;
-        if(merged.length>80)merged=merged.slice(0,80);
-        poemEl.value=merged;updateCount();
+        poemEl.value=cur?(cur+'\n'+extra):extra;  // 字数制限は設けない（切り詰めない）
+        updateCount();
       }
       closeInquiry();doSeal();
     });
@@ -1299,6 +1391,7 @@ async function detectWeather(){
       };
       mailList.appendChild(b);
     }
+    renderSealedShelf();  // 封の中の一覧は「投函」の封をするボタンの直上へ（動線と配置を一致させる）
     if(!received.length && !inTransit.length){
       const p=document.createElement('p');p.className='mail-intro';
       p.innerHTML='まだ届いたたよりはありません。<br>投函したたよりは、届く時が来たらここに。';mailList.appendChild(p);
@@ -1306,13 +1399,13 @@ async function detectWeather(){
     if(received.length){const intro=document.createElement('p');intro.className='mail-intro';
       intro.innerHTML='過去のあなたから、たよりが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
     else if(inTransit.length){const intro=document.createElement('p');intro.className='mail-intro';
-      intro.innerHTML='まだ届いたたよりはありません。<br>封の中のたよりが、届く時を静かに待っています。';mailList.appendChild(intro);}
+      intro.innerHTML='まだ届いたたよりはありません。<br>封の中のたよりは、「投函」の便箋のそばで待っています。';mailList.appendChild(intro);}
     
     received.forEach((L,i)=>{const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
       const sent=parseISO(L.sent_date);
       if(!L.opened){
-        // 封蝋そのものを摘まんで剥がす。スワイプ用の帯や説明文は置かず、封蝋の質感だけで誘う。
-        el.innerHTML='<div class="unopened-tease"><div class="wax peel" data-peel>緘</div><div class="from">過去のあなたから</div>'+
+        // 封の帯の上の封蝋「緘」を、左から右へ滑らせて剥がす。説明文は置かず、質感だけで誘う。
+        el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">過去のあなたから</div>'+
           '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
           '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
           (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
@@ -1326,36 +1419,45 @@ async function detectWeather(){
       applyWeatherReunion(el,L);   // 天気の再会：封じた日と今日が重なった時だけ、かすかに
       mailList.appendChild(el);});
     
-    if(inTransit.length){
-      const head=document.createElement('div');head.className='transit-head';
-      head.textContent='― 封の中 · まだ届かないたより ―';mailList.appendChild(head);
-      inTransit.forEach(S=>{
-        const el=document.createElement('div');el.className='letter sealed-transit';
-        const sent=parseISO(S.sent_date);
-        const extras=[];if(S.has_photo)extras.push('写真');if(S.has_voice)extras.push('声');
-        // 天気待ち伏せたよりは時刻ではなく「天気待ち」を見せる
-        let whenHtml;
-        if(S.waiting_weather){
-          whenHtml='<div class="transit-when">'+esc(WEVENT_LABEL[S.weather_event]||'天気')+'を待っています</div>'+
-                   '<div class="transit-meta">その天気が来た日に、ふっと届きます</div>';
-        }else if(S.arrive_hidden){
-          whenHtml='<div class="transit-when">いつか、突然</div>';
-        }else{
-          // data-arrive-ts にUNIX秒を入れて毎秒更新する
-          // sealed_meta は arrive_at を返さないので seconds_left から到着時刻を逆算
-          const ts=Math.floor(Date.now()/1000)+(S.seconds_left||0);
-          whenHtml='<div class="transit-when countdown" data-arrive-ts="'+ts+'">'+esc(humanGapFromSeconds(S.seconds_left||0))+'</div>';
-        }
-        el.innerHTML='<div class="transit-inner"><div class="wax dim">緘</div>'+
-          whenHtml+
-          '<div class="transit-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+'</div>'+
-          (extras.length?'<div class="transit-meta">'+extras.join('・')+'が入っています</div>':'')+
-          '<div class="transit-note">届く時まで、中身はあなたにも見られません。</div></div>';
-        wireSealedTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
-        mailList.appendChild(el);});
-    }
     startCountdownTicker();
     wireOpenLetters();}
+
+  // 封の中の棚：封をした手紙の一覧・確認。「封をする → 投函」の動線に合わせ、投函ボタンの直上に描く。
+  function renderSealedShelf(){
+    const shelf=document.getElementById('sealedShelf'),list=document.getElementById('sealedShelfList');
+    if(!shelf||!list)return;
+    list.innerHTML='';
+    if(!inTransit.length){shelf.style.display='none';return;}
+    shelf.style.display='';
+    inTransit.forEach(S=>{
+      const el=document.createElement('div');el.className='shelf-item';
+      const extras=[];if(S.has_photo)extras.push('写真');if(S.has_voice)extras.push('声');
+      // 天気待ち伏せたよりは時刻ではなく「天気待ち」を見せる
+      let whenHtml;
+      if(S.waiting_weather){
+        whenHtml='<div class="shelf-when">'+esc(WEVENT_LABEL[S.weather_event]||'天気')+'を待っています</div>';
+      }else if(S.arrive_hidden){
+        whenHtml='<div class="shelf-when">いつか、突然</div>';
+      }else{
+        // data-arrive-ts にUNIX秒を入れて毎秒更新する（sealed_meta は seconds_left で返る）
+        const ts=Math.floor(Date.now()/1000)+(S.seconds_left||0);
+        whenHtml='<div class="shelf-when countdown" data-arrive-ts="'+ts+'">'+esc(humanGapFromSeconds(S.seconds_left||0))+'</div>';
+      }
+      el.innerHTML='<div class="wax mini">緘</div><div class="shelf-body">'+whenHtml+
+        '<div class="shelf-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
+        (extras.length?' · '+extras.join('・')+'入り':'')+'</div></div>';
+      wireShelfTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
+      list.appendChild(el);});
+    startCountdownTicker();
+  }
+  function wireShelfTap(el){
+    el.addEventListener('pointerdown',()=>{
+      const wax=el.querySelector('.wax.mini');if(!wax)return;
+      wax.classList.remove('press');void wax.offsetWidth;
+      wax.classList.add('press');
+      setTimeout(()=>wax.classList.remove('press'),340);
+    });
+  }
 
   // まだ開けられない封をタップした時：エラーも文言も出さず、封蝋がわずかに沈んで戻るだけ。
   function wireSealedTap(el){
@@ -1367,36 +1469,43 @@ async function detectWeather(){
     });
   }
 
-  // 剥がして開ける：封蝋を摘まんでドラッグ／長押しすると開封が確定する（openable のみ）。
-  // Pointer Events でマウス・タッチを共通化。途中で離すと封蝋は元の位置へ戻る。
-  function wirePeel(wax,id){
+  // 剥がして開ける：封の帯の上で、封蝋「緘」を左から右へスライドすると封が切れる。
+  // タップ・長押しでは開かない（蝋を剥がす指の動きだけが封を切れる）。
+  // Pointer Events でマウス・タッチを共通化。途中で離すと封蝋は元の位置へすっと戻る。
+  function wirePeel(track,id){
+    if(!track)return;
+    const wax=track.querySelector('.wax.peel'),trail=track.querySelector('.peel-trail');
     if(!wax)return;
-    const CONFIRM_DIST=62;           // これだけ剥がしたら開封確定
-    let active=false,sx=0,sy=0,moved=false,done=false,lp=null;
-    function reset(){active=false;wax.classList.remove('grab');wax.style.transform='';wax.style.opacity='';}
+    let active=false,sx=0,done=false;
+    const limit=()=>Math.max(40,track.clientWidth-wax.offsetWidth-8); // 右端までの可動距離
+    function setX(x){
+      const rot=(x/limit())*24;  // 進むほど蝋がわずかに傾き、剥がれかけの気配を出す
+      wax.style.transform='translateX('+x.toFixed(1)+'px) rotate('+rot.toFixed(1)+'deg)';
+      if(trail)trail.style.width=(wax.offsetWidth+x+6)+'px';  // 剥がした跡が帯に残る
+    }
+    function reset(){active=false;track.classList.remove('grab');wax.style.transform='';if(trail)trail.style.width='';}
     function confirm(){
-      if(done)return;done=true;active=false;clearTimeout(lp);
+      if(done)return;done=true;active=false;
       if(navigator.vibrate){try{navigator.vibrate(50);}catch(e){}}  // 対応端末だけ・失敗しても無視
-      wax.classList.remove('grab');wax.classList.add('lift');
-      setTimeout(()=>openLetter(id),170);
+      track.classList.remove('grab');  // transitionを戻し、最後のひと剥がれを滑らかに
+      wax.style.transform='translateX('+(limit()+12)+'px) translateY(-22px) scale(.55) rotate(32deg)';
+      wax.style.opacity='0';
+      if(trail)trail.style.width='100%';
+      setTimeout(()=>openLetter(id),240);
     }
     wax.addEventListener('pointerdown',e=>{
       if(done)return;e.preventDefault();
-      active=true;moved=false;sx=e.clientX;sy=e.clientY;
+      active=true;sx=e.clientX;
       try{wax.setPointerCapture(e.pointerId);}catch(_){}
-      wax.classList.add('grab');
-      lp=setTimeout(()=>{if(active&&!moved)confirm();},520);  // 長押しフォールバック（PCでも成立）
+      track.classList.add('grab');
     });
     wax.addEventListener('pointermove',e=>{
       if(!active||done)return;
-      const dx=e.clientX-sx,dy=e.clientY-sy,dist=Math.hypot(dx,dy);
-      if(dist>6){moved=true;clearTimeout(lp);}   // 動き出したら長押し判定は解除
-      const rot=Math.max(-26,Math.min(26,dx*0.4));
-      wax.style.transform='translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px) rotate('+rot.toFixed(1)+'deg)';
-      wax.style.opacity=Math.max(0.28,1-dist/150).toFixed(2);
-      if(dist>=CONFIRM_DIST)confirm();
+      const x=Math.max(0,Math.min(limit(),e.clientX-sx));  // 横方向だけを見る（縦の揺れは無視）
+      setX(x);
+      if(x>=limit()*0.94)confirm();  // 右端まで剥がしたら開封確定
     });
-    const end=()=>{if(!active||done)return;clearTimeout(lp);reset();};
+    const end=()=>{if(!active||done)return;reset();};
     wax.addEventListener('pointerup',end);
     wax.addEventListener('pointercancel',end);
   }
@@ -1479,7 +1588,9 @@ async function detectWeather(){
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'" alt="この便りに添えられた写真">';
     h+='<div class="letter-body">';
     if(L.poem){
-      h+='<div class="letter-poem" id="poem-'+L.id+'">'+esc(L.poem)+'</div>';
+      // 縦書きで封入された手紙は縦書きのまま。2〜3桁の数字だけ縦中横(.tcy)で正立させる
+      const pv=!!L.vertical;
+      h+='<div class="letter-poem'+(pv?' vertical':'')+'" id="poem-'+L.id+'">'+(pv?tcy(esc(L.poem)):esc(L.poem))+'</div>';
       if(L.has_trace)h+='<button class="trace-play" data-lid="'+L.id+'" data-target="poem-'+L.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>もう一度、書いていた時を</button>';
     }
     if(L.voice)h+='<div class="letter-voice"><audio controls src="'+L.voice+'"></audio></div>';
@@ -1520,22 +1631,19 @@ async function detectWeather(){
       h+='<div class="ld-q">あの日、便箋に透けていた問い<br><b>「'+esc(L.seal_q)+'」</b><br>いまのあなたなら、なんと答えますか。</div>';
     h+='</div>';
 
-    // 対話スレッド（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
-    const thread=L.thread||[];
+    // 返信の綴り（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
+    // AIによる「過去の自分との対話」はUIから撤去。手紙への自分の返信だけを綴る。
+    const thread=(L.thread||[]).filter(m=>m.who!=='ai');  // 過去にAIが残した発話は表示しない
     const collapsed=threadCollapsed.has(L.id);
     h+='<div class="thread">';
-    h+='<div class="thread-label">― 過去の自分と、今の自分の対話 ―</div>';
-    // 会話本体（時系列＝古い順。新しいやり取りほど下に積まれ、会話が下へ進んでいく）
+    h+='<div class="thread-label">― このたよりへの、返信 ―</div>';
+    // 返信本体（時系列＝古い順。新しいことばほど下に積まれていく）
     h+='<div class="thread-msgs'+(collapsed?' collapsed':'')+'">';
     if(!thread.length)
-      h+='<div class="thread-empty">まだ、ことばは交わされていません。<br>下の「送る」で、過去のあなたに問いを投げてもらえます。</div>';
+      h+='<div class="thread-empty">まだ、ことばは交わされていません。</div>';
     thread.forEach(m=>{
       const when=fmtDateTime(m.created_at)||(m.created?m.created.slice(0,10):'');
-      if(m.who==='ai'){
-        // 過去の自分からの「問い」は特別な見た目に
-        h+='<div class="msg question"><div class="who">過去のあなたからの問い'+(when?' · '+when:'')+'</div>'+
-           '<div class="bubble q">'+esc(m.text)+'</div></div>';
-      }else if(m.who==='now'){
+      if(m.who==='now'){
         h+='<div class="msg now"><div class="who">今のあなた'+(when?' · '+when:'')+'</div><div class="bubble">'+esc(m.text)+'</div></div>';
       }else{
         h+='<div class="msg past"><div class="who">過去のあなた</div><div class="bubble">'+esc(m.text)+'</div></div>';
@@ -1568,9 +1676,8 @@ async function detectWeather(){
       // 「未来へ封印」チェックが入っていれば、その返事を新しいたよりとして未来へ（問いは返さず封印演出へ）
       const sealFut=mailList.querySelector('[data-sealfut="'+i+'"]');
       if(sealFut&&sealFut.checked){await sealTextToFuture(v);return;}
-      // 送る ＝ 過去の自分から問いをもらう：返信を反映したうえで、過去の自分が問いを返す
-      await loadMail();
-      askPastSelfById(lid);}));
+      // 送る ＝ 返信を手紙に綴じるだけ（AIの応答はしない）
+      await loadMail();}));
     // 会話の折りたたみトグル（再描画しても状態が残るよう threadCollapsed で保持）
     mailList.querySelectorAll('[data-thtoggle]').forEach(b=>b.addEventListener('click',()=>{
       const id=b.dataset.thtoggle;  // たよりIDは16進文字列。数値化(+)するとNaNになり状態が壊れる
@@ -1613,6 +1720,7 @@ async function detectWeather(){
     }
   }
 
+  /* AI対話（過去の自分からの問い）はUIから撤去。将来のopt-inに備えてコードは温存。
   // 「送る」（返信送信後）から呼ばれ、過去の自分が問いを返す
   async function askPastSelfById(id){
     const L=received.find(x=>x.id===id);if(!L)return;
@@ -1622,8 +1730,9 @@ async function detectWeather(){
     const data=await api('/api/letters/'+id+'/ask',{method:'POST',body:JSON.stringify({})});
     // 少し待ってから差し替えると「届いた」感が出る
     setTimeout(()=>loadMail(),650);
-    if(data&&data.used_ai===false){/* AIなしでも問いは返る。静かに表示するだけ */}
+    if(data&&data.used_ai===false){}
   }
+  */
 
   // 任意のテキストを「新しいたより」として未来（数ヶ月後）へ封印する。
   // 返信送信時に「未来へ封印」チェックが入っていたら、その返事の本文を渡して呼ぶ。
@@ -1632,7 +1741,7 @@ async function detectWeather(){
     if(!t){flash('封印する言葉がありません。');return;}
     const arrival=addDays(today,90+Math.floor(Math.random()*275));
     sealCap.textContent='未来へ封印しました';sealing.classList.add('on');
-    await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({poem:t.slice(0,80),
+    await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({poem:t,
       arrive_at:isoDate(arrival)+'T09:00:00',arrive_label:jpDate(arrival)+'（'+humanGapFromSeconds(daysBetween(arrival,today)*86400)+'）',from_reply:true},areaPayload()))});
     setTimeout(()=>{sealing.classList.remove('on');flash('今の返事が、未来の自分へ。');goTab('mailbox');},1700);}
 
@@ -1653,30 +1762,28 @@ async function detectWeather(){
   }
   function renderChapters(d){
     const list=document.getElementById('chList');list.innerHTML='';
-    let hasTitle=false;
     d.chapters.forEach(c=>{
-      if(c.title)hasTitle=true;
       const div=document.createElement('div');div.className='ch-item';
       let words='';
       (c.words||[]).forEach(w=>{words+='<span class="ch-word" style="font-size:'+(10.5+Math.min(w.n,6))+'px">'+esc(w.w)+'</span>';});
-      const body=c.title
-        ?'<h4>'+esc(c.title)+'</h4><div class="ch-body">'+esc(c.body||'')+'</div>'
-        :'<div class="ch-body empty">この頃の章は、まだ編まれていません。</div>';
+      // AIが編んだ章題・本文（c.title / c.body）は表示しない。残すのは自分の言葉と記録だけ。
+      // 将来のopt-in用: const body=c.title?'<h4>'+esc(c.title)+'</h4><div class="ch-body">'+esc(c.body||'')+'</div>':'';
       const stats='たより '+c.sent+'通'+(c.opened?' · 開封 '+c.opened:'')+((c.moods&&c.moods.length)?' · '+c.moods.join('・'):'');
       div.innerHTML='<div class="ch-season">'+esc(c.season)+'</div><div class="ch-when">'+esc(c.label)+'</div>'+
-        '<div class="ch-card">'+body+(words?'<div class="ch-words">'+words+'</div>':'')+'<div class="ch-stats">'+stats+'</div></div>';
+        '<div class="ch-card">'+(words?'<div class="ch-words">'+words+'</div>':'')+'<div class="ch-stats">'+stats+'</div></div>';
       list.appendChild(div);
     });
     const gen=document.getElementById('chGen'),meta=document.getElementById('chMeta');
-    if(d.ai_available===false){gen.style.display='none';}
-    else{gen.style.display='';gen.textContent=hasTitle?'編み直す':'章を編む';}
-    meta.textContent=d.generated_at?(_fmtChWhen(d.generated_at)+(d.stale?' · そのあと、たよりが増えています':'')):'';
+    if(gen)gen.style.display='none';  // 「章を編む」ボタンは撤去済み（HTML側でコメントアウト）
+    meta.textContent='';
   }
   function _fmtChWhen(iso){
     const d=new Date(iso);if(isNaN(d))return'';
     return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' に編まれた章';
   }
-  document.getElementById('chGen').addEventListener('click',async()=>{
+  // 「章を編む」ボタンは撤去済み。要素があるときだけ結線する（将来のopt-in用にコードは温存）。
+  const _chGen=document.getElementById('chGen');
+  if(_chGen)_chGen.addEventListener('click',async()=>{
     const gen=document.getElementById('chGen');
     gen.disabled=true;const prev=gen.textContent;gen.textContent='編んでいます…';
     // 章の生成は四半期が多いと15秒を超え得るので、api()(15秒)ではなく長めのタイムアウトで叩く
@@ -1767,10 +1874,10 @@ async function detectWeather(){
     document.getElementById('acctName').textContent=username;
     setEmailStatus(email,verified);
     gUser.value='';gPass.value='';if(gEmail)gEmail.value='';
-    // まだ「30の問い」を通っていなければ、初回のみ：
-    // ① コンセプト導入画面（この道具の哲学）→ ② はじめの問い、の順で案内する。
+    // 初回のみコンセプト導入画面（この道具の哲学）を見せ、そのまま白紙の便箋へ。
+    // 「はじめの10の問い」は廃止：問いが欲しい人は、便箋の下の「一筆箋」へ（opt-in）。
     if(onboarded===false){
-      showConcept();  // 「はじめる」で openOnboarding(true) へ。完了/スキップ後に enterAppBody()
+      showConcept();  // 「はじめる」でそのまま enterAppBody() へ
       return;
     }
     enterAppBody();
@@ -1797,9 +1904,13 @@ async function detectWeather(){
     gate.classList.add('hidden');
     concept.classList.add('on');concept.scrollTop=0;
   }
-  document.getElementById('conceptGo').addEventListener('click',()=>{
+  document.getElementById('conceptGo').addEventListener('click',async()=>{
     concept.classList.remove('on');
-    openOnboarding(true);  // 哲学を読んでから、はじめの問いへ
+    // 「はじめの10の問い」は廃止：白紙の便箋から始める。
+    // 完了印（onboarded）だけ立てて、透かしの問いなど以降の仕組みを動かす。
+    await api('/api/onboarding',{method:'POST',body:JSON.stringify({answers:{},done:true})});
+    enterAppBody();
+    // 将来のopt-in用に温存: openOnboarding(true);  // 哲学を読んでから、はじめの問いへ
   });
 
   // ---------- 30の問い（オンボーディング） ----------
@@ -2040,7 +2151,9 @@ async function detectWeather(){
     }
     portraitGen.disabled=false;
   }
-  document.getElementById('portraitBtn').addEventListener('click',openPortrait);
+  // 「あなたについて」ボタンはUIから撤去済み（ヘッダー側でコメントアウト）。要素があれば結線する（将来のopt-in用）。
+  const _portraitBtn=document.getElementById('portraitBtn');
+  if(_portraitBtn)_portraitBtn.addEventListener('click',openPortrait);
   portraitGen.addEventListener('click',generatePortrait);
   portraitClose.addEventListener('click',()=>portraitOv.classList.remove('on'));
 
@@ -2067,7 +2180,13 @@ async function detectWeather(){
       const el=now-t0;
       while(idx<norm.length&&norm[idx].at*scale<=el){target.innerHTML=esc(norm[idx].v)+caret;idx++;}
       if(idx<norm.length){requestAnimationFrame(frame);}
-      else{target.classList.remove('tracing');target.textContent=finalText;done();}
+      else{
+        target.classList.remove('tracing');
+        // 縦書きの手紙は再生後も縦中横（数字の正立）を掛け直す
+        if(target.classList.contains('vertical'))target.innerHTML=tcy(esc(finalText));
+        else target.textContent=finalText;
+        done();
+      }
     }
     target.innerHTML=esc(norm[0].v)+caret;
     requestAnimationFrame(frame);
