@@ -50,6 +50,14 @@
   .geo-no{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
   .geo-no:hover{color:var(--ink);border-color:var(--ink-soft)}
   @media (prefers-reduced-motion:reduce){.geo-ask{animation:none;transition:none}}
+  /* 「あの日⇄今日」の見比べ（開封画面から ?asof= 付きで来た時だけ現れる） */
+  .cmp{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;gap:4px;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:24px;padding:4px;
+    box-shadow:0 10px 26px -14px rgba(58,46,37,.55)}
+  .cmp[hidden]{display:none}  /* display:flex が hidden 属性を上書きしないように */
+  .cmp button{font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;font-size:12px;letter-spacing:0.08em;
+    border:0;border-radius:20px;padding:7px 14px;background:transparent;color:var(--ink-soft);cursor:pointer;transition:.2s}
+  .cmp button.on{background:var(--ink);color:var(--paper)}
 </style>
 </head>
 <body>
@@ -58,6 +66,12 @@
     <a class="back" href="/">もどる</a>
   </header>
   <div id="map"></div>
+
+  <!-- 封をした日の地図と、今日の地図。開封画面から来た時だけ現れる切り替え -->
+  <div class="cmp" id="cmp" hidden>
+    <button class="on" data-side="then" id="cmpThen">あの日</button>
+    <button data-side="now">今日</button>
+  </div>
 
   <!-- 位置情報がまだ許されていない時だけ現れる、手紙からの小さな頼み -->
   <div class="geo-ask" id="geoAsk" hidden>
@@ -74,9 +88,18 @@
 <script>
 (async function(){
   const map=L.map('map',{zoomControl:true,attributionControl:true});
+  // 下敷きは二層：世界はOSM、日本の範囲だけ国土地理院（GSI）を上に重ねる。
+  // GSIは日本国内がより詳細で、キー不要・出典表記のみ。bounds外はタイル要求自体が飛ばず、
+  // 世界に出た点（旅先・移住先）はそのままOSMの上に立つ。セピアのCSSフィルタは両方にかかる。
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',{
+    bounds:[[20,122],[46,154]],   // 日本のおおよその範囲（沖縄〜北海道・小笠原まで）
+    minZoom:5,                    // 世界図まで引いた時はOSMだけ（日本の周りに画風の継ぎ目を出さない）
+    maxNativeZoom:18,maxZoom:19,  // GSIはz18まで。z19では拡大で保ち、画風が急に切り替わらないように
+    attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>'
   }).addTo(map);
 
   // 点の色は「状態」で分ける（3色）。
@@ -106,25 +129,55 @@
     m.on('click',()=>m.openTooltip());  // タッチ端末でも触れたら囁く
   }
 
-  let points=[];
+  // ?asof=<封をした日時> 付きで来たら「あの日の地図」と「今日の地図」の見比べモード。
+  // どちらの地図も、いま（開封の瞬間）に取りにいく最新のデータから描く。
+  const ASOF=((new URLSearchParams(location.search)).get('asof')||'').slice(0,19)||null;
+
+  let points=[],pointsThen=null;
   try{
     const r=await fetch('/api/map',{credentials:'same-origin'});
     if(r.status===401){location.href='/';return;}
     points=((await r.json())||{}).points||[];
+    if(ASOF){
+      const r2=await fetch('/api/map?until='+encodeURIComponent(ASOF),{credentials:'same-origin'});
+      if(r2.ok)pointsThen=((await r2.json())||{}).points||[];
+    }
   }catch(e){/* 取れなくても地図はそのまま（説明文は出さない） */}
 
   const latlngs=[];
-  points.forEach(p=>{
-    if(p.area_lat==null||p.area_lng==null)return;
-    const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
-    const m=L.circleMarker(ll,{
-      radius:7,stroke:false,
-      fillColor:p.opened?C_OPENED:C_UNREAD,
-      fillOpacity:0.35   // 同じエリアの点は重ねて描き、重なるほど自然に濃くなる
-    }).addTo(map);
-    // 未開封＝場所そのものが主役（場所名だけ）。開封後＝封をした時間と空気が主役。
-    whisper(m,p.opened?airLabel(p.sent_at,p.time_bucket,p.weather):(p.area_name||''));
-  });
+  const layerNow=L.layerGroup();                       // 今日の点（現在地の青もここに入る）
+  const layerThen=(ASOF&&pointsThen)?L.layerGroup():null;  // あの日＝封をした日時点の点
+  function draw(pts,layer){
+    pts.forEach(p=>{
+      if(p.area_lat==null||p.area_lng==null)return;
+      const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
+      const m=L.circleMarker(ll,{
+        radius:7,stroke:false,
+        fillColor:p.opened?C_OPENED:C_UNREAD,
+        fillOpacity:0.35   // 同じエリアの点は重ねて描き、重なるほど自然に濃くなる
+      }).addTo(layer);
+      // 未開封＝場所そのものが主役（場所名だけ）。開封後＝封をした時間と空気が主役。
+      whisper(m,p.opened?airLabel(p.sent_at,p.time_bucket,p.weather):(p.area_name||''));
+    });
+  }
+  draw(points,layerNow);
+  if(layerThen)draw(pointsThen,layerThen);
+
+  if(layerThen){
+    // まず「あの日」から。今日に切り替えると、その間に増えた点・開いた封が現れる。
+    layerThen.addTo(map);
+    const bar=document.getElementById('cmp');bar.hidden=false;
+    const d=new Date(ASOF);
+    if(!isNaN(d))document.getElementById('cmpThen').textContent=
+      'あの日 · '+d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate();
+    bar.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+      bar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+      if(b.dataset.side==='now'){map.removeLayer(layerThen);layerNow.addTo(map);}
+      else{map.removeLayer(layerNow);layerThen.addTo(map);}
+    }));
+  }else{
+    layerNow.addTo(map);
+  }
 
   if(latlngs.length){
     map.fitBounds(L.latLngBounds(latlngs),{padding:[48,48],maxZoom:14});
@@ -158,10 +211,11 @@
       const w=await r.json();
       if(w&&w.ok)wx={condition:w.condition,temp:w.temp};
     }catch(e){}
+    // 現在地は「今日」の地図の住人。あの日⇄今日の見比べでは、今日の側にだけ現れる。
     const m=L.circleMarker([lat,lng],{
       radius:8,color:C_CURRENT,weight:2,opacity:0.9,
       fillColor:C_CURRENT,fillOpacity:0.55
-    }).addTo(map);
+    }).addTo(layerNow);
     whisper(m,airLabel(new Date().toISOString(),timeBucket(),wx));
     if(!latlngs.length)map.setView([lat,lng],12);  // 封じた点がまだ無ければ、いまの空の下から始める
   }

@@ -27,7 +27,7 @@
 }
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500&family=Courier+Prime&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
   :root{
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
@@ -73,23 +73,22 @@
   .poem textarea:focus{outline:none}
   .poem textarea::placeholder{color:var(--ink-soft);opacity:0.55}
   /* ---- 縦書きの便箋：writing-mode を切り替え、罫線も縦罫に。書いた姿のまま封入される ----
-       テキストブロックは便箋の中央に置く：幅はJS（updateCount）が書かれた列ぶんだけ動的に確保し、
-       flexで水平センタリング。右端固定で左に余白が偏る寄りを避ける。 */
+       横書きと同じ「4行」の便箋：縦書きでは4列（幅144px＝36px×4）×各列20字＝80字。
+       高さ340px＝20字ぶん。列は増やさず固定し、flexで便箋の中央に置く。 */
   .poem.vertical{display:flex;justify-content:center;align-items:center;flex-wrap:wrap}
   .poem.vertical .poem-count{width:100%}  /* カウンターは折り返して便箋の下段へ（テキストブロックの横に並べない） */
   .poem.vertical textarea{
     writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
-    height:340px;min-height:0;width:auto;max-width:100%;
+    height:340px;min-height:0;width:144px;max-width:100%;
     background-image:repeating-linear-gradient(270deg,transparent,transparent 35px,var(--line) 35px,var(--line) 36px);
     overflow-x:auto;overflow-y:hidden}
+  /* 透かし問いは書き出しの位置（1列目の行頭）に：便箋と同じ4列の箱を中央に重ねる（横書きと同じ振る舞い） */
   .poem.vertical .poem-wm{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-    font-feature-settings:"vert";height:340px;line-height:36px}
+    font-feature-settings:"vert";line-break:strict;
+    left:50%;right:auto;width:144px;margin-left:-72px;height:340px;line-height:36px}
   .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
   .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
-  /* ---- 便箋の書体：明朝（既定）とゴシック。姿（縦/横）と同じく手紙ごと封入される ---- */
-  .poem.f-gothic textarea{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}
-  .letter-poem.f-gothic{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
   .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
@@ -169,8 +168,6 @@
   .inquiry-q.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
     max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden}
-  /* ゴシックの便箋なら、栞に映る言葉も同じ書体で */
-  .inquiry-q.f-gothic{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}
   .inquiry-actions{display:flex;flex-direction:column;gap:12px}
   .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
@@ -353,6 +350,13 @@
   .ld-arrow{align-self:center;font-family:'Shippori Mincho',serif;font-size:18px;color:var(--ink-soft);opacity:0.6}
   .ld-q{position:relative;font-family:'Shippori Mincho',serif;font-size:12.5px;line-height:2;color:var(--ink-soft);text-align:center;letter-spacing:0.04em;margin:2px 0 6px}
   .ld-q b{color:var(--ink);font-weight:normal}
+  /* 場所の差分のひとこと（同じ土地/ちがう土地）と、あの日の地図への静かな導線 */
+  .ld-place-note{position:relative;font-family:'Shippori Mincho',serif;font-size:11.5px;color:var(--ink-soft);text-align:center;letter-spacing:0.06em;margin:-6px 0 14px}
+  .ld-maplink{position:relative;text-align:center;margin:10px 0 4px}
+  .ld-maplink a{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft);
+    text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
+  .ld-maplink a:hover{color:var(--ink)}
+  .ld-maplink .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;margin-left:8px;text-transform:uppercase}
   /* 投函から開封までの一筆箋の色が、点になって背景をゆっくり流れる */
   .ld-dots{position:absolute;inset:0;pointer-events:none;overflow:hidden}
   .ld-dot{position:absolute;bottom:-12px;width:9px;height:9px;border-radius:50%;opacity:0;animation:dotDrift linear infinite}
@@ -694,7 +698,6 @@
         <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark">＋</span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
         <button class="voice-btn" id="voiceBtn"><span class="voice-dot"></span><span id="voiceLabel">声を録る</span></button>
         <button class="voice-btn vert-btn" id="vertBtn" title="便箋の姿（縦/横）を切り替える。この姿のまま封をされ、開封の日も同じ姿で届きます"><span class="vert-mark" id="vertMark">縦</span><span id="vertLabel">縦書き</span></button>
-        <button class="voice-btn vert-btn" id="fontBtn" title="便箋の書体を切り替える。この書体のまま封をされ、開封の日も同じ書体で届きます"><span class="vert-mark">あ</span><span id="fontLabel">明朝</span></button>
         <span id="voiceStatus"></span>
       </div>
       <div class="env-foot">
@@ -892,7 +895,7 @@
   const panels={compose:document.getElementById('compose'),mailbox:document.getElementById('mailbox'),timeline:document.getElementById('timeline')};
   function goTab(name){tabs.forEach(x=>x.classList.toggle('on',x.dataset.p===name));
     Object.entries(panels).forEach(([k,p])=>p.classList.toggle('on',k===name));
-    if(name==='compose')updateCount();  // 非表示中は縦書きの列幅が測れないので、見えた時に測り直す
+    if(name==='compose')updateCount();  // 便箋に戻ってきた時にカウンター表示を確かめ直す
     if(name==='mailbox')loadMail();if(name==='timeline')loadTimeline();}
   tabs.forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.p)));
 
@@ -955,18 +958,7 @@
     // 80字は固定の仕様。残りが少なくなったら（72字〜）カウンターが封蝋の色に変わる。
     const n=poemEl.value.length;
     if(poemCount){poemCount.textContent=n;poemCount.parentElement.classList.toggle('near',n>=72);}
-    // 縦書き：高さ固定（列は左へ増えていく）。幅は書かれた列のぶんだけ動的に確保し、
-    // flexセンタリングと合わせてテキストブロックを便箋の中央に置く。
-    if(poemWrap&&poemWrap.classList.contains('vertical')){
-      poemEl.style.height='';
-      const maxW=poemWrap.clientWidth;
-      if(!maxW){poemEl.style.width='';return;}        // 非表示中（幅0）は測れない。見えた時に goTab が測り直す
-      poemEl.style.width='36px';                      // いったん畳んで、必要な列幅を測る
-      const need=Math.max(poemEl.scrollWidth,108);    // 空でも placeholder のぶん最低3列は開けておく
-      poemEl.style.width=Math.min(need,maxW)+'px';
-      return;
-    }
-    // 横書き：80字が収まる高さ（min-height:144px＝4行）で固定。伸ばさない。
+    // 便箋の姿は縦横ともCSSで固定（横＝4行×20字 / 縦＝4列×20字）。動的な採寸はしない。
     poemEl.style.width='';poemEl.style.height='';
   }
 
@@ -991,24 +983,6 @@
     applyVertical();poemEl.focus();
   });
   applyVertical();
-
-  // ---- 書体トグル：明朝（既定）⇄ ゴシック。姿（縦/横）と同じく手紙ごと封入され、開封の日も同じ書体で届く。
-  //      選んだ書体は次の便箋の既定にもなる（localStorage）。 ----
-  const fontBtn=document.getElementById('fontBtn');
-  let composeFont='mincho';
-  try{if(localStorage.getItem('tayori_font')==='gothic')composeFont='gothic';}catch(e){}
-  function applyFont(){
-    if(poemWrap)poemWrap.classList.toggle('f-gothic',composeFont==='gothic');
-    const lb=document.getElementById('fontLabel');
-    if(lb)lb.textContent=composeFont==='gothic'?'ゴシック':'明朝';
-    updateCount();  // 書体で文字幅が変わるので、縦書きの列幅も測り直す
-  }
-  if(fontBtn)fontBtn.addEventListener('click',()=>{
-    composeFont=(composeFont==='gothic')?'mincho':'gothic';
-    try{localStorage.setItem('tayori_font',composeFont);}catch(e){}
-    applyFont();poemEl.focus();
-  });
-  applyFont();
 
   // 縦中横：縦書きの本文で、2〜3桁の数字だけを正立させる（エスケープ済みテキストに適用する）
   function tcy(escaped){
@@ -1229,7 +1203,7 @@
     sealCap.textContent='封をしました';sealing.classList.add('on');
     // エリア変換が走っていれば少しだけ待つ。間に合わなければ位置なしで確定する
     // （封じる体験の即時性 > 位置データの完全性）。
-    if(_areaPromise&&!sealArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
+    if(_areaPromise&&!currentArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
     await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({
       poem,photo:photoData,voice:voiceData,
       trace: poemTrace.length>1 ? poemTrace : null,
@@ -1238,8 +1212,7 @@
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
       seal_q: (poem&&composeWmQ)?composeWmQ:null,  // 便箋に透けていた問い（開封時に再提示）
-      vertical: (poem&&composeVertical)?1:0,       // 縦書きで書かれた手紙は、縦書きのまま届く
-      font: poem?composeFont:null                  // 書体も姿の一部。書いた書体のまま封をされ、同じ書体で届く
+      vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
     },areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は、すぐ下の「封の中」の棚に並ぶ（動線と配置の一致）。
     setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();loadMail();flash('封をしました。');},1700);
@@ -1251,7 +1224,6 @@
     const iq=document.getElementById('inquiryQ');
     iq.textContent=q;
     iq.classList.toggle('vertical',composeVertical);  // 縦書きの便箋なら、栞の中でも縦書きのまま
-    iq.classList.toggle('f-gothic',composeFont==='gothic');  // 書体も便箋のまま映す
     const add=document.getElementById('inquiryAdd');
     const ta=document.getElementById('inquiryAddText');
     add.classList.add('hide');ta.value='';
@@ -1301,14 +1273,15 @@
   let currentWeather=null; // {temp, condition, temp_tag}
   let lastGeoError=null;   // 失敗理由: denied/timeout/unavailable/unsupported/serveroff/fetchfail
 
-  // 封じた場所のエリア（逆ジオコーディング結果）。取れなくても何も言わずに諦める。
+  // いまいる場所のエリア（逆ジオコーディング結果）。封じる時は「封をした場所」、
+  // 開封する時は「開けた場所」として使う。取れなくても何も言わずに諦める。
   // 座標はブラウザ位置情報の1回の取得（detectWeather内）を天気と共用し、追加の許可は求めない。
-  let sealArea=null;      // {area_name, area_lat, area_lng}
+  let currentArea=null;   // {area_name, area_lat, area_lng}
   let _areaPromise=null;  // 進行中の変換。封じる時に少しだけ待ち合わせる
   function requestArea(lat,lng){
     if(_areaPromise)return;
     _areaPromise=api('/api/reverse-geocode',{method:'POST',body:JSON.stringify({lat,lng})})
-      .then(r=>{if(r&&r.area_name!=null&&r.area_lat!=null){sealArea={area_name:r.area_name,area_lat:r.area_lat,area_lng:r.area_lng};}})
+      .then(r=>{if(r&&r.area_name!=null&&r.area_lat!=null){currentArea={area_name:r.area_name,area_lat:r.area_lat,area_lng:r.area_lng};}})
       .catch(()=>{});
   }
   // 時間帯は端末のローカル時刻で確定する（サーバーのタイムゾーンに依存させない）
@@ -1321,8 +1294,8 @@
   }
   // 封緘POSTに同梱するエリア欄。エリアが取れていなければ全てnull（位置なし手紙）。
   function areaPayload(){
-    return sealArea
-      ? {area_name:sealArea.area_name,area_lat:sealArea.area_lat,area_lng:sealArea.area_lng,time_bucket:timeBucket()}
+    return currentArea
+      ? {area_name:currentArea.area_name,area_lat:currentArea.area_lat,area_lng:currentArea.area_lng,time_bucket:timeBucket()}
       : {area_name:null,area_lat:null,area_lng:null,time_bucket:null};
   }
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
@@ -1647,8 +1620,7 @@ async function detectWeather(){
     if(L.poem){
       // 縦書きで封入された手紙は縦書きのまま。2〜3桁の数字だけ縦中横(.tcy)で正立させる
       const pv=!!L.vertical;
-      // 書体も封入された姿の一部：ゴシックで書かれた手紙はゴシックのまま届く
-      h+='<div class="letter-poem'+(pv?' vertical':'')+(L.font==='gothic'?' f-gothic':'')+'" id="poem-'+L.id+'">'+(pv?tcy(esc(L.poem)):esc(L.poem))+'</div>';
+      h+='<div class="letter-poem'+(pv?' vertical':'')+'" id="poem-'+L.id+'">'+(pv?tcy(esc(L.poem)):esc(L.poem))+'</div>';
       if(L.has_trace)h+='<button class="trace-play" data-lid="'+L.id+'" data-target="poem-'+L.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>もう一度、書いていた時を</button>';
     }
     if(L.voice)h+='<div class="letter-voice"><audio controls src="'+L.voice+'"></audio></div>';
@@ -1673,6 +1645,22 @@ async function detectWeather(){
          '<span class="ld-arrow">→</span>'+
          '<div class="ld-box"><div class="ld-lbl">開けた日</div><div class="ld-val now">'+wxCell(L.open_env)+'</div></div></div>';
     }
+    // 場所の差分：封をした土地（日時つき）と、封を開けた土地（日時つき）。
+    // 土地の名前が違えば、その間に自分が動いたことが静かにわかる。
+    if(L.area_name||L.open_area_name){
+      h+='<div class="ld-row">'+
+         '<div class="ld-box"><div class="ld-lbl">あの日の場所</div><div class="ld-val">'+
+           (L.area_name?esc(L.area_name):'—')+
+           '<br><span style="font-size:12px">'+fmtSent(L.sent_date)+'</span></div></div>'+
+         '<span class="ld-arrow">→</span>'+
+         '<div class="ld-box"><div class="ld-lbl">今日の場所</div><div class="ld-val now">'+
+           (L.open_area_name?esc(L.open_area_name):'—')+
+           (L.opened_at?'<br><span style="font-size:12px">'+fmtDateTime(L.opened_at)+'</span>':'')+'</div></div></div>';
+      if(L.area_name&&L.open_area_name)
+        h+='<div class="ld-place-note">'+(L.area_name!==L.open_area_name
+           ?'あの日とは、ちがう土地でこの封を開けています。'
+           :'あの日と、おなじ土地で。')+'</div>';
+    }
     // 色の差分：封をした日に選んだ色と、開封のいま選び直す色
     h+='<div class="ld-row">'+
        '<div class="ld-box"><div class="ld-lbl">あの日の色</div>'+
@@ -1687,6 +1675,8 @@ async function detectWeather(){
     // 問いへの回答の差分：あの日の便箋に透けていた問いを、いまのあなたへもう一度
     if(L.seal_q)
       h+='<div class="ld-q">あの日、便箋に透けていた問い<br><b>「'+esc(L.seal_q)+'」</b><br>いまのあなたなら、なんと答えますか。</div>';
+    // 封をした日の地図と、いまの地図：その間に増えた点を見比べる静かな導線（開封の時だけ現れる）
+    h+='<div class="ld-maplink"><a href="/map?asof='+encodeURIComponent((L.sent_date||'').slice(0,19))+'">封をした日の地図と、今日の地図<span class="sub">map</span></a></div>';
     h+='</div>';
 
     // コメントの綴り（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
@@ -1781,7 +1771,13 @@ async function detectWeather(){
 
   // 開封のシークエンス：封を切る → 本文（封入インクをまとって現れる）→ 差分（本文の下に静かに並ぶ）
   async function openLetter(id){
-    const res=await api('/api/letters/'+id+'/open',{method:'POST',body:JSON.stringify({open_env:currentWeather})});
+    // 「開けた場所」も封緘時と同じ流儀で同梱する（エリア名＋丸め座標のみ。取れていなければ少しだけ待ち、
+    // それでも無ければ場所なしで静かに続行）。封をした場所との差分が「あの日と今日」に並ぶ。
+    if(_areaPromise&&!currentArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
+    const oa=currentArea||{};
+    const res=await api('/api/letters/'+id+'/open',{method:'POST',body:JSON.stringify({
+      open_env:currentWeather,
+      open_area_name:oa.area_name||null,open_area_lat:oa.area_lat??null,open_area_lng:oa.area_lng??null})});
     await loadMail(); // 再描画：ここで初めて封入インクと「あの日と今日」の差分が現れる
     if(res&&res.ok){
       focusLetter(id);

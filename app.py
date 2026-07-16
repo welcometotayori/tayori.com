@@ -470,11 +470,16 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN time_bucket TEXT",
             # 縦書きの手紙。書いた時の姿（縦/横）ごと封入し、開封時も同じ姿で届く。
             "ALTER TABLE letters ADD COLUMN vertical INTEGER DEFAULT 0",
-            # 便箋の書体（明朝/ゴシック）。姿（縦/横）と同じく手紙ごと封入し、開封の日も同じ書体で届く。
+            # 便箋の書体列（書体選択は撤去済み・明朝のみ。過去データ互換のため列だけ残す）
             "ALTER TABLE letters ADD COLUMN font TEXT",
             # コメント（今の自分→過去の手紙への一方通行）の「その時」：時間帯と気象スナップショット
             "ALTER TABLE thread ADD COLUMN time_bucket TEXT",
             "ALTER TABLE thread ADD COLUMN env TEXT",
+            # 開封した場所の「エリア」。封緘時と同じ流儀：生座標は入れず、
+            # 逆ジオコーディング結果のエリア名と代表座標（小数第3位丸め）のみ。取れなければNULLで正常系。
+            "ALTER TABLE letters ADD COLUMN open_area_name TEXT",
+            "ALTER TABLE letters ADD COLUMN open_area_lat REAL",
+            "ALTER TABLE letters ADD COLUMN open_area_lng REAL",
         ):
             try:
                 db.execute(stmt)
@@ -1844,17 +1849,29 @@ def api_map():
     # 非対称表示：未開封の点は「場所名」だけ（封の中の時間・空気は開封まで明かさない）。
     # 開封済みの点は「封をした日時・時間帯・その時の天気」＝時間と空気が主役になる。
     # 天気は表示の有無に関わらず封緘時に seal_env として必ず記録済み（表示と記録は分離）。
+    #
+    # ?until=<ISO日時> を渡すと「その日時点の地図」を返す（開封時の「あの日と今日」の見比べ用）。
+    # 当時まだ無かった点は返さず、当時まだ開封されていなかった点は未開封の姿（場所名のみ）で返す。
+    # 日付の絞り込みはサーバ側で行い、未開封の点の封緘日時をクライアントへ渡さない原則は崩さない。
+    until = (request.args.get("until") or "").strip()[:32] or None
     rows = get_db().execute(
-        """SELECT area_name, area_lat, area_lng, time_bucket, opened, sent_date, seal_env
+        """SELECT area_name, area_lat, area_lng, time_bucket, opened, opened_at, sent_date, seal_env
            FROM letters
            WHERE user_id=? AND area_name IS NOT NULL
              AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
         (uid(),)).fetchall()
     points = []
     for r in rows:
+        if until:
+            # sent_date / opened_at はどちらもISO文字列なので文字列比較で時系列になる
+            if (r["sent_date"] or "") > until:
+                continue  # その日にはまだ封をしていなかった点
+            opened_then = bool(r["opened"]) and bool(r["opened_at"]) and r["opened_at"] <= until
+        else:
+            opened_then = bool(r["opened"])
         p = {"area_name": r["area_name"], "area_lat": r["area_lat"],
-             "area_lng": r["area_lng"], "opened": bool(r["opened"])}
-        if r["opened"]:
+             "area_lng": r["area_lng"], "opened": opened_then}
+        if opened_then:
             p["sent_at"] = r["sent_date"]
             p["time_bucket"] = r["time_bucket"]
             try:
@@ -1954,20 +1971,19 @@ def api_create_letter():
 
     # 縦書きで書かれた手紙かどうか（書いた時の姿ごと封入する）
     vertical = 1 if data.get("vertical") else 0
-    # 便箋の書体。姿（縦/横）と同じく手紙ごと封入する。未指定・不明値は明朝（NULL）扱い。
-    font = data.get("font") if data.get("font") in ("mincho", "gothic") else None
+    # 書体は明朝のみ（書体選択は撤去。letters.font 列は過去データ互換のため残置し、新規は書かない）
 
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,font)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
-             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical, font),
+             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical),
         )
         db.commit()
     return jsonify(id=lid, ok=True)
@@ -2236,15 +2252,29 @@ def api_open_letter(lid):
 
     open_env = json.dumps(data.get("open_env")) if data.get("open_env") else None
     open_mood = (data.get("open_mood") or "").strip()[:40] or None
-    
+
+    # 開封した場所のエリア（封緘時と同じ流儀：逆ジオコーディング済みの名前と丸め座標のみ）。
+    # 揃っていなければすべてNULL＝場所なし開封として正常に続行する。
+    o_name = (str(data.get("open_area_name") or "")).strip()[:80] or None
+    try:
+        o_lat = round(float(data.get("open_area_lat")), 3)
+        o_lng = round(float(data.get("open_area_lng")), 3)
+    except (TypeError, ValueError):
+        o_lat = o_lng = None
+    if not (o_name and o_lat is not None and o_lng is not None
+            and -90.0 <= o_lat <= 90.0 and -180.0 <= o_lng <= 180.0):
+        o_name = o_lat = o_lng = None
+
     with _WRITE_LOCK:
         already = row["opened_at"] if "opened_at" in row.keys() else None
         if not already:
             now_iso = datetime.now().isoformat(timespec="seconds")
+            # 「開けた日の場所」は最初の開封の時だけ記録する（opened_at と同じく、後から動かさない）
             get_db().execute(
                 "UPDATE letters SET opened=1, open_env=?, open_mood=?, opened_at=?, "
+                "open_area_name=?, open_area_lat=?, open_area_lng=?, "
                 "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
-                (open_env, open_mood, now_iso, lid, uid()))
+                (open_env, open_mood, now_iso, o_name, o_lat, o_lng, lid, uid()))
         else:
             if open_mood:
                 get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
