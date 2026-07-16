@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>封じた場所 — たより</title>
+<title>封をした場所 — たより</title>
 <meta name="robots" content="noindex,nofollow">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -54,7 +54,7 @@
 </head>
 <body>
   <header>
-    <div class="ttl">封じた場所<span class="romaji">Where sealed</span></div>
+    <div class="ttl">封をした場所<span class="romaji">Where sealed</span></div>
     <a class="back" href="/">もどる</a>
   </header>
   <div id="map"></div>
@@ -79,9 +79,32 @@
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
-  // 時間帯の色。朝=薄青、昼=濃いめのクリーム（薄いままだとタイルに同化する）、夕=テラコッタ、夜=藍。
-  const BUCKET_COLOR={morning:'#A8C5D6',day:'#DFC996',evening:'#C67B5C',night:'#2B3A55'};
+  // 点の色は「状態」で分ける（3色）。
+  //   現在地＝青 / 保存した場所（未開封）＝朱（封蝋の色） / 開封後の場所＝灰緑
+  // 表示は非対称：未開封は「場所名」だけ、現在地と開封後は「日時・時間帯・天気」＝時間と空気が主役。
+  const C_CURRENT='#5C7FA6', C_UNREAD='#B5543A', C_OPENED='#7D8B72';
   const BUCKET_JP={morning:'朝',day:'昼',evening:'夕',night:'夜'};
+  const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
+
+  // 「2026.7.16 21:30」の形。時間の記録は簡素に、数字だけで。
+  function fmtWhen(iso){
+    if(!iso)return '';
+    const d=new Date(iso);if(isNaN(d))return '';
+    return d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate()+' '+
+           d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
+  }
+  function airLabel(when,bucket,wx){
+    const parts=[];
+    const w=fmtWhen(when);if(w)parts.push(w);
+    if(BUCKET_JP[bucket])parts.push(BUCKET_JP[bucket]);
+    if(wx&&WX_JP[wx.condition])parts.push(WX_JP[wx.condition]+(wx.temp!=null?' '+Math.round(wx.temp)+'℃':''));
+    return parts.join(' · ');
+  }
+  function whisper(m,label){
+    if(!label)return;
+    m.bindTooltip(label,{direction:'top',offset:[0,-6],className:'area-tip',opacity:1});
+    m.on('click',()=>m.openTooltip());  // タッチ端末でも触れたら囁く
+  }
 
   let points=[];
   try{
@@ -96,20 +119,57 @@
     const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
     const m=L.circleMarker(ll,{
       radius:7,stroke:false,
-      fillColor:BUCKET_COLOR[p.time_bucket]||'#8B7B68',
-      fillOpacity:0.3   // 同じエリアの点は重ねて描き、重なるほど自然に濃くなる
+      fillColor:p.opened?C_OPENED:C_UNREAD,
+      fillOpacity:0.35   // 同じエリアの点は重ねて描き、重なるほど自然に濃くなる
     }).addTo(map);
-    const label=(p.area_name||'')+(BUCKET_JP[p.time_bucket]?(' · '+BUCKET_JP[p.time_bucket]):'');
-    if(label){
-      m.bindTooltip(label,{direction:'top',offset:[0,-6],className:'area-tip',opacity:1});
-      m.on('click',()=>m.openTooltip());  // タッチ端末でも触れたら囁く
-    }
+    // 未開封＝場所そのものが主役（場所名だけ）。開封後＝封をした時間と空気が主役。
+    whisper(m,p.opened?airLabel(p.sent_at,p.time_bucket,p.weather):(p.area_name||''));
   });
 
   if(latlngs.length){
     map.fitBounds(L.latLngBounds(latlngs),{padding:[48,48],maxZoom:14});
   }else{
-    map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図（現在地は使わない）
+    map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図
+  }
+
+  // ── 現在地の点（青）：いまの日時・時間帯・天気をまとう ──
+  // 位置の許可がある時だけ静かに現れる。座標は表示前に小数第3位へ丸める（生座標は描かない）。
+  function timeBucket(){
+    const h=new Date().getHours();
+    if(h>=5&&h<11)return 'morning';
+    if(h>=11&&h<17)return 'day';
+    if(h>=17&&h<21)return 'evening';
+    return 'night';
+  }
+  async function showCurrentPin(){
+    if(!navigator.geolocation)return;
+    const pos=await new Promise(res=>{
+      let done=false;const fin=v=>{if(!done){done=true;res(v);}};
+      navigator.geolocation.getCurrentPosition(p=>fin(p),()=>fin(null),
+        {timeout:10000,maximumAge:600000,enableHighAccuracy:false});
+      setTimeout(()=>fin(null),11000);
+    });
+    if(!pos)return;  // 取れなければ無言で引き下がる
+    const lat=Math.round(pos.coords.latitude*1000)/1000,
+          lng=Math.round(pos.coords.longitude*1000)/1000;
+    let wx=null;
+    try{
+      const r=await fetch('/api/weather?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude,{credentials:'same-origin'});
+      const w=await r.json();
+      if(w&&w.ok)wx={condition:w.condition,temp:w.temp};
+    }catch(e){}
+    const m=L.circleMarker([lat,lng],{
+      radius:8,color:C_CURRENT,weight:2,opacity:0.9,
+      fillColor:C_CURRENT,fillOpacity:0.55
+    }).addTo(map);
+    whisper(m,airLabel(new Date().toISOString(),timeBucket(),wx));
+    if(!latlngs.length)map.setView([lat,lng],12);  // 封じた点がまだ無ければ、いまの空の下から始める
+  }
+  // 既に許可されている時だけ黙って描く（許可を求めるのは下の geoAsk カードの役目）
+  if(navigator.permissions&&navigator.permissions.query){
+    navigator.permissions.query({name:'geolocation'})
+      .then(st=>{if(st.state==='granted')showCurrentPin();})
+      .catch(()=>{});
   }
 
   // ── 位置情報の許しがまだ無い時：手紙のことばで、そっと頼む ──
@@ -126,9 +186,9 @@
         .catch(show);  // 判定できないブラウザでは、とりあえず頼んでみる
     }else{show();}
     document.getElementById('geoYes').addEventListener('click',()=>{
-      let done=false;const fin=()=>{if(!done){done=true;hide();}};
-      navigator.geolocation.getCurrentPosition(fin,fin,{timeout:10000,maximumAge:600000,enableHighAccuracy:false});
-      setTimeout(fin,11000);  // 応答が無くても止まらない保険
+      let done=false;const fin=ok=>{if(!done){done=true;hide();if(ok)showCurrentPin();}};
+      navigator.geolocation.getCurrentPosition(()=>fin(true),()=>fin(false),{timeout:10000,maximumAge:600000,enableHighAccuracy:false});
+      setTimeout(()=>fin(false),11000);  // 応答が無くても止まらない保険
     });
     document.getElementById('geoNo').addEventListener('click',hide);
   })();

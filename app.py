@@ -470,6 +470,11 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN time_bucket TEXT",
             # 縦書きの手紙。書いた時の姿（縦/横）ごと封入し、開封時も同じ姿で届く。
             "ALTER TABLE letters ADD COLUMN vertical INTEGER DEFAULT 0",
+            # 便箋の書体（明朝/ゴシック）。姿（縦/横）と同じく手紙ごと封入し、開封の日も同じ書体で届く。
+            "ALTER TABLE letters ADD COLUMN font TEXT",
+            # コメント（今の自分→過去の手紙への一方通行）の「その時」：時間帯と気象スナップショット
+            "ALTER TABLE thread ADD COLUMN time_bucket TEXT",
+            "ALTER TABLE thread ADD COLUMN env TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -1243,9 +1248,17 @@ def letter_to_dict(row, include_thread=True):
     
     if include_thread:
         rows = get_db().execute(
-            "SELECT who,text,created,created_at,kind FROM thread WHERE letter_id=? ORDER BY id",
+            "SELECT who,text,created,created_at,kind,time_bucket,env FROM thread WHERE letter_id=? ORDER BY id",
             (d["id"],)).fetchall()
-        d["thread"] = [dict(r) for r in rows]
+        thread = []
+        for r in rows:
+            m = dict(r)
+            try:
+                m["env"] = json.loads(m["env"]) if m.get("env") else None
+            except (TypeError, ValueError):
+                m["env"] = None
+            thread.append(m)
+        d["thread"] = thread
     return d
 
 def own_letter(lid):
@@ -1827,13 +1840,31 @@ def map_page():
 @app.route("/api/map")
 @login_required
 def api_map():
-    # 手紙のidすら返さない（地図から本文へたどる経路を持たせない）。
+    # 手紙のidは返さない（地図から本文へたどる経路を持たせない）。
+    # 非対称表示：未開封の点は「場所名」だけ（封の中の時間・空気は開封まで明かさない）。
+    # 開封済みの点は「封をした日時・時間帯・その時の天気」＝時間と空気が主役になる。
+    # 天気は表示の有無に関わらず封緘時に seal_env として必ず記録済み（表示と記録は分離）。
     rows = get_db().execute(
-        """SELECT area_name, area_lat, area_lng, time_bucket FROM letters
+        """SELECT area_name, area_lat, area_lng, time_bucket, opened, sent_date, seal_env
+           FROM letters
            WHERE user_id=? AND area_name IS NOT NULL
              AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
         (uid(),)).fetchall()
-    return jsonify(points=[dict(r) for r in rows])
+    points = []
+    for r in rows:
+        p = {"area_name": r["area_name"], "area_lat": r["area_lat"],
+             "area_lng": r["area_lng"], "opened": bool(r["opened"])}
+        if r["opened"]:
+            p["sent_at"] = r["sent_date"]
+            p["time_bucket"] = r["time_bucket"]
+            try:
+                env = json.loads(r["seal_env"]) if r["seal_env"] else None
+            except (TypeError, ValueError):
+                env = None
+            if env:
+                p["weather"] = {"condition": env.get("condition"), "temp": env.get("temp")}
+        points.append(p)
+    return jsonify(points=points)
 
 
 @app.route("/api/letters")
@@ -1866,9 +1897,9 @@ def api_letters():
 @login_required
 def api_create_letter():
     data = request.get_json(force=True)
-    # 詩・断片の自由度を優先し、字数制限は事実上撤廃（暴走ペイロードだけ防ぐ上限）。
+    # 80字は固定の仕様（クライアントの maxlength と対）。
     # 行頭の字下げや空行は意図した余白として保ち、末尾の余りだけ落とす。空判定のみtrimで行う。
-    poem = (data.get("poem") or "")[:8000].rstrip()
+    poem = (data.get("poem") or "")[:80].rstrip()
     if not poem.strip():
         poem = ""
     photo = data.get("photo")
@@ -1923,18 +1954,20 @@ def api_create_letter():
 
     # 縦書きで書かれた手紙かどうか（書いた時の姿ごと封入する）
     vertical = 1 if data.get("vertical") else 0
+    # 便箋の書体。姿（縦/横）と同じく手紙ごと封入する。未指定・不明値は明朝（NULL）扱い。
+    font = data.get("font") if data.get("font") in ("mincho", "gothic") else None
 
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,font)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
-             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical),
+             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical, font),
         )
         db.commit()
     return jsonify(id=lid, ok=True)
@@ -2281,15 +2314,22 @@ def api_reply(lid):
     if not row: return jsonify(error="便りが見つかりません。"), 404
     if not _is_arrived(row): return jsonify(error="まだ封の中です。"), 403
 
-    text = (request.get_json(force=True).get("text") or "").strip()
+    data = request.get_json(force=True)
+    text = (data.get("text") or "").strip()
     if not text: return jsonify(error="空の返事です。"), 400
 
+    # コメントの「その時」を継承する：時間帯（端末ローカルで確定済み）と気象スナップショット
+    time_bucket = data.get("time_bucket")
+    if time_bucket not in ("morning", "day", "evening", "night"):
+        time_bucket = None
+    env = json.dumps(data.get("env")) if data.get("env") else None
+
     now_iso = datetime.now().isoformat(timespec="seconds")
-    
+
     with _WRITE_LOCK:
         get_db().execute(
-            "INSERT INTO thread (letter_id,who,text,created,created_at,kind) VALUES (?,?,?,?,?,?)",
-            (lid, "now", text, date.today().isoformat(), now_iso, "reply"))
+            "INSERT INTO thread (letter_id,who,text,created,created_at,kind,time_bucket,env) VALUES (?,?,?,?,?,?,?,?)",
+            (lid, "now", text, date.today().isoformat(), now_iso, "reply", time_bucket, env))
         get_db().execute("UPDATE letters SET reflect_count = COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?", (lid, uid()))
         get_db().commit()
     return jsonify(ok=True)

@@ -27,7 +27,7 @@
 }
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500&family=Courier+Prime&display=swap');
   :root{
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
@@ -72,17 +72,24 @@
   .poem textarea{width:100%;background:transparent;border:0;resize:none;font-family:'Shippori Mincho',serif;font-size:17px;line-height:36px;color:var(--ink);min-height:144px;background-image:repeating-linear-gradient(transparent,transparent 35px,var(--line) 35px,var(--line) 36px);background-position:0 0;padding:0;word-break:break-word;overflow-wrap:anywhere}
   .poem textarea:focus{outline:none}
   .poem textarea::placeholder{color:var(--ink-soft);opacity:0.55}
-  /* ---- 縦書きの便箋：writing-mode を切り替え、罫線も縦罫に。書いた姿のまま封入される ---- */
+  /* ---- 縦書きの便箋：writing-mode を切り替え、罫線も縦罫に。書いた姿のまま封入される ----
+       テキストブロックは便箋の中央に置く：幅はJS（updateCount）が書かれた列ぶんだけ動的に確保し、
+       flexで水平センタリング。右端固定で左に余白が偏る寄りを避ける。 */
+  .poem.vertical{display:flex;justify-content:center;align-items:center;flex-wrap:wrap}
+  .poem.vertical .poem-count{width:100%}  /* カウンターは折り返して便箋の下段へ（テキストブロックの横に並べない） */
   .poem.vertical textarea{
     writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
-    height:340px;min-height:0;
+    height:340px;min-height:0;width:auto;max-width:100%;
     background-image:repeating-linear-gradient(270deg,transparent,transparent 35px,var(--line) 35px,var(--line) 36px);
     overflow-x:auto;overflow-y:hidden}
   .poem.vertical .poem-wm{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";height:340px;line-height:36px}
   .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
   .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+  /* ---- 便箋の書体：明朝（既定）とゴシック。姿（縦/横）と同じく手紙ごと封入される ---- */
+  .poem.f-gothic textarea{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}
+  .letter-poem.f-gothic{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
   .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
@@ -162,6 +169,8 @@
   .inquiry-q.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
     max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden}
+  /* ゴシックの便箋なら、栞に映る言葉も同じ書体で */
+  .inquiry-q.f-gothic{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}
   .inquiry-actions{display:flex;flex-direction:column;gap:12px}
   .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
@@ -315,8 +324,8 @@
   .mini-act{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--teal)}
   .mini-act:hover{color:var(--seal)}
   .tl-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);text-align:center;margin-bottom:8px;letter-spacing:0.06em;line-height:1.9}
-  /* 封じた場所の地図への、静かな導線 */
-  .map-link-row{text-align:center;margin:30px 0 6px}
+  /* 封をした場所（地図）への、静かな導線。空気の一文（wx-banner）のすぐ下に置く */
+  .map-link-row{text-align:center;margin:-6px 0 26px}
   .map-link{font-family:'Shippori Mincho',serif;font-size:12.5px;letter-spacing:0.12em;color:var(--ink-soft);
             text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
   .map-link:hover{color:var(--ink)}
@@ -677,13 +686,15 @@
       <div class="photo-preview" id="photoPreview"></div>
       <div class="poem">
         <div class="poem-wm hide" id="poemWm"></div>
-        <!-- 字数制限は置かない。改行も、行間も、余白も、そのまま手紙になる -->
-        <textarea id="poemInput" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
+        <!-- 80字は固定の仕様。短いからこそ、選ばれた言葉だけが手紙になる -->
+        <textarea id="poemInput" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
+        <div class="poem-count"><span id="poemCount">0</span> / 80</div>
       </div>
       <div class="voice-row">
         <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark">＋</span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
         <button class="voice-btn" id="voiceBtn"><span class="voice-dot"></span><span id="voiceLabel">声を録る</span></button>
-        <button class="voice-btn vert-btn" id="vertBtn" title="便箋を縦書きにする。この姿のまま封をされ、開封の日も縦書きで届きます"><span class="vert-mark">縦</span>縦書き</button>
+        <button class="voice-btn vert-btn" id="vertBtn" title="便箋の姿（縦/横）を切り替える。この姿のまま封をされ、開封の日も同じ姿で届きます"><span class="vert-mark" id="vertMark">縦</span><span id="vertLabel">縦書き</span></button>
+        <button class="voice-btn vert-btn" id="fontBtn" title="便箋の書体を切り替える。この書体のまま封をされ、開封の日も同じ書体で届きます"><span class="vert-mark">あ</span><span id="fontLabel">明朝</span></button>
         <span id="voiceStatus"></span>
       </div>
       <div class="env-foot">
@@ -772,7 +783,6 @@
     </div>
     <p class="tl-intro">あなたのたよりの、全部。<br>過去から、まだ届いていない未来まで。</p>
     <div class="tl" id="tlList"></div>
-    <div class="map-link-row"><a class="map-link" href="/map">封じた場所<span class="sub">map</span></a></div>
   </section>
 
   <footer>
@@ -882,6 +892,7 @@
   const panels={compose:document.getElementById('compose'),mailbox:document.getElementById('mailbox'),timeline:document.getElementById('timeline')};
   function goTab(name){tabs.forEach(x=>x.classList.toggle('on',x.dataset.p===name));
     Object.entries(panels).forEach(([k,p])=>p.classList.toggle('on',k===name));
+    if(name==='compose')updateCount();  // 非表示中は縦書きの列幅が測れないので、見えた時に測り直す
     if(name==='mailbox')loadMail();if(name==='timeline')loadTimeline();}
   tabs.forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.p)));
 
@@ -939,19 +950,39 @@
   // 書いたぶんだけ便箋がすっと伸び、意図した改行・行間・余白がそのまま残る。
   const poemEl=document.getElementById('poemInput');
   const poemWrap=poemEl.closest('.poem');
+  const poemCount=document.getElementById('poemCount');
   function updateCount(){
-    // 縦書きの間は高さ固定（列は左へ増えていく）。横書きだけ高さを伸ばす。
-    if(poemWrap&&poemWrap.classList.contains('vertical')){poemEl.style.height='';return;}
-    poemEl.style.height='auto';poemEl.style.height=Math.max(144,poemEl.scrollHeight)+'px';
+    // 80字は固定の仕様。残りが少なくなったら（72字〜）カウンターが封蝋の色に変わる。
+    const n=poemEl.value.length;
+    if(poemCount){poemCount.textContent=n;poemCount.parentElement.classList.toggle('near',n>=72);}
+    // 縦書き：高さ固定（列は左へ増えていく）。幅は書かれた列のぶんだけ動的に確保し、
+    // flexセンタリングと合わせてテキストブロックを便箋の中央に置く。
+    if(poemWrap&&poemWrap.classList.contains('vertical')){
+      poemEl.style.height='';
+      const maxW=poemWrap.clientWidth;
+      if(!maxW){poemEl.style.width='';return;}        // 非表示中（幅0）は測れない。見えた時に goTab が測り直す
+      poemEl.style.width='36px';                      // いったん畳んで、必要な列幅を測る
+      const need=Math.max(poemEl.scrollWidth,108);    // 空でも placeholder のぶん最低3列は開けておく
+      poemEl.style.width=Math.min(need,maxW)+'px';
+      return;
+    }
+    // 横書き：80字が収まる高さ（min-height:144px＝4行）で固定。伸ばさない。
+    poemEl.style.width='';poemEl.style.height='';
   }
 
   // ---- 縦書きトグル：便箋の姿（縦/横）はそのまま手紙に封入され、開封の日も同じ姿で届く ----
+  // ボタンはワンタップ切り替え。縦書き中は「横書き」だけ、横書き中は「縦書き」だけを見せる。
   const vertBtn=document.getElementById('vertBtn');
   let composeVertical=false;
   try{composeVertical=localStorage.getItem('tayori_vert')==='1';}catch(e){}
   function applyVertical(){
     if(poemWrap)poemWrap.classList.toggle('vertical',composeVertical);
-    if(vertBtn)vertBtn.classList.toggle('on',composeVertical);
+    if(vertBtn){
+      vertBtn.classList.toggle('on',composeVertical);
+      const mk=document.getElementById('vertMark'),lb=document.getElementById('vertLabel');
+      if(mk)mk.textContent=composeVertical?'横':'縦';
+      if(lb)lb.textContent=composeVertical?'横書き':'縦書き';
+    }
     updateCount();
   }
   if(vertBtn)vertBtn.addEventListener('click',()=>{
@@ -960,6 +991,24 @@
     applyVertical();poemEl.focus();
   });
   applyVertical();
+
+  // ---- 書体トグル：明朝（既定）⇄ ゴシック。姿（縦/横）と同じく手紙ごと封入され、開封の日も同じ書体で届く。
+  //      選んだ書体は次の便箋の既定にもなる（localStorage）。 ----
+  const fontBtn=document.getElementById('fontBtn');
+  let composeFont='mincho';
+  try{if(localStorage.getItem('tayori_font')==='gothic')composeFont='gothic';}catch(e){}
+  function applyFont(){
+    if(poemWrap)poemWrap.classList.toggle('f-gothic',composeFont==='gothic');
+    const lb=document.getElementById('fontLabel');
+    if(lb)lb.textContent=composeFont==='gothic'?'ゴシック':'明朝';
+    updateCount();  // 書体で文字幅が変わるので、縦書きの列幅も測り直す
+  }
+  if(fontBtn)fontBtn.addEventListener('click',()=>{
+    composeFont=(composeFont==='gothic')?'mincho':'gothic';
+    try{localStorage.setItem('tayori_font',composeFont);}catch(e){}
+    applyFont();poemEl.focus();
+  });
+  applyFont();
 
   // 縦中横：縦書きの本文で、2〜3桁の数字だけを正立させる（エスケープ済みテキストに適用する）
   function tcy(escaped){
@@ -1189,7 +1238,8 @@
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
       seal_q: (poem&&composeWmQ)?composeWmQ:null,  // 便箋に透けていた問い（開封時に再提示）
-      vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
+      vertical: (poem&&composeVertical)?1:0,       // 縦書きで書かれた手紙は、縦書きのまま届く
+      font: poem?composeFont:null                  // 書体も姿の一部。書いた書体のまま封をされ、同じ書体で届く
     },areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は、すぐ下の「封の中」の棚に並ぶ（動線と配置の一致）。
     setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();loadMail();flash('封をしました。');},1700);
@@ -1201,6 +1251,7 @@
     const iq=document.getElementById('inquiryQ');
     iq.textContent=q;
     iq.classList.toggle('vertical',composeVertical);  // 縦書きの便箋なら、栞の中でも縦書きのまま
+    iq.classList.toggle('f-gothic',composeFont==='gothic');  // 書体も便箋のまま映す
     const add=document.getElementById('inquiryAdd');
     const ta=document.getElementById('inquiryAddText');
     add.classList.add('hide');ta.value='';
@@ -1226,7 +1277,7 @@
       const extra=ta.value.trim();
       if(extra){
         const cur=poemEl.value.trim();
-        poemEl.value=cur?(cur+'\n'+extra):extra;  // 字数制限は設けない（切り詰めない）
+        poemEl.value=(cur?(cur+'\n'+extra):extra).slice(0,80);  // 書き足しても80字の固定仕様は守る
         updateCount();
       }
       closeInquiry();doSeal();
@@ -1275,6 +1326,7 @@
       : {area_name:null,area_lat:null,area_lng:null,time_bucket:null};
   }
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
+  const BUCKET_JP={morning:'朝',day:'昼',evening:'夕',night:'夜'};
 
 async function detectWeather(){
     if(currentWeather!==null)return;
@@ -1391,6 +1443,11 @@ async function detectWeather(){
       };
       mailList.appendChild(b);
     }
+    // 「封をした場所」への導線：空気の一文（wx-banner）のすぐ下の行に置く。
+    // 天気が取れない時もバナーの直後＝受信の先頭に出し、地図への道を絶やさない。
+    {const mr=document.createElement('div');mr.className='map-link-row';
+     mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>';
+     mailList.appendChild(mr);}
     renderSealedShelf();  // 封の中の一覧は「投函」の封をするボタンの直上へ（動線と配置を一致させる）
     if(!received.length && !inTransit.length){
       const p=document.createElement('p');p.className='mail-intro';
@@ -1590,7 +1647,8 @@ async function detectWeather(){
     if(L.poem){
       // 縦書きで封入された手紙は縦書きのまま。2〜3桁の数字だけ縦中横(.tcy)で正立させる
       const pv=!!L.vertical;
-      h+='<div class="letter-poem'+(pv?' vertical':'')+'" id="poem-'+L.id+'">'+(pv?tcy(esc(L.poem)):esc(L.poem))+'</div>';
+      // 書体も封入された姿の一部：ゴシックで書かれた手紙はゴシックのまま届く
+      h+='<div class="letter-poem'+(pv?' vertical':'')+(L.font==='gothic'?' f-gothic':'')+'" id="poem-'+L.id+'">'+(pv?tcy(esc(L.poem)):esc(L.poem))+'</div>';
       if(L.has_trace)h+='<button class="trace-play" data-lid="'+L.id+'" data-target="poem-'+L.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></svg>もう一度、書いていた時を</button>';
     }
     if(L.voice)h+='<div class="letter-voice"><audio controls src="'+L.voice+'"></audio></div>';
@@ -1631,27 +1689,33 @@ async function detectWeather(){
       h+='<div class="ld-q">あの日、便箋に透けていた問い<br><b>「'+esc(L.seal_q)+'」</b><br>いまのあなたなら、なんと答えますか。</div>';
     h+='</div>';
 
-    // 返信の綴り（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
-    // AIによる「過去の自分との対話」はUIから撤去。手紙への自分の返信だけを綴る。
+    // コメントの綴り（時系列＝古い順。折りたたみは下の「開く／閉じる」で）
+    // 「返信」ではなく「コメント」：過去の手紙→今の自分への一方通行で、往復は前提にしない。
+    // AIによる「過去の自分との対話」はUIから撤去。手紙への自分のコメントだけを綴る。
     const thread=(L.thread||[]).filter(m=>m.who!=='ai');  // 過去にAIが残した発話は表示しない
     const collapsed=threadCollapsed.has(L.id);
     h+='<div class="thread">';
-    h+='<div class="thread-label">― このたよりへの、返信 ―</div>';
-    // 返信本体（時系列＝古い順。新しいことばほど下に積まれていく）
+    h+='<div class="thread-label">― このたよりへの、コメント ―</div>';
+    // コメント本体（時系列＝古い順。新しいことばほど下に積まれていく）
     h+='<div class="thread-msgs'+(collapsed?' collapsed':'')+'">';
     if(!thread.length)
       h+='<div class="thread-empty">まだ、ことばは交わされていません。</div>';
     thread.forEach(m=>{
       const when=fmtDateTime(m.created_at)||(m.created?m.created.slice(0,10):'');
       if(m.who==='now'){
-        h+='<div class="msg now"><div class="who">今のあなた'+(when?' · '+when:'')+'</div><div class="bubble">'+esc(m.text)+'</div></div>';
+        // コメントを置いた「その時」も一緒に残る：日時 · 時間帯 · 天気
+        let meta='今のあなた'+(when?' · '+when:'');
+        if(m.time_bucket&&BUCKET_JP[m.time_bucket])meta+=' · '+BUCKET_JP[m.time_bucket];
+        if(m.env&&m.env.condition&&WX_JP[m.env.condition])
+          meta+=' · '+WX_JP[m.env.condition]+(m.env.temp!=null?' '+Math.round(m.env.temp)+'℃':'');
+        h+='<div class="msg now"><div class="who">'+meta+'</div><div class="bubble">'+esc(m.text)+'</div></div>';
       }else{
         h+='<div class="msg past"><div class="who">過去のあなた</div><div class="bubble">'+esc(m.text)+'</div></div>';
       }});
     h+='</div>';// .thread-msgs
-    // 返信入力＋送信（会話の下に置く）
-    h+='<div class="reply-row"><textarea placeholder="今のあなたから、返事を書く…" data-i="'+i+'"></textarea><button class="reply-send" data-reply="'+i+'">送る</button></div>';
-    // 要件4：この返事を「新しいたより」として未来へ封印するかの選択（チェックで送信時に封印）
+    // コメント入力＋確定（会話の下に置く）。ボタンは既定「残す」＝どこにも送らず、コメントとして残すだけ
+    h+='<div class="reply-row"><textarea placeholder="今のあなたから、返事を書く…" data-i="'+i+'"></textarea><button class="reply-send" data-reply="'+i+'">残す</button></div>';
+    // この返事を「新しいたより」として未来へ封印するかの選択（チェックが入るとボタンは「封じる」に変わる）
     h+='<label class="seal-future"><input type="checkbox" data-sealfut="'+i+'">'+
        '<span>この返事を、新しいたよりとして未来へ封印する<span class="hint">封をすると、数ヶ月後のあなたに、いまの言葉がもう一度届きます。</span></span></label>';
     // 折りたたみトグルは各会話の下・中央に（押しやすいピル型ボタン）
@@ -1671,13 +1735,18 @@ async function detectWeather(){
       const i=+b.dataset.reply,ta=mailList.querySelector('textarea[data-i="'+i+'"]'),v=ta.value.trim();if(!v)return;
       const L=received[i],lid=L.id;
       b.disabled=true;
-      // まずは対話スレッドへ返信を保存
-      await api('/api/letters/'+lid+'/reply',{method:'POST',body:JSON.stringify({text:v})});
+      // コメントとして綴じる。置いた「その時」（時間帯・天気）も一緒に残す
+      await api('/api/letters/'+lid+'/reply',{method:'POST',body:JSON.stringify({
+        text:v,time_bucket:timeBucket(),env:currentWeather||null})});
       // 「未来へ封印」チェックが入っていれば、その返事を新しいたよりとして未来へ（問いは返さず封印演出へ）
       const sealFut=mailList.querySelector('[data-sealfut="'+i+'"]');
       if(sealFut&&sealFut.checked){await sealTextToFuture(v);return;}
-      // 送る ＝ 返信を手紙に綴じるだけ（AIの応答はしない）
+      // 残す ＝ コメントを手紙に綴じるだけ（どこにも送らない。AIの応答もしない）
       await loadMail();}));
+    // 「未来へ封印」のチェックでボタンの言葉が変わる：OFF=残す（綴じるだけ）/ ON=封じる（未来の自分へ）
+    mailList.querySelectorAll('[data-sealfut]').forEach(cb=>cb.addEventListener('change',()=>{
+      const btn=mailList.querySelector('[data-reply="'+cb.dataset.sealfut+'"]');
+      if(btn)btn.textContent=cb.checked?'封じる':'残す';}));
     // 会話の折りたたみトグル（再描画しても状態が残るよう threadCollapsed で保持）
     mailList.querySelectorAll('[data-thtoggle]').forEach(b=>b.addEventListener('click',()=>{
       const id=b.dataset.thtoggle;  // たよりIDは16進文字列。数値化(+)するとNaNになり状態が壊れる
@@ -1742,7 +1811,10 @@ async function detectWeather(){
     const arrival=addDays(today,90+Math.floor(Math.random()*275));
     sealCap.textContent='未来へ封印しました';sealing.classList.add('on');
     await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({poem:t,
-      arrive_at:isoDate(arrival)+'T09:00:00',arrive_label:jpDate(arrival)+'（'+humanGapFromSeconds(daysBetween(arrival,today)*86400)+'）',from_reply:true},areaPayload()))});
+      arrive_at:isoDate(arrival)+'T09:00:00',arrive_label:jpDate(arrival)+'（'+humanGapFromSeconds(daysBetween(arrival,today)*86400)+'）',
+      from_reply:true,
+      seal_env:currentWeather||null   // 封じた瞬間の空気は、このたよりにも必ず記録する（表示と記録は分離）
+    },areaPayload()))});
     setTimeout(()=>{sealing.classList.remove('on');flash('今の返事が、未来の自分へ。');goTab('mailbox');},1700);}
 
   // timeline
