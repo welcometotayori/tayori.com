@@ -480,6 +480,11 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN open_area_name TEXT",
             "ALTER TABLE letters ADD COLUMN open_area_lat REAL",
             "ALTER TABLE letters ADD COLUMN open_area_lng REAL",
+            # デモ用の手紙（scripts/seed_demo_data.py で投入）。demo_mode=1 の手紙だけ
+            # demo_arrive_at（上書きの開封予定日時）を自由に動かせる。本来の arrive_at は
+            # 温存し、上書きはこの列にだけ持つ（NULL に戻せば元の予定に戻る）。
+            "ALTER TABLE letters ADD COLUMN demo_mode INTEGER DEFAULT 0",
+            "ALTER TABLE letters ADD COLUMN demo_arrive_at TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -1226,6 +1231,9 @@ def api_change_password():
 
 def _is_arrived(row):
     keys = row.keys() if hasattr(row, "keys") else []
+    # デモ手紙の上書き開封日時は天気待ちより優先（デモ操作で自由に開けられるようにするため）
+    if "demo_mode" in keys and row["demo_mode"] and row["demo_arrive_at"]:
+        return datetime.fromisoformat(row["demo_arrive_at"]) <= datetime.now()
     if "weather_event" in keys and row["weather_event"]:
         met = row["weather_met_at"] if "weather_met_at" in keys else None
         if met:
@@ -1246,6 +1254,7 @@ def letter_to_dict(row, include_thread=True):
     d["opened"] = bool(d["opened"])
     d["from_reply"] = bool(d["from_reply"])
     d["vertical"] = bool(d.get("vertical"))  # 縦書きで封入された手紙
+    d["demo_mode"] = bool(d.get("demo_mode"))  # デモ用（開封予定日時を自由に動かせる）
     d["arrived"] = _is_arrived(row)
     
     if d.get("seal_env"): d["seal_env"] = json.loads(d["seal_env"])
@@ -1271,7 +1280,9 @@ def own_letter(lid):
 
 def sealed_meta(row):
     keys = row.keys()
-    arrive_at = row["arrive_at"] or (row["arrive_date"] + "T00:00:00")
+    demo_mode = bool(row["demo_mode"]) if "demo_mode" in keys else False
+    demo_at = row["demo_arrive_at"] if (demo_mode and "demo_arrive_at" in keys) else None
+    arrive_at = demo_at or row["arrive_at"] or (row["arrive_date"] + "T00:00:00")
     dt = datetime.fromisoformat(arrive_at)
     wevent = row["weather_event"] if "weather_event" in keys else None
     return {
@@ -1282,10 +1293,13 @@ def sealed_meta(row):
         "arrive_hidden": bool(row["arrive_hidden"]),
         "seconds_left": int((dt - datetime.now()).total_seconds()),
         "weather_event": wevent,
-        "waiting_weather": bool(wevent),
+        # デモの上書き日時がある間はカウントダウン表示にする（天気待ち表示にしない）
+        "waiting_weather": bool(wevent) and not demo_at,
         "has_photo": bool(row["photo"]),
         "has_voice": bool(row["voice"]),
         "from_reply": bool(row["from_reply"]),
+        "demo_mode": demo_mode,
+        "arrive_at": arrive_at,  # デモの日時編集の初期値（上書き中は上書き後の値）
     }
 
 def _smtp_config():
@@ -1987,6 +2001,34 @@ def api_create_letter():
         )
         db.commit()
     return jsonify(id=lid, ok=True)
+
+
+# ── デモ用：開封予定日時の上書き ─────────────────────────────────
+# demo_mode=1 の手紙（seed_demo_data.py で投入）だけが対象。demo_arrive_at を
+# 動かして「まだ開けられない／もう開けられる」を自由に再現する。本来の arrive_at
+# には触れず、null を送れば上書き解除で元の予定に戻る。
+@app.route("/api/letters/<lid>/demo-arrive", methods=["POST"])
+@login_required
+def api_demo_arrive(lid):
+    row = own_letter(lid)
+    if row is None:
+        return jsonify(error="そのたよりは見つかりません。"), 404
+    if not ("demo_mode" in row.keys() and row["demo_mode"]):
+        return jsonify(error="デモ用のたよりではありません。"), 403
+    data = request.get_json(force=True)
+    raw = data.get("demo_arrive_at")
+    if raw:
+        try:
+            val = datetime.fromisoformat(raw).isoformat(timespec="seconds")
+        except (TypeError, ValueError):
+            return jsonify(error="日時が正しくありません。"), 400
+    else:
+        val = None
+    db = get_db()
+    with _WRITE_LOCK:
+        db.execute("UPDATE letters SET demo_arrive_at=? WHERE id=?", (val, lid))
+        db.commit()
+    return jsonify(ok=True, demo_arrive_at=val)
 
 
 # ── 封じる直前の「問い直しの栞」 ─────────────────────────────────

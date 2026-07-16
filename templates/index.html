@@ -213,6 +213,12 @@
   .shelf-body{min-width:0}
   .shelf-when{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--seal);letter-spacing:0.06em}
   .shelf-meta{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);letter-spacing:0.04em;margin-top:2px}
+  /* デモ用の手紙にだけ出る「開封日を変更」の操作列（seed_demo_data.py 投入分が対象） */
+  .shelf-demo{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:-2px 0 8px;border:1px dashed var(--line);border-radius:3px;opacity:0.85}
+  .shelf-demo .sd-lbl{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.18em;color:var(--seal);text-transform:uppercase;flex-shrink:0}
+  .shelf-demo input{flex:1;min-width:0;background:transparent;border:0;border-bottom:1px solid var(--line);font-family:'Courier Prime',monospace;font-size:12px;color:var(--ink);padding:2px 0}
+  .shelf-demo button{background:transparent;border:1px solid var(--line);border-radius:3px;font-family:'Shippori Mincho',serif;font-size:11px;color:var(--ink-soft);padding:4px 10px;cursor:pointer;white-space:nowrap}
+  .shelf-demo button:hover{color:var(--seal);border-color:var(--seal)}
   .transit-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft);margin-bottom:4px}
   .transit-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);letter-spacing:0.06em;margin-top:12px;opacity:0.85}
   .postmark{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 12px 64px;border-bottom:1px dashed var(--line);font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
@@ -364,7 +370,7 @@
 
   /* ---- エモーショナル・カラー・ピッカー：曖昧なグラデーションから「今の気分に近い場所」をタップ ---- */
   .color-band{position:relative;height:32px;border-radius:18px;border:1px solid var(--line);cursor:pointer;flex:1;min-width:150px;
-    background:linear-gradient(90deg,#54617a,#6B8478,#b9a06a,#B5543A,#8a6e8c,#54463B);opacity:0.9;
+    background:linear-gradient(90deg,#6b7280,#5b7c99,#8b9d6f,#d4a574,#e67e50,#d97159);opacity:0.9;
     touch-action:none;user-select:none;-webkit-user-select:none}
   /* カーソルは left ではなく transform で動かす（GPU合成でなめらか）。
      タップ時はスッと滑り（transition）、ドラッグ中(.dragging)は指に1:1で追従させる */
@@ -550,10 +556,13 @@
 
   /* ── 便箋の透かし問い：書き始められない人にだけ薄く現れ、書き始めたら消える ── */
   .poem{position:relative}
-  .poem-wm{position:absolute;left:0;top:0;right:0;pointer-events:none;font-family:'Shippori Mincho',serif;
+  .poem-wm{position:absolute;left:0;top:0;right:0;z-index:2;pointer-events:none;font-family:'Shippori Mincho',serif;
     font-size:15px;line-height:36px;color:var(--ink);opacity:0.24;letter-spacing:0.06em;transition:opacity .6s}
   .poem-wm .wm-sub{display:block;font-size:11px;opacity:0.8;letter-spacing:0.04em}
+  /* 「今は書きたくない」だけは触れる（透かし本体は pointer-events:none のまま） */
+  .poem-wm .wm-dismiss{pointer-events:auto;cursor:pointer;display:inline-block;padding:2px 4px;margin-left:6px;text-decoration:underline;text-underline-offset:3px;opacity:0.75}
   .poem-wm.hide{opacity:0}
+  .poem-wm.hide .wm-dismiss{pointer-events:none}
 </style>
 </head>
 <body>
@@ -1084,7 +1093,8 @@
 
   // ---- エモーショナル・カラー・ピッカー ----
   // 曖昧なグラデーションから「今の気分に近い場所」をタップ。選ばれた位置の色を封入する。
-  const MOOD_STOPS=['#54617a','#6B8478','#b9a06a','#B5543A','#8a6e8c','#54463B'];
+  // 左→右で「沈んだ→あたたかい」の感情軸。CSSの .color-band のグラデーションと必ず対で更新する。
+  const MOOD_STOPS=['#6b7280','#5b7c99','#8b9d6f','#d4a574','#e67e50','#d97159'];
   function _hex2rgb(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
   function moodColorAt(r){ // r: 0..1 → グラデーション上の色
     r=Math.max(0,Math.min(1,r));
@@ -1122,28 +1132,61 @@
   wireColorBand(document.getElementById('sealBand'),document.getElementById('sealChip'),c=>{sealColor=c;});
 
   // ---- 便箋の透かし問い：白紙が怖い人への「最初の一行」。書き始めたら消える ----
-  let composeWmQ=null;  // いま便箋に透けている問い（投函時に seal_q として封入される）
+  // すぐには出さない：白紙のまま止まっている人にだけ現れる呼び水。
+  // 「ほとんど書けないまま3分」か「3分なにも触れていない」時に初めて、白紙の上へそっと透ける。
+  let composeWmQ=null;       // いま便箋に用意されている問い（透けた便箋の投函時に seal_q として封入）
+  let wmRevealed=false;      // この一通の便箋で、問いが透けたか（clearComposeでリセット）
+  let wmDismissed=false;     // 「今は書きたくない」。以後このセッションでは二度と出さない
+  let composeStart=Date.now();     // この便箋を書き始められる状態になった時刻
+  let lastActivity=Date.now();     // 最後の打鍵・カーソル活動
   const POEM_PH=poemEl.placeholder;  // 既定のプレースホルダー（透かしが無い時だけ使う）
   function updateWatermarks(){
     const q=(weeklyState.questions&&weeklyState.questions[0])?weeklyState.questions[0].text:null;
     composeWmQ=q||null;
     const wm=document.getElementById('poemWm');
     if(wm){
-      if(q)wm.innerHTML=esc(q)+'<span class="wm-sub">— 書き出せない時は、この問いから。書き始めたら消えます。</span>';
-      wm.classList.toggle('hide',!q||!!poemEl.value);
+      if(q)wm.innerHTML=esc(q)+'<span class="wm-sub">— 書き出せない時は、この問いから。書き始めたら消えます。<span class="wm-dismiss">今は書きたくない</span></span>';
+      // 透かしは「問いがあり・遅延条件を満たし・退けられておらず・白紙」の時だけ
+      const visible=!!q&&wmRevealed&&!wmDismissed&&!poemEl.value;
+      wm.classList.toggle('hide',!visible);
       // 透かしの問いが出ている間はプレースホルダーを消す（二重に重なって読めなくなるため）
-      poemEl.placeholder=q?'':POEM_PH;
+      poemEl.placeholder=visible?'':POEM_PH;
     }
   }
-  poemEl.addEventListener('input',()=>{
+  // 透かし本体は pointer-events:none。「今は書きたくない」だけ触れるようにして、退けたら再表示しない
+  (function(){
     const wm=document.getElementById('poemWm');
-    if(wm)wm.classList.toggle('hide',!composeWmQ||!!poemEl.value);
+    if(wm)wm.addEventListener('click',e=>{
+      if(e.target.classList.contains('wm-dismiss')){wmDismissed=true;updateWatermarks();}
+    });
+  })();
+  poemEl.addEventListener('input',()=>{
+    lastActivity=Date.now();
+    const wm=document.getElementById('poemWm');
+    if(wm){
+      const visible=!!composeWmQ&&wmRevealed&&!wmDismissed&&!poemEl.value;
+      wm.classList.toggle('hide',!visible);
+      poemEl.placeholder=visible?'':POEM_PH;
+    }
   });
+  poemEl.addEventListener('keyup',()=>{lastActivity=Date.now();});
+  document.addEventListener('mousemove',()=>{lastActivity=Date.now();});
+  document.addEventListener('touchstart',()=>{lastActivity=Date.now();},{passive:true});
+  // 10秒ごとに条件を見る：(50字未満のまま3分経過) または (3分なにも触れていない)
+  setInterval(()=>{
+    if(wmRevealed||wmDismissed||!composeWmQ)return;
+    const now=Date.now();
+    const elapsed=(now-composeStart)/1000, idle=(now-lastActivity)/1000;
+    const len=poemEl.value.trim().length;
+    if((len<50&&elapsed>180)||idle>180){wmRevealed=true;updateWatermarks();}
+  },10000);
 
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
     sealColor=null;inquiryAsked=false;
     const sb=document.getElementById('sealBand'),sc=document.getElementById('sealChip');
     if(sb)sb.classList.remove('picked');if(sc)sc.style.visibility='hidden';
+    // 透かしの遅延を仕切り直す（新しい白紙でまた3分待つ）。「今は書きたくない」はセッション中ずっと有効
+    wmRevealed=false;composeStart=Date.now();lastActivity=Date.now();
     updateWatermarks();}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
@@ -1211,7 +1254,7 @@
       weather_event:wEvent||null,
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
-      seal_q: (poem&&composeWmQ)?composeWmQ:null,  // 便箋に透けていた問い（開封時に再提示）
+      seal_q: (poem&&composeWmQ&&wmRevealed)?composeWmQ:null,  // 実際に透けた問いだけ封入（開封時に再提示）
       vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
     },areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は、すぐ下の「封の中」の棚に並ぶ（動線と配置の一致）。
@@ -1441,6 +1484,8 @@ async function detectWeather(){
           (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
           '</div>';
         wirePeel(el.querySelector('[data-peel]'),L.id);
+        // デモ用の手紙は、届いたあとでも開封予定日を未来へ戻せる（開封前のみ）
+        if(L.demo_mode)el.appendChild(demoAdjustRow(L.id,L.demo_arrive_at||L.arrive_at));
       }else{
         el.innerHTML=renderOpenLetter(L,i,sent);
         // 封入インク：書いた日のスナップショットから、開封時に一回だけレンダリング
@@ -1477,8 +1522,25 @@ async function detectWeather(){
         '<div class="shelf-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
         (extras.length?' · '+extras.join('・')+'入り':'')+'</div></div>';
       wireShelfTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
-      list.appendChild(el);});
+      list.appendChild(el);
+      if(S.demo_mode)list.appendChild(demoAdjustRow(S.id,S.arrive_at));});
     startCountdownTicker();
+  }
+
+  // デモ用の手紙だけに出す「開封予定日を動かす」操作列。datetime-local の値をそのまま
+  // /demo-arrive へ送る（端末ローカル時刻＝サーバーの naive datetime と同じ流儀）。
+  function demoAdjustRow(id,arriveIso){
+    const d=document.createElement('div');d.className='shelf-demo';
+    d.innerHTML='<span class="sd-lbl">demo</span><input type="datetime-local"><button>開封日を変更</button>';
+    const inp=d.querySelector('input');
+    if(arriveIso)inp.value=String(arriveIso).slice(0,16);
+    d.querySelector('button').addEventListener('click',async()=>{
+      if(!inp.value){flash('日時を選んでください。');return;}
+      const r=await api('/api/letters/'+id+'/demo-arrive',{method:'POST',body:JSON.stringify({demo_arrive_at:inp.value})});
+      if(r&&r.ok){flash('開封予定日を変えました。');loadMail();}
+      else flash((r&&r.error)||'変更できませんでした。');
+    });
+    return d;
   }
   function wireShelfTap(el){
     el.addEventListener('pointerdown',()=>{
