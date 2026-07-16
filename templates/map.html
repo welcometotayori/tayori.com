@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>封じた場所 — たより</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&family=Courier+Prime&display=swap');
+  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--paper);color:var(--ink);
+       font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+       display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+  header{display:flex;justify-content:space-between;align-items:baseline;
+         padding:16px 20px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+  .ttl{font-size:15px;letter-spacing:0.18em}
+  .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
+               color:var(--ink-soft);text-transform:uppercase;margin-left:10px}
+  .back{font-size:12.5px;letter-spacing:0.1em;color:var(--ink-soft);text-decoration:none;
+        border-bottom:1px solid var(--line);padding-bottom:1px}
+  .back:hover{color:var(--ink)}
+  #map{flex:1;background:var(--paper-2)}
+  /* タイルを紙の世界観へ少しだけ寄せる（彩度を落とし、わずかにセピアへ） */
+  .leaflet-tile{filter:grayscale(.3) sepia(.16) saturate(.8) brightness(1.02)}
+  /* 点に触れた時のささやき（エリア名と時間帯だけ） */
+  .area-tip{background:var(--paper-2);border:1px solid var(--line);border-radius:2px;
+            color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;
+            font-size:12px;letter-spacing:0.08em;padding:5px 10px;
+            box-shadow:0 6px 18px -10px rgba(58,46,37,.5)}
+  .area-tip::before{display:none}
+  .leaflet-container{font-family:inherit}
+</style>
+</head>
+<body>
+  <header>
+    <div class="ttl">封じた場所<span class="romaji">Where sealed</span></div>
+    <a class="back" href="/">もどる</a>
+  </header>
+  <div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(async function(){
+  const map=L.map('map',{zoomControl:true,attributionControl:true});
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // 時間帯の色。朝=薄青、昼=濃いめのクリーム（薄いままだとタイルに同化する）、夕=テラコッタ、夜=藍。
+  const BUCKET_COLOR={morning:'#A8C5D6',day:'#DFC996',evening:'#C67B5C',night:'#2B3A55'};
+  const BUCKET_JP={morning:'朝',day:'昼',evening:'夕',night:'夜'};
+
+  let points=[];
+  try{
+    const r=await fetch('/api/map',{credentials:'same-origin'});
+    if(r.status===401){location.href='/';return;}
+    points=((await r.json())||{}).points||[];
+  }catch(e){/* 取れなくても地図はそのまま（説明文は出さない） */}
+
+  const latlngs=[];
+  points.forEach(p=>{
+    if(p.area_lat==null||p.area_lng==null)return;
+    const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
+    const m=L.circleMarker(ll,{
+      radius:7,stroke:false,
+      fillColor:BUCKET_COLOR[p.time_bucket]||'#8B7B68',
+      fillOpacity:0.3   // 同じエリアの点は重ねて描き、重なるほど自然に濃くなる
+    }).addTo(map);
+    const label=(p.area_name||'')+(BUCKET_JP[p.time_bucket]?(' · '+BUCKET_JP[p.time_bucket]):'');
+    if(label){
+      m.bindTooltip(label,{direction:'top',offset:[0,-6],className:'area-tip',opacity:1});
+      m.on('click',()=>m.openTooltip());  // タッチ端末でも触れたら囁く
+    }
+  });
+
+  if(latlngs.length){
+    map.fitBounds(L.latLngBounds(latlngs),{padding:[48,48],maxZoom:14});
+  }else{
+    map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図（現在地は使わない）
+  }
+})();
+</script>
+</body>
+</html>

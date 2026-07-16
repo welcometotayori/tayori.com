@@ -459,6 +459,12 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN seal_q TEXT",
             # リテンション：初めて封をした時に一度だけ「ブックマークに」を出す。表示した瞬間にこの列を立てる。
             "ALTER TABLE users ADD COLUMN bookmark_prompt_shown INTEGER DEFAULT 0",
+            # 封じた場所の「エリア」。生の現在地座標は入れない（逆ジオコーディング結果の
+            # エリア名とその代表座標のみ）。位置なし手紙はすべてNULLで正常系。
+            "ALTER TABLE letters ADD COLUMN area_name TEXT",
+            "ALTER TABLE letters ADD COLUMN area_lat REAL",
+            "ALTER TABLE letters ADD COLUMN area_lng REAL",
+            "ALTER TABLE letters ADD COLUMN time_bucket TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -910,6 +916,7 @@ def robots_txt():
         "Allow: /terms\n"
         "Allow: /privacy\n"
         "Disallow: /open/\n"
+        "Disallow: /map\n"
         "Disallow: /api/\n"
         "Disallow: /admin.welcometotayori\n"
         "Disallow: /verify/\n"
@@ -1730,6 +1737,61 @@ def api_weather():
                    humidity=wx.get("humidity"), approx=approx, city=city)
 
 
+# ── 封じた場所のエリア変換（Nominatim逆ジオコーディングのプロキシ）──
+# 受け取った生座標は変換にだけ使い、保存もログも一切しない。
+# 返すのはエリア名と、その「エリアの代表座標」（＝ユーザーの実座標ではない）。
+_NOMINATIM_LOCK = threading.Lock()
+_nominatim_last = 0.0
+# 日本ではsuburbに町名が入ることが多いが保証はないため、狭い順にフォールバックする。
+_AREA_KEYS = ("neighbourhood", "quarter", "suburb", "city_district",
+              "town", "village", "city")
+
+
+@app.route("/api/reverse-geocode", methods=["POST"])
+@login_required
+def api_reverse_geocode():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        lat, lng = float(data.get("lat")), float(data.get("lng"))
+    except (TypeError, ValueError):
+        return jsonify(area_name=None)
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        return jsonify(area_name=None)
+    if not NETWORK_ENABLED:
+        return jsonify(area_name=None)
+
+    # Nominatim利用規約（1req/秒）: 直前の呼び出しから1秒未満なら待ってから叩く。
+    global _nominatim_last
+    with _NOMINATIM_LOCK:
+        wait = 1.0 - (time.monotonic() - _nominatim_last)
+        if wait > 0:
+            time.sleep(wait)
+        _nominatim_last = time.monotonic()
+
+    url = ("https://nominatim.openstreetmap.org/reverse"
+           f"?format=jsonv2&lat={lat}&lon={lng}&accept-language=ja")
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "tayori/1.0 (https://www.tayori-letter.com)"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            d = json.loads(r.read().decode())
+    except Exception:
+        # 失敗しても封緘フローは止めない。座標が残るためエラー詳細もログに出さない。
+        return jsonify(area_name=None)
+
+    addr = d.get("address") or {}
+    area = next((addr[k] for k in _AREA_KEYS if addr.get(k)), None)
+    try:
+        # 結果オブジェクト側の座標＝エリアの代表点。念のため約100m（小数第3位）に丸める。
+        area_lat = round(float(d.get("lat")), 3)
+        area_lng = round(float(d.get("lon")), 3)
+    except (TypeError, ValueError):
+        area_lat = area_lng = None
+    if not area or area_lat is None or area_lng is None:
+        return jsonify(area_name=None)
+    return jsonify(area_name=str(area)[:80], area_lat=area_lat, area_lng=area_lng)
+
+
 @app.route("/api/locate", methods=["POST"])
 @login_required
 def api_locate():
@@ -1742,6 +1804,30 @@ def api_locate():
                          (str(lat), str(lon), uid()))
         get_db().commit()
     return jsonify(ok=True)
+
+
+# ── 封じた場所の地図 ─────────────────────────────────────────────
+# 手紙を封じた場所が、事後的に点になるだけの地図。
+# 出すのはエリア名・時間帯・点の存在のみ。本文・日付・開封状態には一切つながない。
+
+@app.route("/map")
+def map_page():
+    guard = _page_login_guard()
+    if guard:
+        return guard
+    return render_template("map.html")
+
+
+@app.route("/api/map")
+@login_required
+def api_map():
+    # 手紙のidすら返さない（地図から本文へたどる経路を持たせない）。
+    rows = get_db().execute(
+        """SELECT area_name, area_lat, area_lng, time_bucket FROM letters
+           WHERE user_id=? AND area_name IS NOT NULL
+             AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
+        (uid(),)).fetchall()
+    return jsonify(points=[dict(r) for r in rows])
 
 
 @app.route("/api/letters")
@@ -1810,17 +1896,32 @@ def api_create_letter():
     if trace and len(trace) > 600_000:
         trace = None
 
+    # 封じた場所のエリア（逆ジオコーディング済みの名前と代表座標のみ。生座標は受けない前提）。
+    # 名前・座標・時間帯が揃っていなければ、すべてNULLの「位置なし手紙」として扱う。
+    area_name = (str(data.get("area_name") or "")).strip()[:80] or None
+    time_bucket = data.get("time_bucket")
+    if time_bucket not in ("morning", "day", "evening", "night"):
+        time_bucket = None
+    try:
+        area_lat = round(float(data.get("area_lat")), 3)
+        area_lng = round(float(data.get("area_lng")), 3)
+    except (TypeError, ValueError):
+        area_lat = area_lng = None
+    if not (area_name and area_lat is not None and area_lng is not None
+            and -90.0 <= area_lat <= 90.0 and -180.0 <= area_lng <= 180.0):
+        area_name = area_lat = area_lng = time_bucket = None
+
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
-             seal_color, seal_q),
+             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket),
         )
         db.commit()
     return jsonify(id=lid, ok=True)

@@ -269,6 +269,12 @@
   .mini-act{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--teal)}
   .mini-act:hover{color:var(--seal)}
   .tl-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);text-align:center;margin-bottom:8px;letter-spacing:0.06em;line-height:1.9}
+  /* 封じた場所の地図への、静かな導線 */
+  .map-link-row{text-align:center;margin:30px 0 6px}
+  .map-link{font-family:'Shippori Mincho',serif;font-size:12.5px;letter-spacing:0.12em;color:var(--ink-soft);
+            text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
+  .map-link:hover{color:var(--ink)}
+  .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;margin-left:8px;text-transform:uppercase}
   .tl-filter{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 26px}
   .tl{position:relative;margin-left:14px;padding-left:26px;border-left:1.5px solid var(--line)}
   .tl-node{position:relative;margin-bottom:26px}
@@ -707,6 +713,7 @@
     </div>
     <p class="tl-intro">あなたのたよりの、全部。<br>過去から、まだ届いていない未来まで。</p>
     <div class="tl" id="tlList"></div>
+    <div class="map-link-row"><a class="map-link" href="/map">封じた場所<span class="sub">map</span></a></div>
   </section>
 
   <footer>
@@ -1082,7 +1089,10 @@
     else                  label=jpDate(arrival)+' '+(timeInput.value||'09:00');
 
     sealCap.textContent='封をしました';sealing.classList.add('on');
-    await api('/api/letters',{method:'POST',body:JSON.stringify({
+    // エリア変換が走っていれば少しだけ待つ。間に合わなければ位置なしで確定する
+    // （封じる体験の即時性 > 位置データの完全性）。
+    if(_areaPromise&&!sealArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
+    await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({
       poem,photo:photoData,voice:voiceData,
       trace: poemTrace.length>1 ? poemTrace : null,
       arrive_at:isoDateTime(arrival),arrive_label:label,arrive_hidden:hidden,
@@ -1090,7 +1100,7 @@
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
       seal_q: (poem&&composeWmQ)?composeWmQ:null   // 便箋に透けていた問い（開封時に再提示）
-    })});
+    },areaPayload()))});
     setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();flash('封をしました。受信に、一通。');goTab('mailbox');},1700);
   }
 
@@ -1147,6 +1157,31 @@
   const threadCollapsed=new Set();  // 会話を「しまう」たよりIDを保持（再描画でも維持）
   let currentWeather=null; // {temp, condition, temp_tag}
   let lastGeoError=null;   // 失敗理由: denied/timeout/unavailable/unsupported/serveroff/fetchfail
+
+  // 封じた場所のエリア（逆ジオコーディング結果）。取れなくても何も言わずに諦める。
+  // 座標はブラウザ位置情報の1回の取得（detectWeather内）を天気と共用し、追加の許可は求めない。
+  let sealArea=null;      // {area_name, area_lat, area_lng}
+  let _areaPromise=null;  // 進行中の変換。封じる時に少しだけ待ち合わせる
+  function requestArea(lat,lng){
+    if(_areaPromise)return;
+    _areaPromise=api('/api/reverse-geocode',{method:'POST',body:JSON.stringify({lat,lng})})
+      .then(r=>{if(r&&r.area_name!=null&&r.area_lat!=null){sealArea={area_name:r.area_name,area_lat:r.area_lat,area_lng:r.area_lng};}})
+      .catch(()=>{});
+  }
+  // 時間帯は端末のローカル時刻で確定する（サーバーのタイムゾーンに依存させない）
+  function timeBucket(){
+    const h=new Date().getHours();
+    if(h>=5&&h<11)return 'morning';
+    if(h>=11&&h<17)return 'day';
+    if(h>=17&&h<21)return 'evening';
+    return 'night';
+  }
+  // 封緘POSTに同梱するエリア欄。エリアが取れていなければ全てnull（位置なし手紙）。
+  function areaPayload(){
+    return sealArea
+      ? {area_name:sealArea.area_name,area_lat:sealArea.area_lat,area_lng:sealArea.area_lng,time_bucket:timeBucket()}
+      : {area_name:null,area_lat:null,area_lng:null,time_bucket:null};
+  }
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
 
 async function detectWeather(){
@@ -1170,6 +1205,7 @@ async function detectWeather(){
       });
       if(pos){
         console.log('[たより] 位置取得OK', pos.coords.latitude, pos.coords.longitude);
+        requestArea(pos.coords.latitude,pos.coords.longitude); // エリア変換は並行で（待たない・失敗しても無言）
         try{
           const w=await api('/api/weather?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude);
           if(w&&w.ok){ currentWeather=w; console.log('[たより] 天気取得OK', w.condition, w.temp+'℃'); return; }
@@ -1596,8 +1632,8 @@ async function detectWeather(){
     if(!t){flash('封印する言葉がありません。');return;}
     const arrival=addDays(today,90+Math.floor(Math.random()*275));
     sealCap.textContent='未来へ封印しました';sealing.classList.add('on');
-    await api('/api/letters',{method:'POST',body:JSON.stringify({poem:t.slice(0,80),
-      arrive_at:isoDate(arrival)+'T09:00:00',arrive_label:jpDate(arrival)+'（'+humanGapFromSeconds(daysBetween(arrival,today)*86400)+'）',from_reply:true})});
+    await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({poem:t.slice(0,80),
+      arrive_at:isoDate(arrival)+'T09:00:00',arrive_label:jpDate(arrival)+'（'+humanGapFromSeconds(daysBetween(arrival,today)*86400)+'）',from_reply:true},areaPayload()))});
     setTimeout(()=>{sealing.classList.remove('on');flash('今の返事が、未来の自分へ。');goTab('mailbox');},1700);}
 
   // timeline
