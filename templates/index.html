@@ -202,7 +202,7 @@
   @keyframes waxSink{0%{transform:none}42%{transform:translateY(3px) scale(.88);filter:brightness(.94)}100%{transform:none}}
   @media (prefers-reduced-motion:reduce){.transit-inner .wax.dim.press{animation:none}}
   .transit-when{font-family:'Shippori Mincho',serif;font-size:17px;color:var(--seal);letter-spacing:0.1em;margin-bottom:8px}
-  /* 封の中の棚：投函（封をする）ボタンの直上に、封をした手紙が静かに並ぶ */
+  /* 封の中の棚：受信の届いたたよりの下に、封をした手紙が静かに並ぶ */
   .sealed-shelf{margin:2px 0 16px;padding-top:14px;border-top:1px dashed var(--line)}
   .shelf-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:12px;opacity:0.7}
   .shelf-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px dashed var(--line);border-radius:3px;margin-bottom:8px;user-select:none;
@@ -763,11 +763,6 @@
           <span class="color-chip" id="sealChip" style="visibility:hidden"></span>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。開封の日に、もう一度選んで見比べます</div>
-        <!-- 封をした手紙の一覧：「封をする → 投函」の動作フローに合わせ、投函ボタンの直上に置く -->
-        <div class="sealed-shelf" id="sealedShelf" style="display:none">
-          <div class="shelf-label">― 封の中 · まだ届かないたより ―</div>
-          <div id="sealedShelfList"></div>
-        </div>
         <button class="send" id="sendBtn">封 を す る</button>
       </div>
     </div>
@@ -778,6 +773,11 @@
 
   <section class="panel" id="mailbox">
     <div id="mailList"></div>
+    <!-- 封をした手紙の一覧：届いたたよりの下で「あと◯日」を静かに数える -->
+    <div class="sealed-shelf" id="sealedShelf" style="display:none">
+      <div class="shelf-label">― 封の中 · まだ届かないたより ―</div>
+      <div id="sealedShelfList"></div>
+    </div>
   </section>
 
   <section class="panel" id="timeline">
@@ -1247,7 +1247,7 @@
     // エリア変換が走っていれば少しだけ待つ。間に合わなければ位置なしで確定する
     // （封じる体験の即時性 > 位置データの完全性）。
     if(_areaPromise&&!currentArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
-    await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({
+    const sealRes=await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({
       poem,photo:photoData,voice:voiceData,
       trace: poemTrace.length>1 ? poemTrace : null,
       arrive_at:isoDateTime(arrival),arrive_label:label,arrive_hidden:hidden,
@@ -1257,8 +1257,16 @@
       seal_q: (poem&&composeWmQ&&wmRevealed)?composeWmQ:null,  // 実際に透けた問いだけ封入（開封時に再提示）
       vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
     },areaPayload()))});
-    // 封をしたら投函の画面に留まる。封をした手紙は、すぐ下の「封の中」の棚に並ぶ（動線と配置の一致）。
-    setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();loadMail();flash('封をしました。');},1700);
+    // 封をしたら投函の画面に留まる。封をした手紙は「受信」の下の「封の中」の棚に並ぶ。
+    setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();loadMail();flash('封をしました。');
+      // 開封のお知らせメールは認証済みアドレスにしか送られない。届かない状態のまま投函した時は、そのたびに知らせる。
+      if(sealRes&&sealRes.ok&&sealRes.notify_off){
+        const msg=sealRes.notify_reason==='pending'
+          ?'メールの確認がまだのため、届いた時のお知らせは送られません。確認メールのリンクを開いてください。'
+          :'お知らせメールが未設定のため、届いても通知は行きません。右上の封筒マークから設定できます。';
+        setTimeout(()=>flash(msg,4200),2400);
+      }
+    },1700);
   }
 
   // 栞：封じる直前に、自分の書いた言葉をそのまま映す。選択肢は「このまま封じる」「一言書き足して封じる」の二つだけ。
@@ -1302,12 +1310,12 @@
   // WEVENT_LABEL は受信描画でも使うのでグローバルに置く
   
 
-  function flash(msg){const n=document.createElement('div');n.textContent=msg;
+  function flash(msg,ms){const n=document.createElement('div');n.textContent=msg;
     n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#3A2E25;color:#F2EBDD;'+
       'font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
       'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:.3s;text-align:center;max-width:80%';
     document.body.appendChild(n);requestAnimationFrame(()=>n.style.opacity='1');
-    setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),300);},2200);}
+    setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),300);},ms||2200);}
 
   // mailbox
   const mailList=document.getElementById('mailList');
@@ -1464,7 +1472,7 @@ async function detectWeather(){
     {const mr=document.createElement('div');mr.className='map-link-row';
      mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>';
      mailList.appendChild(mr);}
-    renderSealedShelf();  // 封の中の一覧は「投函」の封をするボタンの直上へ（動線と配置を一致させる）
+    renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
     if(!received.length && !inTransit.length){
       const p=document.createElement('p');p.className='mail-intro';
       p.innerHTML='まだ届いたたよりはありません。<br>投函したたよりは、届く時が来たらここに。';mailList.appendChild(p);
@@ -1472,7 +1480,7 @@ async function detectWeather(){
     if(received.length){const intro=document.createElement('p');intro.className='mail-intro';
       intro.innerHTML='過去のあなたから、たよりが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
     else if(inTransit.length){const intro=document.createElement('p');intro.className='mail-intro';
-      intro.innerHTML='まだ届いたたよりはありません。<br>封の中のたよりは、「投函」の便箋のそばで待っています。';mailList.appendChild(intro);}
+      intro.innerHTML='まだ届いたたよりはありません。<br>封の中のたよりは、この下で待っています。';mailList.appendChild(intro);}
     
     received.forEach((L,i)=>{const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
       const sent=parseISO(L.sent_date);
@@ -1497,7 +1505,7 @@ async function detectWeather(){
     startCountdownTicker();
     wireOpenLetters();}
 
-  // 封の中の棚：封をした手紙の一覧・確認。「封をする → 投函」の動線に合わせ、投函ボタンの直上に描く。
+  // 封の中の棚：封をした手紙の一覧・確認。「受信」の届いたたよりの下に描く（あと何日かは受信箱で見る）。
   function renderSealedShelf(){
     const shelf=document.getElementById('sealedShelf'),list=document.getElementById('sealedShelfList');
     if(!shelf||!list)return;

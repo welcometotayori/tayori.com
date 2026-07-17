@@ -2000,7 +2000,15 @@ def api_create_letter():
              seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical),
         )
         db.commit()
-    return jsonify(id=lid, ok=True)
+    # 開封のお知らせメールは認証済みアドレスにしか送られない（_check_and_notify の条件と対）。
+    # 未設定／確認待ちのまま投函した時は、そのたびに知らせられるよう状態を返す。
+    u = db.execute("SELECT email, COALESCE(email_verified,0) AS verified FROM users WHERE id=?", (uid(),)).fetchone()
+    notify_reason = None
+    if not (u and u["email"]):
+        notify_reason = "none"
+    elif not u["verified"]:
+        notify_reason = "pending"
+    return jsonify(id=lid, ok=True, notify_off=bool(notify_reason), notify_reason=notify_reason)
 
 
 # ── デモ用：開封予定日時の上書き ─────────────────────────────────
