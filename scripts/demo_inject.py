@@ -93,6 +93,15 @@ def main():
     ap.add_argument("--arrive", help="開封予定日時（ISO形式。省略時は今から30日後）")
     args = ap.parse_args()
 
+    # --lat / --lng は必ずペアで渡す（片方だけでは座標にならない）
+    if (args.lat is None) != (args.lng is None):
+        print("--lat と --lng は必ずセットで指定してください（片方だけでは座標になりません）。")
+        return 1
+    # 座標だけ渡されても、場所名（--place）が無いと地図のラベルにできない
+    if args.lat is not None and not args.place:
+        print("--lat/--lng を使うときは --place で場所名も一緒に指定してください（地図のラベルに使います）。")
+        return 1
+
     poem = args.text.rstrip()[:80]
     if not poem.strip():
         print("言葉が空です。--text に本文を渡してください。")
@@ -112,8 +121,10 @@ def main():
         if args.lat is not None and args.lng is not None:
             latlng = (args.lat, args.lng)
         if not latlng:
-            print(f"「{args.place}」の座標が分かりません。--lat と --lng を一緒に指定してください。")
-            print(f"（プリセット: {', '.join(PLACES)}）")
+            print(f"「{args.place}」はプリセットにない地名です。詳しい地名を使うときは、"
+                  f"--lat（緯度）と --lng（経度）を一緒に渡してください。")
+            print(f"例: --place 東京都目黒区下目黒 --lat 35.633 --lng 139.706")
+            print(f"（座標なしで使えるプリセット: {', '.join(PLACES)}）")
             return 1
         area_name = args.place.strip()[:80]
         area_lat, area_lng = round(latlng[0], 3), round(latlng[1], 3)

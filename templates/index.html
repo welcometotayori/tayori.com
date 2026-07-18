@@ -83,10 +83,6 @@
     height:340px;min-height:0;width:144px;max-width:100%;
     background-image:repeating-linear-gradient(270deg,transparent,transparent 35px,var(--line) 35px,var(--line) 36px);
     overflow-x:auto;overflow-y:hidden}
-  /* 透かし問いは書き出しの位置（1列目の行頭）に：便箋と同じ4列の箱を中央に重ねる（横書きと同じ振る舞い） */
-  .poem.vertical .poem-wm{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-    font-feature-settings:"vert";line-break:strict;
-    left:50%;right:auto;width:144px;margin-left:-72px;height:340px;line-height:36px}
   .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
   .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
@@ -146,8 +142,8 @@
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
   /* 一筆箋（問いをたどって綴るモード）への静かな導線 */
-  .qmode-link{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:10px;letter-spacing:0.06em;opacity:0.85}
-  .qmode-link a{color:var(--ink-soft);text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:1px;transition:.2s}
+  .qmode-link{text-align:center;font-family:'Shippori Mincho',serif;font-size:13.5px;font-weight:500;color:var(--ink-soft);margin-top:12px;letter-spacing:0.06em}
+  .qmode-link a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--ink-soft);padding-bottom:1px;transition:.2s}
   .qmode-link a:hover{color:var(--seal);border-color:var(--seal)}
   .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(242,235,221,0.92);backdrop-filter:blur(2px)}
   .sealing.on{display:flex}
@@ -328,11 +324,12 @@
   .mini-act:hover{color:var(--seal)}
   .tl-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);text-align:center;margin-bottom:8px;letter-spacing:0.06em;line-height:1.9}
   /* 封をした場所（地図）への、静かな導線。空気の一文（wx-banner）のすぐ下に置く */
-  .map-link-row{text-align:center;margin:-6px 0 26px}
-  .map-link{font-family:'Shippori Mincho',serif;font-size:12.5px;letter-spacing:0.12em;color:var(--ink-soft);
-            text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
-  .map-link:hover{color:var(--ink)}
-  .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;margin-left:8px;text-transform:uppercase}
+  .map-link-row{text-align:center;margin:8px 0 26px}
+  .map-link{display:inline-flex;align-items:center;gap:8px;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;
+            color:var(--ink);text-decoration:none;background:var(--paper-2);border:1px solid var(--line);border-radius:22px;
+            padding:9px 18px;box-shadow:0 6px 16px -10px rgba(58,46,37,0.5);transition:.2s}
+  .map-link:hover{border-color:var(--ink-soft);box-shadow:0 9px 22px -10px rgba(58,46,37,0.62);transform:translateY(-1px)}
+  .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;text-transform:uppercase}
   .tl-filter{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 26px}
   .tl{position:relative;margin-left:14px;padding-left:26px;border-left:1.5px solid var(--line)}
   .tl-node{position:relative;margin-bottom:26px}
@@ -370,7 +367,7 @@
 
   /* ---- エモーショナル・カラー・ピッカー：曖昧なグラデーションから「今の気分に近い場所」をタップ ---- */
   .color-band{position:relative;height:32px;border-radius:18px;border:1px solid var(--line);cursor:pointer;flex:1;min-width:150px;
-    background:linear-gradient(90deg,#6b7280,#5b7c99,#8b9d6f,#d4a574,#e67e50,#d97159);opacity:0.9;
+    background:linear-gradient(90deg,#d15e5e,#d19860,#d1d15e,#5ed15e,#5ed1d1,#5e5ed1,#b45ed1);opacity:0.95;
     touch-action:none;user-select:none;-webkit-user-select:none}
   /* カーソルは left ではなく transform で動かす（GPU合成でなめらか）。
      タップ時はスッと滑り（transition）、ドラッグ中(.dragging)は指に1:1で追従させる */
@@ -380,6 +377,15 @@
   .color-band.dragging .cb-cursor{transition:opacity .2s}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
   .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(58,46,37,0.25);box-shadow:0 2px 6px -3px rgba(58,46,37,0.5);vertical-align:middle}
+  /* 色相バーを選ぶと浮かぶ、トーンの2Dパッド（上下=明るさ / 左右=濃さ。数値も名前も出さない） */
+  .tone-pop{position:absolute;z-index:70;display:none;padding:8px;background:var(--paper);border:1px solid var(--line);
+    border-radius:8px;box-shadow:0 18px 44px -18px rgba(58,46,37,0.65)}
+  .tone-pop.on{display:block;animation:tpFade .18s ease}
+  @keyframes tpFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .tone-pad{position:relative;width:168px;height:126px;border-radius:5px;cursor:crosshair;touch-action:none;
+    background:linear-gradient(to top,#000,rgba(0,0,0,0)),linear-gradient(to right,#fff,var(--tone-hue,#c33))}
+  .tone-dot{position:absolute;width:16px;height:16px;border-radius:50%;border:2px solid #fff;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.45),0 2px 5px rgba(0,0,0,0.45);transform:translate(-50%,-50%);pointer-events:none}
 
   footer{text-align:center;margin-top:50px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.24em;color:var(--ink-soft);opacity:0.6}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
@@ -554,15 +560,7 @@
   /* ── 開封時の気分タグ ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
 
-  /* ── 便箋の透かし問い：書き始められない人にだけ薄く現れ、書き始めたら消える ── */
   .poem{position:relative}
-  .poem-wm{position:absolute;left:0;top:0;right:0;z-index:2;pointer-events:none;font-family:'Shippori Mincho',serif;
-    font-size:15px;line-height:36px;color:var(--ink);opacity:0.24;letter-spacing:0.06em;transition:opacity .6s}
-  .poem-wm .wm-sub{display:block;font-size:11px;opacity:0.8;letter-spacing:0.04em}
-  /* 「今は書きたくない」だけは触れる（透かし本体は pointer-events:none のまま） */
-  .poem-wm .wm-dismiss{pointer-events:auto;cursor:pointer;display:inline-block;padding:2px 4px;margin-left:6px;text-decoration:underline;text-underline-offset:3px;opacity:0.75}
-  .poem-wm.hide{opacity:0}
-  .poem-wm.hide .wm-dismiss{pointer-events:none}
 </style>
 </head>
 <body>
@@ -698,7 +696,6 @@
       <div class="env-head"><span>差出人 — 今日のあなた</span><span id="todayDate"></span></div>
       <div class="photo-preview" id="photoPreview"></div>
       <div class="poem">
-        <div class="poem-wm hide" id="poemWm"></div>
         <!-- 80字は固定の仕様。短いからこそ、選ばれた言葉だけが手紙になる -->
         <textarea id="poemInput" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
         <div class="poem-count"><span id="poemCount">0</span> / 80</div>
@@ -826,6 +823,9 @@
     </div>
   </div>
 </div>
+
+<!-- 色相を選ぶと浮かぶトーンパッド（上下＝明るさ / 左右＝濃さ。感覚だけの微調整） -->
+<div class="tone-pop" id="tonePop"><div class="tone-pad" id="tonePad"><div class="tone-dot" id="toneDot"></div></div></div>
 
 <script>
 (function(){
@@ -963,21 +963,31 @@
   const poemEl=document.getElementById('poemInput');
   const poemWrap=poemEl.closest('.poem');
   const poemCount=document.getElementById('poemCount');
+  const POEM_PH_H=poemEl.placeholder;   // 横書きの既定プレースホルダー（2行）
+  const POEM_PH_V='言葉を、置く。';       // 縦書き用：1列に収まる短い呼び水
   function updateCount(){
     // 80字は固定の仕様。残りが少なくなったら（72字〜）カウンターが封蝋の色に変わる。
     const n=poemEl.value.length;
     if(poemCount){poemCount.textContent=n;poemCount.parentElement.classList.toggle('near',n>=72);}
-    // 便箋の姿は縦横ともCSSで固定（横＝4行×20字 / 縦＝4列×20字）。動的な採寸はしない。
-    poemEl.style.width='';poemEl.style.height='';
+    poemEl.style.height='';
+    // 横書き：幅はCSS固定（4行×20字）。縦書き：使った列数ぶんに幅を詰め、便箋の中央から
+    // 書き出す（空の左列で右へ偏って見えないように）。1〜4列（各36px＝20字）。
+    if(composeVertical){
+      const cols=Math.min(4,Math.max(1,Math.ceil(n/20)));
+      poemEl.style.width=(cols*36)+'px';
+    }else{
+      poemEl.style.width='';
+    }
   }
 
   // ---- 縦書きトグル：便箋の姿（縦/横）はそのまま手紙に封入され、開封の日も同じ姿で届く ----
   // ボタンはワンタップ切り替え。縦書き中は「横書き」だけ、横書き中は「縦書き」だけを見せる。
   const vertBtn=document.getElementById('vertBtn');
-  let composeVertical=false;
-  try{composeVertical=localStorage.getItem('tayori_vert')==='1';}catch(e){}
+  let composeVertical=true;   // 既定は縦書き（和の便箋の姿を初期状態に）
+  try{const _v=localStorage.getItem('tayori_vert');if(_v!=null)composeVertical=(_v==='1');}catch(e){}
   function applyVertical(){
     if(poemWrap)poemWrap.classList.toggle('vertical',composeVertical);
+    poemEl.placeholder=composeVertical?POEM_PH_V:POEM_PH_H;  // 縦書きは1列に収まる短い呼び水に
     if(vertBtn){
       vertBtn.classList.toggle('on',composeVertical);
       const mk=document.getElementById('vertMark'),lb=document.getElementById('vertLabel');
@@ -1091,36 +1101,89 @@
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
 
-  // ---- エモーショナル・カラー・ピッカー ----
-  // 曖昧なグラデーションから「今の気分に近い場所」をタップ。選ばれた位置の色を封入する。
-  // 左→右で「沈んだ→あたたかい」の感情軸。CSSの .color-band のグラデーションと必ず対で更新する。
-  const MOOD_STOPS=['#6b7280','#5b7c99','#8b9d6f','#d4a574','#e67e50','#d97159'];
-  function _hex2rgb(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
-  function moodColorAt(r){ // r: 0..1 → グラデーション上の色
-    r=Math.max(0,Math.min(1,r));
-    const seg=r*(MOOD_STOPS.length-1),i=Math.min(MOOD_STOPS.length-2,Math.floor(seg)),t=seg-i;
-    const a=_hex2rgb(MOOD_STOPS[i]),b=_hex2rgb(MOOD_STOPS[i+1]);
-    return '#'+a.map((v,k)=>Math.round(v+(b[k]-v)*t).toString(16).padStart(2,'0')).join('');
+  // ---- 気分の色：色相バー＋トーンパッド ----
+  // バーで色相（Plutchikの虹：赤〜紫）を選ぶと、真下に小さなパッドが浮かぶ。
+  // パッドは 上下=明るさ・左右=濃さ の2軸。数値も名前もアイコンも出さない、感覚だけの微調整。
+  const HUE_MAX=300;                         // 赤(0)〜紫(300)
+  const TONE_DEF_S=0.55, TONE_DEF_V=0.82;    // 既定トーン（中明度・中彩度の柔らかい色）
+  function _hsvToHex(h,s,v){
+    h=((h%360)+360)%360;
+    const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
+    let r=0,g=0,b=0;
+    if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}
+    else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}
+    return '#'+[r,g,b].map(n=>Math.round((n+m)*255).toString(16).padStart(2,'0')).join('');
   }
-  // タップでもドラッグ（スワイプ）でも色を探せるようにする。
-  // ドラッグ中はカーソル(.cb-cursor)とプレビュー(チップ)をリアルタイム更新し、
-  // 色の確定 cb(color) は指を離した瞬間に一度だけ呼ぶ（開封時のバンドはcbがAPI送信のため）。
+  // 浮かぶトーンパッド（全バー共通で1個を使い回す）
+  const tonePop=document.getElementById('tonePop'),tonePad=document.getElementById('tonePad'),toneDot=document.getElementById('toneDot');
+  let toneCtx=null;   // {hue,s,v,chip,commit}
+  function _toneColor(){return toneCtx?_hsvToHex(toneCtx.hue,toneCtx.s,toneCtx.v):null;}
+  function _renderTone(){
+    if(!toneCtx)return;
+    tonePad.style.setProperty('--tone-hue','hsl('+(((toneCtx.hue%360)+360)%360)+',100%,50%)');
+    toneDot.style.left=(toneCtx.s*100)+'%';
+    toneDot.style.top=((1-toneCtx.v)*100)+'%';
+    const col=_toneColor();
+    if(toneCtx.chip){toneCtx.chip.style.visibility='visible';toneCtx.chip.style.background=col;}
+  }
+  function openTonePad(band,ctx){
+    toneCtx=ctx;_renderTone();
+    tonePop.classList.add('on');           // 先に表示してから採寸（幅・高さを得る）
+    const r=band.getBoundingClientRect(),pop=tonePop.getBoundingClientRect();
+    const vw=document.documentElement.clientWidth,vh=document.documentElement.clientHeight;
+    let left=r.left+window.scrollX+r.width/2-pop.width/2;
+    left=Math.max(8+window.scrollX,Math.min(window.scrollX+vw-pop.width-8,left));
+    // 基本はバーの真下。画面下に収まらなければバーの上へ。
+    let top=r.bottom+window.scrollY+8;
+    if(r.bottom+8+pop.height>vh)top=r.top+window.scrollY-pop.height-8;
+    tonePop.style.left=left+'px';tonePop.style.top=top+'px';
+  }
+  function closeTonePad(){tonePop.classList.remove('on');toneCtx=null;}
+  (function(){
+    let dragging=false;
+    const setXY=(cx,cy)=>{
+      if(!toneCtx)return;
+      const r=tonePad.getBoundingClientRect();
+      toneCtx.s=Math.max(0,Math.min(1,(cx-r.left)/r.width));
+      toneCtx.v=Math.max(0,Math.min(1,1-(cy-r.top)/r.height));
+      _renderTone();
+    };
+    const commit=()=>{if(toneCtx&&toneCtx.commit)toneCtx.commit(_toneColor());};
+    tonePad.addEventListener('mousedown',e=>{e.preventDefault();dragging=true;setXY(e.clientX,e.clientY);});
+    window.addEventListener('mousemove',e=>{if(dragging)setXY(e.clientX,e.clientY);});
+    window.addEventListener('mouseup',()=>{if(dragging){dragging=false;commit();}});
+    tonePad.addEventListener('touchstart',e=>{dragging=true;const t=e.touches[0];setXY(t.clientX,t.clientY);},{passive:true});
+    window.addEventListener('touchmove',e=>{if(dragging){const t=e.touches[0];setXY(t.clientX,t.clientY);}},{passive:true});
+    window.addEventListener('touchend',()=>{if(dragging){dragging=false;commit();}});
+    // パッドの外（バー以外）を触れたら、そっと閉じる
+    const outside=e=>{if(tonePop.classList.contains('on')&&!tonePop.contains(e.target)&&!(e.target.closest&&e.target.closest('.color-band')))closeTonePad();};
+    document.addEventListener('mousedown',outside);
+    document.addEventListener('touchstart',outside,{passive:true});
+  })();
+
+  // タップ／ドラッグで色相を探し、指を離すとトーンパッドが開く。
+  // cb(color) は「バーを離した時（既定トーンで確定）」と「パッドを離すたび（微調整で再確定）」に呼ぶ。
   function wireColorBand(band,chip,cb){
     if(!band)return;
     const cur=band.querySelector('.cb-cursor');
-    let dragging=false,lastColor=null;
+    let dragging=false,hue=0;
+    band._tone=band._tone||{s:TONE_DEF_S,v:TONE_DEF_V};   // このバーが覚えているトーン（前回を引き継ぐ）
     const apply=clientX=>{
       const rect=band.getBoundingClientRect();
       const x=Math.max(0,Math.min(rect.width,clientX-rect.left));
-      lastColor=moodColorAt(rect.width?x/rect.width:0);
-      if(cur)cur.style.transform='translateX('+(x-1)+'px)';  // leftではなくtransformで滑らかに
+      hue=(rect.width?x/rect.width:0)*HUE_MAX;
+      if(cur)cur.style.transform='translateX('+(x-1)+'px)';
       band.classList.add('picked');
-      if(chip){chip.style.visibility='visible';chip.style.background=lastColor;}
+      if(chip){chip.style.visibility='visible';chip.style.background=_hsvToHex(hue,band._tone.s,band._tone.v);}
     };
     const down=x=>{dragging=true;apply(x);};
-    // .dragging は動き始めてから付ける：単タップはtransitionでスッと滑り、ドラッグは1:1追従
     const move=x=>{if(!dragging)return;band.classList.add('dragging');apply(x);};
-    const up=()=>{if(!dragging)return;dragging=false;band.classList.remove('dragging');if(lastColor)cb(lastColor);};
+    const up=()=>{
+      if(!dragging)return;dragging=false;band.classList.remove('dragging');
+      cb(_hsvToHex(hue,band._tone.s,band._tone.v));   // まず既定トーンで確定（パッド未操作でも色は入る）
+      openTonePad(band,{hue:hue,s:band._tone.s,v:band._tone.v,chip:chip,
+        commit:c=>{band._tone.s=toneCtx.s;band._tone.v=toneCtx.v;cb(c);}});
+    };
     band.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX);});
     window.addEventListener('mousemove',e=>move(e.clientX));
     window.addEventListener('mouseup',up);
@@ -1131,63 +1194,12 @@
   let sealColor=null;   // 投函時に選んだ「いまの気分の色」（手紙に封入される）
   wireColorBand(document.getElementById('sealBand'),document.getElementById('sealChip'),c=>{sealColor=c;});
 
-  // ---- 便箋の透かし問い：白紙が怖い人への「最初の一行」。書き始めたら消える ----
-  // すぐには出さない：白紙のまま止まっている人にだけ現れる呼び水。
-  // 「ほとんど書けないまま3分」か「3分なにも触れていない」時に初めて、白紙の上へそっと透ける。
-  let composeWmQ=null;       // いま便箋に用意されている問い（透けた便箋の投函時に seal_q として封入）
-  let wmRevealed=false;      // この一通の便箋で、問いが透けたか（clearComposeでリセット）
-  let wmDismissed=false;     // 「今は書きたくない」。以後このセッションでは二度と出さない
-  let composeStart=Date.now();     // この便箋を書き始められる状態になった時刻
-  let lastActivity=Date.now();     // 最後の打鍵・カーソル活動
-  const POEM_PH=poemEl.placeholder;  // 既定のプレースホルダー（透かしが無い時だけ使う）
-  function updateWatermarks(){
-    const q=(weeklyState.questions&&weeklyState.questions[0])?weeklyState.questions[0].text:null;
-    composeWmQ=q||null;
-    const wm=document.getElementById('poemWm');
-    if(wm){
-      if(q)wm.innerHTML=esc(q)+'<span class="wm-sub">— 書き出せない時は、この問いから。書き始めたら消えます。<span class="wm-dismiss">今は書きたくない</span></span>';
-      // 透かしは「問いがあり・遅延条件を満たし・退けられておらず・白紙」の時だけ
-      const visible=!!q&&wmRevealed&&!wmDismissed&&!poemEl.value;
-      wm.classList.toggle('hide',!visible);
-      // 透かしの問いが出ている間はプレースホルダーを消す（二重に重なって読めなくなるため）
-      poemEl.placeholder=visible?'':POEM_PH;
-    }
-  }
-  // 透かし本体は pointer-events:none。「今は書きたくない」だけ触れるようにして、退けたら再表示しない
-  (function(){
-    const wm=document.getElementById('poemWm');
-    if(wm)wm.addEventListener('click',e=>{
-      if(e.target.classList.contains('wm-dismiss')){wmDismissed=true;updateWatermarks();}
-    });
-  })();
-  poemEl.addEventListener('input',()=>{
-    lastActivity=Date.now();
-    const wm=document.getElementById('poemWm');
-    if(wm){
-      const visible=!!composeWmQ&&wmRevealed&&!wmDismissed&&!poemEl.value;
-      wm.classList.toggle('hide',!visible);
-      poemEl.placeholder=visible?'':POEM_PH;
-    }
-  });
-  poemEl.addEventListener('keyup',()=>{lastActivity=Date.now();});
-  document.addEventListener('mousemove',()=>{lastActivity=Date.now();});
-  document.addEventListener('touchstart',()=>{lastActivity=Date.now();},{passive:true});
-  // 10秒ごとに条件を見る：(50字未満のまま3分経過) または (3分なにも触れていない)
-  setInterval(()=>{
-    if(wmRevealed||wmDismissed||!composeWmQ)return;
-    const now=Date.now();
-    const elapsed=(now-composeStart)/1000, idle=(now-lastActivity)/1000;
-    const len=poemEl.value.trim().length;
-    if((len<50&&elapsed>180)||idle>180){wmRevealed=true;updateWatermarks();}
-  },10000);
+  // 透かし問い（書き出せない時の問い）はUIごと撤去。便箋は白紙のまま静かに待つ。
 
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
     sealColor=null;inquiryAsked=false;
     const sb=document.getElementById('sealBand'),sc=document.getElementById('sealChip');
-    if(sb)sb.classList.remove('picked');if(sc)sc.style.visibility='hidden';
-    // 透かしの遅延を仕切り直す（新しい白紙でまた3分待つ）。「今は書きたくない」はセッション中ずっと有効
-    wmRevealed=false;composeStart=Date.now();lastActivity=Date.now();
-    updateWatermarks();}
+    if(sb)sb.classList.remove('picked');if(sc)sc.style.visibility='hidden';}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
@@ -1254,7 +1266,7 @@
       weather_event:wEvent||null,
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
-      seal_q: (poem&&composeWmQ&&wmRevealed)?composeWmQ:null,  // 実際に透けた問いだけ封入（開封時に再提示）
+      seal_q: null,                                // 透かし問いは撤去（新規の封入なし）
       vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
     },areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は「受信」の下の「封の中」の棚に並ぶ。
@@ -1275,6 +1287,9 @@
     const iq=document.getElementById('inquiryQ');
     iq.textContent=q;
     iq.classList.toggle('vertical',composeVertical);  // 縦書きの便箋なら、栞の中でも縦書きのまま
+    // 縦書きの時は「このまま封じる」一本に。書き足しボタンは畳む。
+    const addBtn=document.getElementById('inquiryAddBtn');
+    if(addBtn)addBtn.style.display=composeVertical?'none':'';
     const add=document.getElementById('inquiryAdd');
     const ta=document.getElementById('inquiryAddText');
     add.classList.add('hide');ta.value='';
@@ -1410,8 +1425,7 @@ async function detectWeather(){
     if(_weeklyLoading)return; _weeklyLoading=true;
     try{
       const w=await api('/api/weekly');
-      if(w&&!w.__neterror){weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,exhausted:!!w.exhausted};
-        updateWatermarks();}
+      if(w&&!w.__neterror){weeklyState={questions:w.questions||[],issued_at:w.issued_at||null,exhausted:!!w.exhausted};}
     }catch(e){}
     finally{_weeklyLoading=false;}
   }

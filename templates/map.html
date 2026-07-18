@@ -152,9 +152,9 @@
       if(p.area_lat==null||p.area_lng==null)return;
       const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
       const m=L.circleMarker(ll,{
-        radius:7,stroke:false,
+        radius:7.5,stroke:true,color:'#3A2E25',weight:1.25,opacity:0.55,
         fillColor:p.opened?C_OPENED:C_UNREAD,
-        fillOpacity:0.35   // 同じエリアの点は重ねて描き、重なるほど自然に濃くなる
+        fillOpacity:0.55   // 細い墨の縁で地図から浮かせる。重なった点は塗りが濃くなり密度も伝わる
       }).addTo(layer);
       // 未開封＝場所そのものが主役（場所名だけ）。開封後＝封をした時間と空気が主役。
       whisper(m,p.opened?airLabel(p.sent_at,p.time_bucket,p.weather):(p.area_name||''));
