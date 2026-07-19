@@ -109,12 +109,16 @@
   // ── 日照のオーバーレイ（ShadeMap）：その時刻の光と影を地図にまとわせる ──
   // キーが無い・WebGLが使えない環境では黙って素の地図のまま（無くても地図は成立する）。
   // 「あの日⇄今日」の見比べでは、あの日の面に封をした瞬間の光を灯す（下のcmp切替と連動）。
+  // 生成は view（中心・ズーム）が確定してから：view未設定の地図に addTo すると
+  // ShadeMap の onAdd が getBounds() で「Set map center and zoom first」を投げるため、
+  // 初期表示（frameAndIntro で fitBounds/setView した後）に initShade() で載せる。
   const SHADE_KEY={{ shademap_key|tojson }};
-  let shadeMap=null;
-  if(SHADE_KEY&&window.ShadeMap){
+  let shadeMap=null, wantShadeDate=new Date();  // 載せる前に決まった日時は wantShadeDate に控える
+  function initShade(){
+    if(!SHADE_KEY||!window.ShadeMap||shadeMap)return;  // 無キー/未対応/既に載せ済みなら何もしない
     try{
       shadeMap=new ShadeMap({
-        date:new Date(),
+        date:wantShadeDate,
         color:'#01112f',
         opacity:0.6,   // OSMが透けて見える濃さ。デザインレビューで調整余地あり
         apiKey:SHADE_KEY,
@@ -126,7 +130,8 @@
       }).addTo(map);
     }catch(e){shadeMap=null;}
   }
-  function shadeDate(d){if(shadeMap&&d&&!isNaN(d)){try{shadeMap.setDate(d);}catch(e){}}}
+  // 載せる前の呼び出しは wantShadeDate に控えるだけ（initShade がその日時で起動する）
+  function shadeDate(d){if(!d||isNaN(d))return;wantShadeDate=d;if(shadeMap){try{shadeMap.setDate(d);}catch(e){}}}
 
   // 点の色は「状態」で分ける（3色）。
   //   現在地＝青 / 保存した場所（未開封）＝朱（封蝋の色） / 開封後の場所＝灰緑
@@ -214,6 +219,7 @@
     }else{
       map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図
     }
+    initShade();  // view が確定してから日照オーバーレイを載せる（未設定だと addTo が例外）
     drawOpeningArc();
   }
   // コンテナが高さ0のまま寄る（fitBounds）とズームが最大に張り付いて壊れる
