@@ -26,6 +26,8 @@ services:
         sync: false                   # 鍵はダッシュボードで手入力（YAMLには書かない）
       - key: TAYORI_ADMIN_PASSWORD
         sync: false                   # 管理画面パスワードもダッシュボードで設定（既定値は使わない）
+      - key: TAYORI_SHADEMAP_KEY
+        sync: false                   # ShadeMap（地図の日照オーバーレイ）のAPIキー。https://shademap.app/about/ で取得。未設定なら影なしの素の地図
       # --- メール通知（Resend の SMTP インターフェースを使う。コード変更は不要） ---
       - key: TAYORI_BASE_URL
         value: https://tayori-letter.com   # 確認・通知リンクの土台。Webのカスタムドメインが有効になるまでは .onrender.com のURLにする

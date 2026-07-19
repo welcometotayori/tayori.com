@@ -60,6 +60,9 @@
   .cmp button{font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;font-size:12px;letter-spacing:0.08em;
     border:0;border-radius:20px;padding:7px 14px;background:transparent;color:var(--ink-soft);cursor:pointer;transition:background .2s,color .2s}
   .cmp button.on{background:var(--ink);color:var(--paper)}
+  /* 開封の弧を辿る封蝋（雫ほどの小さな点） */
+  .seal-dot{width:14px;height:14px;border-radius:50%;background:var(--seal);
+    border:1px solid rgba(58,46,37,.55);box-shadow:0 2px 8px -2px rgba(58,46,37,.6)}
 </style>
 </head>
 <body>
@@ -87,22 +90,43 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+{% if shademap_key %}
+<script src="https://unpkg.com/leaflet-shadow-simulator@0.67.0/dist/leaflet-shadow-simulator.umd.min.js"
+        integrity="sha256-HVrJNydQ6Xf1BD8GTWex+fgDuzm8+J0W8aUJ4CprUNU=" crossorigin=""></script>
+{% endif %}
+<script src="https://unpkg.com/@elfalem/leaflet-curve@0.9.2/dist/leaflet.curve.js"
+        integrity="sha256-pSiawWAR4m6ldGRrvH2nPO+SgWvFC2PXruKgtP6LNNE=" crossorigin=""></script>
 <script>
 (async function(){
   const map=L.map('map',{zoomControl:true,attributionControl:true});
-  // 下敷きは二層：世界はOSM、日本の範囲だけ国土地理院（GSI）を上に重ねる。
-  // GSIは日本国内がより詳細で、キー不要・出典表記のみ。bounds外はタイル要求自体が飛ばず、
-  // 世界に出た点（旅先・移住先）はそのままOSMの上に立つ。セピアのCSSフィルタは両方にかかる。
+  // 下敷きはOSM一枚。かつては日本の範囲だけ国土地理院タイルを重ねていたが、
+  // 国外（旅先・移住先）では描けず、層も煩雑になるため一本化した。
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
-  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',{
-    bounds:[[20,122],[46,154]],   // 日本のおおよその範囲（沖縄〜北海道・小笠原まで）
-    minZoom:5,                    // 世界図まで引いた時はOSMだけ（日本の周りに画風の継ぎ目を出さない）
-    maxNativeZoom:18,maxZoom:19,  // GSIはz18まで。z19では拡大で保ち、画風が急に切り替わらないように
-    attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>'
-  }).addTo(map);
+
+  // ── 日照のオーバーレイ（ShadeMap）：その時刻の光と影を地図にまとわせる ──
+  // キーが無い・WebGLが使えない環境では黙って素の地図のまま（無くても地図は成立する）。
+  // 「あの日⇄今日」の見比べでは、あの日の面に封をした瞬間の光を灯す（下のcmp切替と連動）。
+  const SHADE_KEY={{ shademap_key|tojson }};
+  let shadeMap=null;
+  if(SHADE_KEY&&window.ShadeMap){
+    try{
+      shadeMap=new ShadeMap({
+        date:new Date(),
+        color:'#01112f',
+        opacity:0.6,   // OSMが透けて見える濃さ。デザインレビューで調整余地あり
+        apiKey:SHADE_KEY,
+        terrainSource:{
+          tileSize:256,maxZoom:15,
+          getSourceUrl:({x,y,z})=>`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`,
+          getElevation:({r,g,b})=>(r*256+g+b/256)-32768
+        }
+      }).addTo(map);
+    }catch(e){shadeMap=null;}
+  }
+  function shadeDate(d){if(shadeMap&&d&&!isNaN(d)){try{shadeMap.setDate(d);}catch(e){}}}
 
   // 点の色は「状態」で分ける（3色）。
   //   現在地＝青 / 保存した場所（未開封）＝朱（封蝋の色） / 開封後の場所＝灰緑
@@ -168,23 +192,100 @@
   if(layerThen){
     // まず「あの日」から。今日に切り替えると、その間に増えた点・開いた封が現れる。
     layerThen.addTo(map);
+    shadeDate(new Date(ASOF));  // あの日の面には、封をした瞬間の光を
     const bar=document.getElementById('cmp');bar.hidden=false;
     const d=new Date(ASOF);
     if(!isNaN(d))document.getElementById('cmpThen').textContent=
       'あの日 · '+d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate();
     bar.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
       bar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-      if(b.dataset.side==='now'){map.removeLayer(layerThen);layerNow.addTo(map);}
-      else{map.removeLayer(layerNow);layerThen.addTo(map);}
+      if(b.dataset.side==='now'){map.removeLayer(layerThen);layerNow.addTo(map);shadeDate(new Date());}
+      else{map.removeLayer(layerNow);layerThen.addTo(map);shadeDate(new Date(ASOF));}
     }));
   }else{
     layerNow.addTo(map);
   }
 
-  if(latlngs.length){
-    map.fitBounds(L.latLngBounds(latlngs),{padding:[48,48],maxZoom:14});
-  }else{
-    map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図
+  const REDUCE=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  function frameAndIntro(){
+    if(latlngs.length){
+      map.fitBounds(L.latLngBounds(latlngs),{padding:[48,48],maxZoom:14});
+    }else{
+      map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図
+    }
+    drawOpeningArc();
+  }
+  // コンテナが高さ0のまま寄る（fitBounds）とズームが最大に張り付いて壊れる
+  // （非表示タブでの復元・埋め込みブラウザ・プリレンダリング等）。
+  // 高さが付くのを待ってから一度だけ実行する（付くまでは静かに待つ。急がない）。
+  (function(){
+    const el=document.getElementById('map');
+    function attempt(){
+      if(el.clientHeight<=0)return false;
+      map.invalidateSize({animate:false});frameAndIntro();return true;
+    }
+    if(!attempt()){
+      const iv=setInterval(()=>{if(attempt())clearInterval(iv);},200);
+    }
+  })();
+
+  // ── 開封の弧：封をした場所と、開いた場所を、一本の弧で結ぶ ──
+  // 開封画面から ?asof= 付きで来た時だけ、いちど。航空路線図のような放物線で
+  // 「手紙が時間と場所を超えて届いた」ことを描く（収集や達成の演出ではない）。
+  // 弧は面の切り替えでも消さない：あの日の点から今日の点へ、時間をまたぐ線だから。
+  function drawOpeningArc(){
+    if(!ASOF||typeof L.curve!=='function')return;
+    // asof＝その手紙の封をした日時。手紙idは返さない原則のまま、日時で点を探す
+    const p=points.find(q=>q.opened&&(q.sent_at||'').slice(0,19)===ASOF&&
+                           q.open_area_lat!=null&&q.open_area_lng!=null&&
+                           q.area_lat!=null&&q.area_lng!=null);
+    if(!p)return;
+    const sealed=[p.area_lat,p.area_lng],opened=[p.open_area_lat,p.open_area_lng];
+    const meters=map.distance(sealed,opened);
+    if(meters<200)return;  // 同じ土地の中なら弧は引かない（差分の「同じ土地」の言葉に任せる）
+    // 弧の高さ：中点から垂直方向へ、2点間の35%。緯度経度の平面近似は長距離で歪むので、
+    // 測地距離（メートル）が伸びるほど係数を絞り、国際間（日本⇄スペイン等）でも破綻させない
+    const k=0.35/(1+meters/4.0e6);
+    const dx=opened[1]-sealed[1],dy=opened[0]-sealed[0];
+    const perp=[-dy,dx],plen=Math.hypot(perp[0],perp[1])||1;
+    const off=Math.hypot(dx,dy)*k;
+    const control=[
+      Math.max(-85,Math.min(85,(sealed[0]+opened[0])/2+perp[0]/plen*off)),
+      (sealed[1]+opened[1])/2+perp[1]/plen*off
+    ];
+    function bezier(t){
+      const mt=1-t;
+      return [mt*mt*sealed[0]+2*mt*t*control[0]+t*t*opened[0],
+              mt*mt*sealed[1]+2*mt*t*control[1]+t*t*opened[1]];
+    }
+    // 弧の全体（両端と頂点）が見えるように寄り直す。上のfitBoundsより優先
+    map.fitBounds(L.latLngBounds([sealed,opened,bezier(0.5)]),{padding:[56,56],maxZoom:13});
+    const arc=L.curve(['M',sealed,'Q',control,opened],
+      {color:'#6A5A4C',weight:2,dashArray:'4,6',fill:false,opacity:0,interactive:false}).addTo(map);
+    // 着いたあと：弧は薄く残り、開いた場所に灰緑の点が残る（触れると土地の名まえ）
+    function settle(){
+      arc.setStyle({opacity:0.45});
+      const m=L.circleMarker(opened,{radius:6,stroke:true,color:'#3A2E25',weight:1.25,
+        opacity:0.75,fillColor:C_OPENED,fillOpacity:0.75}).addTo(map);
+      whisper(m,p.open_area_name||'');
+    }
+    if(REDUCE){settle();return;}  // 動きを控える設定では、静かな弧と点だけ
+    // 1. 弧がゆっくり現れ 2. 封蝋が弧を辿り 3. 着いた場所に点が残る（演出は一回きり）
+    const sealIcon=L.divIcon({className:'',html:'<div class="seal-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+    const t0=performance.now(),FADE=600,FLY=1600;
+    let flyer=null;
+    function step(now){
+      const el=now-t0;
+      if(el<FADE){arc.setStyle({opacity:0.7*(el/FADE)});requestAnimationFrame(step);return;}
+      if(!flyer){arc.setStyle({opacity:0.7});flyer=L.marker(sealed,{icon:sealIcon,interactive:false}).addTo(map);}
+      const t=Math.min((el-FADE)/FLY,1);
+      const e2=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;  // ゆっくり発って、ゆっくり着く
+      flyer.setLatLng(bezier(e2));
+      if(t<1){requestAnimationFrame(step);}
+      else{map.removeLayer(flyer);settle();}
+    }
+    requestAnimationFrame(step);
   }
 
   // ── 現在地の点（青）：いまの日時・時間帯・天気をまとう ──
@@ -196,23 +297,21 @@
     if(h>=17&&h<21)return 'evening';
     return 'night';
   }
-  async function showCurrentPin(){
-    if(!navigator.geolocation)return;
-    const pos=await new Promise(res=>{
-      let done=false;const fin=v=>{if(!done){done=true;res(v);}};
-      navigator.geolocation.getCurrentPosition(p=>fin(p),()=>fin(null),
-        {timeout:10000,maximumAge:600000,enableHighAccuracy:false});
-      setTimeout(()=>fin(null),11000);
-    });
-    if(!pos)return;  // 取れなければ無言で引き下がる
-    const lat=Math.round(pos.coords.latitude*1000)/1000,
-          lng=Math.round(pos.coords.longitude*1000)/1000;
-    let wx=null;
-    try{
-      const r=await fetch('/api/weather?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude,{credentials:'same-origin'});
-      const w=await r.json();
-      if(w&&w.ok)wx={condition:w.condition,temp:w.temp};
-    }catch(e){}
+  // 取得はLeaflet標準の map.locate に一本化。以前は getCurrentPosition の非同期の結果を
+  // 待つ間に fitBounds が確定し、封じた点がある限り現在地へは寄らなかった（初期表示のバグ）。
+  // いまは locationfound で必ず現在地周辺へ寄る（あの日⇄今日の見比べ中だけは弧の全景を優先）。
+  // 座標は描く前に小数第3位へ丸める（生座標は描かない・憲法どおり）。
+  // 拒否・失敗（locationerror）は無言：地図は封じた点の眺め（か、静かな世界図）のまま。
+  const geoCard=document.getElementById('geoAsk');
+  function hideGeoAsk(){
+    if(geoCard&&!geoCard.hidden){geoCard.classList.add('bye');setTimeout(()=>{geoCard.hidden=true;},450);}
+  }
+  let currentShown=false;
+  map.on('locationfound',async e=>{
+    hideGeoAsk();
+    if(currentShown)return;currentShown=true;
+    const lat=Math.round(e.latlng.lat*1000)/1000,
+          lng=Math.round(e.latlng.lng*1000)/1000;
     // 現在地は「今日」の地図の住人。あの日⇄今日の見比べでは、今日の側にだけ現れる。
     L.circleMarker([lat,lng],{
       radius:14,stroke:false,
@@ -223,13 +322,23 @@
       radius:8,color:C_CURRENT,weight:2,opacity:0.9,
       fillColor:C_CURRENT,fillOpacity:0.75
     }).addTo(layerNow);
+    if(!ASOF)map.setView([lat,lng],12);  // 現在地の周辺へ。エリア精度なので寄りすぎない
+    let wx=null;
+    try{
+      const r=await fetch('/api/weather?lat='+e.latlng.lat+'&lon='+e.latlng.lng,{credentials:'same-origin'});
+      const w=await r.json();
+      if(w&&w.ok)wx={condition:w.condition,temp:w.temp};
+    }catch(err){}
     whisper(m,airLabel(new Date().toISOString(),timeBucket(),wx));
-    if(!latlngs.length)map.setView([lat,lng],12);  // 封じた点がまだ無ければ、いまの空の下から始める
+  });
+  map.on('locationerror',hideGeoAsk);  // 黙って引き下がる（エラーもトーストも出さない）
+  function locateQuietly(){
+    map.locate({setView:false,timeout:10000,maximumAge:600000,enableHighAccuracy:false});
   }
-  // 既に許可されている時だけ黙って描く（許可を求めるのは下の geoAsk カードの役目）
-  if(navigator.permissions&&navigator.permissions.query){
+  // 既に許可されている時だけ黙って取りにいく（許可を求めるのは下の geoAsk カードの役目）
+  if(navigator.geolocation&&navigator.permissions&&navigator.permissions.query){
     navigator.permissions.query({name:'geolocation'})
-      .then(st=>{if(st.state==='granted')showCurrentPin();})
+      .then(st=>{if(st.state==='granted')locateQuietly();})
       .catch(()=>{});
   }
 
@@ -237,21 +346,16 @@
   // OS標準風の「位置情報をオンにしてください」は使わない。断られたら（応答が無くても）
   // エラーも文言も出さず、静かに引き下がる（憲法：拒否・失敗時は無言）。
   (function(){
-    const card=document.getElementById('geoAsk');
-    if(!card||!navigator.geolocation)return;
-    const show=()=>{card.hidden=false;};
-    const hide=()=>{card.classList.add('bye');setTimeout(()=>{card.hidden=true;},450);};
+    if(!geoCard||!navigator.geolocation)return;
+    const show=()=>{geoCard.hidden=false;};
     if(navigator.permissions&&navigator.permissions.query){
       navigator.permissions.query({name:'geolocation'})
         .then(st=>{if(st.state!=='granted')show();})
         .catch(show);  // 判定できないブラウザでは、とりあえず頼んでみる
     }else{show();}
-    document.getElementById('geoYes').addEventListener('click',()=>{
-      let done=false;const fin=ok=>{if(!done){done=true;hide();if(ok)showCurrentPin();}};
-      navigator.geolocation.getCurrentPosition(()=>fin(true),()=>fin(false),{timeout:10000,maximumAge:600000,enableHighAccuracy:false});
-      setTimeout(()=>fin(false),11000);  // 応答が無くても止まらない保険
-    });
-    document.getElementById('geoNo').addEventListener('click',hide);
+    // 頼みの結果は locationfound / locationerror が受け、カードもそこで下がる
+    document.getElementById('geoYes').addEventListener('click',locateQuietly);
+    document.getElementById('geoNo').addEventListener('click',hideGeoAsk);
   })();
 })();
 </script>

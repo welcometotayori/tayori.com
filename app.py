@@ -1853,7 +1853,9 @@ def map_page():
     guard = _page_login_guard()
     if guard:
         return guard
-    return render_template("map.html")
+    # ShadeMap（日照シミュレーション）のAPIキー。無ければ地図は素のOSMのまま成立する。
+    return render_template("map.html",
+                           shademap_key=os.environ.get("TAYORI_SHADEMAP_KEY", ""))
 
 
 @app.route("/api/map")
@@ -1869,7 +1871,8 @@ def api_map():
     # 日付の絞り込みはサーバ側で行い、未開封の点の封緘日時をクライアントへ渡さない原則は崩さない。
     until = (request.args.get("until") or "").strip()[:32] or None
     rows = get_db().execute(
-        """SELECT area_name, area_lat, area_lng, time_bucket, opened, opened_at, sent_date, seal_env
+        """SELECT area_name, area_lat, area_lng, time_bucket, opened, opened_at, sent_date, seal_env,
+                  open_area_name, open_area_lat, open_area_lng
            FROM letters
            WHERE user_id=? AND area_name IS NOT NULL
              AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
@@ -1888,6 +1891,11 @@ def api_map():
         if opened_then:
             p["sent_at"] = r["sent_date"]
             p["time_bucket"] = r["time_bucket"]
+            # 開いた場所（エリア名＋丸め座標のみ）。開封の弧（封をした場所⇔開いた場所）の材料。
+            # 未開封の点には付けない＝非対称表示の原則そのまま。
+            p["open_area_name"] = r["open_area_name"]
+            p["open_area_lat"] = r["open_area_lat"]
+            p["open_area_lng"] = r["open_area_lng"]
             try:
                 env = json.loads(r["seal_env"]) if r["seal_env"] else None
             except (TypeError, ValueError):
