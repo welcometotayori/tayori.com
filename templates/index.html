@@ -410,6 +410,12 @@
   .color-band.dragging .cb-cursor{transition:opacity .2s}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
   .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(58,46,37,0.25);box-shadow:0 2px 6px -3px rgba(58,46,37,0.5);vertical-align:middle}
+  /* 選び直せるチップ：色は確定していても、タップすれば色相バーに戻せる。
+     ホバーできないモバイルでは title が効かないので、鉛筆バッジと小さな注記で「直せる」ことを見せる */
+  .recolor-chip{-webkit-appearance:none;appearance:none;padding:0;cursor:pointer;position:relative}
+  .recolor-chip::after{content:'✎';position:absolute;right:-4px;bottom:-4px;font-size:9px;line-height:1;color:var(--ink-soft);
+    background:var(--paper);border:1px solid var(--line);border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center}
+  .recolor-hint{font-family:'Shippori Mincho',serif;font-size:10px;color:var(--ink-soft);opacity:0.75;letter-spacing:0.03em;margin-top:4px;text-align:center}
   /* 色相バーを選ぶと浮かぶ、トーンの2Dパッド（上下=明るさ / 左右=濃さ。数値も名前も出さない） */
   .tone-pop{position:absolute;z-index:70;display:none;padding:8px;background:var(--paper);border:1px solid var(--line);
     border-radius:8px;box-shadow:0 18px 44px -18px rgba(58,46,37,0.65)}
@@ -424,7 +430,8 @@
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
 
   /* auth gate */
-  .gate{position:fixed;inset:0;z-index:80;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:24px;
+  .gate{position:fixed;inset:0;z-index:80;background:var(--paper);display:flex;align-items:center;align-items:safe center;justify-content:center;padding:24px;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
     background-image:radial-gradient(circle at 20% 10%,rgba(181,84,58,0.05),transparent 42%),radial-gradient(circle at 80% 80%,rgba(107,132,120,0.06),transparent 46%)}
   .gate.hidden{display:none}
   .gate-card{max-width:380px;width:100%;text-align:center}
@@ -1043,6 +1050,21 @@
     if(poemTrace.length<3000)poemTrace.push({t:now-traceStart,v:poemEl.value});
   });
   poemEl.addEventListener('input',updateCount);updateCount();
+
+  // 縦書き残像対策：一部モバイルWebKitは vertical-rl の textarea で削除後の再描画が
+  // 走らず、消したはずの文字が残像として残る。データは正しく表示だけがズレるので、
+  // 縦書きのときだけ軽い強制再描画（opacityを一瞬だけ動かし、reflowを挟んで戻す）を
+  // 発火させる。削除に限らず IME確定・貼り付け後も同様に残るため、全ての更新契機で走らせる。
+  function vertRepaint(){
+    if(!composeVertical)return;
+    poemEl.style.opacity='0.999';
+    // 強制reflow：一度レイアウトを読ませてから戻すと確実に再描画が入る
+    void poemEl.offsetHeight;
+    requestAnimationFrame(()=>{poemEl.style.opacity='';});
+  }
+  poemEl.addEventListener('input',vertRepaint);
+  poemEl.addEventListener('compositionend',vertRepaint);  // IME確定後の残像
+  poemEl.addEventListener('paste',()=>requestAnimationFrame(vertRepaint));  // 貼り付けは値確定後に
 
   // voice
   let mediaRec=null,chunks=[],voiceData=null;
@@ -1811,7 +1833,9 @@ async function detectWeather(){
          (L.seal_color?'<span class="color-chip" style="background:'+esc(L.seal_color)+'"></span>':'<div class="ld-val" style="opacity:0.35">—</div>')+
        '</div><span class="ld-arrow">→</span>';
     if(L.open_color){
-      h+='<div class="ld-box"><div class="ld-lbl">今日の色</div><span class="color-chip" style="background:'+esc(L.open_color)+'"></span></div>';
+      h+='<div class="ld-box"><div class="ld-lbl">今日の色</div>'+
+         '<button type="button" class="color-chip recolor-chip" data-recolor="'+L.id+'" style="background:'+esc(L.open_color)+'" title="タップで選び直す" aria-label="今日の色を選び直す"></button>'+
+         '<div class="recolor-hint">タップで選び直す</div></div>';
     }else{
       h+='<div class="ld-box"><div class="ld-lbl">いまの気分の色は？</div><div class="color-band" data-oc="'+L.id+'" style="min-width:0"><div class="cb-cursor"></div></div></div>';
     }
@@ -1898,6 +1922,13 @@ async function detectWeather(){
         if(res&&res.ok){const L=received.find(x=>x.id===id);if(L)L.open_color=c;renderMail();}
       });
     });
+    // 確定した色を「選び直す」：ローカルで未選択に戻して色相バーを再表示する（誤タップの救済）。
+    // 実際の上書きは、もう一度バーで色を選んだときに同じ /color へ再POSTされる（サーバー側は常に最新で上書き）。
+    // ここで離脱した場合は前回の色がサーバーに残ったまま＝何も失われない想定挙動。
+    mailList.querySelectorAll('[data-recolor]').forEach(btn=>btn.addEventListener('click',()=>{
+      const id=btn.dataset.recolor;const L=received.find(x=>x.id===id);
+      if(L){L.open_color=null;renderMail();}
+    }));
     // 一筆箋の点群：投函から開封までの期間の色が、差分の背景をゆっくり流れる
     mailList.querySelectorAll('.ld-dots[data-dots]').forEach(box=>{
       const L=received.find(x=>x.id===box.dataset.dots);if(!L)return;
