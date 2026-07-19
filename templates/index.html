@@ -99,7 +99,13 @@
     padding:var(--vert-pad) 0;
     background-image:repeating-linear-gradient(270deg,transparent,transparent 35px,var(--line) 35px,var(--line) 36px);
     background-position:0 var(--vert-pad);   /* paddingぶん罫線の開始位置をずらし、線と文字のズレを防ぐ */
-    overflow-x:auto;overflow-y:hidden}
+    overflow-x:auto;overflow-y:hidden;
+    caret-color:transparent}                 /* 縦書きはネイティブカーソルを消し、自前カーソル(.vcaret)を描く */
+  /* 自前カーソル：縦書きのネイティブカーソルはフォント字面(17px)に縮むため、横書きと同寸
+     (2px厚×line-height 36px長)の横棒を入力位置に重ねて、横書きと同じ見た目にそろえる */
+  .vcaret{position:absolute;height:2px;background:var(--ink);pointer-events:none;display:none;
+    animation:vcaretBlink .9s steps(1) infinite}
+  @keyframes vcaretBlink{50%{opacity:0}}
   .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
   .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
@@ -738,6 +744,7 @@
       <div class="poem">
         <!-- 80字は固定の仕様。短いからこそ、選ばれた言葉だけが手紙になる -->
         <textarea id="poemInput" maxlength="80" placeholder="言葉を置く。&#10;詩でも、断片でも、声にならなかったことでも。"></textarea>
+        <div class="vcaret" id="poemCaret"></div>   <!-- 縦書き用の自前カーソル（横書きと同寸にそろえる） -->
         <div class="poem-count"><span id="poemCount">0</span> / 80</div>
       </div>
       <div class="voice-row">
@@ -1053,18 +1060,67 @@
 
   // 縦書き残像対策：一部モバイルWebKitは vertical-rl の textarea で削除後の再描画が
   // 走らず、消したはずの文字が残像として残る。データは正しく表示だけがズレるので、
-  // 縦書きのときだけ軽い強制再描画（opacityを一瞬だけ動かし、reflowを挟んで戻す）を
-  // 発火させる。削除に限らず IME確定・貼り付け後も同様に残るため、全ての更新契機で走らせる。
+  // 縦書きのときだけ軽い強制再描画を発火させる（下記A+B）。削除に限らず IME確定・貼り付け後も
+  // 同様に残るため、全ての更新契機で走らせる。
   function vertRepaint(){
     if(!composeVertical)return;
-    poemEl.style.opacity='0.999';
-    // 強制reflow：一度レイアウトを読ませてから戻すと確実に再描画が入る
-    void poemEl.offsetHeight;
-    requestAnimationFrame(()=>{poemEl.style.opacity='';});
+    // opacityの微差では iOS が合成テクスチャを再ラスタライズせず残像が残る。そこで
+    // (A) overflow-x のスクロール層を一度畳んで作り直す（残像はこのスクロール領域に残る）＋
+    // (B) transform を丸1フレーム保持して合成レイヤーごと作り直させる、の二段で直接潰す。
+    poemEl.style.overflowX='hidden';
+    poemEl.style.transform='translateZ(0)';
+    void poemEl.offsetHeight;                 // 強制reflow：ここでレイヤーを一度確定させる
+    requestAnimationFrame(()=>{               // 次フレームで戻す（1フレーム保持が肝）
+      poemEl.style.overflowX='';
+      poemEl.style.transform='';
+    });
   }
   poemEl.addEventListener('input',vertRepaint);
   poemEl.addEventListener('compositionend',vertRepaint);  // IME確定後の残像
   poemEl.addEventListener('paste',()=>requestAnimationFrame(vertRepaint));  // 貼り付けは値確定後に
+
+  // ---- 縦書きの自前カーソル ----
+  // 縦書きのネイティブカーソルはフォント字面(17px)まで縮み、横書き(line-height 36px)より
+  // 明らかに短く見える。CSSでカーソル寸法は指定できないため、ネイティブは透明化し、横書きと
+  // 同寸(2px厚×36px長)の横棒を入力位置に重ねて描く。位置はミラー要素で算出する。
+  const poemCaret=document.getElementById('poemCaret');
+  const POEM_LH=36;   // 罫線1行＝列幅＝line-height。横書きカーソルの長さもこれ
+  // ミラー要素へ写すスタイル（折り返し・字送りを textarea と完全一致させるため）
+  const CARET_MIRROR_PROPS=['boxSizing','paddingTop','paddingRight','paddingBottom','paddingLeft',
+    'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+    'fontFamily','fontSize','fontWeight','fontStyle','fontVariant','letterSpacing','lineHeight',
+    'textTransform','wordSpacing','writingMode','webkitWritingMode','textOrientation','lineBreak',
+    'fontFeatureSettings','wordBreak','overflowWrap','tabSize','direction'];
+  function caretPoint(el,pos){
+    const cs=getComputedStyle(el),div=document.createElement('div'),s=div.style;
+    s.position='absolute';s.visibility='hidden';s.top='0';s.left='-9999px';
+    s.whiteSpace='pre-wrap';s.overflow='hidden';
+    s.boxSizing='border-box';s.width=el.offsetWidth+'px';s.height=el.offsetHeight+'px';
+    CARET_MIRROR_PROPS.forEach(p=>{s[p]=cs[p];});
+    div.textContent=el.value.substring(0,pos);
+    const span=document.createElement('span');
+    span.textContent='　';   // 単一の全角マーカー。全角グリフは列の中央に置かれる
+    div.appendChild(span);
+    el.parentNode.appendChild(div);
+    // offsetLeft+幅/2 ＝ その列の中心（マーカーは line-height 幅の列の中央に来る）
+    const top=span.offsetTop, centerX=span.offsetLeft+span.offsetWidth/2;
+    el.parentNode.removeChild(div);
+    return {top,centerX};
+  }
+  function drawPoemCaret(){
+    if(!composeVertical||document.activeElement!==poemEl){poemCaret.style.display='none';return;}
+    const p=caretPoint(poemEl,poemEl.selectionStart);
+    const x=poemEl.offsetLeft+p.centerX-POEM_LH/2-poemEl.scrollLeft;   // 列の中心に36px棒を載せる
+    const y=poemEl.offsetTop+p.top-poemEl.scrollTop;
+    poemCaret.style.left=x+'px';
+    poemCaret.style.top=(y-1)+'px';        // 2px厚を文字境界に載せる
+    poemCaret.style.width=POEM_LH+'px';    // 列幅(=line-height)いっぱい＝横書きと同寸
+    poemCaret.style.display='block';
+    poemCaret.style.animation='none';void poemCaret.offsetHeight;poemCaret.style.animation='';  // 打鍵直後は点灯
+  }
+  ['input','click','keyup','select','focus','scroll'].forEach(ev=>poemEl.addEventListener(ev,drawPoemCaret));
+  poemEl.addEventListener('blur',()=>{poemCaret.style.display='none';});
+  document.addEventListener('selectionchange',()=>{if(document.activeElement===poemEl)drawPoemCaret();});
 
   // voice
   let mediaRec=null,chunks=[],voiceData=null;
