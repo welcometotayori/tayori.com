@@ -152,9 +152,9 @@
       if(p.area_lat==null||p.area_lng==null)return;
       const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
       const m=L.circleMarker(ll,{
-        radius:7.5,stroke:true,color:'#3A2E25',weight:1.25,opacity:0.55,
+        radius:7.5,stroke:true,color:'#3A2E25',weight:1.25,opacity:0.75,
         fillColor:p.opened?C_OPENED:C_UNREAD,
-        fillOpacity:0.55   // 細い墨の縁で地図から浮かせる。重なった点は塗りが濃くなり密度も伝わる
+        fillOpacity:0.75   // 細い墨の縁で地図から浮かせる。重なった点は塗りが濃くなり密度も伝わる
       }).addTo(layer);
       // 未開封＝場所そのものが主役（場所名だけ）。開封後＝封をした時間と空気が主役。
       whisper(m,p.opened?airLabel(p.sent_at,p.time_bucket,p.weather):(p.area_name||''));
@@ -212,9 +212,14 @@
       if(w&&w.ok)wx={condition:w.condition,temp:w.temp};
     }catch(e){}
     // 現在地は「今日」の地図の住人。あの日⇄今日の見比べでは、今日の側にだけ現れる。
+    L.circleMarker([lat,lng],{
+      radius:14,stroke:false,
+      fillColor:C_CURRENT,fillOpacity:0.18,
+      interactive:false          // ハロー自体はクリック/ホバー判定を持たない
+    }).addTo(layerNow);
     const m=L.circleMarker([lat,lng],{
       radius:8,color:C_CURRENT,weight:2,opacity:0.9,
-      fillColor:C_CURRENT,fillOpacity:0.55
+      fillColor:C_CURRENT,fillOpacity:0.75
     }).addTo(layerNow);
     whisper(m,airLabel(new Date().toISOString(),timeBucket(),wx));
     if(!latlngs.length)map.setView([lat,lng],12);  // 封じた点がまだ無ければ、いまの空の下から始める

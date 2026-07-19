@@ -32,7 +32,8 @@
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
-    --paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--teal:#6B8478;--shadow:#D9CDB8;--line:#CBBBA0}
+    --paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--teal:#6B8478;--shadow:#D9CDB8;--line:#CBBBA0;
+    --vert-pad:16px}   /* 縦書きブロック共通の上下パディング */
   *{box-sizing:border-box;margin:0;padding:0}
   /* 視覚非表示（見た目は変えずクローラー/スクリーンリーダーにだけ伝える） */
   .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -80,8 +81,10 @@
   .poem.vertical textarea{
     writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
-    height:340px;min-height:0;width:144px;max-width:100%;
+    height:calc(340px + var(--vert-pad) * 2);min-height:0;width:144px;max-width:100%;
+    padding:var(--vert-pad) 0;
     background-image:repeating-linear-gradient(270deg,transparent,transparent 35px,var(--line) 35px,var(--line) 36px);
+    background-position:0 var(--vert-pad);   /* paddingぶん罫線の開始位置をずらし、線と文字のズレを防ぐ */
     overflow-x:auto;overflow-y:hidden}
   .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
   .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
@@ -164,7 +167,8 @@
   .inquiry-q.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
     max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden;
-    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto 26px}
+    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto 26px;
+    padding:var(--vert-pad) 0}
   .inquiry-actions{display:flex;flex-direction:column;gap:12px}
   .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
@@ -229,7 +233,8 @@
   .letter-poem.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
     height:min(60vh,380px);overflow-x:auto;overflow-y:hidden;
-    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto;padding-bottom:6px}
+    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto;
+    padding:var(--vert-pad) 0}
   .letter-poem.vertical .tcy{text-combine-upright:all;-webkit-text-combine:horizontal}
   /* タイプ再生のキャレット：縦書きでは寝かせる（文字の下で明滅する短い横線） */
   .letter-poem.vertical .trace-caret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0;display:inline-block}
@@ -369,7 +374,7 @@
 
   /* ---- エモーショナル・カラー・ピッカー：曖昧なグラデーションから「今の気分に近い場所」をタップ ---- */
   .color-band{position:relative;height:32px;border-radius:18px;border:1px solid var(--line);cursor:pointer;flex:1;min-width:150px;
-    background:linear-gradient(90deg,#d15e5e,#d19860,#d1d15e,#5ed15e,#5ed1d1,#5e5ed1,#b45ed1);opacity:0.95;
+    background:linear-gradient(90deg,#D9998C,#E0AD8C,#DDCB86,#A8CBAE,#9FC7C2,#93ADC9,#B79FC4);opacity:0.95;
     touch-action:none;user-select:none;-webkit-user-select:none}
   /* カーソルは left ではなく transform で動かす（GPU合成でなめらか）。
      タップ時はスッと滑り（transition）、ドラッグ中(.dragging)は指に1:1で追従させる */
