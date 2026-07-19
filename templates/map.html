@@ -15,7 +15,9 @@
   html,body{margin:0;height:100%}
   body{background:var(--paper);color:var(--ink);
        font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-       display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+       display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;line-break:strict}
+  /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る */
+  .geo-ask p{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   header{display:flex;justify-content:space-between;align-items:baseline;
          padding:16px 20px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
   .ttl{font-size:15px;letter-spacing:0.18em}
@@ -75,8 +77,8 @@
 
   <!-- 位置情報がまだ許されていない時だけ現れる、手紙からの小さな頼み -->
   <div class="geo-ask" id="geoAsk" hidden>
-    <p>たよりは、封をした場所をしずかにおぼえています。<br>
-       いまの居場所を知らせておくと、つぎに封をしたとき、その土地の名まえがこの地図に残ります。</p>
+    <p>たよりは、<wbr>封をした場所を<wbr>しずかに<wbr>おぼえています。<br>
+       いまの居場所を<wbr>知らせておくと、<wbr>つぎに封をしたとき、<wbr>その土地の名まえが<wbr>この地図に残ります。</p>
     <div class="geo-actions">
       <button class="geo-yes" id="geoYes">居場所を、たよりに知らせる</button>
       <button class="geo-no" id="geoNo">このままで</button>

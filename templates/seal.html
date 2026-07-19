@@ -11,7 +11,9 @@
   :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-       min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
+       min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;line-break:strict}
+  /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る。手紙の抜粋には掛けない */
+  .sealed-sub,.excerpt-empty,.bookmark{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .seal-wrap{max-width:520px;width:100%;padding:52px 26px;text-align:center}
 
   /* 蝋封の演出 */
@@ -58,21 +60,21 @@
     <div class="wax">tayori</div>
     <div class="sealed-msg">
       <h1 class="sealed-title">封をしました</h1>
-      <p class="sealed-sub">この手紙は、いまのあなたの手を離れました。<br>時をおいて、未来のあなたのもとへ。</p>
+      <p class="sealed-sub">この手紙は、<wbr>いまのあなたの手を<wbr>離れました。<br>時をおいて、<wbr>未来のあなたのもとへ。</p>
     </div>
 
     <div class="excerpt">
       {% if fragments %}
         {% for line in fragments %}<p>{{ line }}</p>{% endfor %}
       {% else %}
-        <div class="excerpt-empty">言葉は綴られませんでしたが、この時間そのものが、たよりです。</div>
+        <div class="excerpt-empty">言葉は<wbr>綴られませんでしたが、<wbr>この時間そのものが、<wbr>たよりです。</div>
       {% endif %}
     </div>
 
     <a class="home" href="/">とじる</a>
 
     {% if show_bookmark %}
-    <div class="bookmark">また来たい時は、ブックマークに。</div>
+    <div class="bookmark">また来たい時は、<wbr>ブックマークに。</div>
     {% endif %}
   </div>
 </body>

@@ -42,6 +42,15 @@
     background-image:radial-gradient(circle at 20% 10%,rgba(181,84,58,0.04),transparent 40%),radial-gradient(circle at 80% 80%,rgba(107,132,120,0.05),transparent 45%);overflow-x:hidden}
   body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.5;mix-blend-mode:multiply;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}
+  /* ---- 日本語の折り返し ----
+     定型文は文節の切れ目（<wbr>・句読点の後）でだけ折り返し、語の途中で切らない。
+     一節が行に収まらない時だけ overflow-wrap:anywhere が保険で効く。
+     ユーザーの書いた本文（便箋・手紙・コメント）には掛けず、書かれたままにする。 */
+  body{line-break:strict}
+  .concept-body p,.gate-tag,.gate-note,.gate-err,.acct-hint,.onb-lead,.portrait-lead,
+  .note,.qmode-link,.weather-note,.color-hint,.time-hint,.when-readout,.tl-intro,.ch-lead,
+  .mail-intro,.wx-banner,.thread-empty,.ld-q,.ld-place-note,.seal-future span{
+    word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:0 20px 120px}
   header{padding:46px 0 30px;text-align:center;position:relative}
   .stamp{position:absolute;top:34px;right:6px;width:62px;height:62px;border:1.5px solid var(--seal);border-radius:50%;color:var(--seal);
@@ -584,7 +593,7 @@
       <div class="gate-field">
         <label>名前</label>
         <input type="text" id="gUser" autocomplete="username" placeholder="漢字・かな・英数字でOK">
-        <div class="gate-note" id="gNameNote" style="display:none">未来の自分に届く手紙の、差出人の名前になります。本名や、ふだん呼ばれている名前がおすすめです。</div>
+        <div class="gate-note" id="gNameNote" style="display:none">未来の自分に届く<wbr>手紙の、<wbr>差出人の名前に<wbr>なります。<wbr>本名や、<wbr>ふだん呼ばれている<wbr>名前が<wbr>おすすめです。</div>
       </div>
       <div class="gate-field">
         <label>パスワード</label>
@@ -596,7 +605,7 @@
       <div class="gate-field" id="gEmailField" style="display:none">
         <label>Email（通知用）</label>
         <input type="email" id="gEmail" autocomplete="email" placeholder="you@example.com">
-        <div class="gate-note">※確認・通知メールが<b>迷惑メール（スパム）フォルダ</b>に振り分けられることがあります。届かない場合はそちらをご確認のうえ、「迷惑メールではない」に設定してください。</div>
+        <div class="gate-note">※確認・通知メールが<wbr><b style="white-space:nowrap">迷惑メール（スパム）フォルダ</b>に<wbr>振り分けられることが<wbr>あります。<wbr>届かない場合は<wbr>そちらをご確認のうえ、<wbr>「迷惑メールではない」に<wbr>設定してください。</div>
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
@@ -612,9 +621,9 @@
     <div class="concept-mark">JP<br>たより<br>Post</div>
     <h2 class="concept-title"><span style="font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.42em;color:var(--ink-soft);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
     <div class="concept-body">
-      <p>ここに置いた言葉や写真、声は、いますぐ誰かに届くものではありません。時間をおいて、あなたのもとへ返ってきます。</p>
-      <p>返ってくる言葉に、正解や情報を求めないでください。それらは検索の答えではなく、かつてのあなたからの問いかけです。</p>
-      <p>雨の冷たさや、晴れ間の光。その日の空気に呼応して、たよりの文字は揺らめき、表情を変えます。同じ言葉であっても、日によって違う響きを持つように。</p>
+      <p>ここに置いた<wbr>言葉や写真、<wbr>声は、<wbr>いますぐ<wbr>誰かに届くものでは<wbr>ありません。<wbr>時間をおいて、<wbr>あなたのもとへ<wbr>返ってきます。</p>
+      <p>返ってくる<wbr>言葉に、<wbr>正解や情報を<wbr>求めないでください。<wbr>それらは<wbr>検索の答えではなく、<wbr>かつてのあなたからの<wbr>問いかけです。</p>
+      <p>雨の冷たさや、<wbr>晴れ間の光。<wbr>その日の空気に<wbr>呼応して、<wbr>たよりの文字は<wbr>揺らめき、<wbr>表情を変えます。<wbr>同じ言葉であっても、<wbr>日によって<wbr>違う響きを<wbr>持つように。</p>
     </div>
     <button class="concept-go" id="conceptGo">はじめる</button>
   </div>
@@ -624,7 +633,7 @@
   <div class="onb-inner">
     <div class="onb-head">
       <h2 id="onbTitle">はじめの、問い</h2>
-      <div class="onb-lead">これから届くたよりに、過去のあなた自身が答えるための小さな手がかりです。<br>答えられるものだけで構いません。あとからでも書けます。</div>
+      <div class="onb-lead">これから届くたよりに、<wbr>過去のあなた自身が<wbr>答えるための<wbr>小さな手がかりです。<br>答えられるものだけで<wbr>構いません。<wbr>あとからでも書けます。</div>
     </div>
     <div class="onb-prog" id="onbProg">回答 <b>0</b> / 0</div>
     <div id="onbList"></div>
@@ -639,7 +648,7 @@
   <div class="portrait-inner">
     <div class="portrait-mark">JP<br>たより<br>About You</div>
     <h2 class="portrait-title">あなたについて</h2>
-    <div class="portrait-lead">これまで綴った言葉や写真、声、そして「初めの10の問い」への答え。<br>それらを手がかりに、あなたがどのような人なのかを、書き出します。</div>
+    <div class="portrait-lead">これまで綴った<wbr>言葉や写真、声、<wbr>そして<wbr>「初めの10の問い」への<wbr>答え。<br>それらを手がかりに、<wbr>あなたが<wbr>どのような人なのかを、<wbr>書き出します。</div>
     <div class="portrait-body" id="portraitBody"></div>
     <div class="portrait-meta" id="portraitMeta"></div>
     <div class="portrait-actions">
@@ -664,7 +673,7 @@
       <input type="password" id="setPwNew" class="acct-input" autocomplete="new-password" placeholder="新しいパスワード（8文字以上）">
       <button class="acct-save" id="setPwBtn">パスワードを変更</button>
     </div>
-    <div class="acct-hint">※確認メール・通知メールが迷惑メール（スパム）に入ることがあります。その場合は「迷惑メールではない」を押すと、次から届きやすくなります。</div>
+    <div class="acct-hint">※確認メール・通知メールが<wbr><span style="white-space:nowrap">迷惑メール（スパム）に</span><wbr>入ることがあります。<wbr>その場合は<wbr>「迷惑メールではない」を<wbr>押すと、<wbr>次から届きやすくなります。</div>
     <div class="portrait-actions">
       <button class="portrait-close" id="acctClose">とじる</button>
     </div>
@@ -751,7 +760,7 @@
             <button class="chip" data-ev="年が明けたら">年が明けたら</button>
           </div>
         </div>
-        <div class="weather-note" id="weatherEventNote">位置情報をもとに、その天気が来た日に、ふっと届きます。</div>
+        <div class="weather-note" id="weatherEventNote">位置情報をもとに、<wbr>その天気が来た日に、<wbr>ふっと届きます。</div>
         <div class="field-row when-extra" id="randomRow" style="display:none">
           <label>範囲：</label>
           <div class="chips" id="randomRange">
@@ -766,13 +775,13 @@
           <div class="color-band" id="sealBand"><div class="cb-cursor"></div></div>
           <span class="color-chip" id="sealChip" style="visibility:hidden"></span>
         </div>
-        <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。開封の日に、もう一度選んで見比べます</div>
+        <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。<wbr>開封の日に、<wbr>もう一度選んで<wbr>見比べます</div>
         <button class="send" id="sendBtn">封 を す る</button>
       </div>
     </div>
-    <p class="note">送った瞬間、これは見えなくなります。<br>いいねも、既読も、ここにはありません。</p>
+    <p class="note">送った瞬間、<wbr>これは見えなくなります。<br>いいねも、既読も、<wbr>ここにはありません。</p>
     <!-- 白紙が基本。問いに手を引かれて書きたい日のための、静かな別口（opt-in） -->
-    <p class="qmode-link">白紙が続かない日は、<a href="/letter/new">問いをたどって綴る一筆箋</a>から。</p>
+    <p class="qmode-link">白紙が続かない日は、<wbr><a href="/letter/new">問いをたどって<wbr>綴る一筆箋</a>から。</p>
   </section>
 
   <section class="panel" id="mailbox">
@@ -788,7 +797,7 @@
     <div class="chapters" id="chaptersSec" style="display:none">
       <div class="ch-mark">JP · たより · Chronicle</div>
       <h3 class="ch-title">三ヶ月ごとの、あなた</h3>
-      <div class="ch-lead">その頃、よく使っていた言葉たち。<br>あなた自身の、更新の歴史。</div>
+      <div class="ch-lead">その頃、<wbr>よく使っていた言葉たち。<br>あなた自身の、<wbr>更新の歴史。</div>
       <div class="ch-list" id="chList"></div>
       <div class="ch-actions">
         <!-- 「章を編む」（AIが章題・本文を編む機能）はUIから撤去。将来のopt-inに備えてコードは温存。
@@ -797,7 +806,7 @@
         <div class="ch-meta" id="chMeta"></div>
       </div>
     </div>
-    <p class="tl-intro">あなたのたよりの、全部。<br>過去から、まだ届いていない未来まで。</p>
+    <p class="tl-intro">あなたのたよりの、全部。<br>過去から、<wbr>まだ届いていない<wbr>未来まで。</p>
     <div class="tl" id="tlList"></div>
   </section>
 
@@ -1456,20 +1465,20 @@ async function detectWeather(){
       const t=(currentWeather.temp!=null)?Math.round(currentWeather.temp)+'℃':'';
       // IP推定（approx）のときは、おおよ藐の地域であることを添える
       const place=currentWeather.approx?('おおよそ '+esc(currentWeather.city||'現在地')+' あたり'):'あなたのいる場所';
-      b.innerHTML='いま、'+place+'は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。この空気が、封と開封の記録にそっと残ります。';
+      b.innerHTML='いま、'+place+'は <b>'+esc(WX_JP[currentWeather.condition]||'—')+' '+t+'</b>。<wbr>この空気が、<wbr>封と開封の記録に<wbr>そっと残ります。';
       mailList.appendChild(b);
     } else if(currentWeather===false){
       // 失敗理由（lastGeoError）ごとに、状態と対処法を出し分ける。原因が見えないと直しようがないため。
       const M={
-        insecure:{msg:'このアドレスでは位置情報が<b>使えません</b>',hint:'スマホから http://（MacのIP）で開いていると、ブラウザが http 接続の位置情報をブロックします。MacのSafariで 127.0.0.1:5000 を開くか、https化（ngrok 等）が必要です。'},
-        denied:{msg:'位置情報が<b>拒否</b>されています',hint:'Safari：設定→プライバシーとセキュリティ→位置情報サービスで Safari をオン＋このサイトを許可してください'},
-        timeout:{msg:'位置情報の取得が<b>タイムアウト</b>しました',hint:'もう一度お試しください（電波の良い場所だと取得しやすいです）'},
-        unavailable:{msg:'位置情報を<b>取得できませんでした</b>',hint:'少し時間をおいて、もう一度お試しください'},
+        insecure:{msg:'このアドレスでは<wbr>位置情報が<b>使えません</b>',hint:'スマホから http://（MacのIP）で<wbr>開いていると、<wbr>ブラウザが http 接続の<wbr>位置情報をブロックします。<wbr>MacのSafariで 127.0.0.1:5000 を開くか、<wbr>https化（ngrok 等）が必要です。'},
+        denied:{msg:'位置情報が<b>拒否</b>されています',hint:'Safari：設定→<wbr>プライバシーとセキュリティ→<wbr>位置情報サービスで<wbr> Safari をオン＋<wbr>このサイトを許可してください'},
+        timeout:{msg:'位置情報の取得が<b>タイムアウト</b>しました',hint:'もう一度お試しください<wbr>（電波の良い場所だと<wbr>取得しやすいです）'},
+        unavailable:{msg:'位置情報を<b>取得できませんでした</b>',hint:'少し時間をおいて、<wbr>もう一度お試しください'},
         unsupported:{msg:'このブラウザは位置情報に<b>対応していません</b>',hint:''},
         serveroff:{msg:'天気機能が<b>サーバー側でオフ</b>です',hint:'TAYORI_ENABLE_NETWORK=1 を設定して再起動してください'},
         fetchfail:{msg:'天気の取得に<b>失敗</b>しました',hint:'通信状況を確認して、もう一度お試しください'}
       };
-      const info=M[lastGeoError]||{msg:'天気はいま <b>オフ</b> です（位置情報が取得できていません）',hint:''};
+      const info=M[lastGeoError]||{msg:'天気はいま <b>オフ</b> です<wbr>（位置情報が<wbr>取得できていません）',hint:''};
       const b=document.createElement('div');b.className='wx-banner wx-off';
       b.innerHTML='<span>'+info.msg+'</span>'+
         (info.hint?'<span style="font-size:11px;opacity:0.8;line-height:1.5">'+info.hint+'</span>':'')+
@@ -1491,12 +1500,12 @@ async function detectWeather(){
     renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
     if(!received.length && !inTransit.length){
       const p=document.createElement('p');p.className='mail-intro';
-      p.innerHTML='まだ届いたたよりはありません。<br>投函したたよりは、届く時が来たらここに。';mailList.appendChild(p);
+      p.innerHTML='まだ届いた<wbr>たよりはありません。<br>投函したたよりは、<wbr>届く時が来たら<wbr>ここに。';mailList.appendChild(p);
       return;}
     if(received.length){const intro=document.createElement('p');intro.className='mail-intro';
-      intro.innerHTML='過去のあなたから、たよりが届いています。<br>封を開いて、今のあなたから返事を。';mailList.appendChild(intro);}
+      intro.innerHTML='過去のあなたから、<wbr>たよりが届いています。<br>封を開いて、<wbr>今のあなたから返事を。';mailList.appendChild(intro);}
     else if(inTransit.length){const intro=document.createElement('p');intro.className='mail-intro';
-      intro.innerHTML='まだ届いたたよりはありません。<br>封の中のたよりは、この下で待っています。';mailList.appendChild(intro);}
+      intro.innerHTML='まだ届いた<wbr>たよりはありません。<br>封の中のたよりは、<wbr>この下で待っています。';mailList.appendChild(intro);}
     
     received.forEach((L,i)=>{const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
       const sent=parseISO(L.sent_date);
@@ -1744,7 +1753,7 @@ async function detectWeather(){
            (L.opened_at?'<br><span style="font-size:12px">'+fmtDateTime(L.opened_at)+'</span>':'')+'</div></div></div>';
       if(L.area_name&&L.open_area_name)
         h+='<div class="ld-place-note">'+(L.area_name!==L.open_area_name
-           ?'あの日とは、ちがう土地でこの封を開けています。'
+           ?'あの日とは、<wbr>ちがう土地で<wbr>この封を開けています。'
            :'あの日と、おなじ土地で。')+'</div>';
     }
     // 色の差分：封をした日に選んだ色と、開封のいま選び直す色
@@ -1760,7 +1769,7 @@ async function detectWeather(){
     h+='</div>';
     // 問いへの回答の差分：あの日の便箋に透けていた問いを、いまのあなたへもう一度
     if(L.seal_q)
-      h+='<div class="ld-q">あの日、便箋に透けていた問い<br><b>「'+esc(L.seal_q)+'」</b><br>いまのあなたなら、なんと答えますか。</div>';
+      h+='<div class="ld-q">あの日、<wbr>便箋に透けていた問い<br><b>「'+esc(L.seal_q)+'」</b><br>いまのあなたなら、<wbr>なんと答えますか。</div>';
     // 封をした日の地図と、いまの地図：その間に増えた点を見比べる静かな導線（開封の時だけ現れる）
     h+='<div class="ld-maplink"><a href="/map?asof='+encodeURIComponent((L.sent_date||'').slice(0,19))+'">封をした日の地図と、今日の地図<span class="sub">map</span></a></div>';
     h+='</div>';
@@ -1775,7 +1784,7 @@ async function detectWeather(){
     // コメント本体（時系列＝古い順。新しいことばほど下に積まれていく）
     h+='<div class="thread-msgs'+(collapsed?' collapsed':'')+'">';
     if(!thread.length)
-      h+='<div class="thread-empty">まだ、ことばは交わされていません。</div>';
+      h+='<div class="thread-empty">まだ、<wbr>ことばは<wbr>交わされていません。</div>';
     thread.forEach(m=>{
       const when=fmtDateTime(m.created_at)||(m.created?m.created.slice(0,10):'');
       if(m.who==='now'){
@@ -1793,7 +1802,7 @@ async function detectWeather(){
     h+='<div class="reply-row"><textarea placeholder="今のあなたから、返事を書く…" data-i="'+i+'"></textarea><button class="reply-send" data-reply="'+i+'">残す</button></div>';
     // この返事を「新しいたより」として未来へ封印するかの選択（チェックが入るとボタンは「封じる」に変わる）
     h+='<label class="seal-future"><input type="checkbox" data-sealfut="'+i+'">'+
-       '<span>この返事を、新しいたよりとして未来へ封印する<span class="hint">封をすると、数ヶ月後のあなたに、いまの言葉がもう一度届きます。</span></span></label>';
+       '<span>この返事を、<wbr>新しいたよりとして<wbr>未来へ封印する<span class="hint">封をすると、<wbr>数ヶ月後のあなたに、<wbr>いまの言葉が<wbr>もう一度届きます。</span></span></label>';
     // 折りたたみトグルは各会話の下・中央に（押しやすいピル型ボタン）
     if(thread.length)
       h+='<button class="thread-toggle'+(collapsed?' collapsed':'')+'" data-thtoggle="'+L.id+'">'+
