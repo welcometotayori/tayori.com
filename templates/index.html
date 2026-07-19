@@ -33,7 +33,12 @@
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
     --paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--teal:#6B8478;--shadow:#D9CDB8;--line:#CBBBA0;
-    --vert-pad:16px}   /* 縦書きブロック共通の上下パディング */
+    --vert-pad:16px;   /* 縦書きブロック共通の上下パディング */
+    /* モーション・トークン：曲線を一箇所に集約（値は既存の手書きcubic-bezierと同一） */
+    --ease-soft:cubic-bezier(.2,.9,.3,1);     /* カードのせり上がり・封蝋の戻り */
+    --ease-sink:cubic-bezier(.32,.06,.4,1);   /* 封蝋が沈む */
+    --ease-out:cubic-bezier(.23,1,.32,1);     /* 標準の強いイーズアウト（今後のUI追加はこれを既定に） */
+    --ease-drawer:cubic-bezier(.32,.72,0,1)}  /* iOS風ドロワー曲線（シート/引き出しを足す時用の標準） */
   *{box-sizing:border-box;margin:0;padding:0}
   /* 視覚非表示（見た目は変えずクローラー/スクリーンリーダーにだけ伝える） */
   .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -61,7 +66,7 @@
   .tagline{margin-top:20px;font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink-soft);letter-spacing:0.08em}
   .rule{height:1px;background:var(--line);margin:8px 0 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
   .tabs{display:flex;margin:26px 0 22px;border:1px solid var(--line);border-radius:2px;overflow:hidden}
-  .tab{flex:1;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;color:var(--ink-soft);padding:13px 0;transition:.25s;position:relative}
+  .tab{flex:1;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;color:var(--ink-soft);padding:13px 0;transition:background .25s,color .25s;position:relative}
   .tab+.tab{border-left:1px solid var(--line)}
   .tab.on{background:var(--ink);color:var(--paper)}
   .tab .sub{display:block;font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.2em;margin-top:2px;opacity:0.6}
@@ -100,7 +105,7 @@
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
   .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
-  .voice-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;padding:8px 14px;border-radius:24px;cursor:pointer;transition:.2s}
+  .voice-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;padding:8px 14px;border-radius:24px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
   .voice-btn:hover{border-color:var(--seal);color:var(--seal)}
   .voice-btn.rec{background:var(--seal);border-color:var(--seal);color:var(--paper)}
   .voice-dot{width:8px;height:8px;border-radius:50%;background:var(--seal)}
@@ -112,7 +117,7 @@
   .field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;flex-wrap:wrap;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
   .field-row>label{white-space:nowrap;padding-top:6px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;text-transform:none}
   .chips{display:flex;gap:7px;flex-wrap:wrap;flex:1}
-  .chip{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;border:1px solid var(--line);background:transparent;color:var(--ink-soft);padding:5px 11px;border-radius:20px;cursor:pointer;transition:.2s}
+  .chip{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;border:1px solid var(--line);background:transparent;color:var(--ink-soft);padding:5px 11px;border-radius:20px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
   .chip.on{background:var(--seal);border-color:var(--seal);color:var(--paper)}
   .when-extra{margin-top:-4px}
   .date-pick{font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.06em;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:5px 12px;cursor:pointer}
@@ -150,12 +155,12 @@
   .wx-enable-btn i{font-size:14px;line-height:1}
   .weather-locked-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);
     letter-spacing:0.06em;margin-top:10px}
-  .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:.25s}
+  .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:background .25s}
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
   /* 一筆箋（問いをたどって綴るモード）への静かな導線 */
   .qmode-link{text-align:center;font-family:'Shippori Mincho',serif;font-size:13.5px;font-weight:500;color:var(--ink-soft);margin-top:12px;letter-spacing:0.06em}
-  .qmode-link a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--ink-soft);padding-bottom:1px;transition:.2s}
+  .qmode-link a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--ink-soft);padding-bottom:1px;transition:color .2s,border-color .2s}
   .qmode-link a:hover{color:var(--seal);border-color:var(--seal)}
   .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(242,235,221,0.92);backdrop-filter:blur(2px)}
   .sealing.on{display:flex}
@@ -166,7 +171,7 @@
   .inquiry-ov{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(58,46,37,0.34);backdrop-filter:blur(3px)}
   .inquiry-ov.on{display:flex;animation:iqFade .3s ease}
   @keyframes iqFade{from{opacity:0}to{opacity:1}}
-  .inquiry-card{max-width:420px;width:100%;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:34px 28px 28px;text-align:center;box-shadow:0 26px 60px -22px rgba(58,46,37,0.7);animation:iqRise .42s cubic-bezier(.2,.9,.3,1)}
+  .inquiry-card{max-width:420px;width:100%;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:34px 28px 28px;text-align:center;box-shadow:0 26px 60px -22px rgba(58,46,37,0.7);animation:iqRise .42s var(--ease-soft)}
   @keyframes iqRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
   .inquiry-mark{width:40px;height:40px;margin:0 auto 18px;border-radius:50%;border:1px solid var(--seal);color:var(--seal);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:17px;opacity:.9}
   /* 栞に映すのは自分の言葉そのもの：改行・余白を崩さず、長いときは静かにスクロール */
@@ -179,7 +184,7 @@
     width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto 26px;
     padding:var(--vert-pad) 0}
   .inquiry-actions{display:flex;flex-direction:column;gap:12px}
-  .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
+  .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:opacity .2s,color .2s,border-color .2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
   .inquiry-btn.primary:hover{opacity:.86}
   .inquiry-btn.ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
@@ -208,7 +213,7 @@
   .transit-inner .wax.dim{width:48px;height:48px;border-radius:50%;background:var(--line);color:var(--paper);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:20px;box-shadow:none}
   /* 沈黙のフィードバック：まだ開かない封をタップすると、封蝋がわずかに沈んで戻るだけ（言葉は返さない） */
   .sealed-transit{cursor:default}
-  .transit-inner .wax.dim.press{animation:waxSink .32s cubic-bezier(.32,.06,.4,1)}
+  .transit-inner .wax.dim.press{animation:waxSink .32s var(--ease-sink)}
   @keyframes waxSink{0%{transform:none}42%{transform:translateY(3px) scale(.88);filter:brightness(.94)}100%{transform:none}}
   @media (prefers-reduced-motion:reduce){.transit-inner .wax.dim.press{animation:none}}
   .transit-when{font-family:'Shippori Mincho',serif;font-size:17px;color:var(--seal);letter-spacing:0.1em;margin-bottom:8px}
@@ -218,7 +223,7 @@
   .shelf-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px dashed var(--line);border-radius:3px;margin-bottom:8px;user-select:none;
     background:repeating-linear-gradient(45deg,transparent,transparent 13px,rgba(203,187,160,0.14) 13px,rgba(203,187,160,0.14) 14px)}
   .shelf-item .wax.mini{width:28px;height:28px;border-radius:50%;background:var(--line);color:var(--paper);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:13px;flex-shrink:0;box-shadow:none}
-  .shelf-item .wax.mini.press{animation:waxSink .32s cubic-bezier(.32,.06,.4,1)}
+  .shelf-item .wax.mini.press{animation:waxSink .32s var(--ease-sink)}
   @media (prefers-reduced-motion:reduce){.shelf-item .wax.mini.press{animation:none}}
   .shelf-body{min-width:0}
   .shelf-when{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--seal);letter-spacing:0.06em}
@@ -250,7 +255,7 @@
   /* タイプ再生（TypeTrace）：書いていた時の迷い・間をそのまま再生 */
   .trace-play{display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:transparent;border:1px solid var(--line);
     cursor:pointer;font-family:'Shippori Mincho',serif;font-size:11.5px;letter-spacing:0.08em;color:var(--ink-soft);
-    padding:6px 12px;border-radius:20px;transition:.2s}
+    padding:6px 12px;border-radius:20px;transition:color .2s,border-color .2s,opacity .2s}
   .trace-play:hover{color:var(--seal);border-color:var(--seal)}
   .trace-play svg{width:13px;height:13px}
   .trace-play:disabled{opacity:0.5;cursor:default}
@@ -272,11 +277,23 @@
   .peel-track.grab .peel-trail{transition:none}
   .unopened-tease .wax{width:54px;height:54px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:22px}
   .unopened-tease .wax.peel{position:absolute;left:4px;top:4px;margin:0;cursor:grab;touch-action:none;
-    transition:transform .34s cubic-bezier(.2,.9,.3,1),opacity .34s,box-shadow .2s;
+    transition:transform .34s var(--ease-soft),opacity .34s,box-shadow .2s;
     box-shadow:0 7px 20px -6px rgba(181,84,58,0.62),inset 0 2px 5px rgba(255,255,255,0.22)}
   .unopened-tease .wax.peel:hover{box-shadow:0 10px 24px -6px rgba(181,84,58,0.72),inset 0 2px 5px rgba(255,255,255,0.22)}
   .peel-track.grab .wax.peel{cursor:grabbing;transition:none}
   @media (prefers-reduced-motion:reduce){.unopened-tease .wax.peel,.peel-trail{transition:none}}
+  /* ---- 減モーション（全体）：位置・拡大・回転・流れる装飾は止め、意味のある透明度変化は残す ----
+       スピナー(ink-spin)・録音中(pulse)・キャレット点滅は「状態表示」なので停止しない。 */
+  @keyframes sealFade{0%{opacity:0}25%{opacity:1}82%{opacity:1}100%{opacity:0}}
+  @media (prefers-reduced-motion:reduce){
+    .panel{animation:none}                            /* タブ切替のせり上がりを外す */
+    .concept-inner{animation:none}                    /* 導入のせり上がりを外す */
+    .inquiry-card{animation:iqFade .3s ease}          /* せり上がり→フェードのみ */
+    .letter-highlight{animation:none}                 /* 到着グローの明滅を静的に */
+    .seal-mark{transform:none;animation:sealFade 1.4s ease forwards}  /* 拡大回転→静かなフェード */
+    .ld-dot{animation:none;opacity:.22}               /* 流れる装飾点を停止（静的な点に） */
+    .cb-cursor{transition:opacity .18s}               /* カーソルの横移動トランジションを外す */
+  }
   .unopened-tease .from{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.08em;margin-bottom:5px}
   .unopened-tease .ago{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft)}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
@@ -284,7 +301,7 @@
   /* 会話の折りたたみトグル（各会話の下・中央に置く押しやすいボタン。「開く／閉じる」） */
   .thread-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px auto 2px;padding:10px 22px;
     background:var(--paper);border:1px solid var(--line);border-radius:22px;cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;color:var(--ink-soft);transition:.2s}
+    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;color:var(--ink-soft);transition:color .2s,border-color .2s}
   .thread-toggle:hover{color:var(--seal);border-color:var(--seal)}
   .thread-toggle .tt-count{font-family:'Courier Prime',monospace;font-size:10px;min-width:18px;height:18px;padding:0 5px;border:1px solid var(--line);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-soft)}
   .thread-toggle .tt-chev{font-family:'Shippori Mincho',serif;letter-spacing:0.1em;color:var(--seal)}
@@ -325,7 +342,7 @@
   .reply-row{display:flex;gap:8px;margin-top:14px;align-items:flex-end}
   .reply-row textarea{flex:1;background:var(--paper);border:1px solid var(--line);border-radius:3px;resize:none;font-family:'Shippori Mincho',serif;font-size:15px;line-height:1.8;color:var(--ink);padding:10px 12px;min-height:46px;max-height:120px}
   .reply-row textarea:focus{outline:none;border-color:var(--seal)}
-  .reply-row button{background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.12em;padding:0 16px;height:46px;border-radius:3px;transition:.2s;white-space:nowrap}
+  .reply-row button{background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.12em;padding:0 16px;height:46px;border-radius:3px;transition:background .2s;white-space:nowrap}
   .reply-row button:hover{background:var(--seal)}
   .reply-emos{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
   .reply-emos .chip{font-size:11px;padding:4px 10px}
@@ -343,7 +360,7 @@
   .map-link-row{text-align:center;margin:8px 0 26px}
   .map-link{display:inline-flex;align-items:center;gap:8px;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;
             color:var(--ink);text-decoration:none;background:var(--paper-2);border:1px solid var(--line);border-radius:22px;
-            padding:9px 18px;box-shadow:0 6px 16px -10px rgba(58,46,37,0.5);transition:.2s}
+            padding:9px 18px;box-shadow:0 6px 16px -10px rgba(58,46,37,0.5);transition:border-color .2s,box-shadow .2s,transform .2s}
   .map-link:hover{border-color:var(--ink-soft);box-shadow:0 9px 22px -10px rgba(58,46,37,0.62);transform:translateY(-1px)}
   .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;text-transform:uppercase}
   .tl-filter{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 26px}
@@ -353,7 +370,7 @@
   .tl-node.is-now::before{background:var(--seal)}
   .tl-node.is-future::before{border-color:var(--teal);border-style:dashed}
   .tl-when{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.14em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:4px}
-  .tl-card{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:12px 15px;cursor:pointer;transition:.2s}
+  .tl-card{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:12px 15px;cursor:pointer;transition:border-color .2s}
   .tl-card:hover{border-color:var(--seal)}
   .tl-text{font-family:'Shippori Mincho',serif;font-size:14px;line-height:1.9;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .tl-meta{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:6px;text-transform:uppercase}
@@ -416,7 +433,7 @@
   .gate-tag{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);letter-spacing:0.08em;margin-bottom:30px;line-height:1.9}
   .gate-form{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:26px 24px;box-shadow:0 10px 30px -18px rgba(58,46,37,0.5)}
   .gate-tabs{display:flex;margin-bottom:22px;border:1px solid var(--line);border-radius:2px;overflow:hidden}
-  .gate-tab{flex:1;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;color:var(--ink-soft);padding:11px 0;transition:.25s}
+  .gate-tab{flex:1;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;color:var(--ink-soft);padding:11px 0;transition:background .25s,color .25s}
   .gate-tab+.gate-tab{border-left:1px solid var(--line)}
   .gate-tab.on{background:var(--ink);color:var(--paper)}
   .gate-field{text-align:left;margin-bottom:16px}
@@ -430,7 +447,7 @@
     font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);padding:6px 8px}
   .pw-toggle:hover{color:var(--seal)}
   .gate-submit{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:15px;letter-spacing:0.2em;padding:14px;border-radius:2px;transition:.25s;margin-top:4px}
+    font-size:15px;letter-spacing:0.2em;padding:14px;border-radius:2px;transition:background .25s;margin-top:4px}
   .gate-submit:hover{background:var(--seal)}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   .gate-hint{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);margin-top:18px;opacity:0.8}
@@ -467,7 +484,7 @@
   .concept-body p{font-family:'Shippori Mincho',serif;font-size:14px;line-height:2.1;letter-spacing:0.05em;color:var(--ink-soft);margin:0 0 22px}
   .concept-body b{color:var(--ink);font-weight:normal;border-bottom:1px solid var(--seal);padding-bottom:1px}
   .concept-go{margin-top:14px;width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.24em;padding:15px;border-radius:3px;transition:.25s;
+    font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.24em;padding:15px;border-radius:3px;transition:background .25s,transform .25s;
     box-shadow:0 8px 22px -14px rgba(58,46,37,0.5)}
   .concept-go:hover{background:var(--seal);transform:translateY(-1px)}
   .concept-go:active{transform:translateY(0)}
@@ -493,14 +510,14 @@
     display:flex;flex-direction:column;align-items:center;gap:10px}
   /* Primary：塗りつぶし・主役。ただし「閉じる」を巻き込む誤タップを防ぐため大きすぎない。 */
   .onb-save{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:16px;letter-spacing:0.2em;padding:15px;border-radius:3px;transition:.25s;
+    font-size:16px;letter-spacing:0.2em;padding:15px;border-radius:3px;transition:background .25s,transform .25s,opacity .25s;
     box-shadow:0 8px 22px -14px rgba(58,46,37,0.5)}
   .onb-save:hover{background:var(--seal);transform:translateY(-1px)}
   .onb-save:disabled{opacity:0.4;cursor:default;background:var(--line);transform:none}
   .onb-save:active{transform:translateY(0)}
   /* Secondary：枠線のゴースト調。塗りはしないが、誤タップ防止のため十分なタップ領域を確保。 */
   .onb-skip{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:14px;color:var(--ink-soft);letter-spacing:0.1em;padding:12px;border-radius:3px;transition:.2s}
+    font-size:14px;color:var(--ink-soft);letter-spacing:0.1em;padding:12px;border-radius:3px;transition:color .2s,border-color .2s}
   .onb-skip:hover{color:var(--seal);border-color:var(--seal)}
 
   /* ── あなたの肖像（人物分析オーバーレイ） ── */
@@ -522,12 +539,12 @@
   .portrait-meta{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-soft);text-align:center;opacity:0.7;margin:2px 0 22px;min-height:12px}
   .portrait-actions{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:0 auto}
   .portrait-go{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:15px;letter-spacing:0.18em;padding:14px;border-radius:2px;transition:.2s}
+    font-size:15px;letter-spacing:0.18em;padding:14px;border-radius:2px;transition:background .2s,transform .2s,opacity .2s}
   .portrait-go:hover{background:var(--seal);transform:translateY(-1px)}
   .portrait-go:active{transform:translateY(0)}
   .portrait-go:disabled{opacity:0.45;cursor:default;background:var(--line);transform:none}
   .portrait-close{width:100%;background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:13px;color:var(--ink-soft);letter-spacing:0.1em;padding:11px;border-radius:3px;transition:.2s}
+    font-size:13px;color:var(--ink-soft);letter-spacing:0.1em;padding:11px;border-radius:3px;transition:color .2s,border-color .2s}
   .portrait-close:hover{color:var(--seal);border-color:var(--seal)}
   /* ── 三ヶ月ごとの章（年表タブ上部のキュレーション） ── */
   .chapters{margin:6px 0 40px}
@@ -557,7 +574,7 @@
   .ch-stats{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.85}
   .ch-actions{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:2px}
   .ch-gen{background:none;border:1px solid var(--line);cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:13px;color:var(--ink-soft);letter-spacing:0.12em;padding:10px 26px;border-radius:3px;transition:.2s}
+    font-size:13px;color:var(--ink-soft);letter-spacing:0.12em;padding:10px 26px;border-radius:3px;transition:color .2s,border-color .2s,opacity .2s}
   .ch-gen:hover{color:var(--seal);border-color:var(--seal)}
   .ch-gen:disabled{opacity:0.45;cursor:default}
   .ch-meta{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-soft);opacity:0.7;min-height:12px}
@@ -569,7 +586,7 @@
     font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink)}
   .acct-input:focus{outline:none;border-color:var(--seal)}
   .acct-save{width:100%;background:transparent;border:1px solid var(--line);color:var(--ink-soft);cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;padding:10px;border-radius:3px;transition:.2s}
+    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;padding:10px;border-radius:3px;transition:color .2s,border-color .2s}
   .acct-save:hover{color:var(--seal);border-color:var(--seal)}
   .acct-hint{max-width:360px;margin:0 auto 22px;font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-soft);opacity:0.85;letter-spacing:0.03em}
 
@@ -1339,7 +1356,7 @@
   function flash(msg,ms){const n=document.createElement('div');n.textContent=msg;
     n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#3A2E25;color:#F2EBDD;'+
       'font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
-      'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:.3s;text-align:center;max-width:80%';
+      'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:opacity .3s;text-align:center;max-width:80%';
     document.body.appendChild(n);requestAnimationFrame(()=>n.style.opacity='1');
     setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),300);},ms||2200);}
 
@@ -1597,20 +1614,40 @@ async function detectWeather(){
   // 剥がして開ける：封の帯の上で、封蝋「緘」を左から右へスライドすると封が切れる。
   // タップ・長押しでは開かない（蝋を剥がす指の動きだけが封を切れる）。
   // Pointer Events でマウス・タッチを共通化。途中で離すと封蝋は元の位置へすっと戻る。
+  // apple-design 準拠のジェスチャー：指の速度を受け渡し（フリックでも開く §5-6）、境界は
+  // ラバーバンドで抵抗（§9）、途中で離すと現在位置からバネで戻る（§3-4／戻り中に掴み直しても連続）。
   function wirePeel(track,id){
     if(!track)return;
     const wax=track.querySelector('.wax.peel'),trail=track.querySelector('.peel-trail');
     if(!wax)return;
-    let active=false,sx=0,done=false;
+    let active=false,done=false,sx=0,curX=0,vel=0,lastX=0,lastT=0,spring=null;
+    const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
     const limit=()=>Math.max(40,track.clientWidth-wax.offsetWidth-8); // 右端までの可動距離
-    function setX(x){
+    // 境界を越えた分だけ、進むほど付いてこなくなる（実物が止まる前に減速する感触）
+    function rubber(over){const d=track.clientWidth||300,c=.55;return over*d*c/(d+c*Math.abs(over));}
+    // 速度から到達点を推定（スクロールの慣性と同じ指数減衰）
+    function project(v){const dr=.998;return (v/1000)*dr/(1-dr);}
+    function paint(x){
+      curX=x;
       const rot=(x/limit())*24;  // 進むほど蝋がわずかに傾き、剥がれかけの気配を出す
       wax.style.transform='translateX('+x.toFixed(1)+'px) rotate('+rot.toFixed(1)+'deg)';
       if(trail)trail.style.width=(wax.offsetWidth+x+6)+'px';  // 剥がした跡が帯に残る
     }
-    function reset(){active=false;track.classList.remove('grab');wax.style.transform='';if(trail)trail.style.width='';}
+    function stopSpring(){if(spring){cancelAnimationFrame(spring);spring=null;}}
+    // 臨界減衰に近いバネで x→0（初速 v0 px/s を受け渡す）。戻り中は grab を保ち CSS transition を無効化。
+    function springBack(v0){
+      track.classList.add('grab');
+      let x=curX,v=v0,last=performance.now();
+      const k=520,c=46;  // stiffness / damping ≈ 臨界減衰（オーバーシュートなし・約0.45sで収束＝ドロワー相当）
+      (function step(now){
+        const dt=Math.min(.032,(now-last)/1000);last=now;
+        v+=(-k*x-c*v)*dt; x+=v*dt;
+        if(x<=.6&&Math.abs(v)<8){wax.style.transform='';if(trail)trail.style.width='';curX=0;track.classList.remove('grab');spring=null;return;}
+        paint(Math.max(0,x)); spring=requestAnimationFrame(step);
+      })(performance.now());
+    }
     function confirm(){
-      if(done)return;done=true;active=false;
+      if(done)return;done=true;active=false;stopSpring();
       if(navigator.vibrate){try{navigator.vibrate(50);}catch(e){}}  // 対応端末だけ・失敗しても無視
       track.classList.remove('grab');  // transitionを戻し、最後のひと剥がれを滑らかに
       wax.style.transform='translateX('+(limit()+12)+'px) translateY(-22px) scale(.55) rotate(32deg)';
@@ -1620,17 +1657,29 @@ async function detectWeather(){
     }
     wax.addEventListener('pointerdown',e=>{
       if(done)return;e.preventDefault();
-      active=true;sx=e.clientX;
+      stopSpring();                    // 戻り中でも現在位置から掴み直せる（§3 中断可能）
+      active=true;sx=e.clientX-curX;   // 現在の提示値を基準に（掴み直しで飛ばない）
+      vel=0;lastX=curX;lastT=performance.now();
       try{wax.setPointerCapture(e.pointerId);}catch(_){}
       track.classList.add('grab');
     });
     wax.addEventListener('pointermove',e=>{
       if(!active||done)return;
-      const x=Math.max(0,Math.min(limit(),e.clientX-sx));  // 横方向だけを見る（縦の揺れは無視）
-      setX(x);
-      if(x>=limit()*0.94)confirm();  // 右端まで剥がしたら開封確定
+      const L=limit(),raw=e.clientX-sx;                       // 横方向だけを見る（縦の揺れは無視）
+      const x=raw<=L?Math.max(0,raw):L+rubber(raw-L);          // 右端を越えたらラバーバンドで抵抗
+      const now=performance.now(),dt=now-lastT;
+      if(dt>0){vel=(x-lastX)/dt*1000;lastX=x;lastT=now;}       // 速度 px/s を記録
+      paint(x);
+      if(x>=L*0.98)confirm();          // 端まで完全に剥がしたら即確定
     });
-    const end=()=>{if(!active||done)return;reset();};
+    const end=()=>{
+      if(!active||done)return;active=false;
+      const L=limit(),projected=curX+project(vel);
+      // 端近くまで来た／右へフリックした／慣性で端に届く見込み のいずれかで開封
+      if(curX>=L*0.9||(vel>520&&curX>L*0.3)||projected>=L*0.9){confirm();}
+      else if(reduce){wax.style.transform='';if(trail)trail.style.width='';curX=0;track.classList.remove('grab');}
+      else{springBack(vel);}           // それ以外は現在位置からバネで戻る
+    };
     wax.addEventListener('pointerup',end);
     wax.addEventListener('pointercancel',end);
   }

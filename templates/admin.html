@@ -108,6 +108,10 @@
         .btn-delete:active {
             transform: scale(0.97);
         }
+        /* 減モーション：押下時の縮小を止める（色の変化は残す） */
+        @media (prefers-reduced-motion: reduce) {
+            .btn-delete:active { transform: none; }
+        }
         .protected {
             color: #a8a29e;
             font-size: 13px;

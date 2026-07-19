@@ -32,6 +32,8 @@
   .letter-body p{margin:0 0 6px;animation:rise .5s ease both}
   .letter-empty{color:var(--ink-soft);opacity:.5;font-size:15px;line-height:32px}
   @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  /* 減モーション：本文段落のせり上がりを止める（htmxの opacity 変化は残す） */
+  @media (prefers-reduced-motion:reduce){.letter-body p{animation:none}}
 
   /* 設問 */
   .q-area{margin-top:30px}
@@ -45,7 +47,7 @@
   .q-area textarea::placeholder{color:var(--ink-soft);opacity:.5}
   .q-actions{display:flex;align-items:center;gap:18px;margin-top:20px;flex-wrap:wrap}
   .btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.1em;border:1px solid var(--ink);
-       background:var(--ink);color:var(--paper);padding:11px 26px;border-radius:26px;cursor:pointer;transition:.2s}
+       background:var(--ink);color:var(--paper);padding:11px 26px;border-radius:26px;cursor:pointer;transition:opacity .2s}
   .btn:hover{opacity:.86}
   .btn-ghost{background:transparent;color:var(--ink-soft);border:none;text-decoration:underline;text-underline-offset:4px;
        font-size:13px;letter-spacing:0.06em;cursor:pointer;padding:6px 2px}
@@ -53,7 +55,7 @@
   .seal-cta{text-align:center;padding:14px 0 6px}
   .seal-cta .done-note{font-size:15px;color:var(--ink-soft);margin:0 0 22px;line-height:1.85}
   .seal-link{display:inline-block;margin-top:8px}
-  .htmx-request textarea,.htmx-request .btn{opacity:.55;transition:.2s}
+  .htmx-request textarea,.htmx-request .btn{opacity:.55;transition:opacity .2s}
   .seal-anytime{text-align:center;margin-top:48px}
   .seal-anytime a{font-size:12.5px;letter-spacing:0.08em;color:var(--ink-soft);opacity:.72;text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
   .seal-anytime a:hover{opacity:1;color:var(--ink)}
