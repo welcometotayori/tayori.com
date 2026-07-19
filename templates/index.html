@@ -163,7 +163,8 @@
   /* 縦書きの便箋なら、栞に映る言葉も縦書きのまま */
   .inquiry-q.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
-    max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden}
+    max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden;
+    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto 26px}
   .inquiry-actions{display:flex;flex-direction:column;gap:12px}
   .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:.2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
@@ -227,7 +228,8 @@
      2〜3桁の数字だけ縦中横(.tcy)で正立させる（4桁以上・欧文は横倒しのまま＝紙の慣習に合わせる）。 */
   .letter-poem.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
     font-feature-settings:"vert";line-break:strict;
-    height:min(60vh,380px);overflow-x:auto;overflow-y:hidden;margin-left:auto;padding-bottom:6px}
+    height:min(60vh,380px);overflow-x:auto;overflow-y:hidden;
+    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto;padding-bottom:6px}
   .letter-poem.vertical .tcy{text-combine-upright:all;-webkit-text-combine:horizontal}
   /* タイプ再生のキャレット：縦書きでは寝かせる（文字の下で明滅する短い横線） */
   .letter-poem.vertical .trace-caret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0;display:inline-block}
@@ -970,14 +972,9 @@
     const n=poemEl.value.length;
     if(poemCount){poemCount.textContent=n;poemCount.parentElement.classList.toggle('near',n>=72);}
     poemEl.style.height='';
-    // 横書き：幅はCSS固定（4行×20字）。縦書き：使った列数ぶんに幅を詰め、便箋の中央から
-    // 書き出す（空の左列で右へ偏って見えないように）。1〜4列（各36px＝20字）。
-    if(composeVertical){
-      const cols=Math.min(4,Math.max(1,Math.ceil(n/20)));
-      poemEl.style.width=(cols*36)+'px';
-    }else{
-      poemEl.style.width='';
-    }
+    // 横書き：幅はCSS固定（4行×20字）。縦書きも同様に4列（144px＝36px×4）をCSS固定で
+    // 常時見せる。空欄でも縦罫が4本出る（横書きが空でも4行見えるのと同じ姿）。
+    poemEl.style.width='';
   }
 
   // ---- 縦書きトグル：便箋の姿（縦/横）はそのまま手紙に封入され、開封の日も同じ姿で届く ----
@@ -1105,7 +1102,7 @@
   // バーで色相（Plutchikの虹：赤〜紫）を選ぶと、真下に小さなパッドが浮かぶ。
   // パッドは 上下=明るさ・左右=濃さ の2軸。数値も名前もアイコンも出さない、感覚だけの微調整。
   const HUE_MAX=300;                         // 赤(0)〜紫(300)
-  const TONE_DEF_S=0.55, TONE_DEF_V=0.82;    // 既定トーン（中明度・中彩度の柔らかい色）
+  const TONE_DEF_S=0.34, TONE_DEF_V=0.88;    // 既定トーン（淡めのパステル：ビビッドを避け、和紙に落とした薄色に寄せる）
   function _hsvToHex(h,s,v){
     h=((h%360)+360)%360;
     const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
