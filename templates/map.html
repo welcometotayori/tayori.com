@@ -6,6 +6,8 @@
 <title>封をした場所 — たより</title>
 <meta name="robots" content="noindex,nofollow">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<!-- ShadeMapの標高タイル（S3）へ先につないでおく：初回の影の表示を速くする -->
+<link rel="preconnect" href="https://s3.amazonaws.com" crossorigin>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
@@ -124,6 +126,9 @@
         apiKey:SHADE_KEY,
         terrainSource:{
           tileSize:256,maxZoom:15,
+          // _overzoom を指定しないと影の描画格子が z15 止まりになり、街レベルまで
+          // 寄った時にガタガタに粗くなる（タイル取得自体は maxZoom=15 のまま拡大補間）。
+          _overzoom:18,
           getSourceUrl:({x,y,z})=>`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`,
           getElevation:({r,g,b})=>(r*256+g+b/256)-32768
         }

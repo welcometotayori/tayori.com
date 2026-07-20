@@ -731,6 +731,10 @@
     </div>
   </header>
 
+  <!-- 白紙が基本。問いに手を引かれて書きたい日のための、静かな別口（opt-in）。
+       以前は投函パネルの一番下で目に入りにくかったため、ヘッダーとタブの間へ（2026-07-20） -->
+  <p class="qmode-link" style="margin:0 0 14px">白紙が続く場合は、<wbr><a href="/letter/new">問いをたどって<wbr>綴る一筆箋</a>から。</p>
+
   <div class="tabs">
     <button class="tab on" data-p="compose">投函<span class="sub">compose</span></button>
     <button class="tab" data-p="mailbox">受信<span class="sub">received</span></button>
@@ -811,8 +815,7 @@
       </div>
     </div>
     <p class="note">送った瞬間、<wbr>これは見えなくなります。<br>いいねも、既読も、<wbr>ここにはありません。</p>
-    <!-- 白紙が基本。問いに手を引かれて書きたい日のための、静かな別口（opt-in） -->
-    <p class="qmode-link">白紙が続く場合は、<wbr><a href="/letter/new">問いをたどって<wbr>綴る一筆箋</a>から。</p>
+    <!-- 「問いをたどって綴る一筆箋」への導線はヘッダーとタブの間へ移設（2026-07-20） -->
   </section>
 
   <section class="panel" id="mailbox">
@@ -1327,15 +1330,10 @@
       }
     }
 
-    // 封じる直前に一度だけ「栞」を挟む：自分の言葉をもう一度だけ読み返し、
-    // 望むなら一言だけ彫り直してから封じる（本文があるときのみ）。
+    // 「栞」（封じる前の読み返し・一言書き足しの確認画面）は挟まない（2026-07-20撤去）。
+    // 封をするボタンは、押したらそのまま封をする。showInquiry 一式は将来のopt-in用に温存。
     // ※かつてはここでAIが「繰り返し／矛盾」への問いを返していたが、AI要素は撤去。
-    //   将来のopt-in用にAPI呼び出しを温存：
     //   try{const r=await api('/api/compose/inquiry',{method:'POST',body:JSON.stringify({poem})});q=r&&r.question;}catch(e){}
-    if(poem && !inquiryAsked){
-      inquiryAsked=true;
-      showInquiry(poemRaw);return;   // 栞を出す。封じるは栞のボタンから。
-    }
 
     await doSeal();
   });
@@ -1912,8 +1910,7 @@ async function detectWeather(){
     h+='<div class="thread-label">― このたよりへの、コメント ―</div>';
     // コメント本体（時系列＝古い順。新しいことばほど下に積まれていく）
     h+='<div class="thread-msgs'+(collapsed?' collapsed':'')+'">';
-    if(!thread.length)
-      h+='<div class="thread-empty">まだ、<wbr>ことばは<wbr>交わされていません。</div>';
+    // コメントが無い時は何も置かない（「まだ、ことばは…」の空メッセージは2026-07-20に撤去）
     thread.forEach(m=>{
       const when=fmtDateTime(m.created_at)||(m.created?m.created.slice(0,10):'');
       if(m.who==='now'){
