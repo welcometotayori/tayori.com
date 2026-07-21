@@ -298,7 +298,6 @@
     .letter-highlight{animation:none}                 /* 到着グローの明滅を静的に */
     .seal-mark{transform:none;animation:sealFade 1.4s ease forwards}  /* 拡大回転→静かなフェード */
     .ld-dot{animation:none;opacity:.22}               /* 流れる装飾点を停止（静的な点に） */
-    .cb-cursor{transition:opacity .18s}               /* カーソルの横移動トランジションを外す */
   }
   .unopened-tease .from{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.08em;margin-bottom:5px}
   .unopened-tease .ago{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft)}
@@ -404,16 +403,24 @@
   .ld-dot{position:absolute;bottom:-12px;width:9px;height:9px;border-radius:50%;opacity:0;animation:dotDrift linear infinite}
   @keyframes dotDrift{0%{transform:translateY(0);opacity:0}18%{opacity:0.32}82%{opacity:0.32}100%{transform:translateY(-220px);opacity:0}}
 
-  /* ---- エモーショナル・カラー・ピッカー：曖昧なグラデーションから「今の気分に近い場所」をタップ ---- */
-  .color-band{position:relative;height:32px;border-radius:18px;border:1px solid var(--line);cursor:pointer;flex:1;min-width:150px;
-    background:linear-gradient(90deg,#F59B90,#FFBA85,#E4D58C,#A8C7A2,#9FC7C2,#97ADC5,#B79FC4);opacity:0.95;
-    touch-action:none;user-select:none;-webkit-user-select:none}
-  /* カーソルは left ではなく transform で動かす（GPU合成でなめらか）。
-     タップ時はスッと滑り（transition）、ドラッグ中(.dragging)は指に1:1で追従させる */
-  .color-band .cb-cursor{position:absolute;left:0;top:-5px;width:2px;height:42px;background:var(--ink);opacity:0;
-    transform:translateX(-1px);transition:opacity .2s,transform .28s cubic-bezier(.22,1,.36,1);will-change:transform}
-  .color-band.picked .cb-cursor{opacity:0.75}
-  .color-band.dragging .cb-cursor{transition:opacity .2s}
+  /* ---- 気分の色：手染めのスウォッチから「今の気分に近い一枚」を選ぶ ----
+       連続グラデ（色相バー＋トーンパッド）を廃し、和紙に落とした低彩度の9色を並べる。
+       沈んだ → あたたかい の温度軸。選ぶ＝行為として色を置く。 */
+  .mood-swatches{display:flex;flex-wrap:wrap;gap:7px;flex:1;min-width:150px}
+  .mood-sw{-webkit-appearance:none;appearance:none;border:0;background:transparent;padding:5px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;border-radius:50%;transition:transform .2s var(--ease-out)}
+  /* 色玉は正円でなくわずかに歪ませ、にじみ影で「絵の具の色見本」に寄せる */
+  .mood-sw i{display:block;width:30px;height:30px;border:1px solid rgba(58,46,37,0.22);
+    box-shadow:0 3px 8px -4px rgba(58,46,37,0.5);border-radius:48% 52% 50% 50%/52% 48% 52% 48%}
+  .mood-sw:hover{transform:translateY(-2px)}
+  .mood-sw:focus-visible{outline:2px solid var(--seal);outline-offset:1px}
+  /* 選択は拡大でなく「沈む」：紙に押し込まれたように少し縮み、朱の細環で囲う */
+  .mood-sw.on{transform:scale(0.9)}
+  .mood-sw.on i{box-shadow:0 1px 3px -1px rgba(58,46,37,0.5),0 0 0 2px var(--paper),0 0 0 3px var(--seal)}
+  .mood-swatches.compact{gap:6px}
+  .mood-swatches.compact .mood-sw{padding:4px}
+  .mood-swatches.compact .mood-sw i{width:22px;height:22px}
+  @media (prefers-reduced-motion:reduce){.mood-sw{transition:none}.mood-sw:hover{transform:none}}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
   .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(58,46,37,0.25);box-shadow:0 2px 6px -3px rgba(58,46,37,0.5);vertical-align:middle}
   /* 選び直せるチップ：色は確定していても、タップすれば色相バーに戻せる。
@@ -422,15 +429,6 @@
   .recolor-chip::after{content:'✎';position:absolute;right:-4px;bottom:-4px;font-size:9px;line-height:1;color:var(--ink-soft);
     background:var(--paper);border:1px solid var(--line);border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center}
   .recolor-hint{font-family:'Shippori Mincho',serif;font-size:10px;color:var(--ink-soft);opacity:0.75;letter-spacing:0.03em;margin-top:4px;text-align:center}
-  /* 色相バーを選ぶと浮かぶ、トーンの2Dパッド（上下=明るさ / 左右=濃さ。数値も名前も出さない） */
-  .tone-pop{position:absolute;z-index:70;display:none;padding:8px;background:var(--paper);border:1px solid var(--line);
-    border-radius:8px;box-shadow:0 18px 44px -18px rgba(58,46,37,0.65)}
-  .tone-pop.on{display:block;animation:tpFade .18s ease}
-  @keyframes tpFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-  .tone-pad{position:relative;width:168px;height:126px;border-radius:5px;cursor:crosshair;touch-action:none;
-    background:linear-gradient(to top,#000,rgba(0,0,0,0)),linear-gradient(to right,#fff,var(--tone-hue,#c33))}
-  .tone-dot{position:absolute;width:16px;height:16px;border-radius:50%;border:2px solid #fff;
-    box-shadow:0 0 0 1px rgba(0,0,0,0.45),0 2px 5px rgba(0,0,0,0.45);transform:translate(-50%,-50%);pointer-events:none}
 
   footer{text-align:center;margin-top:50px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.24em;color:var(--ink-soft);opacity:0.6}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
@@ -807,8 +805,7 @@
         <div class="when-readout" id="whenReadout"></div>
         <div class="field-row">
           <label>いまの色：</label>
-          <div class="color-band" id="sealBand"><div class="cb-cursor"></div></div>
-          <span class="color-chip" id="sealChip" style="visibility:hidden"></span>
+          <div class="mood-swatches" id="sealSwatches"></div>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。<wbr>開封の日に、<wbr>もう一度選んで<wbr>見比べます</div>
         <button class="send" id="sendBtn">封 を す る</button>
@@ -875,8 +872,6 @@
 </div>
 
 <!-- 色相を選ぶと浮かぶトーンパッド（上下＝明るさ / 左右＝濃さ。感覚だけの微調整） -->
-<div class="tone-pop" id="tonePop"><div class="tone-pad" id="tonePad"><div class="tone-dot" id="toneDot"></div></div></div>
-
 <script>
 (function(){
   const MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -1210,105 +1205,42 @@
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
 
-  // ---- 気分の色：色相バー＋トーンパッド ----
-  // バーで色相（Plutchikの虹：赤〜紫）を選ぶと、真下に小さなパッドが浮かぶ。
-  // パッドは 上下=明るさ・左右=濃さ の2軸。数値も名前もアイコンも出さない、感覚だけの微調整。
-  const HUE_MAX=300;                         // 赤(0)〜紫(300)
-  const TONE_DEF_S=0.34, TONE_DEF_V=0.88;    // 既定トーン（淡めのパステル：ビビッドを避け、和紙に落とした薄色に寄せる）
-  function _hsvToHex(h,s,v){
-    h=((h%360)+360)%360;
-    const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
-    let r=0,g=0,b=0;
-    if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}
-    else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}
-    return '#'+[r,g,b].map(n=>Math.round((n+m)*255).toString(16).padStart(2,'0')).join('');
-  }
-  // 浮かぶトーンパッド（全バー共通で1個を使い回す）
-  const tonePop=document.getElementById('tonePop'),tonePad=document.getElementById('tonePad'),toneDot=document.getElementById('toneDot');
-  let toneCtx=null;   // {hue,s,v,chip,commit}
-  function _toneColor(){return toneCtx?_hsvToHex(toneCtx.hue,toneCtx.s,toneCtx.v):null;}
-  function _renderTone(){
-    if(!toneCtx)return;
-    tonePad.style.setProperty('--tone-hue','hsl('+(((toneCtx.hue%360)+360)%360)+',100%,50%)');
-    toneDot.style.left=(toneCtx.s*100)+'%';
-    toneDot.style.top=((1-toneCtx.v)*100)+'%';
-    const col=_toneColor();
-    if(toneCtx.chip){toneCtx.chip.style.visibility='visible';toneCtx.chip.style.background=col;}
-  }
-  function openTonePad(band,ctx){
-    toneCtx=ctx;_renderTone();
-    tonePop.classList.add('on');           // 先に表示してから採寸（幅・高さを得る）
-    const r=band.getBoundingClientRect(),pop=tonePop.getBoundingClientRect();
-    const vw=document.documentElement.clientWidth,vh=document.documentElement.clientHeight;
-    let left=r.left+window.scrollX+r.width/2-pop.width/2;
-    left=Math.max(8+window.scrollX,Math.min(window.scrollX+vw-pop.width-8,left));
-    // 基本はバーの真下。画面下に収まらなければバーの上へ。
-    let top=r.bottom+window.scrollY+8;
-    if(r.bottom+8+pop.height>vh)top=r.top+window.scrollY-pop.height-8;
-    tonePop.style.left=left+'px';tonePop.style.top=top+'px';
-  }
-  function closeTonePad(){tonePop.classList.remove('on');toneCtx=null;}
-  (function(){
-    let dragging=false;
-    const setXY=(cx,cy)=>{
-      if(!toneCtx)return;
-      const r=tonePad.getBoundingClientRect();
-      toneCtx.s=Math.max(0,Math.min(1,(cx-r.left)/r.width));
-      toneCtx.v=Math.max(0,Math.min(1,1-(cy-r.top)/r.height));
-      _renderTone();
-    };
-    const commit=()=>{if(toneCtx&&toneCtx.commit)toneCtx.commit(_toneColor());};
-    tonePad.addEventListener('mousedown',e=>{e.preventDefault();dragging=true;setXY(e.clientX,e.clientY);});
-    window.addEventListener('mousemove',e=>{if(dragging)setXY(e.clientX,e.clientY);});
-    window.addEventListener('mouseup',()=>{if(dragging){dragging=false;commit();}});
-    tonePad.addEventListener('touchstart',e=>{dragging=true;const t=e.touches[0];setXY(t.clientX,t.clientY);},{passive:true});
-    window.addEventListener('touchmove',e=>{if(dragging){const t=e.touches[0];setXY(t.clientX,t.clientY);}},{passive:true});
-    window.addEventListener('touchend',()=>{if(dragging){dragging=false;commit();}});
-    // パッドの外（バー以外）を触れたら、そっと閉じる
-    const outside=e=>{if(tonePop.classList.contains('on')&&!tonePop.contains(e.target)&&!(e.target.closest&&e.target.closest('.color-band')))closeTonePad();};
-    document.addEventListener('mousedown',outside);
-    document.addEventListener('touchstart',outside,{passive:true});
-  })();
-
-  // タップ／ドラッグで色相を探し、指を離すとトーンパッドが開く。
-  // cb(color) は「バーを離した時（既定トーンで確定）」と「パッドを離すたび（微調整で再確定）」に呼ぶ。
-  function wireColorBand(band,chip,cb){
-    if(!band)return;
-    const cur=band.querySelector('.cb-cursor');
-    let dragging=false,hue=0;
-    band._tone=band._tone||{s:TONE_DEF_S,v:TONE_DEF_V};   // このバーが覚えているトーン（前回を引き継ぐ）
-    const apply=clientX=>{
-      const rect=band.getBoundingClientRect();
-      const x=Math.max(0,Math.min(rect.width,clientX-rect.left));
-      hue=(rect.width?x/rect.width:0)*HUE_MAX;
-      if(cur)cur.style.transform='translateX('+(x-1)+'px)';
-      band.classList.add('picked');
-      if(chip){chip.style.visibility='visible';chip.style.background=_hsvToHex(hue,band._tone.s,band._tone.v);}
-    };
-    const down=x=>{dragging=true;apply(x);};
-    const move=x=>{if(!dragging)return;band.classList.add('dragging');apply(x);};
-    const up=()=>{
-      if(!dragging)return;dragging=false;band.classList.remove('dragging');
-      cb(_hsvToHex(hue,band._tone.s,band._tone.v));   // まず既定トーンで確定（パッド未操作でも色は入る）
-      openTonePad(band,{hue:hue,s:band._tone.s,v:band._tone.v,chip:chip,
-        commit:c=>{band._tone.s=toneCtx.s;band._tone.v=toneCtx.v;cb(c);}});
-    };
-    band.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX);});
-    window.addEventListener('mousemove',e=>move(e.clientX));
-    window.addEventListener('mouseup',up);
-    band.addEventListener('touchstart',e=>down(e.touches[0].clientX),{passive:true});
-    window.addEventListener('touchmove',e=>{if(dragging)move(e.touches[0].clientX);},{passive:true});
-    window.addEventListener('touchend',up);
+  // ---- 気分の色：手染めのスウォッチ ----
+  // 連続グラデ（色相バー＋トーンパッド）を廃し、和紙に落とした低彩度の9色から一枚を選ぶ。
+  // 沈んだ → あたたかい の温度軸。数値も色名も画面には出さない（色名は title/aria-label にだけ持たせる）。
+  const MOOD_SWATCHES=[
+    ['#4E5E68','深藍鼠'],['#5B6B73','藍鼠'],['#728079','青鈍'],
+    ['#8A8F86','利休鼠'],['#A7A492','灰緑'],['#C4B79E','枯色'],
+    ['#D8A96A','枇杷'],['#C7724E','洗朱'],['#B5543A','朱']];
+  // container にスウォッチを敷き、選ぶと cb(hex) を呼ぶ。selected があればその一枚に印を付ける。
+  function wireSwatches(container,cb,selected){
+    if(!container)return;
+    container.textContent='';
+    const sel=selected?selected.toLowerCase():null;
+    MOOD_SWATCHES.forEach(([hex,name])=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='mood-sw';
+      b.setAttribute('aria-label',name);b.title=name;
+      const on=sel===hex.toLowerCase();
+      b.setAttribute('aria-pressed',on?'true':'false');
+      if(on)b.classList.add('on');
+      const dot=document.createElement('i');dot.style.background=hex;b.appendChild(dot);
+      b.addEventListener('click',()=>{
+        container.querySelectorAll('.mood-sw').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});
+        b.classList.add('on');b.setAttribute('aria-pressed','true');
+        cb(hex);
+      });
+      container.appendChild(b);
+    });
   }
   let sealColor=null;   // 投函時に選んだ「いまの気分の色」（手紙に封入される）
-  wireColorBand(document.getElementById('sealBand'),document.getElementById('sealChip'),c=>{sealColor=c;});
+  wireSwatches(document.getElementById('sealSwatches'),c=>{sealColor=c;});
 
   // 透かし問い（書き出せない時の問い）はUIごと撤去。便箋は白紙のまま静かに待つ。
 
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
     sealColor=null;inquiryAsked=false;
-    const sb=document.getElementById('sealBand'),sc=document.getElementById('sealChip');
-    if(sb)sb.classList.remove('picked');if(sc)sc.style.visibility='hidden';}
+    document.querySelectorAll('#sealSwatches .mood-sw').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});}
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
@@ -1891,7 +1823,7 @@ async function detectWeather(){
          '<button type="button" class="color-chip recolor-chip" data-recolor="'+L.id+'" style="background:'+esc(L.open_color)+'" title="タップで選び直す" aria-label="今日の色を選び直す"></button>'+
          '<div class="recolor-hint">タップで選び直す</div></div>';
     }else{
-      h+='<div class="ld-box"><div class="ld-lbl">いまの気分の色は？</div><div class="color-band" data-oc="'+L.id+'" style="min-width:0"><div class="cb-cursor"></div></div></div>';
+      h+='<div class="ld-box"><div class="ld-lbl">いまの気分の色は？</div><div class="mood-swatches compact" data-oc="'+L.id+'" style="min-width:0"></div></div>';
     }
     h+='</div>';
     // 問いへの回答の差分：あの日の便箋に透けていた問いを、いまのあなたへもう一度
@@ -1968,9 +1900,9 @@ async function detectWeather(){
       if(msgs)msgs.classList.toggle('collapsed',c);}));
     mailList.querySelectorAll('textarea').forEach(ta=>ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}));
     // 開封時の「いまの気分の色」：タップで記録し、封をした日の色との差分になる
-    mailList.querySelectorAll('.color-band[data-oc]').forEach(band=>{
-      wireColorBand(band,null,async c=>{
-        const id=band.dataset.oc;
+    mailList.querySelectorAll('.mood-swatches[data-oc]').forEach(cont=>{
+      wireSwatches(cont,async c=>{
+        const id=cont.dataset.oc;
         const res=await api('/api/letters/'+id+'/color',{method:'POST',body:JSON.stringify({color:c})});
         if(res&&res.ok){const L=received.find(x=>x.id===id);if(L)L.open_color=c;renderMail();}
       });
