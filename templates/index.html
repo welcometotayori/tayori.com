@@ -371,29 +371,13 @@
   }
   .unopened-tease .from{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.08em;margin-bottom:5px}
   .unopened-tease .ago{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft)}
-  /* ── 封印カードの墨のベタ塗り（不在の可視化）──
-     本文はサーバから届いていない（DOMにもネットワークにも存在しない）。ここに描くのは
-     行別の文字数だけから起こした「書いた姿の塊」。開封日が近づくほど墨は薄くなる（--ink-op）が、
-     下に文字そのものが無いので、どれだけ薄くても一文字も透けない。 */
-  .sc-ink{display:flex;flex-direction:column;align-items:flex-start;gap:10px;
-    width:-webkit-fit-content;width:fit-content;max-width:88%;margin:18px auto 4px}
-  /* 行の長さ上限は%でなくpxで（fit-content親×%は循環して幅0になる） */
-  .sc-ink .ink-line{display:block;height:12px;border-radius:2px 7px 3px 6px;
-    background:linear-gradient(92deg,rgba(26,19,13,.97),rgba(26,19,13,.85) 55%,rgba(26,19,13,.94));
-    opacity:var(--ink-op,.9);filter:blur(.35px);width:calc(var(--len)*11px);max-width:min(260px,70vw)}
-  .sc-ink.vertical{flex-direction:row-reverse;align-items:flex-start;justify-content:center}
-  .sc-ink.vertical .ink-line{width:12px;height:calc(var(--len)*11px);max-height:190px}
+  /* 封印カードの表示情報（◯字を封じた／場所・時間帯・天気・気分の色） */
   .sc-note{font-family:'Shippori Mincho',serif;font-size:11.5px;letter-spacing:0.12em;color:var(--ink-soft);margin-top:12px}
   .sc-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;color:var(--ink-soft);
     margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}
   .sc-meta .sc-chip{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;
     border:1px solid rgba(58,46,37,.25)}
   .sc-meta .sep{opacity:.45}
-  /* 封の中の棚では、墨塊をひとまわり小さく */
-  .shelf-item .sc-ink{margin:8px 0 2px;gap:6px;max-width:none}
-  .shelf-item .sc-ink .ink-line{height:7px;width:calc(var(--len)*6px);max-width:min(200px,56vw)}
-  .shelf-item .sc-ink.vertical{justify-content:flex-start;flex-direction:row-reverse}
-  .shelf-item .sc-ink.vertical .ink-line{width:7px;height:calc(var(--len)*6px);max-height:64px}
   .shelf-item .sc-meta{justify-content:flex-start;margin-top:4px}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
   .thread-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:16px}
@@ -1705,13 +1689,12 @@ async function detectWeather(){
       if(!L.opened){
         // 封の帯の上の封蝋「緘」を、左から右へ滑らせて剥がす。説明文は置かず、質感だけで誘う。
         // 本文はまだサーバから届いていない（開封APIが初めて配信する）。ここに描くのは
-        // 墨のベタ塗り＝書いた姿の気配と、封をした時のメタデータだけ。
+        // 「◯字を封じた」という気配と、封をした時のメタデータだけ。
         el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">過去のあなたから</div>'+
           '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
           '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
           (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
-          sealedInkHTML(L)+
-          (L.char_count?'<div class="sc-note">'+L.char_count+'字を、墨の下に封じています</div>':'')+
+          (L.char_count?'<div class="sc-note">'+L.char_count+'字を、封じています</div>':'')+
           sealedInfoHTML(L,true)+
           '</div>';
         wirePeel(el.querySelector('[data-peel]'),L.id);
@@ -1752,8 +1735,6 @@ async function detectWeather(){
       el.innerHTML='<div class="wax mini">緘</div><div class="shelf-body">'+whenHtml+
         '<div class="shelf-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
         (extras.length?' · '+extras.join('・')+'入り':'')+'</div>'+
-        // 墨のベタ塗り：開封日が遠いほど濃く、近いほど薄く（本文はネットワーク上に存在しない）
-        sealedInkHTML(S)+
         sealedInfoHTML(S,false)+
         '</div>';
       wireShelfTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
@@ -1942,22 +1923,6 @@ async function detectWeather(){
   }
 
   // ── 封印カード（sealed / openable）の描画部品 ─────────────────
-  // 開封日までの距離 → 墨の濃さ。遠いほど濃く(0.95)、近いほど薄く(0.55)。下限0.55未満にはしない。
-  // ※薄くなっても本文は透けない：そもそも本文がクライアントに存在しないため（サーバ側で遮断済み）。
-  function inkOpacity(S){
-    let p=1;
-    const st=Date.parse(S.sent_date||''),en=Date.parse(S.arrive_at||((S.arrive_date||'')+'T00:00:00'));
-    if(isFinite(st)&&isFinite(en)&&en>st)p=Math.min(1,Math.max(0,(Date.now()-st)/(en-st)));
-    return Math.max(0.55,0.95-0.40*p).toFixed(2);
-  }
-  // 墨のベタ塗り：行別の文字数(line_lens)だけから「書いた姿の塊」を起こす。
-  // 縦書きで封じた手紙は縦の塊（右から左へ）。写真・声だけの手紙は塊なし。
-  function sealedInkHTML(S){
-    const lens=S.line_lens||[];
-    if(!lens.length)return'';
-    return '<div class="sc-ink'+(S.vertical?' vertical':'')+'" style="--ink-op:'+inkOpacity(S)+'" aria-hidden="true">'+
-      lens.map(n=>'<span class="ink-line" style="--len:'+Math.max(2,n)+'"></span>').join('')+'</div>';
-  }
   // §3-1 の表示情報：場所 · 時間帯 · 天気 · 気分の色 ＋「◯字を封じた」
   function sealedInfoHTML(S,compact){
     const bits=[];

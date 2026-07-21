@@ -1304,7 +1304,7 @@ def own_letter(lid):
 
 def _sealed_card_fields(row):
     """封印カード（sealed / openable）に出してよいメタデータだけを束ねる。本文(poem)は絶対に含めない。
-    line_lens は「書いた姿の塊感」を墨のベタ塗りで再現するための行別文字数（シルエット情報のみ）。"""
+    出すのは字数・向き・気分の色・封じた日の天気/場所/時間帯だけ（本文の形は一切漏らさない）。"""
     keys = row.keys()
     poem = row["poem"] or ""
     env = None
@@ -1315,7 +1315,6 @@ def _sealed_card_fields(row):
             env = None
     return {
         "char_count": len(poem),
-        "line_lens": [min(len(ln), 40) for ln in poem.splitlines()[:8]],
         "vertical": bool(row["vertical"]) if "vertical" in keys else False,
         "seal_color": row["seal_color"] if "seal_color" in keys else None,
         "seal_env": env,
