@@ -1242,6 +1242,16 @@ def _is_arrived(row):
     arrive_at = row["arrive_at"] or (row["arrive_date"] + "T00:00:00")
     return datetime.fromisoformat(arrive_at) <= datetime.now()
 
+
+def _letter_opened(row):
+    """開封済みかどうか。opened_at の有無が唯一の真実だが、opened_at 列が無い時代に
+    開封された旧データ（opened=1・opened_at=NULL）も開封済みとして扱う（再封印しない）。"""
+    keys = row.keys() if hasattr(row, "keys") else []
+    if "opened_at" in keys and row["opened_at"]:
+        return True
+    return bool(row["opened"])
+
+
 def letter_to_dict(row, include_thread=True):
     d = dict(row)
     d.pop("user_id", None)
@@ -1278,6 +1288,54 @@ def letter_to_dict(row, include_thread=True):
 def own_letter(lid):
     return get_db().execute("SELECT * FROM letters WHERE id=? AND user_id=?", (lid, uid())).fetchone()
 
+
+def _sealed_card_fields(row):
+    """封印カード（sealed / openable）に出してよいメタデータだけを束ねる。本文(poem)は絶対に含めない。
+    line_lens は「書いた姿の塊感」を墨のベタ塗りで再現するための行別文字数（シルエット情報のみ）。"""
+    keys = row.keys()
+    poem = row["poem"] or ""
+    env = None
+    if "seal_env" in keys and row["seal_env"]:
+        try:
+            env = json.loads(row["seal_env"])
+        except (TypeError, ValueError):
+            env = None
+    return {
+        "char_count": len(poem),
+        "line_lens": [min(len(ln), 40) for ln in poem.splitlines()[:8]],
+        "vertical": bool(row["vertical"]) if "vertical" in keys else False,
+        "seal_color": row["seal_color"] if "seal_color" in keys else None,
+        "seal_env": env,
+        "area_name": row["area_name"] if "area_name" in keys else None,
+        "time_bucket": row["time_bucket"] if "time_bucket" in keys else None,
+    }
+
+
+def openable_meta(row):
+    """開封日が来た・まだ開けていない手紙のカード。sealed と同じく本文はネットワークに一切流さない
+    （本文は POST /api/letters/<id>/open のレスポンスで初めて配信される）。"""
+    keys = row.keys()
+    m = {
+        "id": row["id"],
+        "sent_date": row["sent_date"],
+        "arrive_date": row["arrive_date"],
+        "arrive_at": row["arrive_at"],
+        "arrive_label": row["arrive_label"],
+        "arrive_hidden": bool(row["arrive_hidden"]),
+        "opened": False,
+        "openable": True,
+        "arrived": True,
+        "from_reply": bool(row["from_reply"]),
+        "weather_event": row["weather_event"] if "weather_event" in keys else None,
+        "demo_mode": bool(row["demo_mode"]) if "demo_mode" in keys else False,
+        "demo_arrive_at": row["demo_arrive_at"] if "demo_arrive_at" in keys else None,
+        "has_photo": bool(row["photo"]),
+        "has_voice": bool(row["voice"]),
+    }
+    m.update(_sealed_card_fields(row))
+    return m
+
+
 def sealed_meta(row):
     keys = row.keys()
     demo_mode = bool(row["demo_mode"]) if "demo_mode" in keys else False
@@ -1285,7 +1343,7 @@ def sealed_meta(row):
     arrive_at = demo_at or row["arrive_at"] or (row["arrive_date"] + "T00:00:00")
     dt = datetime.fromisoformat(arrive_at)
     wevent = row["weather_event"] if "weather_event" in keys else None
-    return {
+    out = {
         "id": row["id"],
         "sent_date": row["sent_date"],
         "arrive_date": row["arrive_date"],
@@ -1301,6 +1359,9 @@ def sealed_meta(row):
         "demo_mode": demo_mode,
         "arrive_at": arrive_at,  # デモの日時編集の初期値（上書き中は上書き後の値）
     }
+    # 封印カード（§3-1）の表示情報：投函日・場所・時間帯・天気・気分の色・「◯字を封じた」＋墨の塊
+    out.update(_sealed_card_fields(row))
+    return out
 
 def _smtp_config():
     user = os.environ.get("TAYORI_SMTP_USER")
@@ -1463,9 +1524,10 @@ def _temp_tag(temp):
 
 def _fetch_weather_open_meteo(lat, lon):
     import urllib.request
-    # current= 形式で湿度も取る（湿度は封入インクの「滲み」の素になる）
+    # current= 形式で湿度も取る（湿度は封入インクの「滲み」の素になる）。
+    # 降水・気圧は開封演出（にじみの収束時間・墨の粒状感）の素として投函時に凍結する。
     url = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
-           f"&current=temperature_2m,relative_humidity_2m,weather_code")
+           f"&current=temperature_2m,relative_humidity_2m,weather_code,precipitation,surface_pressure")
     req = urllib.request.Request(url, headers={"User-Agent": "tayori/1.0"})
     with urllib.request.urlopen(req, timeout=4) as response:
         data = json.loads(response.read().decode())
@@ -1473,6 +1535,8 @@ def _fetch_weather_open_meteo(lat, lon):
     code = cw.get("weather_code", 0)
     temp = cw.get("temperature_2m", 20.0)
     humidity = cw.get("relative_humidity_2m")
+    precip = cw.get("precipitation")
+    pressure = cw.get("surface_pressure")
     condition = "clear"
     if code in [71, 73, 75, 77, 85, 86]:
         condition = "snow"
@@ -1483,7 +1547,7 @@ def _fetch_weather_open_meteo(lat, lon):
     elif code in [1, 2, 3]:
         condition = "cloud"
     return {"condition": condition, "temp": temp, "tag": _temp_tag(temp),
-            "humidity": humidity}
+            "humidity": humidity, "precip": precip, "pressure": pressure}
 
 
 def _fetch_weather_owm(lat, lon, api_key):
@@ -1495,6 +1559,8 @@ def _fetch_weather_owm(lat, lon, api_key):
         data = json.loads(response.read().decode())
     temp = (data.get("main") or {}).get("temp", 20.0)
     humidity = (data.get("main") or {}).get("humidity")
+    pressure = (data.get("main") or {}).get("pressure")
+    precip = (data.get("rain") or {}).get("1h") or (data.get("snow") or {}).get("1h") or 0
     wid = ((data.get("weather") or [{}])[0]).get("id", 800)
     if 600 <= wid < 700:
         condition = "snow"
@@ -1507,7 +1573,7 @@ def _fetch_weather_owm(lat, lon, api_key):
     else:
         condition = "clear"
     return {"condition": condition, "temp": temp, "tag": _temp_tag(temp),
-            "humidity": humidity}
+            "humidity": humidity, "precip": precip, "pressure": pressure}
 
 
 def fetch_weather(lat, lon):
@@ -1772,7 +1838,8 @@ def api_weather():
     if not wx:
         return jsonify(ok=False, error="天気が取得できませんでした"), 500
     return jsonify(ok=True, temp=wx["temp"], condition=wx["condition"], temp_tag=wx["tag"],
-                   humidity=wx.get("humidity"), approx=approx, city=city)
+                   humidity=wx.get("humidity"), precip=wx.get("precip"), pressure=wx.get("pressure"),
+                   approx=approx, city=city)
 
 
 # ── 封じた場所のエリア変換（Nominatim逆ジオコーディングのプロキシ）──
@@ -1913,7 +1980,12 @@ def api_letters():
     received, in_transit = [], []
     for r in rows:
         if _is_arrived(r):
-            received.append(letter_to_dict(r))
+            # 【本文秘匿の鉄則】開封日が来ても、開封操作（opened_at）まで本文は配信しない。
+            # openable の手紙はメタデータだけ返し、本文は開封APIのレスポンスで初めて届く。
+            if _letter_opened(r):
+                received.append(letter_to_dict(r))
+            else:
+                received.append(openable_meta(r))
         else:
             in_transit.append(sealed_meta(r))
 
@@ -2287,7 +2359,8 @@ def api_get_trace(lid):
     row = own_letter(lid)
     if row is None:
         return jsonify(error="便りが見つかりません。"), 404
-    if not _is_arrived(row):
+    # 打鍵スナップショットは本文そのもの。到着だけでなく「開封済み」まで出さない（チラ見せ禁止）。
+    if not _is_arrived(row) or not _letter_opened(row):
         return jsonify(error="まだ封の中です。"), 403
     raw = row["trace"] if "trace" in row.keys() else None
     try:
@@ -2343,7 +2416,13 @@ def api_open_letter(lid):
         get_db().commit()
 
     keys = row.keys()
-    return jsonify(ok=True, seal_env=row["seal_env"], open_env=open_env, open_mood=open_mood,
+    # 開封トランザクションのレスポンスで、本文（poem 等）を初めて配信する。
+    # first_open は「にじみ登場アニメ」を初回だけ再生するための一回きりフラグ
+    # （opened_at はサーバ側で確定済み。二度目以降の呼び出しは冪等に clear な手紙を返すだけ）。
+    fresh = own_letter(lid)
+    return jsonify(ok=True, first_open=not bool(already),
+                   letter=letter_to_dict(fresh) if fresh else None,
+                   seal_env=row["seal_env"], open_env=open_env, open_mood=open_mood,
                    seal_color=(row["seal_color"] if "seal_color" in keys else None),
                    seal_q=(row["seal_q"] if "seal_q" in keys else None),
                    sent_date=row["sent_date"])
@@ -2747,8 +2826,9 @@ def _gather_portrait_inputs(user_id, max_photos=6, max_voices=3, max_poems=40):
         if ans:
             ob_lines.append(f"・{_question_text(q, gm)} → {ans}")
 
+    # 封の中（未開封含む）の便りは材料にしない：AIの文章から封印中の言葉が漏れるのを防ぐ
     rows = db.execute(
-        "SELECT poem, photo, voice, sent_date FROM letters WHERE user_id=? ORDER BY sent_date DESC, id DESC",
+        "SELECT poem, photo, voice, sent_date FROM letters WHERE user_id=? AND opened=1 ORDER BY sent_date DESC, id DESC",
         (user_id,)).fetchall()
     poems, image_parts, audio_parts = [], [], []
     for r in rows:
@@ -2926,7 +3006,8 @@ def api_ask_past_self(lid):
     row = own_letter(lid)
     if row is None:
         return jsonify(error="便りが見つかりません。"), 404
-    if not _is_arrived(row):
+    # 本文を材料にAIが語る＝間接的な本文漏れ。開封済みになるまで使わせない。
+    if not _is_arrived(row) or not _letter_opened(row):
         return jsonify(error="まだ封の中です。"), 403
     L = letter_to_dict(row)
 
@@ -3060,7 +3141,9 @@ def api_timeline():
     for r in rows:
         d = letter_to_dict(r, include_thread=False)
         if d["arrived"]:
-            nodes.append(dict(date=d["sent_date"], kind="sent", id=d["id"], poem=d["poem"],
+            # 開封前の本文は年表にも出さない（開封APIより前に body を配信しない鉄則）
+            nodes.append(dict(date=d["sent_date"], kind="sent", id=d["id"],
+                              poem=(d["poem"] if _letter_opened(r) else None),
                               photo=bool(d["photo"]), voice=bool(d["voice"]),
                               emos=d["emos"], opened=d["opened"], hidden=d["arrive_hidden"], sealed=False))
         else:
@@ -3109,8 +3192,9 @@ def _chapter_materials(user_id):
         q["sent"] += 1
         if r["opened"]:
             q["opened"] += 1
+        # 言葉は開封済みの便りからだけ束ねる（届いていても未開封なら、まだ封の中の言葉）
         p = (r["poem"] or "").strip()
-        if p:
+        if p and _letter_opened(r):
             q["poems"].append((r["sent_date"], p))
         if r["photo"]:
             q["photos"] += 1

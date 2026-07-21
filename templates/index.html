@@ -245,7 +245,7 @@
   .postmark{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 12px 64px;border-bottom:1px dashed var(--line);font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
   .postmark .pm-circle{border:1px solid var(--teal);color:var(--teal);border-radius:50%;width:46px;height:46px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:7px;line-height:1.25;transform:rotate(-8deg);padding:3px}
   .letter-photo{width:100%;height:auto;display:block;filter:sepia(0.18) contrast(0.97)}
-  .letter-body{padding:20px 22px 22px}
+  .letter-body{padding:20px 22px 22px;position:relative}
   .letter-poem{font-family:'Shippori Mincho',serif;font-size:18px;line-height:2.3;white-space:pre-wrap;color:var(--ink);word-break:break-word;overflow-wrap:anywhere}
   /* ---- 縦書きで封入された手紙は、開封の日も縦書きのまま届く ----
      約物はフォントの縦組み字形(vert)に任せ、禁則はstrictで守る。
@@ -301,6 +301,36 @@
   }
   .unopened-tease .from{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.08em;margin-bottom:5px}
   .unopened-tease .ago{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-soft)}
+  /* ── 封印カードの墨のベタ塗り（不在の可視化）──
+     本文はサーバから届いていない（DOMにもネットワークにも存在しない）。ここに描くのは
+     行別の文字数だけから起こした「書いた姿の塊」。開封日が近づくほど墨は薄くなる（--ink-op）が、
+     下に文字そのものが無いので、どれだけ薄くても一文字も透けない。 */
+  .sc-ink{display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+    width:-webkit-fit-content;width:fit-content;max-width:88%;margin:18px auto 4px}
+  /* 行の長さ上限は%でなくpxで（fit-content親×%は循環して幅0になる） */
+  .sc-ink .ink-line{display:block;height:12px;border-radius:2px 7px 3px 6px;
+    background:linear-gradient(92deg,rgba(26,19,13,.97),rgba(26,19,13,.85) 55%,rgba(26,19,13,.94));
+    opacity:var(--ink-op,.9);filter:blur(.35px);width:calc(var(--len)*11px);max-width:min(260px,70vw)}
+  .sc-ink.vertical{flex-direction:row-reverse;align-items:flex-start;justify-content:center}
+  .sc-ink.vertical .ink-line{width:12px;height:calc(var(--len)*11px);max-height:190px}
+  .sc-note{font-family:'Shippori Mincho',serif;font-size:11.5px;letter-spacing:0.12em;color:var(--ink-soft);margin-top:12px}
+  .sc-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;color:var(--ink-soft);
+    margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}
+  .sc-meta .sc-chip{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;
+    border:1px solid rgba(58,46,37,.25)}
+  .sc-meta .sep{opacity:.45}
+  /* 封の中の棚では、墨塊をひとまわり小さく */
+  .shelf-item .sc-ink{margin:8px 0 2px;gap:6px;max-width:none}
+  .shelf-item .sc-ink .ink-line{height:7px;width:calc(var(--len)*6px);max-width:min(200px,56vw)}
+  .shelf-item .sc-ink.vertical{justify-content:flex-start;flex-direction:row-reverse}
+  .shelf-item .sc-ink.vertical .ink-line{width:7px;height:calc(var(--len)*6px);max-height:64px}
+  .shelf-item .sc-meta{justify-content:flex-start;margin-top:4px}
+  /* ── 開封のにじみ（初回開封時のみ）──
+     墨が水面下から本文の形に滲み上がる。天気は「出方」にだけ効き、にじみは必ず0へ収束、
+     定着後は filter を外して素の本文（完全クリア）に戻す。 */
+  .ink-wash{position:absolute;pointer-events:none;z-index:3;mix-blend-mode:multiply}
+  .letter-poem.bleeding{will-change:filter,opacity}
+  @media (prefers-reduced-motion:reduce){.ink-wash{display:none}}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
   .thread-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:16px}
   /* 会話の折りたたみトグル（各会話の下・中央に置く押しやすいボタン。「開く／閉じる」） */
@@ -1536,10 +1566,15 @@ async function detectWeather(){
       const sent=parseISO(L.sent_date);
       if(!L.opened){
         // 封の帯の上の封蝋「緘」を、左から右へ滑らせて剥がす。説明文は置かず、質感だけで誘う。
+        // 本文はまだサーバから届いていない（開封APIが初めて配信する）。ここに描くのは
+        // 墨のベタ塗り＝書いた姿の気配と、封をした時のメタデータだけ。
         el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">過去のあなたから</div>'+
           '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
           '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
           (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
+          sealedInkHTML(L)+
+          (L.char_count?'<div class="sc-note">'+L.char_count+'字を、墨の下に封じています</div>':'')+
+          sealedInfoHTML(L,true)+
           '</div>';
         wirePeel(el.querySelector('[data-peel]'),L.id);
         // デモ用の手紙は、届いたあとでも開封予定日を未来へ戻せる（開封前のみ）
@@ -1578,7 +1613,11 @@ async function detectWeather(){
       }
       el.innerHTML='<div class="wax mini">緘</div><div class="shelf-body">'+whenHtml+
         '<div class="shelf-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
-        (extras.length?' · '+extras.join('・')+'入り':'')+'</div></div>';
+        (extras.length?' · '+extras.join('・')+'入り':'')+'</div>'+
+        // 墨のベタ塗り：開封日が遠いほど濃く、近いほど薄く（本文はネットワーク上に存在しない）
+        sealedInkHTML(S)+
+        sealedInfoHTML(S,false)+
+        '</div>';
       wireShelfTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
       list.appendChild(el);
       if(S.demo_mode)list.appendChild(demoAdjustRow(S.id,S.arrive_at));});
@@ -1764,6 +1803,37 @@ async function detectWeather(){
     return esc(c)+(t?'<br><span style="font-size:12px">'+t+hu+'</span>':'');
   }
 
+  // ── 封印カード（sealed / openable）の描画部品 ─────────────────
+  // 開封日までの距離 → 墨の濃さ。遠いほど濃く(0.95)、近いほど薄く(0.55)。下限0.55未満にはしない。
+  // ※薄くなっても本文は透けない：そもそも本文がクライアントに存在しないため（サーバ側で遮断済み）。
+  function inkOpacity(S){
+    let p=1;
+    const st=Date.parse(S.sent_date||''),en=Date.parse(S.arrive_at||((S.arrive_date||'')+'T00:00:00'));
+    if(isFinite(st)&&isFinite(en)&&en>st)p=Math.min(1,Math.max(0,(Date.now()-st)/(en-st)));
+    return Math.max(0.55,0.95-0.40*p).toFixed(2);
+  }
+  // 墨のベタ塗り：行別の文字数(line_lens)だけから「書いた姿の塊」を起こす。
+  // 縦書きで封じた手紙は縦の塊（右から左へ）。写真・声だけの手紙は塊なし。
+  function sealedInkHTML(S){
+    const lens=S.line_lens||[];
+    if(!lens.length)return'';
+    return '<div class="sc-ink'+(S.vertical?' vertical':'')+'" style="--ink-op:'+inkOpacity(S)+'" aria-hidden="true">'+
+      lens.map(n=>'<span class="ink-line" style="--len:'+Math.max(2,n)+'"></span>').join('')+'</div>';
+  }
+  // §3-1 の表示情報：場所 · 時間帯 · 天気 · 気分の色 ＋「◯字を封じた」
+  function sealedInfoHTML(S,compact){
+    const bits=[];
+    if(S.area_name)bits.push(esc(S.area_name));
+    if(S.time_bucket&&BUCKET_JP[S.time_bucket])bits.push(BUCKET_JP[S.time_bucket]);
+    if(S.seal_env&&S.seal_env.condition&&WX_JP[S.seal_env.condition])bits.push(WX_JP[S.seal_env.condition]);
+    if(!compact&&S.char_count)bits.push(S.char_count+'字を封じた');
+    if(!bits.length&&!S.seal_color)return'';
+    let h='<div class="sc-meta">';
+    if(S.seal_color)h+='<span class="sc-chip" style="background:'+esc(S.seal_color)+'"></span>';
+    h+=bits.map((b,i)=>((i||S.seal_color)?'<span class="sep">·</span>':'')+'<span>'+b+'</span>').join('');
+    return h+'</div>';
+  }
+
   function renderOpenLetter(L,i,sent){
     let h='';
     h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
@@ -1938,11 +2008,74 @@ async function detectWeather(){
     const res=await api('/api/letters/'+id+'/open',{method:'POST',body:JSON.stringify({
       open_env:currentWeather,
       open_area_name:oa.area_name||null,open_area_lat:oa.area_lat??null,open_area_lng:oa.area_lng??null})});
-    await loadMail(); // 再描画：ここで初めて封入インクと「あの日と今日」の差分が現れる
+    await loadMail(); // 再描画：本文は今の /open のレスポンスで初めて届き、ここで初めて現れる
     if(res&&res.ok){
       focusLetter(id);
-      setTimeout(()=>autoPlayTrace(id),900);  // 書いていた時間のタイプ再生（traceがあるたよりだけ）
+      // にじみ登場は「初回開封」の一回きり（first_openはサーバのopened_atで確定。
+      // アニメ完了前に離脱してもデータ上は開封済みで、次回からはclear表示のみ）。
+      // タイプ再生（trace）は自動では流さず、本文下のボタンからいつでも。
+      if(res.first_open)playInkBleed(id,res.letter||{});
     }
+  }
+
+  // ── 開封のにじみ演出（初回のみ・数秒）─────────────────────
+  // 投函時に凍結した天気（seal_env）だけを使う。開封時に再フェッチしない。
+  //   湿度→にじみ半径 / 気温→登場時の墨の濃淡 / 降水→収束の長さとゆらぎ / 気圧→墨の粒状感。
+  // にじみは登場の演出であって最終状態ではない：必ず0へ収束し、定着後はfilterを外して
+  // 素の本文（完全クリア＝案A）に戻す。旧データで天気が無い項目は穏当な既定値で出る。
+  function playInkBleed(id,L){
+    let poem=null,wash=null,timer=null;
+    const settle=()=>{ // どんな経路でも最後は必ずクリアに定着させる
+      if(timer){clearTimeout(timer);timer=null;}
+      if(poem){poem.style.filter='';poem.style.opacity='';poem.classList.remove('bleeding');}
+      if(wash&&wash.parentNode)wash.remove();
+    };
+    try{
+      if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+      poem=document.getElementById('poem-'+id);if(!poem)return;
+      const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+      const se=(L&&L.seal_env)||{};
+      const hum=se.humidity==null?55:+se.humidity;
+      const temp=se.temp==null?18:+se.temp;
+      const precip=se.precip==null?0:+se.precip;
+      const press=se.pressure==null?1013:+se.pressure;
+      const blur0=1+11*clamp(hum/100,0,1);              // 湿った日ほど大きくぼやけて登場
+      const pn=clamp(precip/5,0,1);                     // 降水の正規化（5mm/hで最大）
+      const dur=1200+2300*pn;                           // 雨の日ほどゆらぎながら長く収束
+      const turb=clamp((1015-press)/40,0,0.9);          // 低気圧ほど墨がざらつく
+      const dark=clamp(0.55+0.40*(temp/35),0.55,0.95);  // 寒い日は薄墨で現れる（定着後は本文色）
+      // 墨の粒（気圧）：本文の上に重ねるノイズの霧。SVG内部で完結するフィルタなので互換性が高い
+      const body=poem.closest('.letter-body');
+      if(body&&turb>0.02){
+        const r=poem.getBoundingClientRect(),b=body.getBoundingClientRect();
+        const bf=(L&&L.vertical)?'0.035 0.011':'0.011 0.035';  // 縦書きは墨が縦に滴る向き
+        const fid='wash-'+id+'-'+Date.now();
+        wash=document.createElementNS('http://www.w3.org/2000/svg','svg');
+        wash.setAttribute('class','ink-wash');
+        wash.style.cssText='left:'+(r.left-b.left)+'px;top:'+(r.top-b.top)+'px;width:'+r.width+'px;height:'+r.height+'px';
+        wash.innerHTML='<filter id="'+fid+'" x="-20%" y="-20%" width="140%" height="140%">'+
+          '<feTurbulence type="fractalNoise" baseFrequency="'+bf+'" numOctaves="2" seed="'+((parseInt(String(id).slice(0,4),16)||7)%97)+'"/>'+
+          '<feColorMatrix type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.09  0 0 0 0 0.06  0 0 0 '+(0.5+0.5*turb).toFixed(2)+' 0"/>'+
+          '</filter><rect width="100%" height="100%" filter="url(#'+fid+')"/>';
+        body.appendChild(wash);
+      }
+      poem.classList.add('bleeding');
+      // 保険：rAFが何かで途切れても、必ずクリアで終わる（可読性100%の担保）
+      timer=setTimeout(settle,dur+600);
+      const t0=performance.now();
+      (function step(now){
+        try{
+          const t=clamp((now-t0)/dur,0,1);
+          const e=1-Math.pow(1-t,3);                     // ease-out：素早く形が現れ、静かに定着
+          let bl=blur0*(1-e);
+          if(pn>0)bl*=1+0.22*pn*(1-e)*Math.sin(now/90);  // 雨：ゆらぎながら収束
+          poem.style.filter=bl>0.05?'blur('+bl.toFixed(2)+'px)':'';
+          poem.style.opacity=(dark+(1-dark)*e).toFixed(3);
+          if(wash)wash.style.opacity=String(((0.1+0.55*turb)*(1-e)).toFixed(3));
+          if(t<1)requestAnimationFrame(step);else settle();
+        }catch(err){settle();}
+      })(performance.now());
+    }catch(e){settle();}
   }
 
   /* AI対話（過去の自分からの問い）はUIから撤去。将来のopt-inに備えてコードは温存。
@@ -2037,7 +2170,8 @@ async function detectWeather(){
         text= n.kind==='future' ? '封の中 — 届く時を待っています' : '封をした — 中身はまだ見られません';
         meta='封の中';
       }else{
-        text=n.poem||(n.photo?'（写真のたより）':'（声のたより）');
+        // 未開封の届いたたよりは本文がまだ配信されていない（開封まで墨の下）
+        text=n.poem||(!n.opened?'届いた — まだ封を切っていません':(n.photo?'（写真のたより）':'（声のたより）'));
         meta=(n.opened?'開封済み':'未開封')+((n.emos&&n.emos.length)?' · '+n.emos.join('・'):'');
       }
       div.innerHTML='<div class="tl-when">'+when+'</div><div class="tl-card"><div class="tl-text">'+esc(text)+'</div><div class="tl-meta">'+meta+'</div></div>';
