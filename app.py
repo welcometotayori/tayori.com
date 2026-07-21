@@ -422,6 +422,17 @@ def init_db():
                 env     TEXT,
                 created TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS unemptyable_trash (
+                id         TEXT PRIMARY KEY,
+                user_id    TEXT NOT NULL,
+                content    TEXT NOT NULL,
+                mood_color TEXT,
+                vertical   INTEGER DEFAULT 0,
+                random_x   REAL NOT NULL,
+                random_y   REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                trace      TEXT
+            );
             """
         )
         for stmt in (
@@ -485,6 +496,8 @@ def init_db():
             # 温存し、上書きはこの列にだけ持つ（NULL に戻せば元の予定に戻る）。
             "ALTER TABLE letters ADD COLUMN demo_mode INTEGER DEFAULT 0",
             "ALTER TABLE letters ADD COLUMN demo_arrive_at TEXT",
+            # 屑籠にも筆跡（TypeTrace）を封じる。握りつぶした時の打鍵ごと残る
+            "ALTER TABLE unemptyable_trash ADD COLUMN trace TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -2547,6 +2560,81 @@ def api_list_notes():
             d["env"] = None
         out.append(d)
     return jsonify(notes=out)
+
+
+# ── 捨てられない屑籠 ──────────────────────────────────────────
+# 握りつぶして投げ捨てた手紙の行き先。「破壊したはずのものが全部残っている」が思想なので、
+# DELETE も UPDATE も存在しない（消せないことが仕様。エンドポイントを後から足さないこと）。
+# カメラ映像・手のランドマーク座標はクライアントに閉じ、ここには本文と散乱座標だけが届く。
+
+@app.route("/api/trash", methods=["POST"])
+@login_required
+def api_trash_save():
+    data = request.get_json(force=True)
+    # 便箋と同じ80字制約。行頭の字下げ・空行は書かれたまま保ち、末尾の余りだけ落とす。
+    content = (data.get("content") or "")[:80].rstrip()
+    if not content.strip():
+        return jsonify(error="白紙は握りつぶせません。"), 400
+    mood = (data.get("mood_color") or "").strip()[:32] or None
+    vertical = 1 if data.get("vertical") else 0
+    # 筆跡（TypeTrace）。letters と同じ流儀：JSON文字列で保存し、暴走サイズは捨てる。
+    trace = data.get("trace")
+    if trace is not None and not isinstance(trace, str):
+        trace = json.dumps(trace, ensure_ascii=False)
+    if trace and len(trace) > 600_000:
+        trace = None
+    # 散乱座標はクライアント提案を受けるが、範囲外・欠損はサーバ側で振り直す（0〜100の%座標）
+    try:
+        rx = float(data.get("random_x"))
+        ry = float(data.get("random_y"))
+        if not (0.0 <= rx <= 100.0 and 0.0 <= ry <= 100.0):
+            raise ValueError
+    except (TypeError, ValueError):
+        rx = random.uniform(8, 92)
+        ry = random.uniform(10, 90)
+    tid = secrets.token_hex(8)
+    db = get_db()
+    try:
+        with _WRITE_LOCK:
+            db.execute(
+                """INSERT INTO unemptyable_trash
+                   (id,user_id,content,mood_color,vertical,random_x,random_y,created_at,trace)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (tid, uid(), content, mood, vertical, rx, ry,
+                 datetime.now().isoformat(timespec="seconds"), trace))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 屑籠 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
+    return jsonify(ok=True, id=tid), 201
+
+
+@app.route("/api/trash")
+@login_required
+def api_trash_list():
+    # 古いものから返す（屑籠の底に古い紙玉が沈んでいる順）。件数は画面に出さない方針だが上限だけ守る。
+    # trace 本体は重いので一覧には載せず、有無のフラグだけ返す（本体は /api/trash/<tid>/trace）。
+    rows = get_db().execute(
+        """SELECT id,content,mood_color,vertical,random_x,random_y,created_at,
+                  CASE WHEN trace IS NULL THEN 0 ELSE 1 END AS has_trace
+           FROM unemptyable_trash WHERE user_id=? ORDER BY created_at ASC LIMIT 500""",
+        (uid(),)).fetchall()
+    return jsonify(items=[dict(r) for r in rows])
+
+
+@app.route("/api/trash/<tid>/trace")
+@login_required
+def api_trash_trace(tid):
+    row = get_db().execute(
+        "SELECT trace FROM unemptyable_trash WHERE id=? AND user_id=?",
+        (tid, uid())).fetchone()
+    if not row:
+        return jsonify(error="not found"), 404
+    try:
+        steps = json.loads(row["trace"]) if row["trace"] else None
+    except (TypeError, ValueError):
+        steps = None
+    return jsonify(trace=steps)
 
 
 _WX_JP = {"snow": "雪", "rain": "雨", "fog": "霧", "cloud": "曇り", "clear": "晴れ"}

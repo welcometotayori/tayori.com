@@ -108,6 +108,76 @@
   @keyframes vcaretBlink{50%{opacity:0}}
   .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
   .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+  /* ---- 捨てられない屑籠 ----
+     気に食わない手紙を握りつぶして投げ捨てる。でも消えない。全部ここに残る。
+     入口は小さく、数は主張しない。カメラ映像は画面にも出さず、手影だけが便箋に落ちる。 */
+  .poem{position:relative;transition:box-shadow .3s var(--ease-out)}  /* クシャ用canvasの座標基準 */
+  /* 手をかざすと便箋が小さく応える（掴めることの合図） */
+  .poem.hand-near{box-shadow:0 0 0 1px var(--line),0 10px 26px -16px rgba(58,46,37,0.55);border-radius:2px}
+  /* 掴んで取り上げた間、便箋の上から紙が消える（紙は手の中にある） */
+  .poem.hand-taken textarea,.poem.hand-taken .poem-count,.poem.hand-taken .vcaret{opacity:0;transition:opacity .2s}
+  .hand-btn .hand-mark svg{width:13px;height:13px;display:block}
+  .hand-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+  .kuzu-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px}
+  .kuzu-bin{background:none;border:0;cursor:pointer;padding:8px;color:var(--ink-soft);opacity:0.5;transition:opacity .25s}
+  .kuzu-bin:hover{opacity:0.9}
+  .kuzu-bin svg{width:24px;height:28px;display:block}
+  .kuzu-nudge{animation:kuzuNudge .5s var(--ease-soft)}
+  @keyframes kuzuNudge{30%{transform:translateY(2px) rotate(-4deg)}65%{transform:translateY(0) rotate(2deg)}}
+  .trash-ov,.trash-open-ov{position:fixed;inset:0;background:rgba(43,35,28,0.55);z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+  .trash-ov.on,.trash-open-ov.on{display:flex}
+  .trash-room{position:relative;width:min(480px,94vw);height:min(560px,80dvh);background:var(--paper);border:1px solid var(--line);border-radius:3px;
+    box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden}
+  .trash-mark{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.3em;color:var(--ink-soft);text-align:center;padding:18px 0 6px}
+  /* 堆積の年月：月の変わり目にだけ、籠の左に小さく刻む */
+  .trash-era{position:absolute;left:3.5%;transform:translateY(-50%);font-family:'Courier Prime',monospace;font-size:8px;
+    letter-spacing:0.16em;color:var(--ink-soft);opacity:0.65;pointer-events:none;z-index:1}
+  /* 籠：背(奥の面)は紙玉の下、前(手前の縁と帯)は紙玉の上。玉は籠に挟まれて「中にある」 */
+  .kuzu-basket{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .kuzu-basket.back{z-index:0}
+  .kuzu-basket.front{z-index:2}
+  .paper-ball{z-index:1}
+  /* 「ひろげて、書きつづける」は主動作としてわずかに立てる */
+  .trash-close.primaryish{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .trash-close.primaryish:hover{background:var(--seal);border-color:var(--seal)}
+  .trash-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);text-align:center;padding:26px 20px 0;
+    word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .trash-scatter{position:relative;flex:1;margin:6px 10px}
+  .paper-ball{position:absolute;background:none;border:0;padding:0;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(58,46,37,0.28))}
+  .paper-ball svg,.paper-ball canvas{width:100%;height:100%;display:block;transition:transform .25s var(--ease-out)}
+  .paper-ball:hover svg,.paper-ball:focus-visible svg,
+  .paper-ball:hover canvas,.paper-ball:focus-visible canvas{transform:scale(1.1)}
+  .trash-close{align-self:center;margin:0 0 18px;background:none;border:1px solid var(--line);border-radius:2px;cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.24em;color:var(--ink-soft);padding:9px 26px;transition:background .25s,color .25s}
+  .trash-close:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .trash-open-card{width:min(420px,92vw);background:var(--paper);border:1px solid var(--line);border-radius:3px;
+    box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);padding:22px;display:flex;flex-direction:column;gap:14px}
+  .trash-open-paper{background:var(--paper-2);border:1px solid var(--line);border-radius:2px;min-height:190px;max-height:60dvh;overflow:auto;
+    padding:24px 22px;font-family:'Shippori Mincho',serif;font-size:16px;line-height:2;color:var(--ink);
+    white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;position:relative}
+  .trash-open-paper::after{content:"";position:absolute;left:13px;bottom:13px;width:9px;height:9px;border-radius:50%;
+    background:var(--trash-mood,transparent);opacity:0.85}
+  .trash-open-paper.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+    font-feature-settings:"vert";line-break:strict;min-height:300px}
+  /* 縦書きの筆跡再生：キャレットは横棒に寝かせる（.letter-poem.vertical と同じ流儀） */
+  .trash-open-paper.vertical .trace-caret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0;display:inline-block}
+  .trash-open-date{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);text-align:center;word-break:keep-all}
+  .trash-open-card .trash-close{margin:0 auto}
+  /* 手で捨てる：初回だけの使い方の栞 */
+  .hand-guide-ov{position:fixed;inset:0;background:rgba(43,35,28,0.55);z-index:82;display:none;align-items:center;justify-content:center;padding:20px}
+  .hand-guide-ov.on{display:flex}
+  .hand-guide{width:min(420px,92vw);background:var(--paper);border:1px solid var(--line);border-radius:3px;
+    box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);padding:26px 26px 22px;display:flex;flex-direction:column;gap:18px}
+  .hg-mark{font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.3em;color:var(--ink);text-align:center}
+  .hg-steps{list-style:none;display:flex;flex-direction:column;gap:16px}
+  .hg-steps li{display:flex;align-items:flex-start;gap:14px}
+  .hg-steps svg{width:30px;height:30px;flex:none;color:var(--ink-soft);margin-top:2px}
+  .hg-steps span{font-family:'Shippori Mincho',serif;font-size:14px;line-height:1.9;color:var(--ink);
+    word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .hg-steps i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-soft)}
+  .hg-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-soft);text-align:center;
+    border-top:1px dashed var(--line);padding-top:14px;word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .hand-guide .trash-close{margin:0 auto}
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
   .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
@@ -783,6 +853,7 @@
         <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark">＋</span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
         <button class="voice-btn" id="voiceBtn"><span class="voice-dot"></span><span id="voiceLabel">声を録る</span></button>
         <button class="voice-btn vert-btn" id="vertBtn" title="便箋の姿（縦/横）を切り替える。この姿のまま封をされ、開封の日も同じ姿で届きます"><span class="vert-mark" id="vertMark">縦</span><span id="vertLabel">縦書き</span></button>
+        <button class="voice-btn hand-btn" id="handBtn" aria-pressed="false" title="インカメラが手を読み、便箋を掴んで投げ捨てられます。映像も手の座標も、どこにも送られません"><span class="hand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11m0-5.5v-1a1.5 1.5 0 0 1 3 0V11m0-4.5a1.5 1.5 0 0 1 3 0V13"/><path d="M8 12v-1.5a1.5 1.5 0 0 0-3 0V14c0 4 2.5 7 6.5 7s5.5-2.6 5.5-7v-1"/></svg></span><span id="handLabel">捨てる</span></button>
         <span id="voiceStatus"></span>
       </div>
       <div class="env-foot">
@@ -868,6 +939,10 @@
       </div>
     </div>
     <p class="tl-intro">あなたのたよりの、全部。<br>過去から、<wbr>まだ届いていない<wbr>未来まで。</p>
+    <!-- 捨てられない屑籠の入口。年表の隅——手紙にならなかった言葉たちも、あなたの歴史の一部 -->
+    <div class="kuzu-row">
+      <button class="kuzu-bin" id="binBtn" aria-label="屑籠を覗く" title="屑籠"><svg viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M4.5 7.5 6.2 25.5h11.6L19.5 7.5"/><ellipse cx="12" cy="6.5" rx="8" ry="2.1"/><path d="M5.3 13h13.4M5.9 19h12.2"/><path d="M8.3 8.4l1.2 16.6M12 8.7v16.8M15.7 8.4l-1.2 16.6"/></svg></button>
+    </div>
     <div class="tl" id="tlList"></div>
   </section>
 
@@ -898,6 +973,60 @@
       <textarea id="inquiryAddText" maxlength="80" placeholder="ひとこと、書き足す。"></textarea>
       <button class="inquiry-btn primary" id="inquiryAddSeal">書き足して封じる</button>
     </div>
+  </div>
+</div>
+
+<!-- 捨てられない屑籠：投げ捨てた手紙は消えず、紙玉のままここに残りつづける。
+     開けば読める、でも消せない。件数もソートもない（ゴミの量を主張しない）。 -->
+<div class="trash-ov" id="trashOv" role="dialog" aria-modal="true" aria-label="屑籠">
+  <div class="trash-room">
+    <div class="trash-mark">屑 籠</div>
+    <p class="trash-note" id="trashEmpty">まだ、<wbr>何も<wbr>捨てられて<wbr>いません。</p>
+    <!-- 籠の中に、捨てた日の順で紙玉が堆積する。籠は背(奥の面)と前(手前の縁)の二枚で、玉を挟む -->
+    <div class="trash-scatter" id="trashScatter">
+      <svg class="kuzu-basket back" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M17 24 L26.5 87 H73.5 L83 24" fill="rgba(237,227,209,0.55)" stroke="#CBBBA0" stroke-width="0.7"/>
+        <path d="M19.4 40 H80.6 M21.8 56 H78.2 M24 71 H76" stroke="rgba(58,46,37,0.16)" stroke-width="0.5" fill="none"/>
+        <path d="M29 25 L34 86 M41.5 25 L43.5 86 M58.5 25 L56.5 86 M71 25 L66 86" stroke="rgba(58,46,37,0.11)" stroke-width="0.5" fill="none"/>
+      </svg>
+      <svg class="kuzu-basket front" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M26.5 87 H73.5 M25.4 80 H74.6 M24.4 73 H75.6" stroke="rgba(138,122,102,0.45)" stroke-width="0.9" fill="none"/>
+        <ellipse cx="50" cy="24" rx="33" ry="4.4" fill="none" stroke="#8A7A66" stroke-width="0.9"/>
+      </svg>
+    </div>
+    <button class="trash-close" id="trashClose">閉じる</button>
+  </div>
+</div>
+<div class="trash-open-ov" id="trashOpenOv" role="dialog" aria-modal="true" aria-label="丸められた手紙">
+  <div class="trash-open-card">
+    <div class="trash-open-paper" id="trashOpenPaper"></div>
+    <div class="trash-open-date" id="trashOpenDate"></div>
+    <!-- ひろげて書きつづける：本文は便箋へ戻るが、皺の跡は残る。そしてこの紙玉も屑籠に残りつづける -->
+    <button class="trash-close primaryish" id="trashResume">ひろげて、書きつづける</button>
+    <button class="trash-close" id="trashOpenClose">そっと、丸めなおす</button>
+  </div>
+</div>
+
+<!-- 手で捨てる：初回だけの使い方の栞。読んだら二度と挟まない（localStorage） -->
+<div class="hand-guide-ov" id="handGuideOv" role="dialog" aria-modal="true" aria-label="手で捨てる の使い方">
+  <div class="hand-guide">
+    <div class="hg-mark">手 で 捨 て る</div>
+    <ol class="hg-steps">
+      <li>
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 16V8a1.6 1.6 0 0 1 3.2 0V15m0-7v-1.4a1.6 1.6 0 0 1 3.2 0V15m0-6a1.6 1.6 0 0 1 3.2 0v8"/><path d="M11 16v-2a1.6 1.6 0 0 0-3.2 0v5.5c0 5 3.2 8.5 8 8.5s7-3.2 7-8.5V15"/></svg>
+        <span>便箋に、<wbr>手をかざす。<i>便箋が<wbr>すこし浮いて<wbr>応えます</i></span>
+      </li>
+      <li>
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17v-4.5a1.7 1.7 0 0 1 3.4 0V14m0-1.8a1.7 1.7 0 0 1 3.4 0V14m0-1a1.7 1.7 0 0 1 3.4 0v1.5m0 .3a1.6 1.6 0 0 1 3.2 0v4.7c0 4.6-2.9 7.5-6.9 7.5s-6.5-2.9-6.5-7.5z"/></svg>
+        <span>握る。<i>紙が手の中で丸まり、<wbr>動きに<wbr>ついてきます</i></span>
+      </li>
+      <li>
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="22" r="5"/><path d="M14 18 26 6m0 0h-6.5M26 6v6.5"/></svg>
+        <span>振って、<wbr>ぱっと開く。<i>その方向へ飛んで、<wbr>屑籠に残ります</i></span>
+      </li>
+    </ol>
+    <p class="hg-note">手を開くと、<wbr>紙玉は<wbr>その場に落ちます。<wbr>もう一度握れば<wbr>投げられ、<wbr>開いた手を<wbr>かざしつづけると、<wbr>ほどけて<wbr>便箋に戻ります。<br>カメラの映像は、<wbr>どこにも<wbr>送られません。</p>
+    <button class="trash-close" id="handGuideStart">はじめる</button>
   </div>
 </div>
 
@@ -1270,7 +1399,22 @@
 
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
     sealColor=null;inquiryAsked=false;
+    // 皺の跡（握って広げた紙の折り目）は、便箋が新しくなる時に一緒に消える
+    document.querySelectorAll('.wrinkle-residue').forEach(x=>x.remove());
     document.querySelectorAll('#sealSwatches .mood-sw').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});}
+
+  // 捨てられない屑籠モジュールへの橋。カメラ・手影・クシャ・投擲は /static/js/trash/ に隔離し、
+  // こちらからは「いま書かれているもの」を読む口とクリアの口だけを渡す（疎結合）。
+  window.tayoriTrash={
+    getPoem:()=>poemEl.value,
+    getColor:()=>sealColor,
+    getVertical:()=>composeVertical,
+    getTrace:()=>poemTrace.length>1?poemTrace:null,   // 筆跡（TypeTrace）も屑籠へ封じる
+    setPoem:(t)=>{poemEl.value=t;poemEl.dispatchEvent(new Event('input',{bubbles:true}));}, // 屑籠から拾って書きつづける口
+    goCompose:()=>goTab('compose'),
+    clear:clearCompose,
+    flash:(m,ms)=>flash(m,ms)
+  };
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
@@ -2575,5 +2719,7 @@ async function detectWeather(){
   })();
 })();
 </script>
+<!-- 捨てられない屑籠（カメラの手・握りつぶす長押し・屑籠ビュー）。moduleなので非対応環境では静かに無視される -->
+<script type="module" src="/static/js/trash/controller.js"></script>
 </body>
 </html>
