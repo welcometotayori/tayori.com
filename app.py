@@ -2430,8 +2430,9 @@ def api_open_letter(lid):
 
     keys = row.keys()
     # 開封トランザクションのレスポンスで、本文（poem 等）を初めて配信する。
-    # first_open は「にじみ登場アニメ」を初回だけ再生するための一回きりフラグ
-    # （opened_at はサーバ側で確定済み。二度目以降の呼び出しは冪等に clear な手紙を返すだけ）。
+    # first_open は初回開封かどうかの一回きりフラグ（opened_at はサーバ側で確定済み。
+    # 二度目以降の呼び出しは冪等に同じ手紙を返すだけ）。フロントは現状これを使っていないが、
+    # 将来の「初回だけの演出」向けに残置。
     fresh = own_letter(lid)
     return jsonify(ok=True, first_open=not bool(already),
                    letter=letter_to_dict(fresh) if fresh else None,

@@ -395,12 +395,6 @@
   .shelf-item .sc-ink.vertical{justify-content:flex-start;flex-direction:row-reverse}
   .shelf-item .sc-ink.vertical .ink-line{width:7px;height:calc(var(--len)*6px);max-height:64px}
   .shelf-item .sc-meta{justify-content:flex-start;margin-top:4px}
-  /* ── 開封のにじみ（初回開封時のみ）──
-     墨が水面下から本文の形に滲み上がる。天気は「出方」にだけ効き、にじみは必ず0へ収束、
-     定着後は filter を外して素の本文（完全クリア）に戻す。 */
-  .ink-wash{position:absolute;pointer-events:none;z-index:3;mix-blend-mode:multiply}
-  .letter-poem.bleeding{will-change:filter,opacity}
-  @media (prefers-reduced-motion:reduce){.ink-wash{display:none}}
   .thread{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px}
   .thread-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;color:var(--ink-soft);text-transform:uppercase;text-align:center;margin-bottom:16px}
   /* 会話の折りたたみトグル（各会話の下・中央に置く押しやすいボタン。「開く／閉じる」） */
@@ -2143,7 +2137,7 @@ async function detectWeather(){
       });
     });}
 
-  // 開封のシークエンス：封を切る → 本文（封入インクをまとって現れる）→ 差分（本文の下に静かに並ぶ）
+  // 開封のシークエンス：封を切る → 本文（差分の上に静かに並ぶ）
   async function openLetter(id){
     // 「開けた場所」も封緘時と同じ流儀で同梱する（エリア名＋丸め座標のみ。取れていなければ少しだけ待ち、
     // それでも無ければ場所なしで静かに続行）。封をした場所との差分が「あの日と今日」に並ぶ。
@@ -2153,73 +2147,7 @@ async function detectWeather(){
       open_env:currentWeather,
       open_area_name:oa.area_name||null,open_area_lat:oa.area_lat??null,open_area_lng:oa.area_lng??null})});
     await loadMail(); // 再描画：本文は今の /open のレスポンスで初めて届き、ここで初めて現れる
-    if(res&&res.ok){
-      focusLetter(id);
-      // にじみ登場は「初回開封」の一回きり（first_openはサーバのopened_atで確定。
-      // アニメ完了前に離脱してもデータ上は開封済みで、次回からはclear表示のみ）。
-      // タイプ再生（trace）は自動では流さず、本文下のボタンからいつでも。
-      if(res.first_open)playInkBleed(id,res.letter||{});
-    }
-  }
-
-  // ── 開封のにじみ演出（初回のみ・数秒）─────────────────────
-  // 投函時に凍結した天気（seal_env）だけを使う。開封時に再フェッチしない。
-  //   湿度→にじみ半径 / 気温→登場時の墨の濃淡 / 降水→収束の長さとゆらぎ / 気圧→墨の粒状感。
-  // にじみは登場の演出であって最終状態ではない：必ず0へ収束し、定着後はfilterを外して
-  // 素の本文（完全クリア＝案A）に戻す。旧データで天気が無い項目は穏当な既定値で出る。
-  function playInkBleed(id,L){
-    let poem=null,wash=null,timer=null;
-    const settle=()=>{ // どんな経路でも最後は必ずクリアに定着させる
-      if(timer){clearTimeout(timer);timer=null;}
-      if(poem){poem.style.filter='';poem.style.opacity='';poem.classList.remove('bleeding');}
-      if(wash&&wash.parentNode)wash.remove();
-    };
-    try{
-      if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;
-      poem=document.getElementById('poem-'+id);if(!poem)return;
-      const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-      const se=(L&&L.seal_env)||{};
-      const hum=se.humidity==null?55:+se.humidity;
-      const temp=se.temp==null?18:+se.temp;
-      const precip=se.precip==null?0:+se.precip;
-      const press=se.pressure==null?1013:+se.pressure;
-      const blur0=1+11*clamp(hum/100,0,1);              // 湿った日ほど大きくぼやけて登場
-      const pn=clamp(precip/5,0,1);                     // 降水の正規化（5mm/hで最大）
-      const dur=1200+2300*pn;                           // 雨の日ほどゆらぎながら長く収束
-      const turb=clamp((1015-press)/40,0,0.9);          // 低気圧ほど墨がざらつく
-      const dark=clamp(0.55+0.40*(temp/35),0.55,0.95);  // 寒い日は薄墨で現れる（定着後は本文色）
-      // 墨の粒（気圧）：本文の上に重ねるノイズの霧。SVG内部で完結するフィルタなので互換性が高い
-      const body=poem.closest('.letter-body');
-      if(body&&turb>0.02){
-        const r=poem.getBoundingClientRect(),b=body.getBoundingClientRect();
-        const bf=(L&&L.vertical)?'0.035 0.011':'0.011 0.035';  // 縦書きは墨が縦に滴る向き
-        const fid='wash-'+id+'-'+Date.now();
-        wash=document.createElementNS('http://www.w3.org/2000/svg','svg');
-        wash.setAttribute('class','ink-wash');
-        wash.style.cssText='left:'+(r.left-b.left)+'px;top:'+(r.top-b.top)+'px;width:'+r.width+'px;height:'+r.height+'px';
-        wash.innerHTML='<filter id="'+fid+'" x="-20%" y="-20%" width="140%" height="140%">'+
-          '<feTurbulence type="fractalNoise" baseFrequency="'+bf+'" numOctaves="2" seed="'+((parseInt(String(id).slice(0,4),16)||7)%97)+'"/>'+
-          '<feColorMatrix type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.09  0 0 0 0 0.06  0 0 0 '+(0.5+0.5*turb).toFixed(2)+' 0"/>'+
-          '</filter><rect width="100%" height="100%" filter="url(#'+fid+')"/>';
-        body.appendChild(wash);
-      }
-      poem.classList.add('bleeding');
-      // 保険：rAFが何かで途切れても、必ずクリアで終わる（可読性100%の担保）
-      timer=setTimeout(settle,dur+600);
-      const t0=performance.now();
-      (function step(now){
-        try{
-          const t=clamp((now-t0)/dur,0,1);
-          const e=1-Math.pow(1-t,3);                     // ease-out：素早く形が現れ、静かに定着
-          let bl=blur0*(1-e);
-          if(pn>0)bl*=1+0.22*pn*(1-e)*Math.sin(now/90);  // 雨：ゆらぎながら収束
-          poem.style.filter=bl>0.05?'blur('+bl.toFixed(2)+'px)':'';
-          poem.style.opacity=(dark+(1-dark)*e).toFixed(3);
-          if(wash)wash.style.opacity=String(((0.1+0.55*turb)*(1-e)).toFixed(3));
-          if(t<1)requestAnimationFrame(step);else settle();
-        }catch(err){settle();}
-      })(performance.now());
-    }catch(e){settle();}
+    if(res&&res.ok)focusLetter(id);
   }
 
   /* AI対話（過去の自分からの問い）はUIから撤去。将来のopt-inに備えてコードは温存。
