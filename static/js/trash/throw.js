@@ -10,6 +10,15 @@ function reduced() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// onfinish が来なくても必ず一度だけ完了させる（イベントが凍る環境でも投げ捨てを迷子にしない）。
+// 保存やクリアなどの後始末が onDone に載っているので、ここが呼ばれないと詰む。
+function settle(anim, ms, fn) {
+  let done = false;
+  const once = () => { if (!done) { done = true; fn && fn(); } };
+  anim.onfinish = once;
+  setTimeout(once, ms + 300);
+}
+
 // 現在の transform の平行移動成分（手に追従した分）を読む。ここを起点に投げる。
 function baseOffset(el) {
   try {
@@ -23,8 +32,8 @@ function baseOffset(el) {
 // カメラ経路：リリース時の速度ベクトル(px/ms)の向きへ紙玉を飛ばし、縮めて消す。
 export function throwPaper(el, { vx, vy }, onDone) {
   if (reduced()) {
-    el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" })
-      .onfinish = () => onDone && onDone();
+    settle(el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" }),
+           260, onDone);
     return;
   }
   const b = baseOffset(el);
@@ -35,21 +44,21 @@ export function throwPaper(el, { vx, vy }, onDone) {
   const MIN = Math.hypot(window.innerWidth, window.innerHeight) * 0.85;
   if (L < MIN) { dx *= MIN / L; dy *= MIN / L; }
   const rot = (vx + vy) * 140 + (Math.random() * 40 - 20);
-  el.animate(
+  settle(el.animate(
     [
       { transform: `translate(${b.x}px,${b.y}px) rotate(0deg) scale(1)`, opacity: 1 },
       { transform: `translate(${b.x + dx * 0.6}px,${b.y + dy * 0.6}px) rotate(${rot * 0.7}deg) scale(0.5)`, opacity: 0.9, offset: 0.55 },
       { transform: `translate(${b.x + dx}px,${b.y + dy}px) rotate(${rot}deg) scale(0.08)`, opacity: 0 },
     ],
     { duration: 620, easing: EASE_OUT, fill: "forwards" }
-  ).onfinish = () => onDone && onDone();
+  ), 620, onDone);
 }
 
 // 長押し経路：屑籠の位置（画面座標）へ、弧を描いて落とす。
 export function throwInto(el, target, onDone) {
   if (reduced()) {
-    el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" })
-      .onfinish = () => onDone && onDone();
+    settle(el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" }),
+           260, onDone);
     return;
   }
   const b = baseOffset(el);
@@ -57,12 +66,12 @@ export function throwInto(el, target, onDone) {
   const fx = r.left + r.width / 2, fy = r.top + r.height / 2;
   const dx = target.x - fx, dy = target.y - fy;
   const lift = Math.min(-70, dy - 110); // 一度ふわりと持ち上がってから落ちる
-  el.animate(
+  settle(el.animate(
     [
       { transform: `translate(${b.x}px,${b.y}px) rotate(0deg) scale(1)`, opacity: 1 },
       { transform: `translate(${b.x + dx * 0.45}px,${b.y + lift}px) rotate(70deg) scale(0.45)`, opacity: 1, offset: 0.5 },
       { transform: `translate(${b.x + dx}px,${b.y + dy}px) rotate(150deg) scale(0.08)`, opacity: 0.1 },
     ],
     { duration: 640, easing: EASE_SINK, fill: "forwards" }
-  ).onfinish = () => onDone && onDone();
+  ), 640, onDone);
 }

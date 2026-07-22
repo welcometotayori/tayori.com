@@ -1,6 +1,7 @@
-// ── 捨てられない屑籠：結線(状態機械・長押しフォールバック・屑籠ビュー)──
+// ── クシャと「ほどけるまで」：結線(状態機械・タッチ経路・机の眺め・溶解)──
 // 依存：window.tayoriTrash（index.html 内の投函スクリプトが渡す橋。本文・色・縦書き・クリア・flash）
-// カメラ経路：かざす→便箋が応える→握ると紙が手に付いてくる→振って開くと飛ぶ。
+// カメラ経路（マウス環境）：かざす→便箋が応える→握ると紙が手に付いてくる→振って開くと飛ぶ。
+// タッチ経路（指の環境）：便箋を指でこすると丸まっていき、はじくと飛んでいく。
 // 一度くしゃくしゃにした紙は、そっと開いても元に戻らない（その場に落ちて残る）。
 // 戻すのは「落ちた紙玉をクリック/タップする」意図的な操作だけ。紙の物理に嘘をつかない。
 
@@ -24,8 +25,16 @@ function init() {
 
   // ══ 共通 ═══════════════════════════════════════════════
 
-  let crumple = null;   // 進行中のクシャ（カメラ経路と長押し経路で共用。同時には走らない）
+  let crumple = null;   // 進行中のクシャ（カメラ経路とタッチ経路で共用。同時には走らない）
   let busy = false;     // 投げ・復元アニメ中の再入防止
+
+  // 指が主の環境か（タッチ経路の入口）。カメラはマウス環境の隠し味として残す。
+  const COARSE = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+
+  // 触覚のひとしずく。対応端末（Android Chrome等）だけ・iOS Safariは黙って素通り。
+  function buzz(pattern) {
+    if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} }
+  }
 
   function letterText() { return (hooks.getPoem() || "").replace(/\s+$/, ""); }
 
@@ -107,7 +116,7 @@ function init() {
     shadow?.remove(); shadow = null; shadowCtx = null; shadowBuf = null;
     camOn = false;
     camState = "IDLE";
-    poemHost.classList.remove("hand-near", "hand-taken");
+    poemHost.classList.remove("hand-near", "hand-taken", "hand-arming");
     handBtn.setAttribute("aria-pressed", "false");
     handBtn.classList.remove("on");
     handLabel.textContent = "捨てる";
@@ -131,13 +140,14 @@ function init() {
   guideOv?.addEventListener("click", (e) => { if (e.target === guideOv) guideOv.classList.remove("on"); });
 
   if (handBtn) {
+    // 指の環境では、ボタンの説明もカメラではなく指の操作の言葉にする
+    if (COARSE) handBtn.title = "指で便箋をこすると紙が丸まり、はじくと捨てられます";
     handBtn.addEventListener("click", () => {
-      if (camBusy) return;
+      if (camBusy || busy) return;
       if (camOn) { camTeardown(); return; }
-      if (!navigator.mediaDevices?.getUserMedia) {
-        hooks.flash("この端末ではカメラを使えません。");
-        return;
-      }
+      if (touchOn) { touchCancel(); return; }
+      // 指が主の端末・カメラのない端末は、指で直接くしゃくしゃにする経路へ
+      if (COARSE || !navigator.mediaDevices?.getUserMedia) { touchStart(); return; }
       openGuideThenStart();
     });
   }
@@ -239,16 +249,19 @@ function init() {
     if (camState === "IDLE") {
       if (lm && hasText && overLetter && isFist(lm)) {
         camState = "ARMING"; armAt = now;
+        poemHost.classList.add("hand-arming");  // 握った瞬間、紙が身構える（反応は待たせない）
       }
     } else if (camState === "ARMING") {
       // 掴み成立には「便箋の上でグーを260ms維持」を要求（誤爆ガード）
       if (!lm || !isFist(lm) || !isOverRect(toScreen(palmCenter(lm)), poemHost.getBoundingClientRect())) {
         camState = "IDLE";
+        poemHost.classList.remove("hand-arming");
       } else if (now - armAt > 260) {
         // 掴んだ：紙を便箋から「取り上げて」手に持たせる
         startCrumple();
         crumple.detachToBody();                    // 便箋の枠を出て、手と一緒に動けるように
-        poemHost.classList.remove("hand-near");
+        buzz(10);
+        poemHost.classList.remove("hand-near", "hand-arming");
         poemHost.classList.add("hand-taken");      // 便箋の上からは紙が消える（手の中にあるので）
         grabFrom = toScreen(palmCenter(lm));
         followX = followY = 0;
@@ -276,6 +289,7 @@ function init() {
         const speed = Math.max(Math.hypot(v.vx, v.vy), vel.peakSpeed());
         if (speed >= THROW_SPEED) {
           camState = "THROWN"; busy = true;
+          buzz(18);
           const c = crumple; crumple = null;
           c.update(1);
           const dir = Math.hypot(v.vx, v.vy) > 0.02 ? v : { vx: 0.3, vy: -0.5 };
@@ -371,13 +385,222 @@ function init() {
     g.restore();
   }
 
-  // ══ 屑籠ビュー（開けば読める。でも、消せない）═══════════════════
+  // ══ タッチ経路（指でこすって丸め、はじいて捨てる）═══════════════
+  // カメラを使わず、指そのものが手になる。反応は指を置いた瞬間から（200ms以内）。
+  // こすった距離で丸まり、途中で離せばその場に落ち、勢いよくはじけば飛んでいく。
+  // 紙の物理はカメラ経路と同じ：一度こすった紙は伸びない。戻すのはタップだけ。
+
+  let touchOn = false;
+  let tPhase = "paper";      // paper(こすり中) → ball(落ちて休んでいる)
+  let tR = 0;                // 丸まり具合（表示値）
+  let tTarget = 0;           // 丸まり具合（指が求める値）
+  let tRaf = 0;
+  let tPress = false, tMoved = 0, tDownAt = 0, tDownX = 0, tDownY = 0;
+  let tLastX = 0, tLastY = 0;  // 前回の指の位置（movementX非対応の端末でも道のりを測る）
+  let tx = 0, ty = 0;        // 紙の追従オフセット
+  let grabX = 0, grabY = 0;  // ball を掴んだ指の基準
+  let shield = null, hint = null;
+  const tvel = new VelocityTracker(7);
+  // 2026-07-22実機体感FB（暫定値・実機動画で再調整予定）:
+  //   こすり量は指のリーチに合わせ短く、はじきは「反応しない」不満を消す方へ低く。
+  const SCRUB_FULL = 650;        // 指がこの距離こすると丸まりきる（850は完了前に離されやすかった）
+  const TOUCH_THROW = 0.32;      // はじき判定(px/ms)。0.5は誤爆防止に厳しすぎた
+  const SHIELD_PAD = 24;         // 紙の見た目より一回り広い当たり判定
+
+  function positionShield() {
+    if (!shield) return;
+    const r = poemHost.getBoundingClientRect();
+    shield.style.left = (r.left - SHIELD_PAD) + "px";
+    shield.style.top = (r.top - SHIELD_PAD) + "px";
+    shield.style.width = (r.width + SHIELD_PAD * 2) + "px";
+    shield.style.height = (r.height + SHIELD_PAD * 2) + "px";
+  }
+  const reposition = () => positionShield();
+
+  function setHint(text) {
+    if (!hint) {
+      hint = document.createElement("div");
+      hint.className = "touch-crumple-hint";
+      poemHost.appendChild(hint);
+    }
+    hint.classList.remove("bye");
+    hint.textContent = text;
+  }
+
+  function touchStart() {
+    if (touchOn || crumple || busy) return;
+    if (!letterText().trim()) { hooks.flash("白紙は握りつぶせません。"); return; }
+    startCrumple();
+    touchOn = true;
+    tPhase = "paper"; tR = 0; tTarget = 0; tx = 0; ty = 0; tMoved = 0; tPress = false;
+    handBtn.classList.add("on");
+    handBtn.setAttribute("aria-pressed", "true");
+    handLabel.textContent = "やめる";
+    setHint("指でこすると、紙が丸まる");
+    // 紙より一回り広い透明の受け皿。書きかけの本文への誤タッチもこの間だけ防ぐ
+    shield = document.createElement("div");
+    shield.style.cssText = "position:fixed;z-index:97;touch-action:none;background:transparent;";
+    positionShield();
+    document.body.appendChild(shield);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    shield.addEventListener("pointerdown", tDown);
+    shield.addEventListener("pointermove", tMove);
+    shield.addEventListener("pointerup", tUp);
+    shield.addEventListener("pointercancel", tUp);
+    tRaf = requestAnimationFrame(tLoop);
+  }
+
+  function teardownTouchUI() {
+    touchOn = false;
+    cancelAnimationFrame(tRaf);
+    window.removeEventListener("scroll", reposition, true);
+    window.removeEventListener("resize", reposition);
+    shield?.remove(); shield = null;
+    hint?.remove(); hint = null;
+    handBtn.classList.remove("on");
+    handBtn.setAttribute("aria-pressed", "false");
+    handLabel.textContent = "捨てる";
+  }
+
+  // 「やめる」/Escape：こすった紙は伸びない——皺の跡ごと便箋へ戻す。触れる前なら静かに仕舞う。
+  function touchCancel() {
+    if (!touchOn || busy) return;
+    const r = Math.max(tR, tTarget);
+    teardownTouchUI();
+    if (!crumple) return;
+    if (r > 0.12) {
+      followX = tx; followY = ty;
+      restoreGrab(r);
+    } else {
+      const c = crumple; crumple = null; c.destroy();
+      poemHost.classList.remove("hand-taken");
+    }
+  }
+
+  function tLoop() {
+    if (!touchOn) return;
+    tRaf = requestAnimationFrame(tLoop);
+    if (!crumple || busy) return;
+    // 指が求める丸まりへ、紙が少し遅れてついてくる（ギュッと縮む手応え）
+    tR += (tTarget - tR) * 0.38;
+    crumple.update(tR);
+    crumple.el.style.transform = `translate(${tx}px,${ty}px) rotate(${tx * 0.02}deg)`;
+  }
+
+  function tDown(e) {
+    if (busy || !crumple || !e.isPrimary) return;
+    e.preventDefault();
+    try { shield.setPointerCapture(e.pointerId); } catch (_) {}
+    tPress = true; tMoved = 0;
+    tDownAt = performance.now(); tDownX = e.clientX; tDownY = e.clientY;
+    tLastX = e.clientX; tLastY = e.clientY;
+    grabX = e.clientX - tx; grabY = e.clientY - ty;
+    tvel.reset(); tvel.push(e.clientX, e.clientY);
+    if (hint) hint.classList.add("bye");
+    if (tPhase === "paper") {
+      // 置いた瞬間、紙がわずかに縮んで応える（最初の一触りを空振りにしない）
+      tTarget = Math.min(1, Math.max(tTarget, tR + 0.06));
+      // 紙は指の下の canvas に写っている。落ちたりずれたりした時に
+      // 下の便箋の文字が覗かないよう、触れた時点で本物の便箋は伏せる
+      poemHost.classList.add("hand-taken");
+      buzz(8);
+    }
+  }
+
+  function tMove(e) {
+    if (!tPress || busy || !crumple || !e.isPrimary) return;
+    e.preventDefault();
+    tvel.push(e.clientX, e.clientY);
+    const step = Math.hypot(e.clientX - tLastX, e.clientY - tLastY);
+    tLastX = e.clientX; tLastY = e.clientY;
+    tMoved += step;
+    if (tPhase === "paper") {
+      // こすった道のりのぶんだけ丸まる。紙も指の方へ少し寄れて、擦れている感じを出す
+      const dx = e.clientX - tDownX, dy = e.clientY - tDownY;
+      tTarget = Math.min(1, tTarget + step / SCRUB_FULL);
+      tx = dx * 0.08; ty = dy * 0.08;
+      if (tTarget >= 1 && tR < 0.9) buzz(16);  // 丸まりきった手応え
+    } else {
+      // 落ちた紙玉は指に付いてくる（そのまま、はじいて捨てられる）
+      tx = e.clientX - grabX; ty = e.clientY - grabY;
+    }
+  }
+
+  function tUp(e) {
+    if (!tPress || busy || !crumple) return;
+    tPress = false;
+    tvel.push(e.clientX, e.clientY);
+    const v = tvel.velocity();
+    const speed = Math.max(Math.hypot(v.vx, v.vy), tvel.peakSpeed());
+    const quickTap = tMoved < 8 && performance.now() - tDownAt < 260;
+
+    if (tPhase === "ball" && quickTap) {
+      // 落ちた紙玉をタップ＝意図的にひろげて戻す（唯一の「戻る」）
+      teardownTouchUI();
+      followX = tx; followY = ty;
+      restoreGrab(tR);
+      return;
+    }
+    const r = Math.max(tR, tTarget);
+    if (r >= 0.4 && speed >= TOUCH_THROW) { touchThrow(v); return; }
+    if (r >= 0.1 || tPhase === "ball") { touchDrop(); return; }
+    // ほとんど触れていない：紙は平らなまま、指を待つ
+    tTarget = tR;
+  }
+
+  // 手を離す＝紙玉がぽとりと落ち、着地でわずかに弾む（一度こすった紙は伸びない）
+  function touchDrop() {
+    if (!crumple) return;
+    busy = true;
+    const c = crumple;
+    const y0 = ty, r0 = tR, r1 = Math.max(tR, REST_CRUMPLE);
+    const drop = tPhase === "ball" ? 10 : 30 + Math.random() * 14;
+    const t0 = performance.now(), dur = 380;
+    (function tick() {
+      const t = Math.min(1, (performance.now() - t0) / dur);
+      // 落下は加速、着地で一度はっきり弾んでおさまる（やった感の芯）
+      const fall = t < 0.62 ? (t / 0.62) * (t / 0.62)
+                 : 1 - Math.sin(((t - 0.62) / 0.38) * Math.PI) * 0.09;
+      ty = y0 + drop * fall;
+      tR = r0 + (r1 - r0) * t;
+      tTarget = Math.max(tTarget, tR);
+      c.update(tR);
+      c.el.style.transform = `translate(${tx}px,${ty}px)`;
+      if (t < 1) { requestAnimationFrame(tick); return; }
+      busy = false;
+      tPhase = "ball";
+      setHint("はじいて捨てる · タップでひろげる");
+    })();
+  }
+
+  // はじいた：その向きへ飛んでいき、屑籠へ（保存して無言でクリア）
+  function touchThrow(v) {
+    if (!crumple) return;
+    busy = true;
+    buzz(18);
+    const c = crumple; crumple = null;
+    c.update(1);
+    c.detachToBody();
+    c.el.style.transform = `translate(${tx}px,${ty}px)`;  // 付け替えても指の位置から飛ぶ
+    teardownTouchUI();
+    const dir = Math.hypot(v.vx, v.vy) > 0.02 ? v : { vx: 0.3, vy: -0.5 };
+    throwPaper(c.el, dir, async () => {
+      await archive();
+      poemHost.classList.remove("hand-taken");
+      c.destroy();
+      busy = false;
+    });
+  }
+
+  // ══ ほどけるまで（7日のあいだ揺らいでいる。読める。やがて色片になって編み物へ還る）══
 
   const trashOv = $("trashOv");
   const scatter = $("trashScatter");
   const emptyNote = $("trashEmpty");
   const openOv = $("trashOpenOv");
   const openPaper = $("trashOpenPaper");
+  const openInk = $("trashOpenInk");   // 本文の墨。縦書きの中央寄せは紙ではなくこの器が担う
   const openDate = $("trashOpenDate");
 
   function hashSeed(s) {
@@ -386,34 +609,75 @@ function init() {
     return () => { h = (h * 1664525 + 1013904223) >>> 0; return h / 4294967296; };
   }
 
-  // 屑籠の眺め：捨てた日の順に、古い紙玉から籠の底へ地層のように積もる。
-  // 籠は背と前の二枚（markup側）で紙玉を挟む。月の変わり目にだけ小さく年月を刻む。
-  // 件数もグラフも出さない。時間だけが、静かに層になる。
-  function sedimentPos(sorted) {
-    const perRow = 4, rowH = 10.5;
-    const TOP = 26, BOTTOM = 84;      // 籠の口と底（%・basket SVG と対）
+  // ほどけ具合 0(捨てたばかり)〜1(まもなく編み物へ)。数字では出さず、見た目だけに使う。
+  function unravelP(item) {
+    if (!item.unravel_at) return 0;
+    const end = new Date(item.unravel_at).getTime();
+    if (isNaN(end)) return 0;
+    return Math.min(1, Math.max(0, 1 - (end - Date.now()) / (7 * 86400000)));
+  }
+
+  // ほどけの糸：紙玉の縁から外へ、ほどけ具合のぶんだけ糸が伸びる（idから決まる同じ走り）
+  function makeFray(size, p, rnd) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ball-fray");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("aria-hidden", "true");
+    const n = Math.round(1 + p * 6);
+    const r0 = 27; // 紙玉の縁（viewBox基準・inset:-20%ぶん内側）
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2;
+      const len = 6 + p * (10 + rnd() * 10);
+      const x0 = 50 + Math.cos(a) * r0, y0 = 50 + Math.sin(a) * r0;
+      const x1 = 50 + Math.cos(a) * (r0 + len), y1 = 50 + Math.sin(a) * (r0 + len);
+      // 途中で少し撓む（まっすぐな糸はほどけて見えない）
+      const mx = 50 + Math.cos(a + 0.35) * (r0 + len * 0.55);
+      const my = 50 + Math.sin(a + 0.35) * (r0 + len * 0.55);
+      d += `M${x0.toFixed(1)} ${y0.toFixed(1)}Q${mx.toFixed(1)} ${my.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "rgba(58,46,37,0.4)");
+    path.setAttribute("stroke-width", "0.9");
+    path.setAttribute("stroke-linecap", "round");
+    svg.appendChild(path);
+    return svg;
+  }
+
+  // 籠の中の山（立体の堆積）：捨てた日の順に、古い玉ほど底へ沈む。
+  // 行の高さを玉の背丈より低くして半個ずつずらす＝上の玉が下の段の「谷」に乗る。
+  // 玉は手前/奥の二層に分かれ、奥は小さく暗く、手前は大きく明るい。
+  // 描画順は「下（手前）の玉ほど上に描く」＝山の重なりが物理と同じ向きになる。
+  function pilePos(sorted) {
+    const perRow = 4, rowH = 7.6;
+    const TOP = 27, BOTTOM = 77.5;
     return sorted.map((item, k) => {
       const rnd = hashSeed((item.id || "y") + "s");
       const row = Math.floor(k / perRow);
       const col = k % perRow;
-      const y = Math.max(TOP + 4, 79 - row * rowH + (rnd() * 3 - 1.5));
-      // 籠は上が広く下がすぼまる台形。深さに応じて置ける幅を変える
-      const frac = (BOTTOM - y) / (BOTTOM - TOP);
-      const w = 44 + 16 * frac;
-      const x = 50 - w / 2 + ((col + 0.5) * w) / perRow + (rnd() * 5 - 2.5);
-      return { x, y };
+      const depth = rnd() < 0.42 ? 1 : 0;
+      const y = Math.max(TOP + 4, BOTTOM - row * rowH + (rnd() * 2.2 - 1.1) - depth * 3);
+      // 籠は上が広く下がすぼまる台形。さらに山は上の段ほど中央へ寄る（裾広がりのピラミッド）。
+      // 幅は玉の半径ぶん内側に絞り、壁を突き抜けないようクランプする。
+      const frac = Math.min(1, Math.max(0, (BOTTOM - y) / (BOTTOM - TOP)));
+      const spread = Math.max(0.45, 1 - row * 0.14);
+      const w = (36 + 17 * frac) * spread;
+      const brick = (row % 2) * 0.5;   // 半個ずらし＝下の段の谷に乗る
+      let x = 50 - w / 2 + (((col + brick) % perRow) + 0.5) * (w / perRow) + (rnd() * 3 - 1.5);
+      x = Math.min(50 + w / 2, Math.max(50 - w / 2, x));
+      return { x, y, depth };
     });
   }
 
   async function renderTrash() {
     const items = await fetchTrash();
-    // 籠（.kuzu-basket）は残し、紙玉と年月だけ描き直す
     scatter.querySelectorAll(".paper-ball,.trash-era").forEach((x) => x.remove());
     emptyNote.style.display = items.length ? "none" : "";
 
     const sorted = items.slice().sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
-    const pos = sedimentPos(sorted);
-    const placed = sorted.map((item, k) => ({ item, x: pos[k].x, y: pos[k].y }));
+    const pos = pilePos(sorted);
     // 月の変わり目にだけ、籠の左に小さく年月を置く（数字はこれだけ）
     let prevKey = "";
     sorted.forEach((item, k) => {
@@ -430,16 +694,25 @@ function init() {
       }
     });
 
-    placed.forEach(({ item, x, y }) => {
+    sorted.forEach((item, k) => {
+      const { x, y, depth } = pos[k];
       const b = document.createElement("button");
       b.type = "button";
       b.className = "paper-ball";
       b.setAttribute("aria-label", "丸められた手紙");
       const rnd = hashSeed(item.id || "y");
-      const size = 48 + Math.round(rnd() * 26);
+      const size = Math.round((48 + rnd() * 26) * (depth ? 0.84 : 1));
+      const p = unravelP(item);
+      // 立体の文法：奥の玉は暗く影も浅い。手前の玉は明るく、下の玉ほど手前に描かれて重なりを作る。
+      // 溶解の文法：日が経つほど彩度が抜けて存在が薄らぐ（それでも触れば、まだ読める）。
+      const zi = 5 + Math.round((y - 20) / 3) - depth * 4;
       b.style.cssText =
         `left:${x}%;top:${y}%;width:${size}px;height:${size}px;` +
-        `transform:translate(-50%,-50%) rotate(${Math.round(rnd() * 60 - 30)}deg);`;
+        `transform:translate(-50%,-50%) rotate(${Math.round(rnd() * 60 - 30)}deg);` +
+        `z-index:${Math.min(27, Math.max(2, zi))};` +
+        `filter:saturate(${(1 - 0.45 * p).toFixed(2)}) brightness(${depth ? 0.87 : 1}) ` +
+        `drop-shadow(0 ${depth ? 2 : 3}px ${depth ? 3 : 5}px rgba(58,46,37,${depth ? 0.2 : 0.38}));` +
+        `opacity:${(1 - 0.22 * p).toFixed(2)};`;
       // 紙玉は本物のクシャ描画エンジンで描く：その手紙の本文が実際に折り込まれた玉になる。
       // 形は id から決まるので、いつ開いても同じ潰れ方のまま底に沈んでいる。
       b.appendChild(renderPaperBall({
@@ -449,6 +722,7 @@ function init() {
         seed: item.id || "x",
         size,
       }));
+      b.appendChild(makeFray(size, p, hashSeed((item.id || "y") + "f")));
       b.addEventListener("click", () => openBall(item));
       scatter.appendChild(b);
     });
@@ -467,7 +741,7 @@ function init() {
   async function playTrace(item) {
     const runId = ++traceRun;
     // 再生できない事情があれば、黙って完成形を置いて終わる
-    const bail = () => { if (runId === traceRun) openPaper.textContent = item.content; };
+    const bail = () => { if (runId === traceRun) openInk.textContent = item.content; };
     let steps = null;
     try {
       const res = await fetch("/api/trash/" + item.id + "/trace");
@@ -494,12 +768,12 @@ function init() {
       if (runId !== traceRun || !openOv.classList.contains("on")) return; // 閉じた・飛ばした
       const el = performance.now() - t0;
       while (idx < norm.length && norm[idx].at * scale <= el) {
-        openPaper.textContent = norm[idx].v;
-        openPaper.appendChild(caret);
+        openInk.textContent = norm[idx].v;
+        openInk.appendChild(caret);
         idx++;
       }
       if (idx < norm.length) requestAnimationFrame(frame);
-      else openPaper.textContent = item.content;
+      else openInk.textContent = item.content;
     })();
   }
 
@@ -510,7 +784,7 @@ function init() {
     const willPlay = item.has_trace &&
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // 筆跡が封じられている紙玉は、白紙から書き起こす（完成形を先に見せない）
-    openPaper.textContent = willPlay ? "" : item.content;
+    openInk.textContent = willPlay ? "" : item.content;
     openPaper.classList.toggle("vertical", !!item.vertical);
     openPaper.style.setProperty("--trash-mood", item.mood_color || "transparent");
     openDate.textContent = item.created_at ? "握りつぶした日 — " + fmtDate(item.created_at) : "";
@@ -518,7 +792,7 @@ function init() {
     setTimeout(() => $("trashOpenClose")?.focus(), 60);
     if (willPlay) setTimeout(() => playTrace(item), 350);
     // 紙をタップしたら再生を飛ばして、書き終わった姿にする
-    openPaper.onclick = () => { traceRun++; openPaper.textContent = item.content; };
+    openPaper.onclick = () => { traceRun++; openInk.textContent = item.content; };
   }
 
   if (binBtn) {
@@ -531,8 +805,31 @@ function init() {
   $("trashClose")?.addEventListener("click", () => trashOv.classList.remove("on"));
   $("trashOpenClose")?.addEventListener("click", () => openOv.classList.remove("on"));
 
+  // もう、戻らない：7日を待たず、いま編み物へ還す。確認の栞を必ず挟む（不可逆）。
+  // 実行後は何も言わない——ただ、その紙玉のない机の眺めに戻るだけ。
+  const dissolveOv = $("dissolveOv");
+  $("trashDissolve")?.addEventListener("click", () => {
+    if (!currentItem) return;
+    dissolveOv?.classList.add("on");
+    setTimeout(() => $("dissolveBack")?.focus(), 60);
+  });
+  $("dissolveBack")?.addEventListener("click", () => dissolveOv?.classList.remove("on"));
+  dissolveOv?.addEventListener("click", (e) => { if (e.target === dissolveOv) dissolveOv.classList.remove("on"); });
+  $("dissolveGo")?.addEventListener("click", async () => {
+    if (!currentItem) return;
+    const id = currentItem.id;
+    currentItem = null;
+    traceRun++;
+    dissolveOv?.classList.remove("on");
+    openOv.classList.remove("on");
+    try {
+      await fetch("/api/trash/" + id + "/dissolve", { method: "POST", credentials: "same-origin" });
+    } catch (e) {}
+    renderTrash();
+  });
+
   // ひろげて、書きつづける：本文が便箋へ戻り、あの紙玉と同じ皺の跡が残る。
-  // 紙玉そのものは屑籠に残りつづける（消せない、が思想。拾えるのは言葉だけ）。
+  // 紙玉そのものはほどけきる日まで机に残りつづける（拾えるのは言葉だけ）。
   $("trashResume")?.addEventListener("click", () => {
     if (!currentItem) return;
     traceRun++;
@@ -553,7 +850,9 @@ function init() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (guideOv?.classList.contains("on")) guideOv.classList.remove("on");
+    else if (dissolveOv?.classList.contains("on")) dissolveOv.classList.remove("on");
     else if (openOv?.classList.contains("on")) openOv.classList.remove("on");
     else if (trashOv?.classList.contains("on")) trashOv.classList.remove("on");
+    else if (touchOn) touchCancel();
   });
 }

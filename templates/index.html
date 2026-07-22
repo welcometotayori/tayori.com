@@ -110,12 +110,22 @@
   .vert-btn .vert-mark{font-size:16px;line-height:1;border:0;border-radius:0;padding:0;font-family:'Shippori Mincho',serif}
   .vert-btn.on{color:var(--ink)}
   .vert-btn.on>span:first-child{background:rgba(58,46,37,0.05);border-color:var(--ink);color:var(--ink)}
-  /* ---- 捨てられない屑籠 ----
-     気に食わない手紙を握りつぶして投げ捨てる。でも消えない。全部ここに残る。
-     入口は小さく、数は主張しない。カメラ映像は画面にも出さず、手影だけが便箋に落ちる。 */
-  .poem{position:relative;transition:box-shadow .3s var(--ease-out)}  /* クシャ用canvasの座標基準 */
+  /* ---- クシャと「ほどけるまで」 ----
+     気に食わない手紙を握りつぶして投げ捨てる。捨てた言葉は7日のあいだ机の隅で揺らぎ、
+     やがてほどけて色だけが編み物に還る。入口は小さく、数は主張しない。
+     カメラ映像は画面にも出さず、手影だけが便箋に落ちる。 */
+  .poem{position:relative;transition:box-shadow .3s var(--ease-out),transform .22s var(--ease-out)}  /* クシャ用canvasの座標基準 */
   /* 手をかざすと便箋が小さく応える（掴めることの合図） */
   .poem.hand-near{box-shadow:0 0 0 1px var(--line),0 10px 26px -16px rgba(58,46,37,0.55);border-radius:2px}
+  /* 握った瞬間、掴み成立を待たず紙が身構える（反応を待たせない） */
+  .poem.hand-arming{transform:scale(0.988)}
+  /* タッチ経路の添え書き：紙の内側の上辺に小さく、指の使い方だけを囁く */
+  .touch-crumple-hint{position:absolute;left:50%;top:14px;transform:translate(-50%,0);z-index:6;
+    font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.16em;color:var(--ink-soft);
+    white-space:nowrap;pointer-events:none;opacity:0;animation:crumpleHintIn .5s .12s var(--ease-out) forwards}
+  @keyframes crumpleHintIn{to{opacity:0.85}}
+  .touch-crumple-hint.bye{animation:none;opacity:0;transition:opacity .35s}
+  @media (prefers-reduced-motion:reduce){.poem.hand-arming{transform:none}}
   /* 掴んで取り上げた間、便箋の上から紙が消える（紙は手の中にある） */
   .poem.hand-taken textarea,.poem.hand-taken .poem-count,.poem.hand-taken .vcaret{opacity:0;transition:opacity .2s}
   .hand-btn .hand-mark svg{width:18px;height:18px;display:block}
@@ -135,14 +145,23 @@
   /* 堆積の年月：月の変わり目にだけ、籠の左に小さく刻む */
   .trash-era{position:absolute;left:3.5%;transform:translateY(-50%);font-family:'Courier Prime',monospace;font-size:8px;
     letter-spacing:0.16em;color:var(--ink-soft);opacity:0.65;pointer-events:none;z-index:1}
-  /* 籠：背(奥の面)は紙玉の下、前(手前の縁と帯)は紙玉の上。玉は籠に挟まれて「中にある」 */
+  /* 籠：背(奥の面・底ほど暗い)は紙玉の下、前(手前の壁と縁)は紙玉の上。
+     玉は籠に挟まれて「中にある」。z-index：背0 → 玉5〜27(下=手前ほど上) → 底の暗がり28 → 前30 */
   .kuzu-basket{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   .kuzu-basket.back{z-index:0}
-  .kuzu-basket.front{z-index:2}
-  .paper-ball{z-index:1}
+  .kuzu-basket.front{z-index:30}
+  /* 底の暗がり：山の下ほど光が届かない。面ではなく空気の陰（玉の上に薄く積もる） */
+  .kuzu-ao{position:absolute;inset:0;z-index:28;pointer-events:none;
+    background:linear-gradient(180deg,transparent 40%,rgba(58,46,37,0.08) 60%,rgba(58,46,37,0.24) 82%,transparent 88%);
+    clip-path:polygon(17.5% 24.5%,82.5% 24.5%,73.3% 86.6%,26.7% 86.6%)}
+  /* ほどけ：経過した日のぶんだけ、紙玉の縁から糸が出ていく（数字は出さない・見た目だけで伝える） */
+  .ball-fray{position:absolute;inset:-20%;width:140%;height:140%;pointer-events:none;overflow:visible}
   /* 「ひろげて、書きつづける」は主動作としてわずかに立てる */
   .trash-close.primaryish{background:var(--ink);color:var(--paper);border-color:var(--ink)}
   .trash-close.primaryish:hover{background:var(--seal);border-color:var(--seal)}
+  /* 「もう、戻らない」：静かな朱。押しやすくはしない（不可逆の重さぶんだけ、そっと置く） */
+  .trash-close.dissolve{color:var(--seal);border-color:transparent;opacity:.8}
+  .trash-close.dissolve:hover{background:transparent;color:var(--seal);border-color:var(--seal);opacity:1}
   .trash-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);text-align:center;padding:26px 20px 0;
     word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .trash-scatter{position:relative;flex:1;margin:6px 10px}
@@ -160,8 +179,12 @@
     white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;position:relative}
   .trash-open-paper::after{content:"";position:absolute;left:13px;bottom:13px;width:9px;height:9px;border-radius:50%;
     background:var(--trash-mood,transparent);opacity:0.85}
-  .trash-open-paper.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-    font-feature-settings:"vert";line-break:strict;min-height:300px}
+  /* 縦書きは紙ではなく中の墨（ink）に書字方向を持たせ、fit-content+margin:autoで
+     列のかたまりを紙の真ん中へ（.letter-poem.vertical と同じ流儀・横書きは今のまま） */
+  .trash-open-paper.vertical{min-height:300px;height:min(60dvh,420px)}
+  .trash-open-paper.vertical .trash-open-ink{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+    font-feature-settings:"vert";line-break:strict;height:100%;
+    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto}
   /* 縦書きの筆跡再生：キャレットは横棒に寝かせる（.letter-poem.vertical と同じ流儀） */
   .trash-open-paper.vertical .trace-caret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0;display:inline-block}
   .trash-open-date{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);text-align:center;word-break:keep-all}
@@ -320,6 +343,42 @@
   .shelf-body{min-width:0}
   .shelf-when{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--seal);letter-spacing:0.06em}
   .shelf-meta{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);letter-spacing:0.04em;margin-top:2px}
+  /* ---- 一気に捨てる（封の中の一括処分。単体のクシャとは別動線）---- */
+  .shelf-label-row{display:flex;align-items:baseline;justify-content:center;gap:16px;margin-bottom:12px}
+  .shelf-label-row .shelf-label{margin-bottom:0}
+  .bulk-link{background:none;border:0;padding:2px 0;cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:11px;letter-spacing:0.14em;color:var(--ink-soft);border-bottom:1px solid transparent;transition:color .2s,border-bottom-color .2s}
+  .bulk-link:hover{color:var(--seal);border-bottom-color:var(--seal)}
+  .bulk-bar{display:flex;align-items:center;justify-content:center;gap:16px;margin:0 0 12px;padding:7px 0;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .bulk-bar[hidden]{display:none}
+  .bulk-mini{background:none;border:0;padding:2px 0;cursor:pointer;font-family:'Shippori Mincho',serif;
+    font-size:11.5px;letter-spacing:0.1em;color:var(--ink-soft);transition:color .2s}
+  .bulk-mini:hover{color:var(--ink)}
+  .bulk-mini.go{color:var(--seal)}
+  .bulk-mini.go:disabled{opacity:.35;cursor:default}
+  .bulk-count{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.18em;color:var(--ink-soft)}
+  .bulk-link:focus-visible,.bulk-mini:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  /* 選ぶ丸：消印の丸囲みと同族。選ばれると朱の点が灯る */
+  .shelf-item.selectable{cursor:pointer}
+  .sel-ring{width:18px;height:18px;border-radius:50%;border:1px solid var(--ink-soft);flex-shrink:0;position:relative;opacity:.65;transition:border-color .2s,opacity .2s}
+  .shelf-item.sel .sel-ring{border-color:var(--seal);opacity:1}
+  .shelf-item.sel .sel-ring::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--seal)}
+  .shelf-item.sel{border-style:solid;border-color:var(--seal)}
+  .bulk-ov{position:fixed;inset:0;z-index:82;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(58,46,37,0.34);backdrop-filter:blur(3px)}
+  .bulk-ov.on{display:flex;animation:iqFade .3s ease}
+  .bulk-card{max-width:400px;width:100%;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:30px 26px 24px;text-align:center;box-shadow:0 26px 60px -22px rgba(58,46,37,0.7);animation:iqRise .42s var(--ease-soft)}
+  .bulk-mark{width:34px;height:34px;margin:0 auto 14px;border-radius:50%;border:1px solid var(--ink-soft);color:var(--ink-soft);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:15px}
+  .bulk-msg{font-family:'Shippori Mincho',serif;font-size:13.5px;line-height:2.1;letter-spacing:0.05em;color:var(--ink);margin:0 0 20px;word-break:keep-all;overflow-wrap:anywhere}
+  .bulk-msg .bulk-sub{font-size:11.5px;color:var(--ink-soft)}
+  .bulk-actions{display:flex;flex-direction:column;gap:12px}
+  /* まとめて放る一発芝居：屑籠がひとつ現れ、選ばれた封筒が一斉に放り込まれる（籠は堆積ビューと同じ姿） */
+  .bulk-stage{position:fixed;inset:0;z-index:96;pointer-events:none}
+  .bulk-stage .basket{position:absolute;left:50%;bottom:9vh;width:150px;height:150px;transform:translateX(-50%);opacity:0;transition:opacity .35s}
+  .bulk-stage .basket .kuzu-basket{position:absolute;inset:0;width:100%;height:100%}
+  .bulk-stage .basket.in{opacity:1}
+  .bulk-stage .basket.gulp{animation:basketGulp .5s var(--ease-sink)}
+  @keyframes basketGulp{35%{transform:translateX(-50%) translateY(5px) scaleY(0.97)}}
   /* デモ用の手紙にだけ出る「開封日を変更」の操作列（seed_demo_data.py 投入分が対象） */
   .shelf-demo{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:-2px 0 8px;border:1px dashed var(--line);border-radius:3px;opacity:0.85}
   .shelf-demo .sd-lbl{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.18em;color:var(--seal);text-transform:uppercase;flex-shrink:0}
@@ -456,7 +515,7 @@
   .mini-act:hover{color:var(--seal)}
   .tl-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);text-align:center;margin-bottom:8px;letter-spacing:0.06em;line-height:1.9}
   /* 封をした場所（地図）への、静かな導線。空気の一文（wx-banner）のすぐ下に置く */
-  .map-link-row{text-align:center;margin:8px 0 26px}
+  .map-link-row{text-align:center;margin:8px 0 26px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
   .map-link{display:inline-flex;align-items:center;gap:8px;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;
             color:var(--ink);text-decoration:none;background:var(--paper-2);border:1px solid var(--line);border-radius:22px;
             padding:9px 18px;box-shadow:0 6px 16px -10px rgba(58,46,37,0.5);transition:border-color .2s,box-shadow .2s,transform .2s}
@@ -930,7 +989,17 @@
     <div id="mailList"></div>
     <!-- 封をした手紙の一覧：届いたたよりの下で「あと◯日」を静かに数える -->
     <div class="sealed-shelf" id="sealedShelf" style="display:none">
-      <div class="shelf-label">― 封の中 · まだ届かないたより ―</div>
+      <div class="shelf-label-row">
+        <div class="shelf-label">― 封の中 · まだ届かないたより ―</div>
+        <!-- 一気に捨てる：封の中のたよりを選んで、まとめて屑籠へ。単体のクシャとは別の動線 -->
+        <button class="bulk-link" id="bulkBtn" title="封の中のたよりを選んで、まとめて屑籠へ">一気に捨てる</button>
+      </div>
+      <div class="bulk-bar" id="bulkBar" hidden>
+        <button class="bulk-mini" id="bulkAll">すべて選ぶ</button>
+        <span class="bulk-count" id="bulkCount">0通</span>
+        <button class="bulk-mini go" id="bulkGo" disabled>捨てる</button>
+        <button class="bulk-mini" id="bulkCancel">やめる</button>
+      </div>
       <div id="sealedShelfList"></div>
     </div>
   </section>
@@ -949,7 +1018,7 @@
       </div>
     </div>
     <p class="tl-intro">あなたのたよりの、全部。<br>過去から、<wbr>まだ届いていない<wbr>未来まで。</p>
-    <!-- 捨てられない屑籠の入口。年表の隅——手紙にならなかった言葉たちも、あなたの歴史の一部 -->
+    <!-- 屑籠の入口。年表の隅——手紙にならなかった言葉たちも、あなたの歴史の一部 -->
     <div class="kuzu-row">
       <button class="kuzu-bin" id="binBtn" aria-label="屑籠を覗く" title="屑籠"><svg viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M4.5 7.5 6.2 25.5h11.6L19.5 7.5"/><ellipse cx="12" cy="6.5" rx="8" ry="2.1"/><path d="M5.3 13h13.4M5.9 19h12.2"/><path d="M8.3 8.4l1.2 16.6M12 8.7v16.8M15.7 8.4l-1.2 16.6"/></svg></button>
     </div>
@@ -986,21 +1055,36 @@
   </div>
 </div>
 
-<!-- 捨てられない屑籠：投げ捨てた手紙は消えず、紙玉のままここに残りつづける。
-     開けば読める、でも消せない。件数もソートもない（ゴミの量を主張しない）。 -->
+<!-- 屑籠：捨てた言葉は籠の中に堆積する（2026-07-22夕FB「ゴミ箱はゴミ箱のまま・堆積が見えるのが良い」で復活）。
+     7日の溶解は仕様のまま——籠の中で日ごとに縁がほどけ褪せて、やがて色だけが編み物に還る。
+     数字のカウントダウンは出さない（ほどけ具合だけで無言に伝える）。 -->
 <div class="trash-ov" id="trashOv" role="dialog" aria-modal="true" aria-label="屑籠">
   <div class="trash-room">
     <div class="trash-mark">屑 籠</div>
     <p class="trash-note" id="trashEmpty">まだ、<wbr>何も<wbr>捨てられて<wbr>いません。</p>
-    <!-- 籠の中に、捨てた日の順で紙玉が堆積する。籠は背(奥の面)と前(手前の縁)の二枚で、玉を挟む -->
+    <!-- 籠の中に、捨てた日の順で紙玉が「山」になる。奥の玉は小さく暗く、手前の玉は大きく明るく。
+         籠は背（底ほど暗い内側）と前（下の壁と縁）で山を挟み、玉の裾を隠して「中にある」立体を出す -->
     <div class="trash-scatter" id="trashScatter">
       <svg class="kuzu-basket back" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M17 24 L26.5 87 H73.5 L83 24" fill="rgba(237,227,209,0.55)" stroke="#CBBBA0" stroke-width="0.7"/>
+        <defs>
+          <linearGradient id="kbDepth" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="rgba(58,46,37,0.05)"/>
+            <stop offset="0.72" stop-color="rgba(58,46,37,0.26)"/>
+            <stop offset="1" stop-color="rgba(58,46,37,0.40)"/>
+          </linearGradient>
+        </defs>
+        <path d="M17 24 L26.5 87 H73.5 L83 24" fill="rgba(237,227,209,0.85)" stroke="#CBBBA0" stroke-width="0.7"/>
+        <path d="M17 24 L26.5 87 H73.5 L83 24" fill="url(#kbDepth)"/>
         <path d="M19.4 40 H80.6 M21.8 56 H78.2 M24 71 H76" stroke="rgba(58,46,37,0.16)" stroke-width="0.5" fill="none"/>
         <path d="M29 25 L34 86 M41.5 25 L43.5 86 M58.5 25 L56.5 86 M71 25 L66 86" stroke="rgba(58,46,37,0.11)" stroke-width="0.5" fill="none"/>
       </svg>
+      <div class="kuzu-ao" aria-hidden="true"></div>
       <svg class="kuzu-basket front" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M26.5 87 H73.5 M25.4 80 H74.6 M24.4 73 H75.6" stroke="rgba(138,122,102,0.45)" stroke-width="0.9" fill="none"/>
+        <!-- 手前の壁：下の帯だけ立ち上げ、いちばん下の玉の裾を呑む（「中にある」ことの証拠） -->
+        <path d="M25.7 72.5 Q50 77 74.3 72.5 L73.5 87 H26.5 Z" fill="#EDE3D1" fill-opacity="0.92" stroke="rgba(138,122,102,0.5)" stroke-width="0.6"/>
+        <path d="M26.1 78 Q50 82 73.9 78 M26.4 83 Q50 86.5 73.6 83" stroke="rgba(58,46,37,0.14)" stroke-width="0.5" fill="none"/>
+        <path d="M31 73.6 L32.5 87 M40.5 74.6 L41.2 87 M50 75 L50 87 M59.5 74.6 L58.8 87 M69 73.6 L67.5 87" stroke="rgba(58,46,37,0.10)" stroke-width="0.5" fill="none"/>
+        <path d="M26.5 87 H73.5" stroke="rgba(138,122,102,0.5)" stroke-width="0.9" fill="none"/>
         <ellipse cx="50" cy="24" rx="33" ry="4.4" fill="none" stroke="#8A7A66" stroke-width="0.9"/>
       </svg>
     </div>
@@ -1009,11 +1093,37 @@
 </div>
 <div class="trash-open-ov" id="trashOpenOv" role="dialog" aria-modal="true" aria-label="丸められた手紙">
   <div class="trash-open-card">
-    <div class="trash-open-paper" id="trashOpenPaper"></div>
+    <div class="trash-open-paper" id="trashOpenPaper"><div class="trash-open-ink" id="trashOpenInk"></div></div>
     <div class="trash-open-date" id="trashOpenDate"></div>
-    <!-- ひろげて書きつづける：本文は便箋へ戻るが、皺の跡は残る。そしてこの紙玉も屑籠に残りつづける -->
+    <!-- ひろげて書きつづける：本文は便箋へ戻るが、皺の跡は残る。紙玉はここに残りつづける -->
     <button class="trash-close primaryish" id="trashResume">ひろげて、書きつづける</button>
     <button class="trash-close" id="trashOpenClose">そっと、丸めなおす</button>
+    <!-- もう、戻らない：7日を待たず、いま編み物へ還す（確認を必ず挟む・不可逆） -->
+    <button class="trash-close dissolve" id="trashDissolve">もう、戻らない</button>
+  </div>
+</div>
+
+<!-- もう、戻らないの栞：不可逆の一歩の前で、一度だけ立ち止まる -->
+<div class="bulk-ov" id="dissolveOv" role="dialog" aria-modal="true" aria-label="もう、戻らない">
+  <div class="bulk-card">
+    <div class="bulk-mark">還</div>
+    <p class="bulk-msg">この言葉は、<wbr>いま編み物に還ります。<br>文字と筆跡はほどけて、<wbr>色だけが残ります。<br>もう、<wbr>読み返すことは<wbr>できません。</p>
+    <div class="bulk-actions">
+      <button class="inquiry-btn primary" id="dissolveGo">還す</button>
+      <button class="inquiry-btn ghost" id="dissolveBack">まだ、置いておく</button>
+    </div>
+  </div>
+</div>
+
+<!-- 一気に捨てる：放り込む前に一度だけ立ち止まる栞。ここを経ずに実行されることはない -->
+<div class="bulk-ov" id="bulkOv" role="dialog" aria-modal="true" aria-label="一気に捨てる">
+  <div class="bulk-card">
+    <div class="bulk-mark">屑</div>
+    <p class="bulk-msg" id="bulkMsg"></p>
+    <div class="bulk-actions">
+      <button class="inquiry-btn primary" id="bulkConfirm">一気に捨てる</button>
+      <button class="inquiry-btn ghost" id="bulkBack">やめる</button>
+    </div>
   </div>
 </div>
 
@@ -1713,7 +1823,8 @@ async function detectWeather(){
     // 「封をした場所」への導線：空気の一文（wx-banner）のすぐ下の行に置く。
     // 天気が取れない時もバナーの直後＝受信の先頭に出し、地図への道を絶やさない。
     {const mr=document.createElement('div');mr.className='map-link-row';
-     mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>';
+     mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>'+
+       '<a class="map-link" href="/archive">言葉の編み物<span class="sub">amimono</span></a>';
      mailList.appendChild(mr);}
     renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
     if(!received.length && !inTransit.length){
@@ -1794,6 +1905,7 @@ async function detectWeather(){
     shelf.style.display='';
     inTransit.forEach(S=>{
       const el=document.createElement('div');el.className='shelf-item';
+      el.dataset.lid=S.id;
       const extras=[];if(S.has_photo)extras.push('写真');if(S.has_voice)extras.push('声');
       // 天気待ち伏せたよりは時刻ではなく「天気待ち」を見せる
       let whenHtml;
@@ -1811,9 +1923,27 @@ async function detectWeather(){
         (extras.length?' · '+extras.join('・')+'入り':'')+'</div>'+
         sealedInfoHTML(S,false)+
         '</div>';
+      // 一気に捨てるの選択中：先頭に「選ぶ丸」を灯し、タップで選び外しできるようにする
+      if(bulkMode){
+        el.classList.add('selectable');
+        if(bulkSel.has(S.id))el.classList.add('sel');
+        const ring=document.createElement('span');ring.className='sel-ring';ring.setAttribute('aria-hidden','true');
+        el.insertBefore(ring,el.firstChild);
+        el.setAttribute('role','checkbox');
+        el.setAttribute('aria-checked',bulkSel.has(S.id)?'true':'false');
+        el.tabIndex=0;
+        const toggle=()=>{
+          if(bulkSel.has(S.id))bulkSel.delete(S.id);else bulkSel.add(S.id);
+          el.classList.toggle('sel');el.setAttribute('aria-checked',bulkSel.has(S.id)?'true':'false');
+          bulkRefresh();
+        };
+        el.addEventListener('click',toggle);
+        el.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();toggle();}});
+      }
       wireShelfTap(el);   // 沈黙のフィードバック：タップしても言葉は返さず、封蝋が沈んで戻るだけ
       list.appendChild(el);
       if(S.demo_mode)list.appendChild(demoAdjustRow(S.id,S.arrive_at));});
+    if(bulkMode)bulkRefresh();
     startCountdownTicker();
   }
 
@@ -1838,6 +1968,108 @@ async function detectWeather(){
       wax.classList.remove('press');void wax.offsetWidth;
       wax.classList.add('press');
       setTimeout(()=>wax.classList.remove('press'),340);
+    });
+  }
+
+  // ── 一気に捨てる：封の中のたよりを選んで、まとめてひとつの屑籠へ ──
+  // 単体のクシャ（投函の「捨てる」）は残したままの、一覧からの別動線。
+  // 必ず確認の栞を挟む。演出は1通ずつの繰り返しではなく「ひとまとめに放る」一幕だけ。
+  // 行き先は消せない屑籠（unemptyable_trash）——たよりとしては戻せないが、言葉は読める。
+  let bulkMode=false;const bulkSel=new Set();
+  const bulkBtn=document.getElementById('bulkBtn'),bulkBar=document.getElementById('bulkBar'),
+        bulkAll=document.getElementById('bulkAll'),bulkCount=document.getElementById('bulkCount'),
+        bulkGo=document.getElementById('bulkGo'),bulkCancel=document.getElementById('bulkCancel'),
+        bulkOv=document.getElementById('bulkOv'),bulkMsg=document.getElementById('bulkMsg'),
+        bulkConfirm=document.getElementById('bulkConfirm'),bulkBack=document.getElementById('bulkBack');
+  function bulkRefresh(){
+    bulkCount.textContent=bulkSel.size+'通';
+    bulkGo.disabled=!bulkSel.size;
+    bulkAll.textContent=(bulkSel.size&&bulkSel.size===inTransit.length)?'選びなおす':'すべて選ぶ';
+  }
+  function bulkExit(){
+    bulkMode=false;bulkSel.clear();
+    bulkBtn.style.visibility='';bulkBar.hidden=true;
+    renderSealedShelf();
+  }
+  bulkBtn&&bulkBtn.addEventListener('click',()=>{
+    bulkMode=true;bulkSel.clear();
+    bulkBtn.style.visibility='hidden';bulkBar.hidden=false;
+    renderSealedShelf();
+  });
+  bulkCancel&&bulkCancel.addEventListener('click',bulkExit);
+  bulkAll&&bulkAll.addEventListener('click',()=>{
+    if(bulkSel.size===inTransit.length)bulkSel.clear();
+    else inTransit.forEach(S=>bulkSel.add(S.id));
+    renderSealedShelf();
+  });
+  bulkGo&&bulkGo.addEventListener('click',()=>{
+    if(!bulkSel.size)return;
+    const withMedia=inTransit.some(S=>bulkSel.has(S.id)&&(S.has_photo||S.has_voice));
+    bulkMsg.innerHTML=bulkSel.size+'通のたよりを、<wbr>一気に捨てます。<br>封には<wbr>もう戻せません。<wbr>しばらくは<wbr>読み返せますが、<wbr>やがてほどけて、<wbr>色だけが<wbr>編み物に残ります。'+
+      (withMedia?'<br><span class="bulk-sub">同封の写真や声は、<wbr>紙玉には残りません。</span>':'');
+    bulkOv.classList.add('on');
+    setTimeout(()=>bulkBack.focus(),60);
+  });
+  bulkBack&&bulkBack.addEventListener('click',()=>bulkOv.classList.remove('on'));
+  bulkOv&&bulkOv.addEventListener('click',e=>{if(e.target===bulkOv)bulkOv.classList.remove('on');});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&bulkOv&&bulkOv.classList.contains('on'))bulkOv.classList.remove('on');
+  });
+  bulkConfirm&&bulkConfirm.addEventListener('click',async()=>{
+    bulkOv.classList.remove('on');
+    const ids=[...bulkSel];
+    bulkConfirm.disabled=true;
+    await bulkThrowShow(ids);
+    const r=await api('/api/letters/bulk-discard',{method:'POST',body:JSON.stringify({ids})});
+    bulkConfirm.disabled=false;
+    if(!(r&&r.ok))flash((r&&r.error)||'うまく捨てられませんでした。もう一度どうぞ。');
+    bulkExit();
+    loadMail();
+  });
+  // ひとまとめに放る一発芝居：屑籠がひとつ現れ、選ばれた封筒が「一斉に」浮いて放り込まれる。
+  // 個別クシャの連続にはしない（儀式はひとつの動作）。reduced-motionでは芝居ごと省く。
+  function bulkThrowShow(ids){
+    return new Promise(res=>{
+      const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+      const items=[...document.querySelectorAll('#sealedShelfList .shelf-item')].filter(el=>ids.includes(el.dataset.lid));
+      if(reduce||!items.length||!Element.prototype.animate){res();return;}
+      const stage=document.createElement('div');stage.className='bulk-stage';
+      // 芝居が何かの事情で終われなくても、舞台を片づけて処分そのものは必ず進む保険
+      setTimeout(()=>{try{stage.remove();}catch(e){}res();},2200);
+      const basket=document.createElement('div');basket.className='basket';
+      // 器は堆積ビューの籠そのもの（同じSVGを写す）
+      document.querySelectorAll('#trashScatter .kuzu-basket').forEach(s=>basket.appendChild(s.cloneNode(true)));
+      stage.appendChild(basket);document.body.appendChild(stage);
+      requestAnimationFrame(()=>basket.classList.add('in'));
+      const clones=items.map(el=>{
+        const r=el.getBoundingClientRect();
+        const c=el.cloneNode(true);
+        c.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:97;background:var(--paper-2)';
+        stage.appendChild(c);
+        el.style.visibility='hidden';
+        return c;
+      });
+      const br=basket.getBoundingClientRect();
+      const tx=br.left+br.width/2,ty=br.top+br.height*0.3;   // 籠の口へ
+      if(navigator.vibrate){try{navigator.vibrate(18);}catch(e){}}
+      let done=0;
+      clones.forEach(c=>{
+        const r=c.getBoundingClientRect();
+        const dx=tx-(r.left+r.width/2),dy=ty-(r.top+r.height/2);
+        const rot=Math.random()*70-35;
+        c.animate([
+          {transform:'translate(0,0) rotate(0deg) scale(1)',opacity:1},
+          {transform:'translate('+(dx*0.4)+'px,'+(dy*0.55-60)+'px) rotate('+(rot*0.6)+'deg) scale(0.5)',opacity:1,offset:0.5},
+          {transform:'translate('+dx+'px,'+dy+'px) rotate('+rot+'deg) scale(0.06)',opacity:0.2}
+        ],{duration:760,easing:'cubic-bezier(.32,.06,.4,1)',fill:'forwards'}).onfinish=()=>{
+          if(++done!==clones.length)return;
+          basket.classList.add('gulp');
+          setTimeout(()=>{
+            stage.style.transition='opacity .4s';stage.style.opacity='0';
+            setTimeout(()=>{stage.remove();res();},420);
+          },460);
+        };
+      });
     });
   }
 

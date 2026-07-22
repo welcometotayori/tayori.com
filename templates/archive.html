@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>言葉の編み物 — たより</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&family=Courier+Prime&display=swap');
+  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0;
+        --ease-out:cubic-bezier(.23,1,.32,1)}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:var(--paper);color:var(--ink);
+       font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+       -webkit-font-smoothing:antialiased;line-break:strict}
+  header{display:flex;justify-content:space-between;align-items:baseline;
+         padding:16px 20px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+  .ttl{font-size:15px;letter-spacing:0.18em}
+  .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
+               color:var(--ink-soft);text-transform:uppercase;margin-left:10px}
+  .back{font-size:12.5px;letter-spacing:0.1em;color:var(--ink-soft);text-decoration:none;
+        border-bottom:1px solid var(--line);padding-bottom:1px}
+  .back:hover{color:var(--ink)}
+
+  main{max-width:1100px;margin:0 auto;padding:26px 18px 60px;position:relative}
+  /* 地の糸：いま同じ空の下で綴られた誰かの色。凝視しないと気づかない濃度が正しい */
+  .ground{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .ground .thread{position:absolute;left:-2%;width:104%;height:1px}
+  .lead,.empty,.q-modes,#quiltGroups{position:relative;z-index:1}
+  .lead{text-align:center;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft);margin:2px 0 26px;
+        word-break:keep-all;overflow-wrap:anywhere}
+  .empty{text-align:center;color:var(--ink-soft);font-size:13px;letter-spacing:0.1em;padding:60px 0}
+
+  /* ── 言葉の編み物：一通が一枚のパッチになって、一枚の布に編まれる ──
+     大きさ=字数、色=気分。未開封は色を宿さない編み目のまま（存在だけが見える）。 */
+  .q-modes{display:flex;justify-content:center;gap:22px;margin:0 0 20px}
+  .q-mode{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:11.5px;
+    letter-spacing:0.14em;color:var(--ink-soft);padding:3px 1px;transition:color .2s;
+    border-bottom:1px solid transparent}
+  .q-mode.on{color:var(--ink);border-bottom-color:var(--seal)}
+  .q-mode:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  .q-group{margin-bottom:26px}
+  .q-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);
+    text-transform:uppercase;margin:0 2px 8px;opacity:0.8}
+  .q-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));grid-auto-rows:34px;
+    grid-auto-flow:dense;gap:5px}
+  .patch{position:relative;border-radius:1px;cursor:default;overflow:hidden;
+    transition:background-color .75s var(--ease-out),filter .75s var(--ease-out),opacity .75s var(--ease-out)}
+  /* 単色だと平坦になるので、布の照りほどの淡い二色（派手なグラデーションにはしない） */
+  .patch::after{content:'';position:absolute;inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent 45%,rgba(58,46,37,0.10))}
+  .patch:hover,.patch:focus-visible{outline:1px solid var(--ink-soft);outline-offset:2px}
+  .patch.s2{grid-column:span 2}
+  .patch.s3{grid-column:span 2;grid-row:span 2}
+  .patch.s4{grid-column:span 3;grid-row:span 2}
+  .patch.wait,.patch.reveal{background-color:rgba(58,46,37,0.26);opacity:0.45;filter:grayscale(1)}
+  .patch.revealed{opacity:1;filter:none}
+  /* 未開封のパッチに掛かる編み目（SVGパターン）。開封で色と入れ替わる */
+  .q-weave{position:absolute;inset:0;width:100%;height:100%;display:block;transition:opacity .75s var(--ease-out)}
+  .patch.revealed .q-weave{opacity:0}
+  /* 溶けて還った色片：最小の一マス。彩度を落とし、解れの質感だけをまとう。
+     「そこに書かれた事実はあったが、内容はもう読めない」——ささやきも持たない */
+  .patch.scrap{filter:saturate(.6) brightness(.95);cursor:default}
+  .patch.scrap:hover,.patch.scrap:focus-visible{outline:none}
+  .q-fray{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  /* 触れた時のささやき：地名だけ。座標も日付も語らない */
+  .tip{position:fixed;z-index:50;pointer-events:none;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:2px;color:var(--ink);font-size:11.5px;letter-spacing:0.08em;padding:4px 10px;
+    box-shadow:0 6px 18px -10px rgba(58,46,37,.5);opacity:0;transform:translate(-50%,-6px);
+    transition:opacity .3s,transform .3s;white-space:nowrap}
+  .tip.on{opacity:1;transform:translate(-50%,-10px)}
+  .tip .pin{color:var(--seal);margin-right:5px;font-size:10px}
+
+  @media (prefers-reduced-motion:reduce){
+    .patch,.q-weave{transition:none}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="ttl">言葉の編み物<span class="romaji">Amimono</span></div>
+    <a class="back" href="/">もどる</a>
+  </header>
+
+  <main>
+    <p class="lead">一通が一枚のパッチになって、<wbr>一枚の布に編まれます。<br>大きさは言葉のかさ、<wbr>色はその日の気分。<wbr>封の中のたよりは、<wbr>まだ編み目のまま。</p>
+
+    <div class="q-modes">
+      <button class="q-mode on" id="qmMonth">月ごとに</button>
+      <button class="q-mode" id="qmPlace">土地ごとに</button>
+    </div>
+    <div id="quiltGroups"></div>
+
+    <p class="empty" id="empty" style="display:none">まだ、<wbr>たよりがありません。</p>
+  </main>
+
+  <!-- 未開封パッチの編み目（SVGパターンの原本。各パッチが参照する） -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <pattern id="weavePat" width="6" height="6" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="rgba(58,46,37,0.06)"/>
+        <path d="M0 1.5H6" stroke="rgba(242,235,221,0.55)" stroke-width="1"/>
+        <path d="M1.5 0V6" stroke="rgba(242,235,221,0.35)" stroke-width="1"/>
+        <path d="M0 4.5H6" stroke="rgba(58,46,37,0.10)" stroke-width="0.8"/>
+        <path d="M4.5 0V6" stroke="rgba(58,46,37,0.08)" stroke-width="0.8"/>
+      </pattern>
+      <!-- 解れ：溶けて還った色片の質感（斜めにほどけた糸） -->
+      <pattern id="frayPat" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
+        <path d="M0 2H9" stroke="rgba(242,235,221,0.5)" stroke-width="0.8"/>
+        <path d="M0 6.5H7" stroke="rgba(58,46,37,0.14)" stroke-width="0.7"/>
+      </pattern>
+    </defs>
+  </svg>
+
+  <div class="tip" id="tip"></div>
+
+<script>
+(function(){
+  'use strict';
+  // ── 言葉の編み物 ──────────────────────────────────────────
+  // 機能的なグラフではなく、時間と気分の「物質の眺め」。
+  // ・未開封は色を宿さない編み目（サーバーが色を返さないので、覗いても色は無い）
+  // ・座標は使わない。場所は area_label（地名）だけ
+  // ・前回この頁を見た後に開封されたたよりは、編み目から色が滲み出す
+  // （「川で見る」は2026-07-22の仕様更新で廃止。単独の記録には情報量が薄いため）
+
+  const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const tip=document.getElementById('tip');
+  let letters=[],scraps=[];
+
+  // ── ささやき（地名だけ）──
+  function whisper(el,label){
+    if(!label)return;
+    el.tabIndex=0;
+    const show=()=>{
+      const r=el.getBoundingClientRect();
+      tip.innerHTML='<span class="pin">◦</span>'+esc(label);
+      tip.style.left=(r.left+r.width/2)+'px';
+      tip.style.top=r.top+'px';
+      tip.classList.add('on');
+    };
+    const hide=()=>tip.classList.remove('on');
+    el.addEventListener('pointerenter',show);
+    el.addEventListener('pointerleave',hide);
+    el.addEventListener('focus',show);
+    el.addEventListener('blur',hide);
+  }
+  function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+  // ── 開封の滲み出し：前回の訪問より後に開封されたたよりだけ、編み目→色 ──
+  let seen='';
+  try{seen=localStorage.getItem('tayori_archive_seen')||'';}catch(e){}
+  function isFresh(L){return !!(L.is_opened&&L.opened_at&&L.opened_at>seen);}
+  function markSeen(){try{localStorage.setItem('tayori_archive_seen',new Date().toISOString().slice(0,19));}catch(e){}}
+  // 編み目から色へ。gradientは補間できないので、色は background-color 一本で持たせる
+  function revealLater(el,i){
+    if(reduce){el.classList.remove('reveal');el.classList.add('revealed');return;}
+    setTimeout(()=>{el.classList.remove('reveal');el.classList.add('revealed');},420+i*110);
+  }
+
+  let qMode='month';
+  const qmM=document.getElementById('qmMonth'),qmP=document.getElementById('qmPlace');
+  qmM.addEventListener('click',()=>{qMode='month';qmM.classList.add('on');qmP.classList.remove('on');buildQuilt();});
+  qmP.addEventListener('click',()=>{qMode='place';qmP.classList.add('on');qmM.classList.remove('on');buildQuilt();});
+
+  function sizeClass(cc){return cc<=20?'':cc<=40?'s2':cc<=64?'s3':'s4';}
+
+  function letterPatch(L,freshIdx){
+    const p=document.createElement('div');
+    p.className=('patch '+sizeClass(Math.max(0,L.char_count||0))).trim();
+    if(!L.is_opened){
+      p.classList.add('wait');
+      p.setAttribute('aria-label','まだ封の中のたより');
+      // 編み目（SVGパターン）を掛けておく。開封の日、色と入れ替わる
+      p.innerHTML='<svg class="q-weave" aria-hidden="true"><rect width="100%" height="100%" fill="url(#weavePat)"/></svg>';
+    }else{
+      p.style.backgroundColor=L.mood_color||'rgba(58,46,37,0.22)';
+      p.setAttribute('aria-label','開封済みのたより');
+      if(isFresh(L)){p.classList.add('reveal');revealLater(p,freshIdx());}
+    }
+    whisper(p,L.area_label);
+    return p;
+  }
+
+  // 溶けて還った色片：最小の一マス（言葉のかさは、ほどけた時に失われる）。ささやきも無い。
+  function scrapPatch(S){
+    const p=document.createElement('div');
+    p.className='patch scrap';
+    p.style.backgroundColor=S.mood_color||'rgba(58,46,37,0.22)';
+    p.setAttribute('aria-label','編み物に還った色');
+    p.innerHTML='<svg class="q-fray" aria-hidden="true"><rect width="100%" height="100%" fill="url(#frayPat)"/></svg>';
+    return p;
+  }
+
+  function buildQuilt(){
+    const host=document.getElementById('quiltGroups');
+    host.innerHTML='';
+    // 「月ごと」は行分け、「土地ごと」は地名のクラスタ。書いた順のまま編み、
+    // 還った色片は同じ月の行の末尾（土地ごとでは「還った色」のひとかたまり）に置く。
+    const groups=new Map(); // sortKey → {label, items:[{L}|{S}]}
+    const add=(key,label,item)=>{
+      if(!groups.has(key))groups.set(key,{label,items:[]});
+      groups.get(key).items.push(item);
+    };
+    letters.forEach(L=>{
+      if(qMode==='month'){
+        const d=new Date(L.written_at);
+        const key=isNaN(d)?'0000-00':d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        add(key,isNaN(d)?'いつかの頃':d.getFullYear()+'年'+(d.getMonth()+1)+'月',{L});
+      }else{
+        const label=L.area_label||'場所の記されていないたより';
+        add('p:'+label,label,{L});
+      }
+    });
+    scraps.forEach(S=>{
+      if(qMode==='month'){
+        const m=String(S.woven_month||'0000-00');
+        const y=m.slice(0,4),mo=m.slice(5,7);
+        add(m,(+y&&+mo)?(+y)+'年'+(+mo)+'月':'いつかの頃',{S});
+      }else{
+        add('zzz:scrap','還った色',{S});
+      }
+    });
+    const keys=[...groups.keys()];
+    if(qMode==='month')keys.sort();
+    let fresh=0;const freshIdx=()=>fresh++;
+    keys.forEach(k=>{
+      const gr=groups.get(k);
+      const g=document.createElement('div');g.className='q-group';
+      const lb=document.createElement('div');lb.className='q-label';lb.textContent=gr.label;
+      const grid=document.createElement('div');grid.className='q-grid';
+      gr.items.forEach(it=>{
+        grid.appendChild(it.L?letterPatch(it.L,freshIdx):scrapPatch(it.S));
+      });
+      g.appendChild(lb);g.appendChild(grid);host.appendChild(g);
+    });
+  }
+
+  // 地の糸：いま同じ空の下で綴られた誰かの色（k匿名を満たさない時は流れない）
+  function loadAmbient(){
+    fetch('/api/amimono/ambient',{credentials:'same-origin'})
+      .then(r=>r.json())
+      .then(d=>{
+        const cols=(d&&d.colors)||[];
+        if(!cols.length)return;
+        const g=document.createElement('div');
+        g.className='ground';g.setAttribute('aria-hidden','true');
+        cols.slice(0,40).forEach(c=>{
+          const t=document.createElement('div');t.className='thread';
+          t.style.top=(Math.random()*100).toFixed(2)+'%';
+          t.style.background=c;
+          t.style.opacity=(0.05+Math.random()*0.05).toFixed(3);
+          g.appendChild(t);
+        });
+        const main=document.querySelector('main');
+        main.insertBefore(g,main.firstChild);
+      })
+      .catch(()=>{});
+  }
+
+  // ── 起動 ──
+  fetch('/api/archive',{credentials:'same-origin'})
+    .then(r=>r.json())
+    .then(data=>{
+      letters=(data&&data.letters)||[];
+      scraps=(data&&data.scraps)||[];
+      if(!letters.length&&!scraps.length){
+        document.getElementById('empty').style.display='';
+        document.querySelector('.q-modes').style.display='none';
+        document.querySelector('.lead').style.display='none';
+        return;
+      }
+      buildQuilt();
+      loadAmbient();
+      // 滲み出しを見せ終えた頁は「見た」ことにする（次に来た時にまた最初から騒がない）
+      setTimeout(markSeen,1200);
+    })
+    .catch(()=>{document.getElementById('empty').style.display='';});
+})();
+</script>
+</body>
+</html>
