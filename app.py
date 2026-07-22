@@ -433,6 +433,12 @@ def init_db():
                 created_at TEXT NOT NULL,
                 trace      TEXT
             );
+            CREATE TABLE IF NOT EXISTS woven_scraps (
+                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL,
+                mood_color  TEXT,
+                woven_month TEXT NOT NULL
+            );
             """
         )
         for stmt in (
@@ -498,11 +504,20 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN demo_arrive_at TEXT",
             # 屑籠にも筆跡（TypeTrace）を封じる。握りつぶした時の打鍵ごと残る
             "ALTER TABLE unemptyable_trash ADD COLUMN trace TEXT",
+            # ほどける日時（2026-07-22「ほどけるまで」）。この日時を過ぎた紙玉は
+            # 色片(woven_scraps)へ溶け、本文と筆跡は物理的に消える（不可逆）。
+            "ALTER TABLE unemptyable_trash ADD COLUMN unravel_at TEXT",
         ):
             try:
                 db.execute(stmt)
             except sqlite3.OperationalError:
                 pass
+
+        # 「ほどけるまで」への移行: 既存の紙玉に created_at 基準で7日ルールを当てると
+        # デプロイ即日に古い紙玉の本文が消えてしまう。既存行には「今から7日」の猶予を与える。
+        db.execute(
+            "UPDATE unemptyable_trash SET unravel_at=? WHERE unravel_at IS NULL",
+            ((datetime.now() + timedelta(days=7)).isoformat(timespec="seconds"),))
 
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
@@ -950,6 +965,7 @@ def robots_txt():
         "Allow: /privacy\n"
         "Disallow: /open/\n"
         "Disallow: /map\n"
+        "Disallow: /archive\n"
         "Disallow: /api/\n"
         "Disallow: /admin.welcometotayori\n"
         "Disallow: /verify/\n"
@@ -1798,6 +1814,7 @@ def start_notifier(interval=None):
         # 起動直後にいきなりS3バックアップを走らせない（従来は last_backup=0 で初回即実行→
         # 起動直後の登録とDBで競合する温床だった）。初回は起動から約5分後にずらす。
         last_backup = time.time() - backup_hours * 3600 + 300
+        last_dissolve = 0.0
         time.sleep(grace + 8)   # persist は notifier より少し後ろにずらす
         while True:
             try:
@@ -1805,6 +1822,19 @@ def start_notifier(interval=None):
                     _persist_to_durable()
             except Exception as e:
                 print(f"[たより] 永続化でエラー（継続）: {e}", flush=True)
+            try:
+                # ほどけるまで: 7日を過ぎた紙玉を色片へ還す（1時間ごと・読み取り時の遅延溶解が保険）
+                if time.time() - last_dissolve >= 3600:
+                    last_dissolve = time.time()
+                    _db = _connect()
+                    try:
+                        n = _dissolve_scraps(_db)
+                        if n:
+                            print(f"[たより] ほどけるまで: {n}片が編み物へ還りました", flush=True)
+                    finally:
+                        _db.close()
+            except Exception as e:
+                print(f"[たより] 溶解バッチでエラー（継続）: {e}", flush=True)
             try:
                 if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:
                     ok = _run_backup_to_s3()
@@ -1983,6 +2013,117 @@ def api_map():
                 p["weather"] = {"condition": env.get("condition"), "temp": env.get("temp")}
         points.append(p)
     return jsonify(points=points)
+
+
+# ── 言葉の編み物 ─────────────────────────────────────────────
+# 全レター横断の眺め。一通が一枚のパッチとして一枚の布に編まれる。地図と並行する別ビュー。
+# （「川で見る」は2026-07-22の仕様更新で廃止。単独の記録には情報量が薄いため）
+# 【秘匿の鉄則】未開封のたよりは色（気分）を返さない＝編み目のままの影。
+# 手紙のid・配達日時など、この眺めが使わないものは一切返さない。
+# 座標（緯度経度）はこのAPIには一切載せない。場所は area_name（地域名）だけ。
+
+@app.route("/archive")
+def archive_page():
+    guard = _page_login_guard()
+    if guard:
+        return guard
+    return render_template("archive.html")
+
+
+@app.route("/api/archive")
+@login_required
+def api_archive():
+    db = get_db()
+    # 遅延溶解の保険（常駐ループが止まっていても、編み物を見た瞬間には正しい状態）
+    _dissolve_scraps(db, user_id=uid())
+    rows = db.execute(
+        "SELECT * FROM letters WHERE user_id=? ORDER BY sent_date ASC, id ASC",
+        (uid(),)).fetchall()
+    entries = []
+    for r in rows:
+        keys = r.keys()
+        opened = _letter_opened(r)
+        entries.append({
+            "written_at": r["sent_date"],
+            "is_opened": opened,
+            "opened_at": r["opened_at"] if (opened and "opened_at" in keys) else None,
+            "mood_color": (r["seal_color"] if "seal_color" in keys else None) if opened else None,
+            "char_count": len(r["poem"] or ""),
+            "area_label": r["area_name"] if "area_name" in keys else None,
+        })
+    # 溶けて還った色片。持っているのは色と『YYYY-MM』の粗い月だけ（本文はもう存在しない）
+    scraps = [dict(r) for r in db.execute(
+        "SELECT mood_color, woven_month FROM woven_scraps WHERE user_id=? "
+        "ORDER BY woven_month ASC, id ASC LIMIT 1000",
+        (uid(),)).fetchall()]
+    return jsonify(letters=entries, scraps=scraps)
+
+
+# ── 地の糸（他者moodの気配）──────────────────────────────────
+# no-social原則の意図的な例外（docs/amimono-design.md A節）。
+# 「他者は気配として編まれる。関係としては編まれない。」
+# 返すのは色のhex配列だけ。誰の色か・何人か・いつかは、サーバも返さない。
+# 数値はすべて調整可能な定数（deploy後の体感で詰める）。
+
+AMBIENT_WINDOW_HOURS = 72   # この時間窓の全ユーザーの色を集める
+AMBIENT_K = 8               # k匿名: これ未満しか集まらない時は何も返さない
+AMBIENT_CAP = 200           # 返す色の上限
+AMBIENT_CACHE_SECONDS = 600 # 全ユーザー共通の集計なので10分キャッシュで十分
+_ambient_cache = {"t": 0.0, "colors": []}
+_ambient_lock = threading.Lock()
+
+# 手染め9スウォッチ（index.html の MOOD_SWATCHES と対）。v3.7以前の自由色は最近傍へ丸め、
+# 珍しい色から個人が浮かび上がるのを防ぐ（色の量子化）。
+_MOOD_SWATCH_HEX = ["#4E5E68", "#5B6B73", "#728079", "#8A8F86", "#A7A492",
+                    "#C4B79E", "#D8A96A", "#C7724E", "#B5543A"]
+
+
+def _hex_to_rgb(h):
+    try:
+        h = h.strip().lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, AttributeError, IndexError):
+        return None
+
+
+def _quantize_to_swatch(color):
+    rgb = _hex_to_rgb(color)
+    if rgb is None:
+        return None
+    best, best_d = None, None
+    for sw in _MOOD_SWATCH_HEX:
+        s = _hex_to_rgb(sw)
+        d = sum((a - b) ** 2 for a, b in zip(rgb, s))
+        if best_d is None or d < best_d:
+            best, best_d = sw, d
+    return best
+
+
+@app.route("/api/amimono/ambient")
+@login_required
+def api_amimono_ambient():
+    now = time.time()
+    with _ambient_lock:
+        if now - _ambient_cache["t"] < AMBIENT_CACHE_SECONDS:
+            return jsonify(colors=_ambient_cache["colors"])
+    since = (datetime.now() - timedelta(hours=AMBIENT_WINDOW_HOURS)).isoformat(timespec="seconds")
+    rows = get_db().execute(
+        "SELECT seal_color FROM letters WHERE sent_date>=? AND seal_color IS NOT NULL AND seal_color<>'' "
+        "LIMIT 400", (since,)).fetchall()
+    colors = []
+    for r in rows:
+        q = _quantize_to_swatch(r["seal_color"])
+        if q:
+            colors.append(q)
+    if len(colors) < AMBIENT_K:
+        colors = []          # 過疎の時間帯は、糸を流さない（一色から誰かが特定されないように）
+    random.shuffle(colors)   # 順序からも時系列を消す
+    colors = colors[:AMBIENT_CAP]
+    with _ambient_lock:
+        _ambient_cache.update(t=now, colors=colors)
+    return jsonify(colors=colors)
 
 
 @app.route("/api/letters")
@@ -2567,6 +2708,51 @@ def api_list_notes():
 # DELETE も UPDATE も存在しない（消せないことが仕様。エンドポイントを後から足さないこと）。
 # カメラ映像・手のランドマーク座標はクライアントに閉じ、ここには本文と散乱座標だけが届く。
 
+# ── ほどけるまで（2026-07-22・二段階の溶解）─────────────────────
+# 捨てた言葉は7日のあいだ「揺らいでいる」＝読める・筆跡も再生できる・ひろげて書きつづけられる。
+# 7日を過ぎるか「もう、戻らない」を選んだ紙玉は、色片(woven_scraps)へ溶けて編み物に還る。
+# 本文・筆跡はその時に物理的に消える（不可逆）。
+# 改定された恒久ルール: ユーザー任意の削除APIは今後も作らない。出口はこの溶解だけ。
+
+UNRAVEL_AFTER = timedelta(days=7)
+
+
+def _dissolve_scraps(db, user_id=None, tid=None):
+    """ほどける日時を過ぎた紙玉（tid指定時はその一枚を今すぐ）を色片へ還す。冪等。
+    バッチ・読み取り時の遅延溶解・「もう、戻らない」の三経路すべてがここを通る。"""
+    if tid:
+        q = "SELECT id,user_id,mood_color,created_at FROM unemptyable_trash WHERE id=? AND user_id=?"
+        args = (tid, user_id)
+    else:
+        q = ("SELECT id,user_id,mood_color,created_at FROM unemptyable_trash "
+             "WHERE unravel_at IS NOT NULL AND unravel_at<=?")
+        args = (datetime.now().isoformat(timespec="seconds"),)
+        if user_id:
+            q += " AND user_id=?"
+            args = args + (user_id,)
+    with _WRITE_LOCK:
+        rows = db.execute(q, args).fetchall()
+        for r in rows:
+            db.execute(
+                "INSERT INTO woven_scraps (id,user_id,mood_color,woven_month) VALUES (?,?,?,?)",
+                (secrets.token_hex(8), r["user_id"], r["mood_color"],
+                 (r["created_at"] or "")[:7] or "0000-00"))
+            db.execute("DELETE FROM unemptyable_trash WHERE id=?", (r["id"],))
+        if rows:
+            db.commit()
+    return len(rows)
+
+
+@app.route("/api/trash/<tid>/dissolve", methods=["POST"])
+@login_required
+def api_trash_dissolve(tid):
+    # 「もう、戻らない」：7日を待たず、いま編み物へ還す。確認ダイアログはクライアント必須。
+    n = _dissolve_scraps(get_db(), user_id=uid(), tid=tid)
+    if not n:
+        return jsonify(error="見つかりませんでした。"), 404
+    return jsonify(ok=True)
+
+
 @app.route("/api/trash", methods=["POST"])
 @login_required
 def api_trash_save():
@@ -2594,14 +2780,16 @@ def api_trash_save():
         ry = random.uniform(10, 90)
     tid = secrets.token_hex(8)
     db = get_db()
+    now = datetime.now()
     try:
         with _WRITE_LOCK:
             db.execute(
                 """INSERT INTO unemptyable_trash
-                   (id,user_id,content,mood_color,vertical,random_x,random_y,created_at,trace)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                   (id,user_id,content,mood_color,vertical,random_x,random_y,created_at,trace,unravel_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (tid, uid(), content, mood, vertical, rx, ry,
-                 datetime.now().isoformat(timespec="seconds"), trace))
+                 now.isoformat(timespec="seconds"), trace,
+                 (now + UNRAVEL_AFTER).isoformat(timespec="seconds")))
             db.commit()
     except sqlite3.OperationalError as e:
         print(f"[たより] 屑籠 書き込み失敗（再試行可）: {e}", flush=True)
@@ -2612,10 +2800,14 @@ def api_trash_save():
 @app.route("/api/trash")
 @login_required
 def api_trash_list():
-    # 古いものから返す（屑籠の底に古い紙玉が沈んでいる順）。件数は画面に出さない方針だが上限だけ守る。
+    # 古いものから返す（底に古い紙玉が沈んでいる順）。件数は画面に出さない方針だが上限だけ守る。
     # trace 本体は重いので一覧には載せず、有無のフラグだけ返す（本体は /api/trash/<tid>/trace）。
-    rows = get_db().execute(
-        """SELECT id,content,mood_color,vertical,random_x,random_y,created_at,
+    # unravel_at はクライアントが「ほどけ具合」を描くための材料（数字のカウントダウンには使わない）。
+    db = get_db()
+    # 遅延溶解の保険: 常駐ループが止まっていても、見た瞬間には必ず正しい状態にする
+    _dissolve_scraps(db, user_id=uid())
+    rows = db.execute(
+        """SELECT id,content,mood_color,vertical,random_x,random_y,created_at,unravel_at,
                   CASE WHEN trace IS NULL THEN 0 ELSE 1 END AS has_trace
            FROM unemptyable_trash WHERE user_id=? ORDER BY created_at ASC LIMIT 500""",
         (uid(),)).fetchall()
@@ -2635,6 +2827,50 @@ def api_trash_trace(tid):
     except (TypeError, ValueError):
         steps = None
     return jsonify(trace=steps)
+
+
+@app.route("/api/letters/bulk-discard", methods=["POST"])
+@login_required
+def api_letters_bulk_discard():
+    # 「一気に捨てる」：封の中（まだ届いていない）のたよりだけを、まとめて屑籠へ移す。
+    # 恒久ルール「消せない屑籠」のとおり、行き先は unemptyable_trash。紙玉になった言葉は
+    # 屑籠で読めるが、もう封には戻せない。届いてしまったたよりは歴史の一部なので対象外。
+    data = request.get_json(force=True)
+    ids = data.get("ids")
+    if not isinstance(ids, list) or not ids:
+        return jsonify(error="捨てるたよりが選ばれていません。"), 400
+    ids = [str(i)[:64] for i in ids][:100]
+    db = get_db()
+    moved = 0
+    try:
+        with _WRITE_LOCK:
+            for lid in ids:
+                row = db.execute("SELECT * FROM letters WHERE id=? AND user_id=?",
+                                 (lid, uid())).fetchone()
+                if not row or _is_arrived(row):
+                    continue
+                keys = row.keys()
+                _now = datetime.now()
+                db.execute(
+                    """INSERT INTO unemptyable_trash
+                       (id,user_id,content,mood_color,vertical,random_x,random_y,created_at,trace,unravel_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (secrets.token_hex(8), uid(),
+                     (row["poem"] or "")[:80].rstrip(),
+                     row["seal_color"] if "seal_color" in keys else None,
+                     row["vertical"] if ("vertical" in keys and row["vertical"]) else 0,
+                     random.uniform(8, 92), random.uniform(10, 90),
+                     _now.isoformat(timespec="seconds"),
+                     row["trace"] if "trace" in keys else None,
+                     (_now + UNRAVEL_AFTER).isoformat(timespec="seconds")))
+                db.execute("DELETE FROM thread WHERE letter_id=?", (lid,))
+                db.execute("DELETE FROM letters WHERE id=? AND user_id=?", (lid, uid()))
+                moved += 1
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 一気に捨てる 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
+    return jsonify(ok=True, moved=moved)
 
 
 _WX_JP = {"snow": "雪", "rain": "雨", "fog": "霧", "cloud": "曇り", "clear": "晴れ"}
