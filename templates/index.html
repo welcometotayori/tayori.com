@@ -65,15 +65,15 @@
   .romaji{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.42em;color:var(--ink-soft);text-transform:uppercase;padding-left:0.42em}
   .tagline{margin-top:20px;font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink-soft);letter-spacing:0.08em}
   .rule{height:1px;background:var(--line);margin:8px 0 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
-  .tabs{display:flex;margin:26px 0 22px;border:1px solid var(--line);border-radius:2px;overflow:hidden}
-  .tab{flex:1;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;color:var(--ink-soft);padding:13px 0;transition:background .25s,color .25s;position:relative}
-  .tab+.tab{border-left:1px solid var(--line)}
-  .tab.on{background:var(--ink);color:var(--paper)}
+  .tabs{display:flex;gap:28px;justify-content:center;margin:26px 0 22px;border-bottom:1px solid var(--line)}
+  .tab{flex:0 0 auto;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.14em;color:var(--ink-soft);padding:12px 10px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s;position:relative}
+  .tab:focus-visible{outline:2px solid var(--seal);outline-offset:3px}
+  .tab.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--seal)}
   .tab .sub{display:block;font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.2em;margin-top:2px;opacity:0.6}
   .panel{display:none;animation:fade .5s ease both}
   .panel.on{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  .envelope{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 10px 30px -18px rgba(58,46,37,0.5);position:relative;overflow:hidden}
+  .envelope{background:var(--paper-2);border:1px solid var(--line);border-radius:2px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 2px 10px -7px rgba(58,46,37,0.3);position:relative;overflow:hidden}
   .env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--line);font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft)}
   /* 写真プレビュー（ボタンは voice-btn と同形にし、選んだ写真はここに表示） */
   .photo-preview{margin:0 18px;display:none;position:relative}
@@ -81,8 +81,9 @@
   .photo-preview img{width:100%;height:auto;display:block;border-radius:2px;border:1.5px solid var(--line)}
   .photo-remove{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(43,40,36,0.55);color:var(--paper);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
   .photo-btn input[type=file]{display:none}
-  .photo-mark{font-size:14px;line-height:1;font-family:'Shippori Mincho',serif}
-  .photo-btn.on{background:var(--seal);border-color:var(--seal);color:var(--paper)}
+  .photo-mark svg{width:19px;height:19px;display:block}
+  .photo-btn.on{color:var(--seal)}
+  .photo-btn.on>span:first-child{background:rgba(181,84,58,0.07);border-color:var(--seal);color:var(--seal)}
   .poem{margin:0 18px 6px}
   .poem textarea{width:100%;background:transparent;border:0;resize:none;font-family:'Shippori Mincho',serif;font-size:17px;line-height:36px;color:var(--ink);min-height:144px;background-image:repeating-linear-gradient(transparent,transparent 35px,var(--line) 35px,var(--line) 36px);background-position:0 0;padding:0;word-break:break-word;overflow-wrap:anywhere}
   .poem textarea:focus{outline:none}
@@ -106,8 +107,9 @@
   .vcaret{position:absolute;height:2px;background:var(--ink);pointer-events:none;display:none;
     animation:vcaretBlink .9s steps(1) infinite}
   @keyframes vcaretBlink{50%{opacity:0}}
-  .vert-btn .vert-mark{font-size:12px;line-height:1;border:1px solid currentColor;border-radius:3px;padding:1px 3px}
-  .vert-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+  .vert-btn .vert-mark{font-size:16px;line-height:1;border:0;border-radius:0;padding:0;font-family:'Shippori Mincho',serif}
+  .vert-btn.on{color:var(--ink)}
+  .vert-btn.on>span:first-child{background:rgba(58,46,37,0.05);border-color:var(--ink);color:var(--ink)}
   /* ---- 捨てられない屑籠 ----
      気に食わない手紙を握りつぶして投げ捨てる。でも消えない。全部ここに残る。
      入口は小さく、数は主張しない。カメラ映像は画面にも出さず、手影だけが便箋に落ちる。 */
@@ -116,8 +118,9 @@
   .poem.hand-near{box-shadow:0 0 0 1px var(--line),0 10px 26px -16px rgba(58,46,37,0.55);border-radius:2px}
   /* 掴んで取り上げた間、便箋の上から紙が消える（紙は手の中にある） */
   .poem.hand-taken textarea,.poem.hand-taken .poem-count,.poem.hand-taken .vcaret{opacity:0;transition:opacity .2s}
-  .hand-btn .hand-mark svg{width:13px;height:13px;display:block}
-  .hand-btn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+  .hand-btn .hand-mark svg{width:18px;height:18px;display:block}
+  .hand-btn.on{color:var(--ink)}
+  .hand-btn.on>span:first-child{background:rgba(58,46,37,0.05);border-color:var(--ink);color:var(--ink)}
   .kuzu-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px}
   .kuzu-bin{background:none;border:0;cursor:pointer;padding:8px;color:var(--ink-soft);opacity:0.5;transition:opacity .25s}
   .kuzu-bin:hover{opacity:0.9}
@@ -181,11 +184,18 @@
   .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft);margin-top:4px}
   .poem-count.near{color:var(--seal)}
   .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
-  .voice-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;padding:8px 14px;border-radius:24px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
-  .voice-btn:hover{border-color:var(--seal);color:var(--seal)}
-  .voice-btn.rec{background:var(--seal);border-color:var(--seal);color:var(--paper)}
-  .voice-dot{width:8px;height:8px;border-radius:50%;background:var(--seal)}
-  .voice-btn.rec .voice-dot{background:var(--paper);animation:pulse 1s infinite}
+  /* 道具は「印」：丸い判のマークが主役、下に小さな添え書き（2026-07-22）。
+     マーク（1つ目のspan）が44px円＝タップ域、状態は判の線と朱/墨の色で示す */
+  .voice-btn{display:inline-flex;flex-direction:column;align-items:center;gap:6px;border:0;background:none;color:var(--ink-soft);font-family:'Shippori Mincho',serif;font-size:10.5px;letter-spacing:0.12em;padding:2px;cursor:pointer;transition:color .2s;white-space:nowrap}
+  .voice-btn>span:first-child{width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);border-radius:50%;background:var(--paper);color:var(--ink-soft);
+    transition:border-color .2s,background .2s,color .2s}
+  .voice-btn:hover{color:var(--seal)}
+  .voice-btn:hover>span:first-child{border-color:var(--seal);color:var(--seal)}
+  .voice-btn.rec{color:var(--seal)}
+  .voice-btn.rec>span:first-child{background:var(--seal);border-color:var(--seal)}
+  .voice-dot::after{content:"";display:block;width:10px;height:10px;border-radius:50%;background:var(--seal)}
+  .voice-btn.rec .voice-dot::after{background:var(--paper);animation:pulse 1s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .voice-have{color:var(--teal)}
   .voice-clear{cursor:pointer;text-decoration:underline;color:var(--ink-soft);font-size:11px}
@@ -193,10 +203,14 @@
   .field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;flex-wrap:wrap;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-soft)}
   .field-row>label{white-space:nowrap;padding-top:6px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;text-transform:none}
   .chips{display:flex;gap:7px;flex-wrap:wrap;flex:1}
-  .chip{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;border:1px solid var(--line);background:transparent;color:var(--ink-soft);padding:5px 11px;border-radius:20px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
-  .chip.on{background:var(--seal);border-color:var(--seal);color:var(--paper)}
+  /* 囲みは角ばらせず、消印のような丸囲みに（2026-07-22）。
+     ベタ塗りには戻さない：選択＝朱の線と薄い染みだけで示す */
+  .chip{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;border:1px solid var(--line);background:transparent;color:var(--ink-soft);padding:7px 15px;border-radius:999px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+  .chip:hover{border-color:var(--ink-soft);color:var(--ink)}
+  .chip.on{background:rgba(181,84,58,0.07);border-color:var(--seal);color:var(--seal)}
+  .chip:focus-visible,.date-pick:focus-visible,.voice-btn:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
   .when-extra{margin-top:-4px}
-  .date-pick{font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.06em;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:5px 12px;cursor:pointer}
+  .date-pick{font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.06em;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:7px 15px;cursor:pointer}
   .date-pick:focus{outline:none;border-color:var(--seal)}
   .when-readout{font-family:'Shippori Mincho',serif;font-size:12.5px;color:var(--seal);letter-spacing:0.08em;margin:2px 0 16px;min-height:18px;text-align:center}
   .when-readout.hidden-mode{color:var(--ink-soft);font-style:italic}
@@ -231,7 +245,9 @@
   .wx-enable-btn i{font-size:14px;line-height:1}
   .weather-locked-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);
     letter-spacing:0.06em;margin-top:10px}
-  .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:2px;transition:background .25s}
+  .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:1px;transition:background .25s}
+  .send:hover{background:var(--seal)}
+  .send:focus-visible,.gate-submit:focus-visible,.concept-go:focus-visible{outline:2px solid var(--seal);outline-offset:3px}
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-soft);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
   /* 一筆箋（問いをたどって綴るモード）への静かな導線 */
@@ -499,6 +515,25 @@
   .mood-swatches.compact .mood-sw{padding:4px}
   .mood-swatches.compact .mood-sw i{width:22px;height:22px}
   @media (prefers-reduced-motion:reduce){.mood-sw{transition:none}.mood-sw:hover{transform:none}}
+
+  /* ── 読み終えたたよりの棚（library）──
+     開封済みだけが背表紙になる（未開封は棚に入らない＝本文秘匿はそのまま）。
+     背表紙の色＝封をした日の気分の色。タップで一通だけ机に広げる。 */
+  .lib-shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 22px}
+  @media (max-width:520px){.lib-shelf{grid-template-columns:repeat(2,1fr)}}
+  .lib-card{display:flex;flex-direction:column;justify-content:space-between;gap:12px;aspect-ratio:3/4;
+    padding:13px 12px 11px;background:var(--paper-2);color:var(--ink);
+    border:1px solid rgba(58,46,37,0.28);border-radius:2px;
+    font-family:'Shippori Mincho',serif;text-align:left;cursor:pointer;
+    transition:transform .2s var(--ease-out),box-shadow .2s}
+  .lib-card:hover{transform:translateY(-2px)}
+  .lib-card:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  .lib-card.deep{color:var(--paper);border-color:rgba(58,46,37,0.4)}   /* 濃い背表紙は文字を紙色に */
+  .lib-card.on{box-shadow:0 0 0 2px var(--paper),0 0 0 3px var(--seal)}/* 選択の印＝色見本と同じ流儀 */
+  .lib-quote{font-size:13px;line-height:1.85;letter-spacing:0.04em;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+  .lib-year{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.2em;opacity:0.85}
+  @media (prefers-reduced-motion:reduce){.lib-card{transition:none}.lib-card:hover{transform:none}}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-soft);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
   .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(58,46,37,0.25);box-shadow:0 2px 6px -3px rgba(58,46,37,0.5);vertical-align:middle}
   /* 選び直せるチップ：色は確定していても、タップすれば色相バーに戻せる。
@@ -513,30 +548,31 @@
 
   /* auth gate */
   .gate{position:fixed;inset:0;z-index:80;background:var(--paper);display:flex;align-items:center;align-items:safe center;justify-content:center;padding:24px;
-    overflow-y:auto;-webkit-overflow-scrolling:touch;
-    background-image:radial-gradient(circle at 20% 10%,rgba(181,84,58,0.05),transparent 42%),radial-gradient(circle at 80% 80%,rgba(107,132,120,0.06),transparent 46%)}
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
   .gate.hidden{display:none}
   .gate-card{max-width:380px;width:100%;text-align:center}
   .gate h1{font-size:46px;margin-bottom:4px}
   .gate .romaji{margin-bottom:8px}
   .gate-tag{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-soft);letter-spacing:0.08em;margin-bottom:30px;line-height:1.9}
-  .gate-form{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;padding:26px 24px;box-shadow:0 10px 30px -18px rgba(58,46,37,0.5)}
-  .gate-tabs{display:flex;margin-bottom:22px;border:1px solid var(--line);border-radius:2px;overflow:hidden}
-  .gate-tab{flex:1;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;color:var(--ink-soft);padding:11px 0;transition:background .25s,color .25s}
-  .gate-tab+.gate-tab{border-left:1px solid var(--line)}
-  .gate-tab.on{background:var(--ink);color:var(--paper)}
+  .gate-form{position:relative;background:transparent;border:0;border-radius:0;padding:30px 2px 0;box-shadow:none}
+  .gate-form::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:var(--line);
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+  .gate-tabs{display:flex;gap:26px;justify-content:center;margin-bottom:26px;border-bottom:1px solid var(--line)}
+  .gate-tab{flex:0 0 auto;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.14em;color:var(--ink-soft);padding:10px 6px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s}
+  .gate-tab:focus-visible{outline:2px solid var(--seal);outline-offset:3px}
+  .gate-tab.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--seal)}
   .gate-field{text-align:left;margin-bottom:16px}
   .gate-field label{display:block;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft);margin-bottom:6px}
-  .gate-field input{width:100%;background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:11px 13px;
-    font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink)}
-  .gate-field input:focus{outline:none;border-color:var(--seal)}
+  .gate-field input{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:10px 2px;
+    font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);transition:border-color .2s}
+  .gate-field input:focus{outline:none;border-bottom-color:var(--seal)}
   .pw-wrap{position:relative}
   .pw-wrap input{padding-right:54px;width:100%}
   .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;
     font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);padding:6px 8px}
   .pw-toggle:hover{color:var(--seal)}
   .gate-submit{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:15px;letter-spacing:0.2em;padding:14px;border-radius:2px;transition:background .25s;margin-top:4px}
+    font-size:15px;letter-spacing:0.2em;padding:14px;border-radius:1px;transition:background .25s;margin-top:4px}
   .gate-submit:hover{background:var(--seal)}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   .gate-hint{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-soft);margin-top:18px;opacity:0.8}
@@ -573,8 +609,7 @@
   .concept-body p{font-family:'Shippori Mincho',serif;font-size:14px;line-height:2.1;letter-spacing:0.05em;color:var(--ink-soft);margin:0 0 22px}
   .concept-body b{color:var(--ink);font-weight:normal;border-bottom:1px solid var(--seal);padding-bottom:1px}
   .concept-go{margin-top:14px;width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.24em;padding:15px;border-radius:3px;transition:background .25s,transform .25s;
-    box-shadow:0 8px 22px -14px rgba(58,46,37,0.5)}
+    font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.24em;padding:15px;border-radius:1px;transition:background .25s,transform .25s}
   .concept-go:hover{background:var(--seal);transform:translateY(-1px)}
   .concept-go:active{transform:translateY(0)}
 
@@ -828,7 +863,7 @@
         <div class="poem-count"><span id="poemCount">0</span> / 80</div>
       </div>
       <div class="voice-row">
-        <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark">＋</span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
+        <label class="voice-btn photo-btn" id="photoBtn"><span class="photo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m5.5 17 4.5-4.5 3 3 3.5-3.5 2.5 2.5"/></svg></span><span id="photoLabel">写真を入れる</span><input type="file" accept="image/*" id="photoInputGallery"></label>
         <button class="voice-btn" id="voiceBtn"><span class="voice-dot"></span><span id="voiceLabel">声を録る</span></button>
         <button class="voice-btn vert-btn" id="vertBtn" title="便箋の姿（縦/横）を切り替える。この姿のまま封をされ、開封の日も同じ姿で届きます"><span class="vert-mark" id="vertMark">縦</span><span id="vertLabel">縦書き</span></button>
         <button class="voice-btn hand-btn" id="handBtn" aria-pressed="false" title="インカメラが手を読み、便箋を掴んで投げ捨てられます。映像も手の座標も、どこにも送られません"><span class="hand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11m0-5.5v-1a1.5 1.5 0 0 1 3 0V11m0-4.5a1.5 1.5 0 0 1 3 0V13"/><path d="M8 12v-1.5a1.5 1.5 0 0 0-3 0V14c0 4 2.5 7 6.5 7s5.5-2.6 5.5-7v-1"/></svg></span><span id="handLabel">捨てる</span></button>
@@ -837,17 +872,14 @@
       <div class="env-foot">
         <div class="field-row">
           <label>届く頃：</label>
+          <!-- 選択肢は6つまで（ヒックの法則）。1週間後/半年後/3年後は中間刻みとして削除、
+               ランダムは「いつか、突然」と役割が重なるため削除（2026-07-22） -->
           <div class="chips" id="whenChips">
             <button class="chip" data-mode="date">日付を選ぶ</button>
-            
-            <button class="chip" data-mode="rel" data-d="7">1週間後</button>
             <button class="chip" data-mode="rel" data-d="30">1ヶ月後</button>
             <button class="chip on" data-mode="rel" data-d="90">3ヶ月後</button>
-            <button class="chip" data-mode="rel" data-d="180">半年後</button>
             <button class="chip" data-mode="rel" data-d="365">1年後</button>
-            <button class="chip" data-mode="rel" data-d="1095">3年後</button>
             <button class="chip" data-mode="event">出来事で</button>
-            <button class="chip" data-mode="random">ランダム</button>
             <button class="chip" data-mode="surprise">いつか、突然</button>
           </div>
         </div>
@@ -1523,6 +1555,15 @@
   // mailbox
   const mailList=document.getElementById('mailList');
   let received=[],inTransit=[];
+  // ── 読み終えたたよりの棚（library）──
+  // 開封済みは背表紙（気分の色）で棚に並び、タップした一通だけを机に広げる。
+  // 開封直後は自動でその一通を広げる（openLetterでセット）。再描画をまたいで保持。
+  let shelfOpenId=null;
+  function libDark(hex){ // 背表紙が濃色か（文字を紙色に反転するか）
+    const m=/^#?([0-9a-f]{6})$/i.exec(hex||'');if(!m)return false;
+    const n=parseInt(m[1],16);
+    return (0.299*(n>>16)+0.587*((n>>8)&255)+0.114*(n&255))<140;
+  }
   const threadCollapsed=new Set();  // 会話を「しまう」たよりIDを保持（再描画でも維持）
   let currentWeather=null; // {temp, condition, temp_tag}
   let lastGeoError=null;   // 失敗理由: denied/timeout/unavailable/unsupported/serveroff/fetchfail
@@ -1684,29 +1725,62 @@ async function detectWeather(){
     else if(inTransit.length){const intro=document.createElement('p');intro.className='mail-intro';
       intro.innerHTML='まだ届いた<wbr>たよりはありません。<br>封の中のたよりは、<wbr>この下で待っています。';mailList.appendChild(intro);}
     
-    received.forEach((L,i)=>{const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
-      const sent=parseISO(L.sent_date);
-      if(!L.opened){
-        // 封の帯の上の封蝋「緘」を、左から右へ滑らせて剥がす。説明文は置かず、質感だけで誘う。
-        // 本文はまだサーバから届いていない（開封APIが初めて配信する）。ここに描くのは
-        // 「◯字を封じた」という気配と、封をした時のメタデータだけ。
-        el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">過去のあなたから</div>'+
-          '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
-          '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
-          (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
-          (L.char_count?'<div class="sc-note">'+L.char_count+'字を、封じています</div>':'')+
-          sealedInfoHTML(L,true)+
-          '</div>';
-        wirePeel(el.querySelector('[data-peel]'),L.id);
-        // デモ用の手紙は、届いたあとでも開封予定日を未来へ戻せる（開封前のみ）
-        if(L.demo_mode)el.appendChild(demoAdjustRow(L.id,L.demo_arrive_at||L.arrive_at));
-      }else{
-        el.innerHTML=renderOpenLetter(L,i,sent);
-        // 封入インク：書いた日のスナップショットから、開封時に一回だけレンダリング
-        if(L.seal_env){el.classList.add('inked');el.style.cssText=inkStyleVars(L);}
-      }
+    // ── 未開封：封蝋を剥がす儀式は従来のまま、一通ずつ全幅で ──
+    // 封の帯の上の封蝋「緘」を、左から右へ滑らせて剥がす。説明文は置かず、質感だけで誘う。
+    // 本文はまだサーバから届いていない（開封APIが初めて配信する）。ここに描くのは
+    // 「◯字を封じた」という気配と、封をした時のメタデータだけ。
+    received.forEach(L=>{
+      if(L.opened)return;
+      const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
+      el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">過去のあなたから</div>'+
+        '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
+        '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
+        (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
+        (L.char_count?'<div class="sc-note">'+L.char_count+'字を、封じています</div>':'')+
+        sealedInfoHTML(L,true)+
+        '</div>';
+      wirePeel(el.querySelector('[data-peel]'),L.id);
+      // デモ用の手紙は、届いたあとでも開封予定日を未来へ戻せる（開封前のみ）
+      if(L.demo_mode)el.appendChild(demoAdjustRow(L.id,L.demo_arrive_at||L.arrive_at));
       applyWeatherReunion(el,L);   // 天気の再会：封じた日と今日が重なった時だけ、かすかに
       mailList.appendChild(el);});
+
+    // ── 開封済み：読み終えたたよりは棚に収まる ──
+    // 背表紙の色＝封をした日の気分の色。書き出しと投函の月年だけを見せ、
+    // タップした一通だけを棚の下（机）に広げる。全景は従来の renderOpenLetter のまま。
+    const openedLetters=received.filter(L=>L.opened);
+    if(openedLetters.length){
+      const grid=document.createElement('div');grid.className='lib-shelf';
+      openedLetters.forEach(L=>{
+        const sent=parseISO(L.sent_date);
+        const isOn=String(shelfOpenId)===String(L.id);
+        const b=document.createElement('button');b.type='button';
+        b.className='lib-card'+(isOn?' on':'');
+        if(L.seal_color){b.style.background=L.seal_color;if(libDark(L.seal_color))b.classList.add('deep');}
+        b.innerHTML='<span class="lib-quote"></span><span class="lib-year">'+MON[sent.getMonth()]+' '+sent.getFullYear()+'</span>';
+        b.querySelector('.lib-quote').textContent=
+          L.poem?('「'+L.poem+'」'):(L.photo?'写真のたより':(L.voice?'声のたより':'―'));
+        b.setAttribute('aria-expanded',isOn?'true':'false');
+        b.addEventListener('click',()=>{
+          shelfOpenId=isOn?null:L.id;    // 同じ背表紙をもう一度タップ＝棚へ戻す
+          renderMail();
+          if(shelfOpenId!=null)focusLetter(L.id);
+        });
+        grid.appendChild(b);
+      });
+      mailList.appendChild(grid);
+
+      // 机に広げている一通（棚から取り出した姿）
+      const cur=openedLetters.find(L=>String(L.id)===String(shelfOpenId));
+      if(cur){
+        const el=document.createElement('div');el.className='letter';el.dataset.lid=cur.id;
+        el.innerHTML=renderOpenLetter(cur,received.indexOf(cur),parseISO(cur.sent_date));
+        // 封入インク：書いた日のスナップショットから、開封時に一回だけレンダリング
+        if(cur.seal_env){el.classList.add('inked');el.style.cssText=inkStyleVars(cur);}
+        applyWeatherReunion(el,cur);
+        mailList.appendChild(el);
+      }
+    }
     
     startCountdownTicker();
     wireOpenLetters();}
@@ -2111,6 +2185,7 @@ async function detectWeather(){
     const res=await api('/api/letters/'+id+'/open',{method:'POST',body:JSON.stringify({
       open_env:currentWeather,
       open_area_name:oa.area_name||null,open_area_lat:oa.area_lat??null,open_area_lng:oa.area_lng??null})});
+    if(res&&res.ok)shelfOpenId=id; // 開封したての一通は、棚に仕舞わずそのまま机に広げる
     await loadMail(); // 再描画：本文は今の /open のレスポンスで初めて届き、ここで初めて現れる
     if(res&&res.ok)focusLetter(id);
   }
