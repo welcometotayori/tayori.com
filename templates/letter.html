@@ -9,8 +9,8 @@
 <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
-  :root{--paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
-        --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));--paper-raised:#FFFFFF;
+  :root{--paper:#FAF8F3;--ground:#E8E2D8;--ink:#2A2522;--seal:#710014;--kraft:#B38F6F;
+        --paper-sunk:color-mix(in oklab,var(--paper) 93%,var(--kraft));--paper-raised:#FFFFFF;
         --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
         --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
         --ink-faint:color-mix(in oklab,var(--ink) 30%,var(--paper));
@@ -21,7 +21,7 @@
         --seal-onfill:var(--paper);
         --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper))}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.9;min-height:100vh;-webkit-font-smoothing:antialiased;line-break:strict}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.9;min-height:100vh;-webkit-font-smoothing:antialiased;line-break:strict}
   /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る。回答本文には掛けない */
   .lead,.done-note,.letter-empty{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   /* 問い（DB由来で<wbr>を仕込めない）は、対応ブラウザだけ自動の文節折返しに */
@@ -34,8 +34,8 @@
   .lead{font-size:15px;letter-spacing:0.06em;color:var(--ink-mute);margin:0 0 26px;line-height:1.85}
 
   /* 便箋（手紙プレビュー） */
-  .paper{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;
-         box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 12px 34px -20px rgba(22,22,22,0.55);
+  .paper{background:var(--paper);border:1px solid var(--rule);border-radius:3px;
+         box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 12px 34px -20px rgba(90,70,50,0.55);
          padding:26px 24px;min-height:150px;position:relative;overflow:hidden}
   .paper-head{font-size:12px;letter-spacing:0.12em;color:var(--ink-mute);padding-bottom:12px;margin-bottom:14px;border-bottom:1px dashed var(--rule)}
   .letter-body{font-size:16.5px;line-height:34px;color:var(--ink);word-break:break-word;overflow-wrap:anywhere;min-height:70px}

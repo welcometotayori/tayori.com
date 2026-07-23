@@ -8,8 +8,8 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
-  :root{--paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
-        --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));--paper-raised:#FFFFFF;
+  :root{--paper:#FAF8F3;--ground:#E8E2D8;--ink:#2A2522;--seal:#710014;--kraft:#B38F6F;
+        --paper-sunk:color-mix(in oklab,var(--paper) 93%,var(--kraft));--paper-raised:#FFFFFF;
         --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
         --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
         --ink-faint:color-mix(in oklab,var(--ink) 30%,var(--paper));
@@ -20,7 +20,7 @@
         --seal-onfill:var(--paper);
         --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper))}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
        min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;line-break:strict}
   /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る。手紙の抜粋には掛けない */
   .sealed-sub,.excerpt-empty,.bookmark{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
@@ -41,9 +41,9 @@
 
   /* 封をした手紙の抜粋 */
   .excerpt{opacity:0;animation:fade 1s ease 1.4s forwards;
-           background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;
+           background:var(--paper);border:1px solid var(--rule);border-radius:3px;
            padding:22px 22px;text-align:left;font-size:15.5px;line-height:32px;color:var(--ink);
-           box-shadow:0 10px 30px -22px rgba(22,22,22,.5);margin-bottom:36px}
+           box-shadow:0 10px 30px -22px rgba(90,70,50,.5);margin-bottom:36px}
   .excerpt p{margin:0 0 4px}
   .excerpt-empty{color:var(--ink-mute);opacity:.6;font-size:14px}
 

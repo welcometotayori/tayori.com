@@ -8,8 +8,11 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Courier+Prime&display=swap');
-  /* 器の4色。mood 9色は canvas の中だけに置く（器に mood 色を使わない・宙に封蝋色を出さない） */
-  :root{--space:#161616;--chalk:#F2F1ED;--thread:#B38F6F}
+  /* ── 色の星空（2026-07-24 リデザイン）──
+     封をされた未開封の手紙が、mood color の光の点として暗い空間に浮かぶ。
+     見えるのは色だけ。日付・件名・残り日数はすべて出さない。
+     タップしても中身は開かない——ほんの少し揺れて、「そこにある」ことだけが返る。 */
+  :root{--space:#08080D;--chalk:#FAF8F3;--thread:#B38F6F}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{background:var(--space);color:var(--chalk);overflow:hidden;
@@ -18,29 +21,31 @@
   header{position:fixed;top:0;left:0;right:0;z-index:10;
          display:flex;justify-content:space-between;align-items:baseline;
          padding:16px 20px 12px}
-  .ttl{font-size:15px;letter-spacing:0.18em;color:var(--chalk)}
+  .ttl{font-size:15px;letter-spacing:0.18em;color:var(--chalk);opacity:.85}
   .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
                color:var(--thread);text-transform:uppercase;margin-left:10px}
-  .back{font-size:12.5px;letter-spacing:0.1em;color:rgba(242,241,237,.55);text-decoration:none;
+  .back{font-size:12.5px;letter-spacing:0.1em;color:rgba(250,248,243,.55);text-decoration:none;
         border-bottom:1px solid rgba(179,143,111,.45);padding-bottom:1px;transition:color .2s}
   .back:hover{color:var(--chalk)}
-  #mood-space{position:fixed;inset:0;background:var(--space)}
-  #mood-space canvas{position:absolute;inset:0;width:100%;height:100%}
-  /* クロスフェード：prev が下、base が上。base の不透明度だけを 400ms で動かす */
-  #ms-base{transition:opacity .4s ease}
-  /* 期間の切り替え：ボタンらしい装飾はつけない。文字だけ */
-  .ranges{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;justify-content:center;gap:26px;
-          padding:14px 16px calc(14px + env(safe-area-inset-bottom))}
-  .ranges button{appearance:none;background:none;border:0;padding:2px 2px;cursor:pointer;
-                 font-family:inherit;font-size:12.5px;letter-spacing:0.14em;
-                 color:rgba(242,241,237,.35);transition:color .3s}
-  .ranges button.on{color:var(--chalk)}
-  .ranges button:hover{color:rgba(242,241,237,.7)}
-  .ms-empty{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;margin:0;
-            font-size:12.5px;letter-spacing:0.14em;line-height:2;color:rgba(242,241,237,.35);
-            text-align:center;word-break:keep-all;transition:opacity .4s;pointer-events:none}
-  .ms-empty[hidden]{display:none}
-  @media (prefers-reduced-motion:reduce){ #ms-base,.ms-empty{transition:none} }
+  #sky{position:fixed;inset:0;background:var(--space);border-radius:12px;overflow:hidden}
+  /* 点のタップ域：小さな星でも指で触れられるよう、透明の当たり判定を広めに取る */
+  .star-hit{position:absolute;width:44px;height:44px;transform:translate(-50%,-50%);
+            display:flex;align-items:center;justify-content:center;
+            background:none;border:0;padding:0;cursor:default;-webkit-tap-highlight-color:transparent}
+  .star-hit:focus{outline:none}
+  /* 星＝手紙。大きさが開封日の近さ（大きい=近い、小さい=遠い）。数字にはしない */
+  .star{border-radius:50%;pointer-events:none}
+  @keyframes wobble{
+    0%   { transform: translate(0, 0); }
+    15%  { transform: translate(2px, -2px); }
+    30%  { transform: translate(-1.5px, 1px); }
+    45%  { transform: translate(1px, -0.5px); }
+    60%  { transform: translate(-0.5px, 0.5px); }
+    80%  { transform: translate(0.3px, -0.2px); }
+    100% { transform: translate(0, 0); }
+  }
+  .star.wobble{animation:wobble .8s ease-out}
+  @media (prefers-reduced-motion:reduce){ .star.wobble{animation:none} }
 </style>
 </head>
 <body>
@@ -49,305 +54,81 @@
     <a class="back" href="/">もどる</a>
   </header>
 
-  <div id="mood-space">
-    <canvas id="ms-prev"></canvas>
-    <canvas id="ms-base"></canvas>
-  </div>
-
-  <p class="ms-empty" id="msEmpty" hidden>この期間には、<wbr>まだ手紙が<wbr>ありません</p>
-
-  <div class="ranges" id="ranges" role="group" aria-label="期間">
-    <button data-r="1d">1日</button>
-    <button data-r="1w">1週間</button>
-    <button data-r="1m">1ヶ月</button>
-    <button data-r="1y">1年</button>
-    <button data-r="all" class="on">すべて</button>
-  </div>
+  <div id="sky" aria-label="封の中のたよりが、色の点として浮かんでいます"></div>
 
 <script>
 (function(){
   'use strict';
 
-  // ── 調整予定のマジックナンバー（spec §9）。実データを見て詰める ──
-  const TUNE = {
-    TAU: 86400 * 7,        // 半径の正規化定数：1週間（調整範囲 1日–30日）
-    RMIN: 0.06, RMAX: 0.48,
-    EXP: 0.85,             // 半径の指数（0.7–0.95）。純粋な log だと外周がスカスカになる
-    BLUR: 1.5,             // glow の blur 半径 px（1.0–3.0）
-    UNOPENED_DRAW: 0.55,   // 未開封線：予定位置までの何割を描くか（0.4–0.7）
-    SAT_MULT: 1.35,        // 手染め色は彩度が低く screen 合成で沈むので canvas 内でだけ上げる（1.2–1.6）
-    SAT_FLOOR: 18,         // 沈(#8C7F80, S≈5)がただの白飛びにならないための下駄
-    LUM_MULT: 0.85,
-    JITTER_DEG: 2.5,       // 同じ気分の点が完全に一直線に重ならないための、封緘時刻由来の決定的な揺らぎ（0で純スポーク）
-    FUTURE_GAIN: 0.10, FUTURE_EXP: 0.6,  // 未開封の予定位置：RMAX の外へどれだけ出るか
-  };
+  const sky = document.getElementById('sky');
+  const MARGIN = 0.08;        // 端から8%は空ける
+  const SIZE_MIN = 5, SIZE_MAX = 28;
+  const OP_MIN = 0.35, OP_MAX = 0.9;
+  // 色を選ばず封じた手紙も「そこにある」：無彩の点として浮かべる
+  const COLORLESS = 'hsl(228, 8%, 62%)';
 
-  // ── 気分7色。app.py の _MOOD_SWATCH_HEX / index.html の MOOD_SWATCHES と対 ──
-  // 角度は等間隔にしない：実際の色相（H）をそのまま使う。並びは「静→明→暖→重」の温度順
-  //（凪→芽→陽→温→恋→憂→沈）。色相は青緑→黄→赤→紫へ散るので、宙は扇ではなく緩い環になる。
-  const SWATCH_HEX = ['#C9D4D2','#C4CDB4','#EBD9AE','#E8C4A8',
-                      '#DFAFAE','#C0B2C4','#8C7F80'];
+  let stars = [];   // {c, d} のまま保持し、リサイズで置き直す
 
-  function hexToHsl(hex){
-    const n = parseInt(hex.slice(1), 16);
-    const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-    let h = 0;
-    if (d) {
-      if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0));
-      else if (mx === g) h = (b - r) / d + 2;
-      else h = (r - g) / d + 4;
-      h *= 60;
-    }
-    const l = (mx + mn) / 2;
-    const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
-    return { h: h, s: s * 100, l: l * 100 };
-  }
-  function hslCss(h, s, l, a){ return 'hsla(' + h + ',' + s + '%,' + l + '%,' + a + ')'; }
+  // 大きい点から順に、重ならない場所を探して散布する（見つからなければ最後の候補で妥協）
+  function layout(){
+    sky.textContent = '';
+    const W = sky.clientWidth, H = sky.clientHeight;
+    if (!W || !H || !stars.length) return;   // 手紙が0通なら、空の暗闇だけ
 
-  const PALETTE = SWATCH_HEX.map(function(hex){
-    const c = hexToHsl(hex);
-    return {
-      hue: c.h,
-      // canvas 内でだけ使う変換色（UI側でこの色を使わない）
-      s: Math.min(100, Math.max(c.s * TUNE.SAT_MULT, TUNE.SAT_FLOOR)),
-      l: c.l * TUNE.LUM_MULT,
-    };
-  });
-  function col(m, a){ const p = PALETTE[m]; return hslCss(p.hue, p.s, p.l, a); }
-  function colWhite(m, a){ const p = PALETTE[m]; // 開封点の芯：白へ寄せた同色相
-    return hslCss(p.hue, p.s * .5, Math.min(96, p.l + 42), a); }
+    const maxDays = Math.max(30, ...stars.map(p => p.d));
+    const items = stars.map(p => {
+      const ratio = 1 - (p.d / maxDays);     // 0=最も遠い未来 〜 1=もうすぐ開封
+      return {
+        c: p.c || COLORLESS,
+        size: SIZE_MIN + ratio * (SIZE_MAX - SIZE_MIN),
+        op: OP_MIN + ratio * (OP_MAX - OP_MIN),
+      };
+    }).sort((a, b) => b.size - a.size);
 
-  // ── 座標変換 ──
-  function thetaOf(m, s){
-    const jit = TUNE.JITTER_DEG ? (hash01(s) - .5) * 2 * TUNE.JITTER_DEG : 0;
-    return ((PALETTE[m].hue + jit) / 360) * Math.PI * 2 - Math.PI / 2; // -PI/2 で赤系(0°)が真上
-  }
-  // 決定的な擬似乱数（Math.random だと再描画のたびに宙が揺れてしまう）
-  function hash01(n){
-    let x = (n | 0) ^ 0x9E3779B9;
-    x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B);
-    x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35);
-    x ^= x >>> 16;
-    return (x >>> 0) / 4294967296;
-  }
-  // 中心=最古、外周=最新。log + 指数補正で密度を均す。t が未来（未開封の予定）なら RMAX の外へ
-  function radiusOf(t, oldest, now, R){
-    if (t > now) {
-      const future = (t - now) / TUNE.TAU;
-      return (TUNE.RMAX + TUNE.FUTURE_GAIN * Math.pow(Math.log1p(future), TUNE.FUTURE_EXP)) * R;
-    }
-    const age  = Math.max(0, now - t);
-    const span = Math.max(1, now - oldest);
-    const k = Math.pow(Math.log1p(age / TUNE.TAU) / Math.log1p(span / TUNE.TAU), TUNE.EXP);
-    return (TUNE.RMIN + (TUNE.RMAX - TUNE.RMIN) * (1 - Math.min(1, k))) * R;
-  }
-
-  // ── canvas ──
-  const wrap = document.getElementById('mood-space');
-  const base = document.getElementById('ms-base');
-  const prev = document.getElementById('ms-prev');
-  let DPR = 1, W = 0, H = 0;
-  const layers = PALETTE.map(function(){ return document.createElement('canvas'); });
-  // ctx.filter 非対応（Safari 18 未満の WebKit 等）では blur 代入が no-op になり、
-  // 自己二重描画が「無blurのアルファ2倍」に化けるので、glow パス自体を落とす
-  const HAS_FILTER = (function(){
-    const c = document.createElement('canvas').getContext('2d');
-    c.filter = 'blur(1px)';
-    return c.filter !== 'none';
-  })();
-
-  function sizeCanvases(){
-    // DPR はブラウザズームや別ディスプレイへの移動で変わるので毎回読み直す（Retina 3x は 2 で上限）
-    DPR = Math.min(2, window.devicePixelRatio || 1);
-    const r = wrap.getBoundingClientRect();
-    const w = Math.max(1, Math.round(r.width * DPR));
-    const h = Math.max(1, Math.round(r.height * DPR));
-    if (w === W && h === H) return;
-    W = w; H = h;
-    // フルスクリーン canvas の作り直しは高い（DPR2で1枚≈16MB）。9層は使い回し、サイズ変更時だけ張り替える
-    [base, prev].concat(layers).forEach(function(c){ c.width = w; c.height = h; });
-  }
-
-  function render(data, target){
-    const R = Math.min(W, H);
-    const now = data.now, oldest = (data.oldest != null ? data.oldest : now);
-    const cx = W / 2, cy = H / 2;
-    layers.forEach(function(c){ c.getContext('2d').clearRect(0, 0, W, H); });
-
-    // 手紙ごとに：線 → 封緘点 → 開封点。その mood のレイヤーにだけ描く
-    for (let i = 0; i < data.points.length; i++){
-      const p = data.points[i];
-      if (!(p.m >= 0 && p.m < PALETTE.length)) continue;
-      const ctx = layers[p.m].getContext('2d');
-      const th = thetaOf(p.m, p.s);
-      const r1 = radiusOf(p.s, oldest, now, R);
-      const x1 = cx + r1 * Math.cos(th), y1 = cy + r1 * Math.sin(th);
-
-      if (p.o != null){
-        // 開封済み：封緘点 → 開封点。封緘側は淡く、開封側は明るく
-        const r2 = radiusOf(p.o, oldest, now, R);
-        const x2 = cx + r2 * Math.cos(th), y2 = cy + r2 * Math.sin(th);
-        if (Math.abs(r2 - r1) > .5){
-          const g = ctx.createLinearGradient(x1, y1, x2, y2);
-          g.addColorStop(0, col(p.m, .10));
-          g.addColorStop(1, col(p.m, .55));
-          ctx.strokeStyle = g;
-          ctx.lineWidth = .6 * DPR;
-          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-        }
-        drawSealDot(ctx, x1, y1, p.m);
-        drawOpenDot(ctx, x2, y2, p.m);
-      } else {
-        // 未開封：開封予定の方向へ伸びかけて、途中で消える（未来へ伸びている途中）
-        if (p.d){
-          const rT = radiusOf(p.d, oldest, now, R);
-          const rD = r1 + (rT - r1) * TUNE.UNOPENED_DRAW;
-          if (rD - r1 > .5){
-            const xD = cx + rD * Math.cos(th), yD = cy + rD * Math.sin(th);
-            const g = ctx.createLinearGradient(x1, y1, xD, yD);
-            g.addColorStop(0, col(p.m, .10));
-            g.addColorStop(1, col(p.m, 0));
-            ctx.strokeStyle = g;
-            ctx.lineWidth = .6 * DPR;
-            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(xD, yD); ctx.stroke();
-          }
-        }
-        drawSealDot(ctx, x1, y1, p.m);
+    const placed = [];
+    items.forEach(it => {
+      let x = 0, y = 0, ok = false;
+      for (let t = 0; t < 240 && !ok; t++){
+        x = (MARGIN + Math.random() * (1 - MARGIN * 2)) * W;
+        y = (MARGIN + Math.random() * (1 - MARGIN * 2)) * H;
+        ok = placed.every(q => {
+          const min = (it.size + q.size) / 2 + 10;   // 円同士の最低距離
+          return (x - q.x) ** 2 + (y - q.y) ** 2 >= min * min;
+        });
       }
-    }
+      placed.push({ x: x, y: y, size: it.size });
 
-    // glow：レイヤーごとに一度だけ blur を重ねる（点ごとの shadowBlur は全件描画では遅すぎる）
-    // 自分自身を blur 付きで重ね描き＝鋭い芯 + にじんだ暈
-    if (HAS_FILTER){
-      for (let i = 0; i < layers.length; i++){
-        const lctx = layers[i].getContext('2d');
-        lctx.filter = 'blur(' + (TUNE.BLUR * DPR) + 'px)';
-        lctx.drawImage(layers[i], 0, 0);
-        lctx.filter = 'none';
-      }
-    }
-
-    // 合成：黒地に screen。気分が重なった場所が白へ飛び、密度の高い時期が自然に発光する
-    const bctx = target.getContext('2d');
-    bctx.globalCompositeOperation = 'source-over';
-    bctx.fillStyle = '#161616';
-    bctx.fillRect(0, 0, W, H);
-    bctx.globalCompositeOperation = 'screen';
-    for (let i = 0; i < layers.length; i++) bctx.drawImage(layers[i], 0, 0);
-    bctx.globalCompositeOperation = 'source-over';
-  }
-
-  function drawSealDot(ctx, x, y, m){
-    // まだ届いていない：小さく、淡く、輪郭を持たせない
-    const rr = 1.5 * DPR;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, rr * 2);
-    g.addColorStop(0, col(m, .35));
-    g.addColorStop(.6, col(m, .18));
-    g.addColorStop(1, col(m, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, rr * 2, 0, Math.PI * 2); ctx.fill();
-  }
-  function drawOpenDot(ctx, x, y, m){
-    // 届いた：収束している。中心を白へ寄せる
-    const rr = 2.5 * DPR;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, rr);
-    g.addColorStop(0, colWhite(m, .9));
-    g.addColorStop(.5, col(m, .9));
-    g.addColorStop(1, col(m, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // ── データ取得と期間切り替え ──
-  const cache = {};       // range -> data（サーバ側にも5分キャッシュがあるが、往復自体を省く）
-  let current = 'all';    // いま描かれている（＝データ取得に成功した）期間
-  let wanted = 'all';     // 最後にユーザーが選んだ期間
-  let renderQueued = false;
-
-  function scheduleRender(fade){
-    if (renderQueued) return;
-    renderQueued = true;
-    requestAnimationFrame(function(){
-      renderQueued = false;
-      const data = cache[current];
-      if (!data) return;
-      if (fade){
-        // 直前の絵を prev に写してから、base を透明→不透明へ（400ms のクロスフェード）
-        prev.getContext('2d').drawImage(base, 0, 0);
-        base.style.transition = 'none';
-        base.style.opacity = '0';
-        render(data, base);
-        void base.offsetWidth;             // transition を効かせ直すための reflow
-        base.style.transition = '';
-        base.style.opacity = '1';
-      } else {
-        render(data, base);
-      }
-      document.getElementById('msEmpty').hidden = data.points.length > 0;
+      const hit = document.createElement('div');
+      hit.className = 'star-hit';
+      hit.style.left = (x / W * 100) + '%';
+      hit.style.top  = (y / H * 100) + '%';
+      const dot = document.createElement('span');
+      dot.className = 'star';
+      dot.style.width = dot.style.height = it.size.toFixed(1) + 'px';
+      dot.style.background = it.c;
+      dot.style.opacity = it.op.toFixed(2);
+      hit.appendChild(dot);
+      // タップ＝小さく揺れる。それだけ。中身も開封日も出ない。
+      hit.addEventListener('pointerdown', function(){
+        dot.classList.remove('wobble');
+        void dot.offsetWidth;               // アニメーションを掛け直すための reflow
+        dot.classList.add('wobble');
+      });
+      sky.appendChild(hit);
     });
   }
-
-  async function show(rng, fade){
-    wanted = rng;
-    if (!cache[rng]){
-      try {
-        const res = await fetch('/api/mood-space?range=' + rng);
-        if (!res.ok) return;    // 失敗時は current もハイライトも動かさない
-        cache[rng] = await res.json();  //   ＝同じボタンをもう一度押せばそのままリトライになる
-      } catch (e) { return; }
-    }
-    if (wanted !== rng) return; // 待っている間に別の期間が選ばれていた
-    current = rng;
-    document.querySelectorAll('.ranges button').forEach(function(b){
-      b.classList.toggle('on', b.dataset.r === rng);
-    });
-    scheduleRender(fade);
-  }
-
-  document.getElementById('ranges').addEventListener('click', function(e){
-    const b = e.target.closest('button');
-    if (b && b.dataset.r !== current) show(b.dataset.r, true);
-  });
 
   let resizeQueued = false;
   window.addEventListener('resize', function(){
     if (resizeQueued) return;
     resizeQueued = true;
-    requestAnimationFrame(function(){
-      resizeQueued = false;
-      sizeCanvases();
-      scheduleRender(false);
-    });
+    requestAnimationFrame(function(){ resizeQueued = false; layout(); });
   });
 
-  // ── #dummy：散らばりの目視確認用（サーバへは行かない） ──
-  function dummyData(){
-    const rand = (function(seed){ return function(){ // mulberry32
-      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };})(20260723);
-    const now = 1753200000, DAY = 86400;
-    const points = [];
-    for (let i = 0; i < 420; i++){
-      const m = Math.floor(Math.pow(rand(), 1.3) * 9);           // 沈んだ側をやや厚く
-      const s = now - Math.floor(Math.pow(rand(), 2.2) * 180 * DAY); // 最近ほど密
-      const wait = Math.floor(Math.pow(rand(), 2) * 60 * DAY) + 600;
-      if (rand() < .7 && s + wait < now) points.push({ m: m, s: s, o: s + wait });
-      else points.push({ m: m, s: s, o: null, d: s + wait });
-    }
-    return { now: now, oldest: now - 180 * DAY, points: points };
-  }
-
-  sizeCanvases();
-  if (location.hash === '#dummy' || /[?&]dummy=1/.test(location.search)){
-    cache[current] = dummyData();
-    scheduleRender(false);
-  } else {
-    show('all', false);
-  }
+  fetch('/api/mood-space')
+    .then(r => r.ok ? r.json() : { points: [] })
+    .then(d => { stars = (d && d.points) || []; layout(); })
+    .catch(() => {});   // 失敗しても暗闇のまま（この画面にエラーの文字は置かない）
 })();
 </script>
 </body>

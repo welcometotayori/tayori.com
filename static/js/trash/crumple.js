@@ -9,9 +9,9 @@
 // 屑籠ビューの紙玉も同じエンジンで描く(renderPaperBall)。id から決まる乱数なので
 // 同じ紙玉はいつ開いても同じ形。差し替える時は update(ratio) のインターフェースだけ保つこと。
 
-const PAPER  = "#F2F1ED"; // --paper
+const PAPER  = "#FAF8F3"; // --paper
 const PAPER2 = "#DEDDD9"; // --paper-sunk(封筒の地。縮んだ余白を埋める色)
-const INK    = "#161616"; // --ink
+const INK    = "#2A2522"; // --ink
 const LINE   = "#DACBBC"; // --rule
 
 const COLS = 12, ROWS = 14;
@@ -133,7 +133,7 @@ function renderWarp(tctx, src, W, H, seeds, creases, vertexPos, rr, dpr) {
                 + comp * 0.34 * rr;
       shade = Math.round(shade * 7) / 7; // 量子化:紙の面は連続トーンでは割れない
       tctx.fillStyle = shade > 0
-        ? `rgba(22,22,22,${Math.min(0.55, shade)})`
+        ? `rgba(42,37,34,${Math.min(0.55, shade)})`
         : `rgba(255,255,255,${Math.min(0.5, -shade * 0.9)})`;
       tctx.fillRect(-1, -1, sw + 2, sh + 2);
     }
@@ -152,7 +152,7 @@ function renderWarp(tctx, src, W, H, seeds, creases, vertexPos, rr, dpr) {
         tctx.strokeStyle = `rgba(255,255,255,${0.22 * rr})`;
         tctx.lineWidth = 0.9 * dpr;
         tctx.beginPath(); tctx.moveTo(pA[0] + dpr * 0.6, pA[1] + dpr * 0.6); tctx.lineTo(pB[0] + dpr * 0.6, pB[1] + dpr * 0.6); tctx.stroke();
-        tctx.strokeStyle = `rgba(22,22,22,${0.15 * rr})`;
+        tctx.strokeStyle = `rgba(42,37,34,${0.15 * rr})`;
         tctx.lineWidth = 0.7 * dpr;
         tctx.beginPath(); tctx.moveTo(pA[0], pA[1]); tctx.lineTo(pB[0], pB[1]); tctx.stroke();
       }
@@ -168,7 +168,7 @@ function renderWarp(tctx, src, W, H, seeds, creases, vertexPos, rr, dpr) {
       tctx.beginPath();
       pts.forEach((p, k) => { k ? tctx.lineTo(p[0] + dpr, p[1] + dpr) : tctx.moveTo(p[0] + dpr, p[1] + dpr); });
       tctx.stroke();
-      tctx.strokeStyle = `rgba(22,22,22,${0.32 * rr})`;
+      tctx.strokeStyle = `rgba(42,37,34,${0.32 * rr})`;
       tctx.lineWidth = 1 * dpr;
       tctx.beginPath();
       pts.forEach((p, k) => { k ? tctx.lineTo(p[0], p[1]) : tctx.moveTo(p[0], p[1]); });
@@ -183,8 +183,8 @@ function renderWarp(tctx, src, W, H, seeds, creases, vertexPos, rr, dpr) {
     tctx.globalCompositeOperation = "source-atop";
     const grad = tctx.createRadialGradient(cx - gR * 0.25, cy - gR * 0.3, gR * 0.1, cx, cy, gR);
     grad.addColorStop(0, `rgba(255,255,255,${0.18 * t})`);
-    grad.addColorStop(0.6, "rgba(22,22,22,0)");
-    grad.addColorStop(1, `rgba(22,22,22,${0.5 * t})`);
+    grad.addColorStop(0.6, "rgba(42,37,34,0)");
+    grad.addColorStop(1, `rgba(42,37,34,${0.5 * t})`);
     tctx.fillStyle = grad;
     tctx.fillRect(0, 0, W, H);
     tctx.globalCompositeOperation = "source-over";
@@ -201,7 +201,7 @@ function drawResidue(g, W, H, dpr, seeds, creases, vertexPos) {
     g.beginPath();
     pts.forEach((p, k) => { k ? g.lineTo(p[0] + dpr, p[1] + dpr) : g.moveTo(p[0] + dpr, p[1] + dpr); });
     g.stroke();
-    g.strokeStyle = "rgba(22,22,22,0.14)";
+    g.strokeStyle = "rgba(42,37,34,0.14)";
     g.lineWidth = 1 * dpr;
     g.beginPath();
     pts.forEach((p, k) => { k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); });
@@ -213,7 +213,7 @@ function drawResidue(g, W, H, dpr, seeds, creases, vertexPos) {
     for (let i = 0; i < COLS; i++) {
       const f = seeds.fine[j][i].f;
       if (Math.abs(f - 0.5) < 0.36) continue;
-      g.fillStyle = f > 0.5 ? "rgba(22,22,22,0.035)" : "rgba(255,255,255,0.06)";
+      g.fillStyle = f > 0.5 ? "rgba(42,37,34,0.035)" : "rgba(255,255,255,0.06)";
       g.fillRect(i * sw, j * sh, sw, sh);
     }
   }
@@ -282,7 +282,7 @@ export function createCrumple(hostEl, { text, color, vertical }) {
       ctx.fillRect(0, 0, W, H);
     }
     ctx.save();
-    ctx.shadowColor = `rgba(22,22,22,${0.18 + 0.22 * ratio})`;
+    ctx.shadowColor = `rgba(90,70,50,${0.18 + 0.22 * ratio})`;
     ctx.shadowBlur = (6 + 14 * ratio) * dpr;
     ctx.shadowOffsetY = 3 * dpr;
     ctx.drawImage(tmp, 0, 0);

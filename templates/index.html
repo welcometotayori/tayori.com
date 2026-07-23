@@ -32,13 +32,15 @@
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
-    /* ベース4色（確定・変更不可）。派生はすべて color-mix — 新しいhexを足さない */
-    --paper:#F2F1ED;   /* 紙 — 背景 */
-    --ink:#161616;     /* 墨 — 本文 */
+    /* ベース色（2026-07-24 明度反転）。派生はすべて color-mix — 新しいhexを足さない。
+       紙＝画面で一番明るいレイヤー。地（ページ背景）は紙より暗い暖色。 */
+    --paper:#FAF8F3;   /* 紙 — 手紙・カードの面（最明） */
+    --ground:#E8E2D8;  /* 地 — ページ背景（紙より暗く、暖かく） */
+    --ink:#2A2522;     /* 墨 — 本文（真っ黒を避けた墨色） */
     --seal:#710014;    /* 封蝋 — 主アクション、封の演出 */
     --kraft:#B38F6F;   /* 和紙の耳 — 罫、副次要素、境界（文字色には使わない） */
     /* 面 */
-    --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));
+    --paper-sunk:color-mix(in oklab,var(--paper) 93%,var(--kraft));  /* 紙の上の窪み（入力の井戸など） */
     --paper-raised:#FFFFFF;  /* 浮いたカード（唯一の例外） */
     /* 文字 */
     --ink-strong:var(--ink);
@@ -54,7 +56,8 @@
     --seal-onfill:var(--paper);
     /* フォーカス */
     --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper));
-    /* 気分7色（静→明→暖→重の温度順）。紙の上で multiply 前提の低彩度パステル */
+    /* 気分7色（静→明→暖→重の温度順）。ピッカーはHSL自由選択になったが（v3.14）、
+       地図の集計はこの7色への量子化のまま（app.py の _MOOD_SWATCH_HEX と対）。 */
     --mood-nagi:#C9D4D2;--mood-me:#C4CDB4;--mood-hi:#EBD9AE;--mood-on:#E8C4A8;
     --mood-koi:#DFAFAE;--mood-yuu:#C0B2C4;--mood-shizumi:#8C7F80;
     --mood-sealed:color-mix(in oklab,var(--kraft) 22%,var(--paper));
@@ -68,7 +71,7 @@
   /* 視覚非表示（見た目は変えずクローラー/スクリーンリーダーにだけ伝える） */
   .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   html{-webkit-text-size-adjust:100%}
-  body{background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;
+  body{background:var(--ground);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;
     background-image:radial-gradient(circle at 20% 10%,rgba(113,0,20,0.04),transparent 40%),radial-gradient(circle at 80% 80%,rgba(179,143,111,0.05),transparent 45%);overflow-x:hidden}
   body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.5;mix-blend-mode:multiply;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}
@@ -98,13 +101,13 @@
   .panel{display:none;animation:fade .5s ease both}
   .panel.on{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  .envelope{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:2px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 2px 10px -7px rgba(22,22,22,0.3);position:relative;overflow:hidden}
+  .envelope{background:var(--paper);border:1px solid var(--rule);border-radius:2px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 2px 10px -7px rgba(90,70,50,0.3);position:relative;overflow:hidden}
   .env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--rule);font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-mute)}
   /* 写真プレビュー（ボタンは voice-btn と同形にし、選んだ写真はここに表示） */
   .photo-preview{margin:0 18px;display:none;position:relative}
   .photo-preview.has{display:block}
   .photo-preview img{width:100%;height:auto;display:block;border-radius:2px;border:1.5px solid var(--rule)}
-  .photo-remove{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(22,22,22,0.55);color:var(--paper);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .photo-remove{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(42,37,34,0.55);color:var(--paper);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
   .photo-btn input[type=file]{display:none}
   .photo-mark svg{width:19px;height:19px;display:block}
   .photo-btn.on{color:var(--seal)}
@@ -134,14 +137,14 @@
   @keyframes vcaretBlink{50%{opacity:0}}
   .vert-btn .vert-mark{font-size:16px;line-height:1;border:0;border-radius:0;padding:0;font-family:'Shippori Mincho',serif}
   .vert-btn.on{color:var(--ink)}
-  .vert-btn.on>span:first-child{background:rgba(22,22,22,0.05);border-color:var(--ink);color:var(--ink)}
+  .vert-btn.on>span:first-child{background:rgba(42,37,34,0.05);border-color:var(--ink);color:var(--ink)}
   /* ---- クシャと「ほどけるまで」 ----
      気に食わない手紙を握りつぶして投げ捨てる。捨てた言葉は7日のあいだ机の隅で揺らぎ、
-     やがてほどけて色だけが編み物に還る。入口は小さく、数は主張しない。
+     やがてほどけて消える（色片は温存されるが、編み物ビューは2026-07-24に削除）。入口は小さく、数は主張しない。
      カメラ映像は画面にも出さず、手影だけが便箋に落ちる。 */
   .poem{position:relative;transition:box-shadow .3s var(--ease-out),transform .22s var(--ease-out)}  /* クシャ用canvasの座標基準 */
   /* 手をかざすと便箋が小さく応える（掴めることの合図） */
-  .poem.hand-near{box-shadow:0 0 0 1px var(--rule),0 10px 26px -16px rgba(22,22,22,0.55);border-radius:2px}
+  .poem.hand-near{box-shadow:0 0 0 1px var(--rule),0 10px 26px -16px rgba(90,70,50,0.55);border-radius:2px}
   /* 握った瞬間、掴み成立を待たず紙が身構える（反応を待たせない） */
   .poem.hand-arming{transform:scale(0.988)}
   /* タッチ経路の添え書き：紙の内側の上辺に小さく、指の使い方だけを囁く */
@@ -155,14 +158,14 @@
   .poem.hand-taken textarea,.poem.hand-taken .poem-count,.poem.hand-taken .vcaret{opacity:0;transition:opacity .2s}
   .hand-btn .hand-mark svg{width:18px;height:18px;display:block}
   .hand-btn.on{color:var(--ink)}
-  .hand-btn.on>span:first-child{background:rgba(22,22,22,0.05);border-color:var(--ink);color:var(--ink)}
+  .hand-btn.on>span:first-child{background:rgba(42,37,34,0.05);border-color:var(--ink);color:var(--ink)}
   .kuzu-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px}
   .kuzu-bin{background:none;border:0;cursor:pointer;padding:8px;color:var(--ink-mute);opacity:0.5;transition:opacity .25s}
   .kuzu-bin:hover{opacity:0.9}
   .kuzu-bin svg{width:24px;height:28px;display:block}
   .kuzu-nudge{animation:kuzuNudge .5s var(--ease-soft)}
   @keyframes kuzuNudge{30%{transform:translateY(2px) rotate(-4deg)}65%{transform:translateY(0) rotate(2deg)}}
-  .trash-ov,.trash-open-ov{position:fixed;inset:0;background:rgba(22,22,22,0.55);z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+  .trash-ov,.trash-open-ov{position:fixed;inset:0;background:rgba(42,37,34,0.55);z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
   .trash-ov.on,.trash-open-ov.on{display:flex}
   .trash-room{position:relative;width:min(480px,94vw);height:min(560px,80dvh);background:var(--paper);border:1px solid var(--rule);border-radius:3px;
     box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden}
@@ -177,7 +180,7 @@
   .kuzu-basket.front{z-index:30}
   /* 底の暗がり：山の下ほど光が届かない。面ではなく空気の陰（玉の上に薄く積もる） */
   .kuzu-ao{position:absolute;inset:0;z-index:28;pointer-events:none;
-    background:linear-gradient(180deg,transparent 40%,rgba(22,22,22,0.08) 60%,rgba(22,22,22,0.24) 82%,transparent 88%);
+    background:linear-gradient(180deg,transparent 40%,rgba(42,37,34,0.08) 60%,rgba(42,37,34,0.24) 82%,transparent 88%);
     clip-path:polygon(17.5% 24.5%,82.5% 24.5%,73.3% 86.6%,26.7% 86.6%)}
   /* ほどけ：経過した日のぶんだけ、紙玉の縁から糸が出ていく（数字は出さない・見た目だけで伝える） */
   .ball-fray{position:absolute;inset:-20%;width:140%;height:140%;pointer-events:none;overflow:visible}
@@ -190,7 +193,7 @@
   .trash-note{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-mute);text-align:center;padding:26px 20px 0;
     word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .trash-scatter{position:relative;flex:1;margin:6px 10px}
-  .paper-ball{position:absolute;background:none;border:0;padding:0;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(22,22,22,0.28))}
+  .paper-ball{position:absolute;background:none;border:0;padding:0;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(90,70,50,0.28))}
   .paper-ball svg,.paper-ball canvas{width:100%;height:100%;display:block;transition:transform .25s var(--ease-out)}
   .paper-ball:hover svg,.paper-ball:focus-visible svg,
   .paper-ball:hover canvas,.paper-ball:focus-visible canvas{transform:scale(1.1)}
@@ -199,7 +202,7 @@
   .trash-close:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
   .trash-open-card{width:min(420px,92vw);background:var(--paper);border:1px solid var(--rule);border-radius:3px;
     box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);padding:22px;display:flex;flex-direction:column;gap:14px}
-  .trash-open-paper{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:2px;min-height:190px;max-height:60dvh;overflow:auto;
+  .trash-open-paper{background:var(--paper);border:1px solid var(--rule);border-radius:2px;min-height:190px;max-height:60dvh;overflow:auto;
     padding:24px 22px;font-family:'Shippori Mincho',serif;font-size:16px;line-height:2;color:var(--ink);
     white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;position:relative}
   .trash-open-paper::after{content:"";position:absolute;left:13px;bottom:13px;width:9px;height:9px;border-radius:50%;
@@ -215,7 +218,7 @@
   .trash-open-date{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-align:center;word-break:keep-all}
   .trash-open-card .trash-close{margin:0 auto}
   /* 手で捨てる：初回だけの使い方の栞 */
-  .hand-guide-ov{position:fixed;inset:0;background:rgba(22,22,22,0.55);z-index:82;display:none;align-items:center;justify-content:center;padding:20px}
+  .hand-guide-ov{position:fixed;inset:0;background:rgba(42,37,34,0.55);z-index:82;display:none;align-items:center;justify-content:center;padding:20px}
   .hand-guide-ov.on{display:flex}
   .hand-guide{width:min(420px,92vw);background:var(--paper);border:1px solid var(--rule);border-radius:3px;
     box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);padding:26px 26px 22px;display:flex;flex-direction:column;gap:18px}
@@ -283,7 +286,7 @@
   .wx-banner b{color:var(--seal);font-weight:500}
   /* 天気オフ時：状態テキスト＋押しやすい「位置情報をオンに」ボタン */
   .wx-off{display:flex;flex-direction:column;align-items:center;gap:11px;opacity:1;
-    background:var(--paper-sunk);border:1px solid var(--rule);border-radius:10px;padding:15px 16px;margin-bottom:18px}
+    background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:15px 16px;margin-bottom:18px}
   .wx-enable-btn{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);
     border:0;border-radius:20px;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:13px;
     letter-spacing:0.04em;padding:8px 16px;transition:background .2s,transform .1s;-webkit-tap-highlight-color:transparent}
@@ -302,53 +305,35 @@
   .qmode-link{text-align:center;font-family:'Shippori Mincho',serif;font-size:13.5px;font-weight:500;color:var(--ink-mute);margin-top:12px;letter-spacing:0.06em}
   .qmode-link a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--ink-mute);padding-bottom:1px;transition:color .2s,border-color .2s}
   .qmode-link a:hover{color:var(--seal);border-color:var(--seal)}
-  .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(242,241,237,0.92);backdrop-filter:blur(2px)}
+  .sealing{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(250,248,243,0.92);backdrop-filter:blur(2px)}
   .sealing.on{display:flex}
   .seal-mark{width:120px;height:120px;border-radius:50%;background:var(--seal);display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:'Shippori Mincho',serif;font-size:38px;box-shadow:0 12px 40px -10px rgba(113,0,20,0.6);animation:press 1.6s ease forwards;transform:scale(0)}
   @keyframes press{0%{transform:scale(0) rotate(-30deg);opacity:0}35%{transform:scale(1.15) rotate(-8deg);opacity:1}50%{transform:scale(0.96) rotate(-8deg)}70%{transform:scale(1) rotate(-8deg)}100%{transform:scale(1) rotate(-8deg);opacity:0}}
   .seal-cap{position:absolute;bottom:34%;font-family:'Shippori Mincho',serif;font-size:15px;letter-spacing:0.2em;color:var(--ink-mute);opacity:0;animation:capin 1.6s ease forwards}
-  /* 問い直しの栞 */
-  .inquiry-ov{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(22,22,22,0.34);backdrop-filter:blur(3px)}
-  .inquiry-ov.on{display:flex;animation:iqFade .3s ease}
+  /* 栞ふうの確認ダイアログの共通部品（もう戻らない／一気に捨てる が使う）。
+     かつての「問い直しの栞」由来の名前だが、AI要素は2026-07-24に完全撤去済み。 */
   @keyframes iqFade{from{opacity:0}to{opacity:1}}
-  .inquiry-card{max-width:420px;width:100%;background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:34px 28px 28px;text-align:center;box-shadow:0 26px 60px -22px rgba(22,22,22,0.7);animation:iqRise .42s var(--ease-soft)}
   @keyframes iqRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  .inquiry-mark{width:40px;height:40px;margin:0 auto 18px;border-radius:50%;border:1px solid var(--seal);color:var(--seal);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:17px;opacity:.9}
-  /* 栞に映すのは自分の言葉そのもの：改行・余白を崩さず、長いときは静かにスクロール */
-  .inquiry-q{font-family:'Shippori Mincho',serif;font-size:16.5px;line-height:2.0;letter-spacing:0.03em;color:var(--ink);margin:0 0 26px;
-    white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;text-align:left;max-height:44vh;overflow-y:auto}
-  /* 縦書きの便箋なら、栞に映る言葉も縦書きのまま */
-  .inquiry-q.vertical{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-    font-feature-settings:"vert";line-break:strict;
-    max-height:none;height:min(44vh,320px);overflow-x:auto;overflow-y:hidden;
-    width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto 26px;
-    padding:var(--vert-pad) 0}
-  .inquiry-actions{display:flex;flex-direction:column;gap:12px}
   .inquiry-btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.08em;cursor:pointer;transition:opacity .2s,color .2s,border-color .2s;border-radius:26px;padding:12px 22px}
   .inquiry-btn.primary{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
   .inquiry-btn.primary:hover{opacity:.86}
   .inquiry-btn.ghost{background:transparent;color:var(--ink-mute);border:1px solid var(--rule)}
   .inquiry-btn.ghost:hover{color:var(--ink);border-color:var(--ink-mute)}
-  .inquiry-add{margin-top:16px;display:flex;flex-direction:column;gap:12px}
-  .inquiry-add textarea{width:100%;background:var(--paper-sunk);border:1px solid var(--rule);border-radius:4px;resize:none;min-height:74px;
-    font-family:'Shippori Mincho',serif;font-size:15px;line-height:30px;color:var(--ink);padding:12px 14px}
-  .inquiry-add textarea:focus{outline:none;border-color:var(--ink-mute)}
-  .inquiry-add.hide{display:none}
   @keyframes capin{0%,40%{opacity:0}60%{opacity:1}100%{opacity:0}}
   .mail-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-mute);text-align:center;margin-bottom:22px;letter-spacing:0.06em;line-height:1.9}
-  .letter{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;margin-bottom:20px;overflow:hidden;position:relative;box-shadow:0 8px 24px -18px rgba(22,22,22,0.5)}
+  .letter{background:var(--paper);border:1px solid var(--rule);border-radius:3px;margin-bottom:20px;overflow:hidden;position:relative;box-shadow:0 8px 24px -18px rgba(90,70,50,0.5)}
   /* 天気の再会：封じた日と今日の天気が重なった時だけ、封筒にごくかすかな気配が差す。通知はしない */
   .letter.wx-reunion::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:3px;z-index:2}
-  .letter.wx-reunion.wx-clear{box-shadow:0 8px 24px -18px rgba(22,22,22,0.5),0 0 26px -3px rgba(222,182,120,0.42)}
+  .letter.wx-reunion.wx-clear{box-shadow:0 8px 24px -18px rgba(90,70,50,0.5),0 0 26px -3px rgba(222,182,120,0.42)}
   .letter.wx-reunion.wx-clear::after{background:radial-gradient(ellipse 120% 90% at 50% 0,rgba(240,206,140,0.16),transparent 62%)}
   .letter.wx-reunion.wx-rain::after{background:linear-gradient(102deg,transparent 20%,rgba(118,138,158,0.12) 45%,transparent 58%),linear-gradient(78deg,transparent 55%,rgba(118,138,158,0.09) 78%,transparent 90%);filter:blur(.6px);mix-blend-mode:multiply}
   .letter.wx-reunion.wx-snow::after{background:radial-gradient(ellipse 130% 100% at 50% 10%,rgba(255,255,255,0.28),transparent 66%);mix-blend-mode:screen}
   .letter.wx-reunion.wx-cloud::after{background:linear-gradient(180deg,rgba(150,156,164,0.09),transparent 55%);mix-blend-mode:multiply}
   .letter.wx-reunion.wx-fog::after{background:rgba(210,206,198,0.14);backdrop-filter:blur(.4px)}
   .letter-highlight{animation:letterGlow 2.6s ease}
-  @keyframes letterGlow{0%{box-shadow:0 0 0 0 rgba(113,0,20,0)}25%{box-shadow:0 0 0 4px rgba(113,0,20,0.35),0 8px 30px -10px rgba(113,0,20,0.5)}100%{box-shadow:0 8px 24px -18px rgba(22,22,22,0.5)}}
+  @keyframes letterGlow{0%{box-shadow:0 0 0 0 rgba(113,0,20,0)}25%{box-shadow:0 0 0 4px rgba(113,0,20,0.35),0 8px 30px -10px rgba(113,0,20,0.5)}100%{box-shadow:0 8px 24px -18px rgba(90,70,50,0.5)}}
   .transit-head{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin:30px 0 18px;opacity:0.7}
-  .sealed-transit{border-style:dashed;background:repeating-linear-gradient(45deg,var(--paper-sunk),var(--paper-sunk) 13px,rgba(218,204,189,0.16) 13px,rgba(218,204,189,0.16) 14px)}
+  .sealed-transit{border-style:dashed;background:repeating-linear-gradient(45deg,var(--paper),var(--paper) 13px,rgba(218,204,189,0.16) 13px,rgba(218,204,189,0.16) 14px)}
   .transit-inner{padding:28px 22px;text-align:center;user-select:none}
   .transit-inner .wax.dim{width:48px;height:48px;border-radius:50%;background:var(--rule);color:var(--paper);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:20px;box-shadow:none}
   /* 沈黙のフィードバック：まだ開かない封をタップすると、封蝋がわずかに沈んで戻るだけ（言葉は返さない） */
@@ -390,9 +375,9 @@
   .shelf-item.sel .sel-ring{border-color:var(--seal);opacity:1}
   .shelf-item.sel .sel-ring::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--seal)}
   .shelf-item.sel{border-style:solid;border-color:var(--seal)}
-  .bulk-ov{position:fixed;inset:0;z-index:82;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(22,22,22,0.34);backdrop-filter:blur(3px)}
+  .bulk-ov{position:fixed;inset:0;z-index:82;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(42,37,34,0.34);backdrop-filter:blur(3px)}
   .bulk-ov.on{display:flex;animation:iqFade .3s ease}
-  .bulk-card{max-width:400px;width:100%;background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:30px 26px 24px;text-align:center;box-shadow:0 26px 60px -22px rgba(22,22,22,0.7);animation:iqRise .42s var(--ease-soft)}
+  .bulk-card{max-width:400px;width:100%;background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:30px 26px 24px;text-align:center;box-shadow:0 26px 60px -22px rgba(90,70,50,0.7);animation:iqRise .42s var(--ease-soft)}
   .bulk-mark{width:34px;height:34px;margin:0 auto 14px;border-radius:50%;border:1px solid var(--ink-mute);color:var(--ink-mute);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:15px}
   .bulk-msg{font-family:'Shippori Mincho',serif;font-size:13.5px;line-height:2.1;letter-spacing:0.05em;color:var(--ink);margin:0 0 20px;word-break:keep-all;overflow-wrap:anywhere}
   .bulk-msg .bulk-sub{font-size:11.5px;color:var(--ink-mute)}
@@ -464,7 +449,7 @@
   @media (prefers-reduced-motion:reduce){
     .panel{animation:none}                            /* タブ切替のせり上がりを外す */
     .concept-inner{animation:none}                    /* 導入のせり上がりを外す */
-    .inquiry-card{animation:iqFade .3s ease}          /* せり上がり→フェードのみ */
+    .bulk-card{animation:iqFade .3s ease}             /* せり上がり→フェードのみ */
     .letter-highlight{animation:none}                 /* 到着グローの明滅を静的に */
     .seal-mark{transform:none;animation:sealFade 1.4s ease forwards}  /* 拡大回転→静かなフェード */
     .ld-dot{animation:none;opacity:.22}               /* 流れる装飾点を停止（静的な点に） */
@@ -476,7 +461,7 @@
   .sc-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.06em;color:var(--ink-mute);
     margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}
   .sc-meta .sc-chip{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;
-    border:1px solid rgba(22,22,22,.25)}
+    border:1px solid rgba(42,37,34,.25)}
   .sc-meta .sep{opacity:.45}
   .shelf-item .sc-meta{justify-content:flex-start;margin-top:4px}
   .thread{border-top:1px dashed var(--rule);margin-top:20px;padding-top:18px}
@@ -542,9 +527,9 @@
   /* 封をした場所（地図）への、静かな導線。空気の一文（wx-banner）のすぐ下に置く */
   .map-link-row{text-align:center;margin:8px 0 26px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
   .map-link{display:inline-flex;align-items:center;gap:8px;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;
-            color:var(--ink);text-decoration:none;background:var(--paper-sunk);border:1px solid var(--rule);border-radius:22px;
-            padding:9px 18px;box-shadow:0 6px 16px -10px rgba(22,22,22,0.5);transition:border-color .2s,box-shadow .2s,transform .2s}
-  .map-link:hover{border-color:var(--ink-mute);box-shadow:0 9px 22px -10px rgba(22,22,22,0.62);transform:translateY(-1px)}
+            color:var(--ink);text-decoration:none;background:var(--paper);border:1px solid var(--rule);border-radius:22px;
+            padding:9px 18px;box-shadow:0 6px 16px -10px rgba(90,70,50,0.5);transition:border-color .2s,box-shadow .2s,transform .2s}
+  .map-link:hover{border-color:var(--ink-mute);box-shadow:0 9px 22px -10px rgba(90,70,50,0.62);transform:translateY(-1px)}
   .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;text-transform:uppercase}
   .tl-filter{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 26px}
   .tl{position:relative;margin-left:14px;padding-left:26px;border-left:1.5px solid var(--rule)}
@@ -553,7 +538,7 @@
   .tl-node.is-now::before{background:var(--seal)}
   .tl-node.is-future::before{border-color:var(--rule-firm);border-style:dashed}
   .tl-when{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.14em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:4px}
-  .tl-card{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;padding:12px 15px;cursor:pointer;transition:border-color .2s}
+  .tl-card{background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:12px 15px;cursor:pointer;transition:border-color .2s}
   .tl-card:hover{border-color:var(--seal)}
   .tl-text{font-family:'Shippori Mincho',serif;font-size:14px;line-height:1.9;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .tl-meta{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.1em;color:var(--ink-mute);margin-top:6px;text-transform:uppercase}
@@ -581,24 +566,26 @@
   .ld-dot{position:absolute;bottom:-12px;width:9px;height:9px;border-radius:50%;opacity:0;animation:dotDrift linear infinite}
   @keyframes dotDrift{0%{transform:translateY(0);opacity:0}18%{opacity:0.32}82%{opacity:0.32}100%{transform:translateY(-220px);opacity:0}}
 
-  /* ---- 気分の色：手染めのスウォッチから「今の気分に近い一枚」を選ぶ ----
-       連続グラデ（色相バー＋トーンパッド）を廃し、和紙に落とした低彩度の9色を並べる。
-       沈んだ → あたたかい の温度軸。選ぶ＝行為として色を置く。 */
-  .mood-swatches{display:flex;flex-wrap:wrap;gap:7px;flex:1;min-width:150px}
-  .mood-sw{-webkit-appearance:none;appearance:none;border:0;background:transparent;padding:5px;cursor:pointer;
-    display:inline-flex;align-items:center;justify-content:center;border-radius:50%;transition:transform .2s var(--ease-out)}
-  /* 色玉は正円でなくわずかに歪ませ、にじみ影で「絵の具の色見本」に寄せる */
-  .mood-sw i{display:block;width:30px;height:30px;border:1px solid rgba(22,22,22,0.22);
-    box-shadow:0 3px 8px -4px rgba(22,22,22,0.5);border-radius:48% 52% 50% 50%/52% 48% 52% 48%}
-  .mood-sw:hover{transform:translateY(-2px)}
-  .mood-sw:focus-visible{outline:2px solid var(--focus-ring);outline-offset:1px}
-  /* 選択は拡大でなく「沈む」：紙に押し込まれたように少し縮み、朱の細環で囲う */
-  .mood-sw.on{transform:scale(0.9)}
-  .mood-sw.on i{box-shadow:0 1px 3px -1px rgba(22,22,22,0.5),0 0 0 2px var(--paper),0 0 0 3px var(--seal)}
-  .mood-swatches.compact{gap:6px}
-  .mood-swatches.compact .mood-sw{padding:4px}
-  .mood-swatches.compact .mood-sw i{width:22px;height:22px}
-  @media (prefers-reduced-motion:reduce){.mood-sw{transition:none}.mood-sw:hover{transform:none}}
+  /* ---- 気分の色：HSLカラーピッカー（2026-07-24 / v3.14）----
+       7色スウォッチを廃し、色相バー＋彩度×明度フィールドで自由に選ぶ。
+       保存形式は 'hsl(H, S%, L%)'（CSSにもサーバにもこのまま渡る）。 */
+  .mood-picker{flex:1;min-width:200px;display:flex;flex-direction:column;gap:12px}
+  .mp-hue{position:relative;height:28px;border-radius:14px;cursor:pointer;touch-action:none;
+    background:linear-gradient(to right,hsl(0,100%,50%),hsl(60,100%,50%),hsl(120,100%,50%),hsl(180,100%,50%),hsl(240,100%,50%),hsl(300,100%,50%),hsl(360,100%,50%))}
+  /* 彩度×明度：横=彩度0→100%、縦=明度100→0%。白→透明→黒 を H の彩度グラデの上に重ねる */
+  .mp-sv{position:relative;height:200px;border-radius:6px;cursor:pointer;touch-action:none;
+    background:linear-gradient(to bottom,#fff,rgba(255,255,255,0) 50%,rgba(0,0,0,0) 50%,#000),
+               linear-gradient(to right,hsl(var(--mp-h,0),0%,50%),hsl(var(--mp-h,0),100%,50%))}
+  .mp-thumb{position:absolute;width:18px;height:18px;border-radius:50%;border:2px solid #fff;
+    box-shadow:0 1px 4px rgba(90,70,50,0.4),0 0 0 1px rgba(42,37,34,0.28);
+    transform:translate(-50%,-50%);pointer-events:none}
+  .mp-hue:focus-visible,.mp-sv:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+  .mp-preview{width:40px;height:40px;border-radius:50%;border:1px dashed var(--rule-firm);align-self:flex-start}
+  .mp-preview.has{border:1px solid rgba(42,37,34,0.22);box-shadow:0 3px 8px -4px rgba(90,70,50,0.5)}
+  .mood-picker.compact{min-width:0;gap:9px}
+  .mood-picker.compact .mp-sv{height:130px}
+  .mood-picker.compact .mp-hue{height:22px;border-radius:11px}
+  .mood-picker.compact .mp-preview{width:30px;height:30px}
 
   /* ── 読み終えたたよりの棚（library）──
      開封済みだけが背表紙になる（未開封は棚に入らない＝本文秘匿はそのまま）。
@@ -606,20 +593,20 @@
   .lib-shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 22px}
   @media (max-width:520px){.lib-shelf{grid-template-columns:repeat(2,1fr)}}
   .lib-card{display:flex;flex-direction:column;justify-content:space-between;gap:12px;aspect-ratio:3/4;
-    padding:13px 12px 11px;background:var(--paper-sunk);color:var(--ink);
-    border:1px solid rgba(22,22,22,0.28);border-radius:2px;
+    padding:13px 12px 11px;background:var(--paper);color:var(--ink);
+    border:1px solid rgba(42,37,34,0.28);border-radius:2px;
     font-family:'Shippori Mincho',serif;text-align:left;cursor:pointer;
     transition:transform .2s var(--ease-out),box-shadow .2s}
   .lib-card:hover{transform:translateY(-2px)}
   .lib-card:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-  .lib-card.deep{color:var(--paper);border-color:rgba(22,22,22,0.4)}   /* 濃い背表紙は文字を紙色に */
+  .lib-card.deep{color:var(--paper);border-color:rgba(42,37,34,0.4)}   /* 濃い背表紙は文字を紙色に */
   .lib-card.on{box-shadow:0 0 0 2px var(--paper),0 0 0 3px var(--seal)}/* 選択の印＝色見本と同じ流儀 */
   .lib-quote{font-size:13px;line-height:1.85;letter-spacing:0.04em;overflow:hidden;
     display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
   .lib-year{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.2em;opacity:0.85}
   @media (prefers-reduced-motion:reduce){.lib-card{transition:none}.lib-card:hover{transform:none}}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-mute);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
-  .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(22,22,22,0.25);box-shadow:0 2px 6px -3px rgba(22,22,22,0.5);vertical-align:middle}
+  .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(42,37,34,0.25);box-shadow:0 2px 6px -3px rgba(90,70,50,0.5);vertical-align:middle}
   /* 選び直せるチップ：色は確定していても、タップすれば色相バーに戻せる。
      ホバーできないモバイルでは title が効かないので、鉛筆バッジと小さな注記で「直せる」ことを見せる */
   .recolor-chip{-webkit-appearance:none;appearance:none;padding:0;cursor:pointer;position:relative}
@@ -707,7 +694,7 @@
   .onb-prog b{color:var(--seal);font-size:15px;margin:0 2px}
   .onb-remain{display:block;margin-top:5px;font-size:12px;color:var(--seal);opacity:0.9;letter-spacing:0.06em}
   .onb-q{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;padding:16px 16px 14px;margin-bottom:14px;
-    box-shadow:0 6px 20px -16px rgba(22,22,22,0.5)}
+    box-shadow:0 6px 20px -16px rgba(90,70,50,0.5)}
   .onb-q .num{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--seal)}
   .onb-q .qt{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);letter-spacing:0.04em;margin:6px 0 10px;line-height:1.8}
   .onb-q textarea{width:100%;background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;resize:none;
@@ -719,7 +706,7 @@
   /* Primary：塗りつぶし・主役。ただし「閉じる」を巻き込む誤タップを防ぐため大きすぎない。 */
   .onb-save{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:16px;letter-spacing:0.2em;padding:15px;border-radius:3px;transition:background .25s,transform .25s,opacity .25s;
-    box-shadow:0 8px 22px -14px rgba(22,22,22,0.5)}
+    box-shadow:0 8px 22px -14px rgba(90,70,50,0.5)}
   .onb-save:hover{background:var(--seal);transform:translateY(-1px)}
   .onb-save:disabled{opacity:0.4;cursor:default;background:var(--rule);transform:none}
   .onb-save:active{transform:translateY(0)}
@@ -770,8 +757,8 @@
     font-family:'Shippori Mincho',serif;font-size:14px;background:var(--paper);
     transform:rotate(-6deg);box-shadow:0 0 0 4px var(--paper)}
   .ch-when{font-family:'Courier Prime',monospace;font-size:10.5px;letter-spacing:0.12em;color:var(--ink-mute);margin-bottom:5px}
-  .ch-card{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;padding:14px 15px 12px;
-    box-shadow:0 6px 20px -16px rgba(22,22,22,0.5)}
+  .ch-card{background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:14px 15px 12px;
+    box-shadow:0 6px 20px -16px rgba(90,70,50,0.5)}
   .ch-card h4{font-family:'Shippori Mincho',serif;font-size:15.5px;letter-spacing:0.1em;color:var(--ink);margin:0 0 8px;font-weight:600}
   .ch-body{font-family:'Shippori Mincho',serif;font-size:13px;line-height:2;letter-spacing:0.03em;color:var(--ink);
     margin-bottom:10px;text-align:justify;word-break:break-word}
@@ -1032,7 +1019,7 @@
         <div class="when-readout" id="whenReadout"></div>
         <div class="field-row">
           <label>いまの色：</label>
-          <div class="mood-swatches" id="sealSwatches"></div>
+          <div class="mood-picker" id="sealSwatches"></div>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。<wbr>開封の日に、<wbr>もう一度選んで<wbr>見比べます</div>
         <button class="send" id="sendBtn">封 を す る</button>
@@ -1096,24 +1083,8 @@
   <div class="seal-cap" id="sealCap">封をしました</div>
 </div>
 
-<!-- 問い直しの栞：封じる直前に一度だけ。選択肢は二つだけ。 -->
-<div class="inquiry-ov" id="inquiryOv">
-  <div class="inquiry-card">
-    <div class="inquiry-mark">栞</div>
-    <p class="inquiry-q" id="inquiryQ"></p>
-    <div class="inquiry-actions">
-      <button class="inquiry-btn primary" id="inquirySealBtn">このまま封じる</button>
-      <button class="inquiry-btn ghost" id="inquiryAddBtn">一言、書き足して封じる</button>
-    </div>
-    <div class="inquiry-add hide" id="inquiryAdd">
-      <textarea id="inquiryAddText" maxlength="80" placeholder="ひとこと、書き足す。"></textarea>
-      <button class="inquiry-btn primary" id="inquiryAddSeal">書き足して封じる</button>
-    </div>
-  </div>
-</div>
-
 <!-- 屑籠：捨てた言葉は籠の中に堆積する（2026-07-22夕FB「ゴミ箱はゴミ箱のまま・堆積が見えるのが良い」で復活）。
-     7日の溶解は仕様のまま——籠の中で日ごとに縁がほどけ褪せて、やがて色だけが編み物に還る。
+     7日の溶解は仕様のまま——籠の中で日ごとに縁がほどけ褪せて、やがて消える。
      数字のカウントダウンは出さない（ほどけ具合だけで無言に伝える）。 -->
 <div class="trash-ov" id="trashOv" role="dialog" aria-modal="true" aria-label="屑籠">
   <div class="trash-room">
@@ -1125,22 +1096,22 @@
       <svg class="kuzu-basket back" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <defs>
           <linearGradient id="kbDepth" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="rgba(22,22,22,0.05)"/>
-            <stop offset="0.72" stop-color="rgba(22,22,22,0.26)"/>
-            <stop offset="1" stop-color="rgba(22,22,22,0.40)"/>
+            <stop offset="0" stop-color="rgba(42,37,34,0.05)"/>
+            <stop offset="0.72" stop-color="rgba(42,37,34,0.26)"/>
+            <stop offset="1" stop-color="rgba(42,37,34,0.40)"/>
           </linearGradient>
         </defs>
         <path d="M17 24 L26.5 87 H73.5 L83 24" fill="rgba(224,223,220,0.85)" stroke="#DACBBC" stroke-width="0.7"/>
         <path d="M17 24 L26.5 87 H73.5 L83 24" fill="url(#kbDepth)"/>
-        <path d="M19.4 40 H80.6 M21.8 56 H78.2 M24 71 H76" stroke="rgba(22,22,22,0.16)" stroke-width="0.5" fill="none"/>
-        <path d="M29 25 L34 86 M41.5 25 L43.5 86 M58.5 25 L56.5 86 M71 25 L66 86" stroke="rgba(22,22,22,0.11)" stroke-width="0.5" fill="none"/>
+        <path d="M19.4 40 H80.6 M21.8 56 H78.2 M24 71 H76" stroke="rgba(42,37,34,0.16)" stroke-width="0.5" fill="none"/>
+        <path d="M29 25 L34 86 M41.5 25 L43.5 86 M58.5 25 L56.5 86 M71 25 L66 86" stroke="rgba(42,37,34,0.11)" stroke-width="0.5" fill="none"/>
       </svg>
       <div class="kuzu-ao" aria-hidden="true"></div>
       <svg class="kuzu-basket front" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <!-- 手前の壁：下の帯だけ立ち上げ、いちばん下の玉の裾を呑む（「中にある」ことの証拠） -->
         <path d="M25.7 72.5 Q50 77 74.3 72.5 L73.5 87 H26.5 Z" fill="#DEDDD9" fill-opacity="0.92" stroke="rgba(138,122,102,0.5)" stroke-width="0.6"/>
-        <path d="M26.1 78 Q50 82 73.9 78 M26.4 83 Q50 86.5 73.6 83" stroke="rgba(22,22,22,0.14)" stroke-width="0.5" fill="none"/>
-        <path d="M31 73.6 L32.5 87 M40.5 74.6 L41.2 87 M50 75 L50 87 M59.5 74.6 L58.8 87 M69 73.6 L67.5 87" stroke="rgba(22,22,22,0.10)" stroke-width="0.5" fill="none"/>
+        <path d="M26.1 78 Q50 82 73.9 78 M26.4 83 Q50 86.5 73.6 83" stroke="rgba(42,37,34,0.14)" stroke-width="0.5" fill="none"/>
+        <path d="M31 73.6 L32.5 87 M40.5 74.6 L41.2 87 M50 75 L50 87 M59.5 74.6 L58.8 87 M69 73.6 L67.5 87" stroke="rgba(42,37,34,0.10)" stroke-width="0.5" fill="none"/>
         <path d="M26.5 87 H73.5" stroke="rgba(138,122,102,0.5)" stroke-width="0.9" fill="none"/>
         <ellipse cx="50" cy="24" rx="33" ry="4.4" fill="none" stroke="#8A7A66" stroke-width="0.9"/>
       </svg>
@@ -1155,7 +1126,7 @@
     <!-- ひろげて書きつづける：本文は便箋へ戻るが、皺の跡は残る。紙玉はここに残りつづける -->
     <button class="trash-close primaryish" id="trashResume">ひろげて、書きつづける</button>
     <button class="trash-close" id="trashOpenClose">そっと、丸めなおす</button>
-    <!-- もう、戻らない：7日を待たず、いま編み物へ還す（確認を必ず挟む・不可逆） -->
+    <!-- もう、戻らない：7日を待たず、いまほどいて消す（確認を必ず挟む・不可逆） -->
     <button class="trash-close dissolve" id="trashDissolve">もう、戻らない</button>
   </div>
 </div>
@@ -1164,7 +1135,7 @@
 <div class="bulk-ov" id="dissolveOv" role="dialog" aria-modal="true" aria-label="もう、戻らない">
   <div class="bulk-card">
     <div class="bulk-mark">還</div>
-    <p class="bulk-msg">この言葉は、<wbr>いま編み物に還ります。<br>文字と筆跡はほどけて、<wbr>色だけが残ります。<br>もう、<wbr>読み返すことは<wbr>できません。</p>
+    <p class="bulk-msg">この言葉は、<wbr>いまほどけて<wbr>消えます。<br>文字も筆跡も、<wbr>残りません。<br>もう、<wbr>読み返すことは<wbr>できません。</p>
     <div class="bulk-actions">
       <button class="inquiry-btn primary" id="dissolveGo">還す</button>
       <button class="inquiry-btn ghost" id="dissolveBack">まだ、置いておく</button>
@@ -1542,44 +1513,83 @@
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
 
-  // ---- 気分の色：7色のスウォッチ ----
-  // 紙(--paper)の上で multiply 前提の低彩度パステル7色から一枚を選ぶ。
-  // 並びは色相環ではなく「静→明→暖→重」の温度順（app.py の _MOOD_SWATCH_HEX と対）。
-  // 数値も色名も画面には出さない（色名は title/aria-label にだけ持たせる）。
-  const MOOD_SWATCHES=[
-    ['#C9D4D2','凪'],['#C4CDB4','芽'],['#EBD9AE','陽'],['#E8C4A8','温'],
-    ['#DFAFAE','恋'],['#C0B2C4','憂'],['#8C7F80','沈']];
-  // container にスウォッチを敷き、選ぶと cb(hex) を呼ぶ。selected があればその一枚に印を付ける。
-  function wireSwatches(container,cb,selected){
+  // ---- 気分の色：HSLカラーピッカー（v3.14）----
+  // 色相バー(0-360)＋彩度×明度フィールドで選ぶ。保存形式は 'hsl(H, S%, L%)'。
+  // 数値は画面に出さない（色は色のまま置く）。
+  // 'hsl(h, s%, l%)' か '#rrggbb'（旧データ）→ {h,s,l}。読めない値は null
+  function parseHslColor(str){
+    if(!str)return null;
+    let m=/hsla?\(\s*(-?[\d.]+)(?:deg)?\s*[, ]\s*([\d.]+)%\s*[, ]\s*([\d.]+)%/.exec(str);
+    if(m)return{h:((+m[1])%360+360)%360,s:Math.min(100,+m[2]),l:Math.min(100,+m[3])};
+    m=/^#?([0-9a-f]{6})$/i.exec(String(str).trim());
+    if(!m)return null;
+    const n=parseInt(m[1],16),r=(n>>16)/255,g=((n>>8)&255)/255,b=(n&255)/255;
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;let h=0;
+    if(d){if(mx===r)h=((g-b)/d+(g<b?6:0));else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;}
+    const l=(mx+mn)/2,s=d?d/(1-Math.abs(2*l-1)):0;
+    return{h:h,s:s*100,l:l*100};
+  }
+  function hslStr(h,s,l){return'hsl('+Math.round(h)+', '+Math.round(s)+'%, '+Math.round(l)+'%)';}
+  // container にピッカーを敷き、選ぶ／動かすたびに cb('hsl(H, S%, L%)') を呼ぶ。
+  // selected（hsl/旧hex）があればその色から始める。無ければ選ぶまで確定しない。
+  function wireMoodPicker(container,cb,selected){
     if(!container)return;
-    container.textContent='';
-    const sel=selected?selected.toLowerCase():null;
-    MOOD_SWATCHES.forEach(([hex,name])=>{
-      const b=document.createElement('button');
-      b.type='button';b.className='mood-sw';
-      b.setAttribute('aria-label',name);b.title=name;
-      const on=sel===hex.toLowerCase();
-      b.setAttribute('aria-pressed',on?'true':'false');
-      if(on)b.classList.add('on');
-      const dot=document.createElement('i');dot.style.background=hex;b.appendChild(dot);
-      b.addEventListener('click',()=>{
-        container.querySelectorAll('.mood-sw').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});
-        b.classList.add('on');b.setAttribute('aria-pressed','true');
-        cb(hex);
+    container.textContent='';container.classList.add('mood-picker');
+    const init=parseHslColor(selected);
+    let H=init?init.h:0,S=init?init.s:70,L=init?init.l:62,chosen=!!init;
+    const hue=document.createElement('div');hue.className='mp-hue';hue.tabIndex=0;
+    hue.setAttribute('role','slider');hue.setAttribute('aria-label','色相');
+    const hueTh=document.createElement('span');hueTh.className='mp-thumb';hue.appendChild(hueTh);
+    const sv=document.createElement('div');sv.className='mp-sv';sv.tabIndex=0;
+    sv.setAttribute('role','slider');sv.setAttribute('aria-label','彩度と明度');
+    const svTh=document.createElement('span');svTh.className='mp-thumb';sv.appendChild(svTh);
+    const prev=document.createElement('span');prev.className='mp-preview';prev.setAttribute('aria-hidden','true');
+    container.appendChild(hue);container.appendChild(sv);container.appendChild(prev);
+    function paint(){
+      container.style.setProperty('--mp-h',H);
+      hue.setAttribute('aria-valuenow',Math.round(H));
+      hueTh.style.left=(H/360*100)+'%';hueTh.style.top='50%';
+      hueTh.style.background=hslStr(H,100,50);
+      svTh.style.left=S+'%';svTh.style.top=(100-L)+'%';
+      svTh.style.background=chosen?hslStr(H,S,L):'transparent';
+      if(chosen){prev.style.background=hslStr(H,S,L);prev.classList.add('has');}
+    }
+    function commit(){chosen=true;paint();cb(hslStr(H,S,L));}
+    function drag(el,onAt){
+      el.addEventListener('pointerdown',e=>{
+        e.preventDefault();
+        try{el.setPointerCapture(e.pointerId);}catch(err){} // 合成イベント等でpointerIdが無効でも選択は続ける
+        onAt(e);
+        const mv=ev=>onAt(ev);
+        el.addEventListener('pointermove',mv);
+        el.addEventListener('pointerup',()=>el.removeEventListener('pointermove',mv),{once:true});
       });
-      container.appendChild(b);
-    });
+    }
+    drag(hue,e=>{const r=hue.getBoundingClientRect();
+      H=Math.max(0,Math.min(359.9,(e.clientX-r.left)/r.width*360));commit();});
+    drag(sv,e=>{const r=sv.getBoundingClientRect();
+      S=Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100));
+      L=Math.max(0,Math.min(100,100-(e.clientY-r.top)/r.height*100));commit();});
+    hue.addEventListener('keydown',e=>{
+      if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();
+        H=(H+(e.key==='ArrowRight'?5:-5)+360)%360;commit();}});
+    sv.addEventListener('keydown',e=>{
+      const d={ArrowLeft:[-5,0],ArrowRight:[5,0],ArrowUp:[0,5],ArrowDown:[0,-5]}[e.key];
+      if(d){e.preventDefault();
+        S=Math.max(0,Math.min(100,S+d[0]));L=Math.max(0,Math.min(100,L+d[1]));commit();}});
+    paint();
   }
   let sealColor=null;   // 投函時に選んだ「いまの気分の色」（手紙に封入される）
-  wireSwatches(document.getElementById('sealSwatches'),c=>{sealColor=c;});
+  wireMoodPicker(document.getElementById('sealSwatches'),c=>{sealColor=c;});
 
   // 透かし問い（書き出せない時の問い）はUIごと撤去。便箋は白紙のまま静かに待つ。
 
   function clearCompose(){resetPhoto();poemEl.value='';voiceData=null;vStatus.textContent='';poemTrace=[];traceStart=0;updateCount();
-    sealColor=null;inquiryAsked=false;
+    sealColor=null;
     // 皺の跡（握って広げた紙の折り目）は、便箋が新しくなる時に一緒に消える
     document.querySelectorAll('.wrinkle-residue').forEach(x=>x.remove());
-    document.querySelectorAll('#sealSwatches .mood-sw').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});}
+    // ピッカーを敷き直して未選択状態に戻す
+    wireMoodPicker(document.getElementById('sealSwatches'),c=>{sealColor=c;});}
 
   // 捨てられない屑籠モジュールへの橋。カメラ・手影・クシャ・投擲は /static/js/trash/ に隔離し、
   // こちらからは「いま書かれているもの」を読む口とクリアの口だけを渡す（疎結合）。
@@ -1595,8 +1605,6 @@
   };
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
-
-  let inquiryAsked=false;   // 「問い直しの栞」は封じるボタンの押下ごとに一度だけ
 
   document.getElementById('sendBtn').addEventListener('click',async()=>{
     // 行頭の字下げや空行（意図した余白）は保つ。空かどうかの判定にだけ trim を使う。
@@ -1614,15 +1622,12 @@
       }
     }
 
-    // 「栞」（封じる前の読み返し・一言書き足しの確認画面）は挟まない（2026-07-20撤去）。
-    // 封をするボタンは、押したらそのまま封をする。showInquiry 一式は将来のopt-in用に温存。
-    // ※かつてはここでAIが「繰り返し／矛盾」への問いを返していたが、AI要素は撤去。
-    //   try{const r=await api('/api/compose/inquiry',{method:'POST',body:JSON.stringify({poem})});q=r&&r.question;}catch(e){}
-
+    // 封をするボタンは、押したらそのまま封をする。
+    // （AIが本文を読んで問いを返す「問い直しの栞」は2026-07-24に完全削除。書くのを手伝うAIは置かない）
     await doSeal();
   });
 
-  // 実際に封をする処理（栞を経ても経なくても、最後はここに合流する）
+  // 実際に封をする処理
   async function doSeal(){
     // 行頭の字下げ・空行は意図した余白としてそのまま封入する（落とすのは末尾の余りだけ）
     const poem=poemEl.value.replace(/\s+$/,'');
@@ -1658,7 +1663,7 @@
       vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
     },areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は「受信」の下の「封の中」の棚に並ぶ。
-    setTimeout(()=>{sealing.classList.remove('on');inquiryAsked=false;clearCompose();loadMail();flash('封をしました。');
+    setTimeout(()=>{sealing.classList.remove('on');clearCompose();loadMail();flash('封をしました。');
       // 開封のお知らせメールは認証済みアドレスにしか送られない。届かない状態のまま投函した時は、そのたびに知らせる。
       if(sealRes&&sealRes.ok&&sealRes.notify_off){
         const msg=sealRes.notify_reason==='pending'
@@ -1669,52 +1674,11 @@
     },1700);
   }
 
-  // 栞：封じる直前に、自分の書いた言葉をそのまま映す。選択肢は「このまま封じる」「一言書き足して封じる」の二つだけ。
-  function showInquiry(q){
-    const ov=document.getElementById('inquiryOv');
-    const iq=document.getElementById('inquiryQ');
-    iq.textContent=q;
-    iq.classList.toggle('vertical',composeVertical);  // 縦書きの便箋なら、栞の中でも縦書きのまま
-    // 縦書きの時は「このまま封じる」一本に。書き足しボタンは畳む。
-    const addBtn=document.getElementById('inquiryAddBtn');
-    if(addBtn)addBtn.style.display=composeVertical?'none':'';
-    const add=document.getElementById('inquiryAdd');
-    const ta=document.getElementById('inquiryAddText');
-    add.classList.add('hide');ta.value='';
-    ov.classList.add('on');
-    // ふるまいはボタンのイベントで（下の wireInquiry で一度だけ結線）
-    setTimeout(()=>{const s=document.getElementById('inquirySealBtn');if(s)s.focus();},60);
-  }
-  function closeInquiry(){document.getElementById('inquiryOv').classList.remove('on');}
-  (function wireInquiry(){
-    const sealBtn=document.getElementById('inquirySealBtn');
-    const addBtn=document.getElementById('inquiryAddBtn');
-    const add=document.getElementById('inquiryAdd');
-    const ta=document.getElementById('inquiryAddText');
-    const confirmBtn=document.getElementById('inquiryAddSeal');
-    // ① このまま封じる
-    sealBtn.addEventListener('click',()=>{closeInquiry();doSeal();});
-    // ② 一言書き足して封じる → 小さな入力欄を開く
-    addBtn.addEventListener('click',()=>{
-      if(add.classList.contains('hide')){add.classList.remove('hide');setTimeout(()=>ta.focus(),40);return;}
-    });
-    // 書き足しを本文へ追記して封じる（保存されるのはユーザーの本文だけ）
-    confirmBtn.addEventListener('click',()=>{
-      const extra=ta.value.trim();
-      if(extra){
-        const cur=poemEl.value.trim();
-        poemEl.value=(cur?(cur+'\n'+extra):extra).slice(0,80);  // 書き足しても80字の固定仕様は守る
-        updateCount();
-      }
-      closeInquiry();doSeal();
-    });
-  })();
-
   // WEVENT_LABEL は受信描画でも使うのでグローバルに置く
   
 
   function flash(msg,ms){const n=document.createElement('div');n.textContent=msg;
-    n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#161616;color:#F2F1ED;'+
+    n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#2A2522;color:#FAF8F3;'+
       'font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
       'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:opacity .3s;text-align:center;max-width:80%';
     document.body.appendChild(n);requestAnimationFrame(()=>n.style.opacity='1');
@@ -1727,10 +1691,11 @@
   // 開封済みは背表紙（気分の色）で棚に並び、タップした一通だけを机に広げる。
   // 開封直後は自動でその一通を広げる（openLetterでセット）。再描画をまたいで保持。
   let shelfOpenId=null;
-  function libDark(hex){ // 背表紙が濃色か（文字を紙色に反転するか）
-    const m=/^#?([0-9a-f]{6})$/i.exec(hex||'');if(!m)return false;
-    const n=parseInt(m[1],16);
-    return (0.299*(n>>16)+0.587*((n>>8)&255)+0.114*(n&255))<140;
+  function libDark(color){ // 背表紙が濃色か（文字を紙色に反転するか）。hsl()と旧hexの両対応
+    const c=parseHslColor(color);if(!c)return false;
+    const s=c.s/100,l=c.l/100,a=s*Math.min(l,1-l);
+    const f=n=>{const k=(n+c.h/30)%12;return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};
+    return 255*(0.299*f(0)+0.587*f(8)+0.114*f(4))<140;
   }
   const threadCollapsed=new Set();  // 会話を「しまう」たよりIDを保持（再描画でも維持）
   let currentWeather=null; // {temp, condition, temp_tag}
@@ -1882,7 +1847,6 @@ async function detectWeather(){
     // 天気が取れない時もバナーの直後＝受信の先頭に出し、地図への道を絶やさない。
     {const mr=document.createElement('div');mr.className='map-link-row';
      mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>'+
-       '<a class="map-link" href="/archive">言葉の編み物<span class="sub">amimono</span></a>'+
        '<a class="map-link" href="/mood">気分の宙<span class="sub">mood</span></a>';
      mailList.appendChild(mr);}
     renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
@@ -2064,7 +2028,7 @@ async function detectWeather(){
   bulkGo&&bulkGo.addEventListener('click',()=>{
     if(!bulkSel.size)return;
     const withMedia=inTransit.some(S=>bulkSel.has(S.id)&&(S.has_photo||S.has_voice));
-    bulkMsg.innerHTML=bulkSel.size+'通のたよりを、<wbr>一気に捨てます。<br>封には<wbr>もう戻せません。<wbr>しばらくは<wbr>読み返せますが、<wbr>やがてほどけて、<wbr>色だけが<wbr>編み物に残ります。'+
+    bulkMsg.innerHTML=bulkSel.size+'通のたよりを、<wbr>一気に捨てます。<br>封には<wbr>もう戻せません。<wbr>しばらくは<wbr>読み返せますが、<wbr>やがてほどけて、<wbr>消えていきます。'+
       (withMedia?'<br><span class="bulk-sub">同封の写真や声は、<wbr>紙玉には残りません。</span>':'');
     bulkOv.classList.add('on');
     setTimeout(()=>bulkBack.focus(),60);
@@ -2103,7 +2067,7 @@ async function detectWeather(){
       const clones=items.map(el=>{
         const r=el.getBoundingClientRect();
         const c=el.cloneNode(true);
-        c.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:97;background:var(--paper-sunk)';
+        c.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:97;background:var(--paper)';
         stage.appendChild(c);
         el.style.visibility='hidden';
         return c;
@@ -2361,7 +2325,7 @@ async function detectWeather(){
          '<button type="button" class="color-chip recolor-chip" data-recolor="'+L.id+'" style="background:'+esc(L.open_color)+'" title="タップで選び直す" aria-label="今日の色を選び直す"></button>'+
          '<div class="recolor-hint">タップで選び直す</div></div>';
     }else{
-      h+='<div class="ld-box"><div class="ld-lbl">いまの気分の色は？</div><div class="mood-swatches compact" data-oc="'+L.id+'" style="min-width:0"></div></div>';
+      h+='<div class="ld-box"><div class="ld-lbl">いまの気分の色は？</div><div class="mood-picker compact" data-oc="'+L.id+'"></div></div>';
     }
     h+='</div>';
     // 問いへの回答の差分：あの日の便箋に透けていた問いを、いまのあなたへもう一度
@@ -2437,13 +2401,21 @@ async function detectWeather(){
       const msgs=b.parentElement.querySelector('.thread-msgs');
       if(msgs)msgs.classList.toggle('collapsed',c);}));
     mailList.querySelectorAll('textarea').forEach(ta=>ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}));
-    // 開封時の「いまの気分の色」：タップで記録し、封をした日の色との差分になる
-    mailList.querySelectorAll('.mood-swatches[data-oc]').forEach(cont=>{
-      wireSwatches(cont,async c=>{
-        const id=cont.dataset.oc;
+    // 開封時の「いまの気分の色」：ピッカーで選んで記録し、封をした日の色との差分になる。
+    // ドラッグ中に描画を作り直すと操作が切れるので、確定はポインタを離した時にだけ送る。
+    mailList.querySelectorAll('.mood-picker[data-oc]').forEach(cont=>{
+      let pending=null,sending=false;
+      wireMoodPicker(cont,c=>{pending=c;});
+      const settle=async()=>{
+        if(!pending||sending)return;
+        sending=true;
+        const id=cont.dataset.oc,c=pending;
         const res=await api('/api/letters/'+id+'/color',{method:'POST',body:JSON.stringify({color:c})});
+        sending=false;
         if(res&&res.ok){const L=received.find(x=>x.id===id);if(L)L.open_color=c;renderMail();}
-      });
+      };
+      cont.addEventListener('pointerup',settle);
+      cont.addEventListener('focusout',settle);   // キーボード操作の確定はフォーカスが離れた時
     });
     // 確定した色を「選び直す」：ローカルで未選択に戻して色相バーを再表示する（誤タップの救済）。
     // 実際の上書きは、もう一度バーで色を選んだときに同じ /color へ再POSTされる（サーバー側は常に最新で上書き）。

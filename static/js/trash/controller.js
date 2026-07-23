@@ -380,7 +380,7 @@ function init() {
     // 墨色に転ぶよう色を掛ける
     g.save();
     g.globalCompositeOperation = "source-in";
-    g.fillStyle = "rgba(22,22,22,1)";
+    g.fillStyle = "rgba(42,37,34,1)";
     g.fillRect(0, 0, shadow.width, shadow.height);
     g.restore();
   }
@@ -593,7 +593,7 @@ function init() {
     });
   }
 
-  // ══ ほどけるまで（7日のあいだ揺らいでいる。読める。やがて色片になって編み物へ還る）══
+  // ══ ほどけるまで（7日のあいだ揺らいでいる。読める。やがて色片になって消える）══
 
   const trashOv = $("trashOv");
   const scatter = $("trashScatter");
@@ -609,7 +609,7 @@ function init() {
     return () => { h = (h * 1664525 + 1013904223) >>> 0; return h / 4294967296; };
   }
 
-  // ほどけ具合 0(捨てたばかり)〜1(まもなく編み物へ)。数字では出さず、見た目だけに使う。
+  // ほどけ具合 0(捨てたばかり)〜1(まもなく消える)。数字では出さず、見た目だけに使う。
   function unravelP(item) {
     if (!item.unravel_at) return 0;
     const end = new Date(item.unravel_at).getTime();
@@ -639,7 +639,7 @@ function init() {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", d);
     path.setAttribute("fill", "none");
-    path.setAttribute("stroke", "rgba(22,22,22,0.4)");
+    path.setAttribute("stroke", "rgba(42,37,34,0.4)");
     path.setAttribute("stroke-width", "0.9");
     path.setAttribute("stroke-linecap", "round");
     svg.appendChild(path);
@@ -711,7 +711,7 @@ function init() {
         `transform:translate(-50%,-50%) rotate(${Math.round(rnd() * 60 - 30)}deg);` +
         `z-index:${Math.min(27, Math.max(2, zi))};` +
         `filter:saturate(${(1 - 0.45 * p).toFixed(2)}) brightness(${depth ? 0.87 : 1}) ` +
-        `drop-shadow(0 ${depth ? 2 : 3}px ${depth ? 3 : 5}px rgba(22,22,22,${depth ? 0.2 : 0.38}));` +
+        `drop-shadow(0 ${depth ? 2 : 3}px ${depth ? 3 : 5}px rgba(90,70,50,${depth ? 0.2 : 0.38}));` +
         `opacity:${(1 - 0.22 * p).toFixed(2)};`;
       // 紙玉は本物のクシャ描画エンジンで描く：その手紙の本文が実際に折り込まれた玉になる。
       // 形は id から決まるので、いつ開いても同じ潰れ方のまま底に沈んでいる。
@@ -805,7 +805,7 @@ function init() {
   $("trashClose")?.addEventListener("click", () => trashOv.classList.remove("on"));
   $("trashOpenClose")?.addEventListener("click", () => openOv.classList.remove("on"));
 
-  // もう、戻らない：7日を待たず、いま編み物へ還す。確認の栞を必ず挟む（不可逆）。
+  // もう、戻らない：7日を待たず、いま色片へ還す。確認の栞を必ず挟む（不可逆）。
   // 実行後は何も言わない——ただ、その紙玉のない机の眺めに戻るだけ。
   const dissolveOv = $("dissolveOv");
   $("trashDissolve")?.addEventListener("click", () => {

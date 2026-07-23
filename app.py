@@ -22,6 +22,7 @@ import signal
 import smtplib
 import sqlite3
 import secrets
+import colorsys
 import hashlib
 import tempfile
 import threading
@@ -391,6 +392,34 @@ def _backfill_grid_ids(db):
             db.execute("UPDATE letters SET grid_id=? WHERE id=?", (gid, r["id"]))
 
 
+def _hex_to_hsl_str(hex_str):
+    """"#RRGGBB"/"#RGB" → "hsl(H, S%, L%)"。変換できない値は None（元の値を残す）。"""
+    try:
+        h = hex_str.strip().lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except (ValueError, AttributeError, IndexError):
+        return None
+    hue, lig, sat = colorsys.rgb_to_hls(r, g, b)
+    return "hsl(%d, %d%%, %d%%)" % (round(hue * 360) % 360, round(sat * 100), round(lig * 100))
+
+
+def _migrate_colors_to_hsl(db):
+    """気分の色を持つ全カラムの HEX 値を "hsl(H, S%, L%)" へ変換する（v3.14・冪等）。
+    対象: letters.seal_color / letters.open_color / unemptyable_trash.mood_color /
+          woven_scraps.mood_color / notes.color"""
+    for table, col in (("letters", "seal_color"), ("letters", "open_color"),
+                       ("unemptyable_trash", "mood_color"), ("woven_scraps", "mood_color"),
+                       ("notes", "color")):
+        rows = db.execute(
+            f"SELECT id, {col} AS c FROM {table} WHERE {col} LIKE '#%'").fetchall()
+        for r in rows:
+            hsl = _hex_to_hsl_str(r["c"])
+            if hsl:
+                db.execute(f"UPDATE {table} SET {col}=? WHERE id=?", (hsl, r["id"]))
+
+
 def init_db():
     global _init_db_done
     if _init_db_done:
@@ -552,6 +581,11 @@ def init_db():
         db.execute(
             "UPDATE unemptyable_trash SET unravel_at=? WHERE unravel_at IS NULL",
             ((datetime.now() + timedelta(days=7)).isoformat(timespec="seconds"),))
+
+        # ── 気分の色のHSL移行（2026-07-24 / v3.14）────────────────────
+        # ピッカーがスウォッチ→HSLになったのに合わせ、既存のHEX値を "hsl(H, S%, L%)" へ
+        # 一括変換する。冪等（HEXで始まる行だけ変換）。読む側は両対応なので取りこぼしても壊れない。
+        _migrate_colors_to_hsl(db)
 
         # ── 気分の地図（Mood Night Map）の集計テーブル ────────────────
         # Postgres なら MATERIALIZED VIEW だが、たよりは SQLite なので普通のテーブルとして持ち、
@@ -1017,7 +1051,6 @@ def robots_txt():
         "Allow: /privacy\n"
         "Disallow: /open/\n"
         "Disallow: /map\n"
-        "Disallow: /archive\n"
         "Disallow: /api/\n"
         "Disallow: /admin.welcometotayori\n"
         "Disallow: /verify/\n"
@@ -1920,7 +1953,7 @@ def start_notifier(interval=None):
                     try:
                         n = _dissolve_scraps(_db)
                         if n:
-                            print(f"[たより] ほどけるまで: {n}片が編み物へ還りました", flush=True)
+                            print(f"[たより] ほどけるまで: {n}片が色片に還りました", flush=True)
                     finally:
                         _db.close()
             except Exception as e:
@@ -2165,64 +2198,11 @@ def api_map_moods():
     return jsonify(areas=out)
 
 
-# ── 言葉の編み物 ─────────────────────────────────────────────
-# 全レター横断の眺め。一通が一枚のパッチとして一枚の布に編まれる。地図と並行する別ビュー。
-# （「川で見る」は2026-07-22の仕様更新で廃止。単独の記録には情報量が薄いため）
-# 【秘匿の鉄則】未開封のたよりは色（気分）を返さない＝編み目のままの影。
-# 手紙のid・配達日時など、この眺めが使わないものは一切返さない。
-# 座標（緯度経度）はこのAPIには一切載せない。場所は area_name（地域名）だけ。
+# ──「言葉の編み物」（/archive・全レター横断のパッチワーク）と「地の糸」（他者moodの気配）は
+#    2026-07-24 に機能ごと削除。屑籠の7日溶解（本文と筆跡が消える不可逆の仕組み）はそのまま。
+#    色片(woven_scraps)テーブルと溶解時の書き込みも温存する（非破壊・将来の眺めの余地のため）。
 
-@app.route("/archive")
-def archive_page():
-    guard = _page_login_guard()
-    if guard:
-        return guard
-    return render_template("archive.html")
-
-
-@app.route("/api/archive")
-@login_required
-def api_archive():
-    db = get_db()
-    # 遅延溶解の保険（常駐ループが止まっていても、編み物を見た瞬間には正しい状態）
-    _dissolve_scraps(db, user_id=uid())
-    rows = db.execute(
-        "SELECT * FROM letters WHERE user_id=? ORDER BY sent_date ASC, id ASC",
-        (uid(),)).fetchall()
-    entries = []
-    for r in rows:
-        keys = r.keys()
-        opened = _letter_opened(r)
-        entries.append({
-            "written_at": r["sent_date"],
-            "is_opened": opened,
-            "opened_at": r["opened_at"] if (opened and "opened_at" in keys) else None,
-            "mood_color": (r["seal_color"] if "seal_color" in keys else None) if opened else None,
-            "char_count": len(r["poem"] or ""),
-            "area_label": r["area_name"] if "area_name" in keys else None,
-        })
-    # 溶けて還った色片。持っているのは色と『YYYY-MM』の粗い月だけ（本文はもう存在しない）
-    scraps = [dict(r) for r in db.execute(
-        "SELECT mood_color, woven_month FROM woven_scraps WHERE user_id=? "
-        "ORDER BY woven_month ASC, id ASC LIMIT 1000",
-        (uid(),)).fetchall()]
-    return jsonify(letters=entries, scraps=scraps)
-
-
-# ── 地の糸（他者moodの気配）──────────────────────────────────
-# no-social原則の意図的な例外（docs/amimono-design.md A節）。
-# 「他者は気配として編まれる。関係としては編まれない。」
-# 返すのは色のhex配列だけ。誰の色か・何人か・いつかは、サーバも返さない。
-# 数値はすべて調整可能な定数（deploy後の体感で詰める）。
-
-AMBIENT_WINDOW_HOURS = 72   # この時間窓の全ユーザーの色を集める
-AMBIENT_K = 8               # k匿名: これ未満しか集まらない時は何も返さない
-AMBIENT_CAP = 200           # 返す色の上限
-AMBIENT_CACHE_SECONDS = 600 # 全ユーザー共通の集計なので10分キャッシュで十分
-_ambient_cache = {"t": 0.0, "colors": []}
-_ambient_lock = threading.Lock()
-
-# 気分7色（index.html の MOOD_SWATCHES / mood.html の SWATCH_HEX と対）。
+# 気分7色（地図の量子化パレット）。
 # 並びは「静→明→暖→重」の温度順：凪→芽→陽→温→恋→憂→沈。
 # 旧9スウォッチ・v3.7以前の自由色は最近傍へ丸め、珍しい色から個人が浮かび上がるのを防ぐ（色の量子化）。
 _MOOD_SWATCH_HEX = ["#C9D4D2", "#C4CDB4", "#EBD9AE", "#E8C4A8",
@@ -2231,9 +2211,23 @@ _MOOD_SWATCH_HEX = ["#C9D4D2", "#C4CDB4", "#EBD9AE", "#E8C4A8",
 _MOOD_SLUGS = ["nagi", "me", "hi", "on", "koi", "yuu", "shizumi"]
 
 
+_HSL_RE = re.compile(
+    r"^hsla?\(\s*(-?[\d.]+)(?:deg)?\s*[, ]\s*([\d.]+)%\s*[, ]\s*([\d.]+)%")
+
+
 def _hex_to_rgb(h):
+    """色文字列 → (r,g,b)。HEX(#RGB/#RRGGBB)と hsl()/hsla() の両方を受ける。
+    v3.14でピッカーがHSL保存になったが、旧データ・デモ投入はHEXのまま来るため両対応。"""
     try:
-        h = h.strip().lstrip("#")
+        h = h.strip()
+        m = _HSL_RE.match(h)
+        if m:
+            hue = (float(m.group(1)) % 360) / 360.0
+            sat = min(100.0, max(0.0, float(m.group(2)))) / 100.0
+            lig = min(100.0, max(0.0, float(m.group(3)))) / 100.0
+            r, g, b = colorsys.hls_to_rgb(hue, lig, sat)
+            return (round(r * 255), round(g * 255), round(b * 255))
+        h = h.lstrip("#")
         if len(h) == 3:
             h = "".join(c * 2 for c in h)
         return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -2254,61 +2248,18 @@ def _quantize_to_swatch(color):
     return best
 
 
-@app.route("/api/amimono/ambient")
-@login_required
-def api_amimono_ambient():
-    now = time.time()
-    with _ambient_lock:
-        if now - _ambient_cache["t"] < AMBIENT_CACHE_SECONDS:
-            return jsonify(colors=_ambient_cache["colors"])
-    since = (datetime.now() - timedelta(hours=AMBIENT_WINDOW_HOURS)).isoformat(timespec="seconds")
-    rows = get_db().execute(
-        "SELECT seal_color FROM letters WHERE sent_date>=? AND seal_color IS NOT NULL AND seal_color<>'' "
-        "LIMIT 400", (since,)).fetchall()
-    colors = []
-    for r in rows:
-        q = _quantize_to_swatch(r["seal_color"])
-        if q:
-            colors.append(q)
-    if len(colors) < AMBIENT_K:
-        colors = []          # 過疎の時間帯は、糸を流さない（一色から誰かが特定されないように）
-    random.shuffle(colors)   # 順序からも時系列を消す
-    colors = colors[:AMBIENT_CAP]
-    with _ambient_lock:
-        _ambient_cache.update(t=now, colors=colors)
-    return jsonify(colors=colors)
-
-
-# ── 気分の宙（mood space）────────────────────────────────────
-# 全ユーザーの手紙を、地理ではなく感情の座標に置く集合ビュー（/mood）。
-# 返すのは「気分の番号・封じた時刻・開いた時刻（未開封なら開く予定）」だけ。
-# 誰の手紙か・どこでか・何が書かれているかは、サーバも返さない。
-# 時刻は1分に丸める（秒単位の一致から個人の行動が浮かばないように。
-# どの期間表示でも1分は1px未満なので、絵は変わらない）。
-
-MOOD_SPACE_RANGES = {"1d": 1, "1w": 7, "1m": 30, "1y": 365, "all": None}
-MOOD_SPACE_CACHE_SECONDS = 300  # 全ユーザー共通の集計なので5分キャッシュ（無料枠のDB負荷対策）
-_mood_space_cache = {}          # range -> {"t": epoch, "body": dict}
-_mood_space_lock = threading.Lock()
+# ── 気分の宙（mood space / 色の星空）──────────────────────────
+# 2026-07-24 リデザイン：封をされた・まだ開封日が来ていない「本人の」手紙が、
+# 気分の色の光の点として暗い宙に浮かぶ。返すのは色と「開封日までの残り日数」だけ。
+# 本文・日付・件名・場所は一切返さない（残り日数はサイズ計算のためだけに使い、UIには出さない）。
 
 _MOOD_SWATCH_INDEX = {h.lower(): i for i, h in enumerate(_MOOD_SWATCH_HEX)}
 
 
 def _mood_index(color):
-    """seal_color(HEX) → 気分7色の番号(0-6)。旧9スウォッチ・v3.7以前の自由色は最近傍へ丸める。"""
+    """seal_color(HEX/HSL) → 気分7色の番号(0-6)。旧9スウォッチ・自由色は最近傍へ丸める。"""
     q = _quantize_to_swatch(color)
     return _MOOD_SWATCH_INDEX.get(q.lower()) if q else None
-
-
-def _iso_to_epoch_min(s):
-    """ISOローカル日時文字列 → UNIX秒（1分丸め）。日付だけの旧データは0時扱い。壊れた値は None。"""
-    if not s:
-        return None
-    try:
-        t = datetime.fromisoformat(str(s).strip()[:19]).timestamp()
-    except (ValueError, TypeError):
-        return None
-    return int(t // 60) * 60
 
 
 @app.route("/mood")
@@ -2322,49 +2273,27 @@ def mood_page():
 @app.route("/api/mood-space")
 @login_required
 def api_mood_space():
-    rng = (request.args.get("range") or "all").strip()
-    if rng not in MOOD_SPACE_RANGES:
-        rng = "all"
-    now = time.time()
-    with _mood_space_lock:
-        c = _mood_space_cache.get(rng)
-        if c and now - c["t"] < MOOD_SPACE_CACHE_SECONDS:
-            return jsonify(c["body"])
-    days = MOOD_SPACE_RANGES[rng]
-    # SELECT * は使わない：本文(poem)・位置(area_*)・idの類を絶対に載せないため、列を指で数えて書く。
-    # excluded_from_aggregate は A・B 共通のオプトアウト。宙（A）も地図（B）も同じ意思を尊重する。
-    where = ("COALESCE(demo_mode,0)=0 AND COALESCE(excluded_from_aggregate,0)=0 "
-             "AND seal_color IS NOT NULL AND seal_color<>''")
-    params = []
-    if days is not None:
-        # sent_date はISO文字列なので文字列比較で時系列になる（/api/map と同じ流儀）
-        params.append((datetime.now() - timedelta(days=days)).isoformat(timespec="seconds"))
-        where += " AND sent_date>=?"
+    # SELECT * は使わない：本文(poem)・場所(area_*)を絶対に載せないため、列を指で数えて書く。
+    # id も返さない（点はタップしても中身に辿り着けない＝「そこにある」だけ）。
     rows = get_db().execute(
-        "SELECT seal_color, sent_date, opened, opened_at, arrive_at, arrive_date "
-        "FROM letters WHERE " + where + " ORDER BY sent_date ASC", params).fetchall()
-    points, oldest = [], None
+        "SELECT seal_color, opened, opened_at, arrive_at, arrive_date, "
+        "       demo_mode, demo_arrive_at, weather_event, weather_met_at "
+        "FROM letters WHERE user_id=?", (uid(),)).fetchall()
+    now = datetime.now()
+    points = []
     for r in rows:
-        m = _mood_index(r["seal_color"])
-        s = _iso_to_epoch_min(r["sent_date"])
-        if m is None or s is None:
+        if _letter_opened(r) or _is_arrived(r):
+            continue   # 宙に浮かぶのは、封の中でまだ開封日が来ていない手紙だけ
+        arrive = ((r["demo_arrive_at"] if r["demo_mode"] else None)
+                  or r["arrive_at"] or (r["arrive_date"] + "T00:00:00"))
+        try:
+            remaining = max(0, (datetime.fromisoformat(arrive) - now).days)
+        except (TypeError, ValueError):
             continue
-        p = {"m": m, "s": s, "o": None}
-        if _letter_opened(r):
-            # opened_at列が無い時代の旧データは「開けるようになった時刻」で代用（無ければ封緘時刻）
-            p["o"] = (_iso_to_epoch_min(r["opened_at"]) or _iso_to_epoch_min(r["arrive_at"])
-                      or _iso_to_epoch_min(r["arrive_date"]) or s)
-        else:
-            d = _iso_to_epoch_min(r["arrive_at"]) or _iso_to_epoch_min(r["arrive_date"])
-            if d:
-                p["d"] = d
-        if oldest is None or s < oldest:
-            oldest = s
-        points.append(p)
-    body = {"now": int(now), "range": rng, "oldest": oldest, "points": points}
-    with _mood_space_lock:
-        _mood_space_cache[rng] = {"t": now, "body": body}
-    return jsonify(body)
+        # 色を選ばず封じた手紙は c=null（クライアント側で無彩の点として浮かべる）
+        points.append({"c": r["seal_color"] or None, "d": remaining})
+    random.shuffle(points)   # 並び順から投函順を消す（返すのは色と残り日数だけ）
+    return jsonify(points=points)
 
 
 # ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
@@ -2566,74 +2495,8 @@ def api_demo_arrive(lid):
     return jsonify(ok=True, demo_arrive_at=val)
 
 
-# ── 封じる直前の「問い直しの栞」 ─────────────────────────────────
-# 封じるボタンを押した瞬間に一度だけ、本文の「繰り返す言葉」か「矛盾」を
-# 事実＋開いた問いの形で返す。助言・解釈・共感は禁止。該当なしなら問いを作らない。
-# 生成した問いは一切保存しない（保存されるのはユーザーの本文だけ）。
-INQUIRY_SYSTEM = (
-    "あなたは、ある人が未来の自分へ宛てた手紙を封じる直前に、一度だけ言葉を返す存在です。\n"
-    "本文を読み、次のどちらかが明確にある時だけ、問いをひとつ返します。\n"
-    "（1）同じ言葉が繰り返し出てくる　（2）前半と後半で言っていることが食い違っている。\n\n"
-    "―― 出力の形（厳守） ――\n"
-    "・『事実の指摘 ＋ 開いた問い』の二部構成、一文だけ。\n"
-    "・例：「『仕方ない』が3回出てきています。仕方なかったのは、どれのことですか？」\n"
-    "・繰り返しなら言葉と回数を、矛盾ならどこが食い違うかを、事実として淡々と指摘する。\n"
-    "・そのうえで、答えを誘導しない開いた問いで終える。必ず『？』で終える。\n\n"
-    "―― 絶対に書かないこと ――\n"
-    "・助言・提案（「〜してみては」「〜するといいかもしれません」など）\n"
-    "・感情の解釈や診断（「〜という気持ちですね」「〜だったのですね」など）\n"
-    "・共感や相槌（「わかります」「つらかったですね」「大変でしたね」など）\n"
-    "・励まし、ねぎらい、褒め言葉の一切。\n\n"
-    "―― 該当がない時 ――\n"
-    "繰り返しも矛盾も見当たらなければ、無理に作らず、『なし』とだけ出力する。\n"
-    "出力は問いの一文、または『なし』のみ。注釈や前置きはつけない。"
-)
-
-
-def _clean_inquiry(text):
-    """AIの返答を検品し、問いとして成立するものだけ返す。該当なし・非問い形式は None。"""
-    if not text:
-        return None
-    # 前後の空白と“くくり”のクォートだけ落とす。日本語の「」は出力形式の一部なので残す。
-    q = text.strip().strip("\"'` 　\n").strip()
-    # 全体が「…」で丸ごと包まれている時だけ、その外側の一対をほどく（内側の指摘部分は保つ）。
-    if q.startswith("「") and q.endswith("」") and q.count("「") == 1 and q.count("」") == 1:
-        q = q[1:-1].strip()
-    if not q:
-        return None
-    if q in ("なし", "無し", "None", "none", "NONE") or q.startswith("なし"):
-        return None
-    if "？" not in q and "?" not in q:  # 問いの形になっていなければ捨てる
-        return None
-    return q[:120]
-
-
-@app.route("/api/compose/inquiry", methods=["POST"])
-@login_required
-def api_compose_inquiry():
-    data = request.get_json(force=True)
-    text = (data.get("poem") or "").strip()
-    # 短すぎる本文は繰り返しも矛盾も検出しにくい。問いを作らずそのまま封じさせる。
-    if len(text) < 12:
-        return jsonify(question=None)
-    gemini_key = os.environ.get("GEMINI_API_KEY")
-    claude_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not (AI_ENABLED and NETWORK_ENABLED and (gemini_key or claude_key)):
-        return jsonify(question=None)
-    prompt = INQUIRY_SYSTEM + "\n\n【本文】\n" + text + "\n\n出力："
-    out = None
-    if gemini_key:
-        try:
-            out = _gemini_question(prompt, gemini_key)
-        except Exception as e:
-            print(f"[問い直し Gemini失敗→フォールバック] {e}", flush=True)
-    if not out and claude_key:
-        try:
-            out = _claude_question(prompt, claude_key)
-        except Exception as e:
-            print(f"[問い直し Claude失敗] {e}", flush=True)
-    # 問いはレスポンスで返すだけ。DBには一切保存しない。
-    return jsonify(question=_clean_inquiry(out))
+# ──「問い直しの栞」（封じる直前にAIが本文を読んで問いを返す機能）は 2026-07-24 に完全削除。
+# 「AIは手紙の中身を読まない」という設計思想と矛盾するため、温存コードごと撤去した。
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -3004,7 +2867,7 @@ def api_list_notes():
 
 # ── ほどけるまで（2026-07-22・二段階の溶解）─────────────────────
 # 捨てた言葉は7日のあいだ「揺らいでいる」＝読める・筆跡も再生できる・ひろげて書きつづけられる。
-# 7日を過ぎるか「もう、戻らない」を選んだ紙玉は、色片(woven_scraps)へ溶けて編み物に還る。
+# 7日を過ぎるか「もう、戻らない」を選んだ紙玉は、色片(woven_scraps)へ溶けて消える。
 # 本文・筆跡はその時に物理的に消える（不可逆）。
 # 改定された恒久ルール: ユーザー任意の削除APIは今後も作らない。出口はこの溶解だけ。
 
@@ -3040,7 +2903,7 @@ def _dissolve_scraps(db, user_id=None, tid=None):
 @app.route("/api/trash/<tid>/dissolve", methods=["POST"])
 @login_required
 def api_trash_dissolve(tid):
-    # 「もう、戻らない」：7日を待たず、いま編み物へ還す。確認ダイアログはクライアント必須。
+    # 「もう、戻らない」：7日を待たず、いま色片へ還す。確認ダイアログはクライアント必須。
     n = _dissolve_scraps(get_db(), user_id=uid(), tid=tid)
     if not n:
         return jsonify(error="見つかりませんでした。"), 404

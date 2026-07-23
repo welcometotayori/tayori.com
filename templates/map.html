@@ -14,8 +14,8 @@
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&family=Courier+Prime&display=swap');
   :root{
     /* ベース4色（確定・変更不可）＋ color-mix 派生。個別のhexを足さない */
-    --paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
-    --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));
+    --paper:#FAF8F3;--ground:#E8E2D8;--ink:#2A2522;--seal:#710014;--kraft:#B38F6F;
+    --paper-sunk:color-mix(in oklab,var(--paper) 93%,var(--kraft));
     --paper-raised:#FFFFFF;
     --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
     --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
@@ -34,7 +34,7 @@
     --aura-opacity:0.42}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{background:var(--paper);color:var(--ink);
+  body{background:var(--ground);color:var(--ink);
        font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
        display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;line-break:strict}
   /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る */
@@ -55,7 +55,7 @@
   .area-tip,.mood-tip{background:var(--paper-raised);border:1px solid var(--rule);border-radius:2px;
             color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;
             font-size:12px;letter-spacing:0.08em;padding:5px 10px;
-            box-shadow:0 6px 18px -10px rgba(22,22,22,.5)}
+            box-shadow:0 6px 18px -10px rgba(90,70,50,.5)}
   .area-tip::before,.mood-tip::before{display:none}
   /* ── 気分の aura ──
      --aura-color をアニメーション可能にする（開封時に --mood-sealed → 合成色へ0.9s）。
@@ -80,8 +80,8 @@
   .mood-sealed-ring{border:1px solid var(--rule);border-radius:50%;opacity:.5}
   /* 位置情報がまだ許されていない時の、手紙のことばでの頼み（OS風の文言は使わない） */
   .geo-ask{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1000;
-    width:min(420px,calc(100% - 32px));background:var(--paper-sunk);border:1px solid var(--rule);border-radius:4px;
-    padding:18px 20px 16px;box-shadow:0 18px 44px -18px rgba(22,22,22,.6);
+    width:min(420px,calc(100% - 32px));background:var(--paper);border:1px solid var(--rule);border-radius:4px;
+    padding:18px 20px 16px;box-shadow:0 18px 44px -18px rgba(90,70,50,.6);
     animation:geoIn .5s ease both;transition:opacity .4s,transform .4s}
   .geo-ask.bye{opacity:0;transform:translateX(-50%) translateY(8px);pointer-events:none}
   @keyframes geoIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
@@ -97,14 +97,14 @@
   /* 「あの日⇄今日」の見比べ（開封画面から ?asof= 付きで来た時だけ現れる） */
   .cmp{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;gap:4px;
     background:var(--paper-sunk);border:1px solid var(--rule);border-radius:24px;padding:4px;
-    box-shadow:0 10px 26px -14px rgba(22,22,22,.55)}
+    box-shadow:0 10px 26px -14px rgba(90,70,50,.55)}
   .cmp[hidden]{display:none}  /* display:flex が hidden 属性を上書きしないように */
   .cmp button{font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;font-size:12px;letter-spacing:0.08em;
     border:0;border-radius:20px;padding:7px 14px;background:transparent;color:var(--ink-mute);cursor:pointer;transition:background .2s,color .2s}
   .cmp button.on{background:var(--ink);color:var(--paper)}
   /* 開封の弧を辿る封蝋（雫ほどの小さな点） */
   .seal-dot{width:14px;height:14px;border-radius:50%;background:var(--seal);
-    border:1px solid rgba(22,22,22,.55);box-shadow:0 2px 8px -2px rgba(22,22,22,.6)}
+    border:1px solid rgba(42,37,34,.55);box-shadow:0 2px 8px -2px rgba(90,70,50,.6)}
 </style>
 </head>
 <body>
