@@ -2270,6 +2270,44 @@ def mood_page():
     return render_template("mood.html")
 
 
+# 他の人の気配（2026-07-24 追加）：封の中でまだ開封日が来ていない「誰かの」手紙も、
+# 遠くの小さな星として同じ宙に浮かぶ。demo除外・オプトアウト尊重は地図(B)と同じ意思。
+# 生の自由色はHSLの微妙な値が個人を指しうるので、外に出すのは7色に量子化した後だけ。
+# 全ユーザー横断クエリなのでグローバルキャッシュを挟む（60秒＝ポーリングと同じ周期）。
+_OTHERS_CACHE_SECONDS = 60
+_OTHERS_MAX = 160          # 画面に出す他者の星の上限。超えた分は毎回ランダムに間引く
+_others_lock = threading.Lock()
+_others_cache = {"t": 0.0, "pairs": []}   # pairs: (user_id, mood_index)
+
+
+def _mood_space_all_pairs():
+    """封の中の全ユーザーの (user_id, 気分番号) を返す。呼び出し側で本人分を除く。"""
+    now = time.time()
+    with _others_lock:
+        if now - _others_cache["t"] < _OTHERS_CACHE_SECONDS:
+            return _others_cache["pairs"]
+    rows = get_db().execute(
+        "SELECT user_id, seal_color, opened, opened_at, arrive_at, arrive_date, "
+        "       demo_mode, demo_arrive_at, weather_event, weather_met_at "
+        "FROM letters WHERE COALESCE(demo_mode,0)=0 "
+        "AND COALESCE(excluded_from_aggregate,0)=0 "
+        "AND seal_color IS NOT NULL AND seal_color<>''").fetchall()
+    pairs = []
+    for r in rows:
+        try:
+            if _letter_opened(r) or _is_arrived(r):
+                continue
+        except (TypeError, ValueError):
+            continue
+        m = _mood_index(r["seal_color"])
+        if m is not None:
+            pairs.append((r["user_id"], m))
+    with _others_lock:
+        _others_cache["t"] = time.time()
+        _others_cache["pairs"] = pairs
+    return pairs
+
+
 @app.route("/api/mood-space")
 @login_required
 def api_mood_space():
@@ -2293,7 +2331,14 @@ def api_mood_space():
         # 色を選ばず封じた手紙は c=null（クライアント側で無彩の点として浮かべる）
         points.append({"c": r["seal_color"] or None, "d": remaining})
     random.shuffle(points)   # 並び順から投函順を消す（返すのは色と残り日数だけ）
-    return jsonify(points=points)
+
+    # 他の人の星：量子化済みの色だけ。残り日数もIDも返さない（大きさの手掛かりを渡さない）
+    others = [_MOOD_SWATCH_HEX[m] for u, m in _mood_space_all_pairs() if u != uid()]
+    if len(others) > _OTHERS_MAX:
+        others = random.sample(others, _OTHERS_MAX)
+    else:
+        random.shuffle(others)
+    return jsonify(points=points, others=others)
 
 
 # ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────

@@ -11,7 +11,9 @@
   /* ── 色の星空（2026-07-24 リデザイン）──
      封をされた未開封の手紙が、mood color の光の点として暗い空間に浮かぶ。
      見えるのは色だけ。日付・件名・残り日数はすべて出さない。
-     タップしても中身は開かない——ほんの少し揺れて、「そこにある」ことだけが返る。 */
+     タップしても中身は開かない——ほんの少し揺れて、「そこにある」ことだけが返る。
+     同じ宙の遠くには、どこかの誰かの封の中の気分も、触れられない小さな星として瞬く。
+     空は据え置きではなく、少しずつ今と同期する（60秒ごと・タブ復帰時）。 */
   :root{--space:#08080D;--chalk:#FAF8F3;--thread:#B38F6F}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -35,6 +37,14 @@
   .star-hit:focus{outline:none}
   /* 星＝手紙。大きさが開封日の近さ（大きい=近い、小さい=遠い）。数字にはしない */
   .star{border-radius:50%;pointer-events:none}
+  /* 遠い星＝どこかの誰かの封の中の気分。触れられない・揺れない・ただ瞬く */
+  .far-star{position:absolute;border-radius:50%;transform:translate(-50%,-50%);
+            pointer-events:none;animation:twinkle 6s ease-in-out infinite}
+  @keyframes twinkle{0%,100%{opacity:var(--op)}50%{opacity:calc(var(--op)*0.45)}}
+  @media (prefers-reduced-motion:reduce){ .far-star{animation:none} }
+  /* 空の入れ替わりは瞬きほどの淡い明滅で（据え置きの絵ではなく、少しずつ今と同期する） */
+  #sky.settling{opacity:.4}
+  #sky{transition:opacity .4s ease}
   @keyframes wobble{
     0%   { transform: translate(0, 0); }
     15%  { transform: translate(2px, -2px); }
@@ -54,7 +64,7 @@
     <a class="back" href="/">もどる</a>
   </header>
 
-  <div id="sky" aria-label="封の中のたよりが、色の点として浮かんでいます"></div>
+  <div id="sky" aria-label="封の中のたよりと、どこかの誰かの気分が、色の点として浮かんでいます"></div>
 
 <script>
 (function(){
@@ -67,13 +77,34 @@
   // 色を選ばず封じた手紙も「そこにある」：無彩の点として浮かべる
   const COLORLESS = 'hsl(228, 8%, 62%)';
 
-  let stars = [];   // {c, d} のまま保持し、リサイズで置き直す
+  // 遠い星（他の人の気分）：小さく・淡く・触れられない
+  const FAR_MIN = 1.5, FAR_MAX = 4;
+  const FAR_OP_MIN = 0.10, FAR_OP_MAX = 0.26;
+
+  let stars = [];      // 本人の {c, d}。保持したままリサイズで置き直す
+  let farStars = [];   // 他の人の色（量子化済みhex）の配列
 
   // 大きい点から順に、重ならない場所を探して散布する（見つからなければ最後の候補で妥協）
   function layout(){
     sky.textContent = '';
     const W = sky.clientWidth, H = sky.clientHeight;
-    if (!W || !H || !stars.length) return;   // 手紙が0通なら、空の暗闇だけ
+    if (!W || !H) return;
+
+    // 遠い星は奥に沈める：当たり判定なし・衝突判定なし（小さいので重なっても瞬きに紛れる）
+    farStars.forEach(c => {
+      const dot = document.createElement('span');
+      dot.className = 'far-star';
+      const size = FAR_MIN + Math.random() * (FAR_MAX - FAR_MIN);
+      dot.style.width = dot.style.height = size.toFixed(1) + 'px';
+      dot.style.background = c;
+      dot.style.setProperty('--op', (FAR_OP_MIN + Math.random() * (FAR_OP_MAX - FAR_OP_MIN)).toFixed(2));
+      dot.style.animationDelay = (-Math.random() * 6).toFixed(1) + 's';
+      dot.style.left = (Math.random() * 100) + '%';
+      dot.style.top  = (Math.random() * 100) + '%';
+      sky.appendChild(dot);
+    });
+
+    if (!stars.length) return;   // 自分の手紙が0通でも、誰かの遠い星は瞬いている
 
     const maxDays = Math.max(30, ...stars.map(p => p.d));
     const items = stars.map(p => {
@@ -125,10 +156,40 @@
     requestAnimationFrame(function(){ resizeQueued = false; layout(); });
   });
 
-  fetch('/api/mood-space')
-    .then(r => r.ok ? r.json() : { points: [] })
-    .then(d => { stars = (d && d.points) || []; layout(); })
-    .catch(() => {});   // 失敗しても暗闇のまま（この画面にエラーの文字は置かない）
+  // ── 今との同期 ──
+  // サーバは毎回シャッフルして返すので、並びに依らない鍵で「本当に変わったか」を見る。
+  // 変わった時だけ、空をいちど淡くしてから置き直す（変わっていなければ星は動かさない）。
+  let lastKey = null;
+
+  function skyKey(d){
+    const own = (d.points || []).map(p => (p.c || '') + '/' + p.d).sort();
+    const far = (d.others || []).slice().sort();
+    return own.join(',') + '|' + far.join(',');
+  }
+
+  function fetchSky(){
+    fetch('/api/mood-space')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        const key = skyKey(d);
+        if (key === lastKey) return;
+        const first = (lastKey === null);
+        lastKey = key;
+        stars = d.points || [];
+        farStars = d.others || [];
+        if (first){ layout(); return; }
+        sky.classList.add('settling');
+        setTimeout(function(){ layout(); sky.classList.remove('settling'); }, 400);
+      })
+      .catch(() => {});   // 失敗しても暗闇のまま（この画面にエラーの文字は置かない）
+  }
+
+  fetchSky();
+  setInterval(fetchSky, 60000);                    // 60秒ごと＝サーバ側キャッシュと同じ周期
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) fetchSky();              // タブに戻ってきた時は待たずに今へ
+  });
 })();
 </script>
 </body>
