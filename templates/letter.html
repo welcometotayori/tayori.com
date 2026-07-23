@@ -9,7 +9,17 @@
 <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
-  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0;--shadow:#D9CDB8}
+  :root{--paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
+        --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));--paper-raised:#FFFFFF;
+        --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
+        --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
+        --ink-faint:color-mix(in oklab,var(--ink) 30%,var(--paper));
+        --rule:color-mix(in oklab,var(--kraft) 38%,var(--paper));
+        --rule-firm:color-mix(in oklab,var(--kraft) 62%,var(--paper));
+        --seal-hover:color-mix(in oklab,var(--seal) 86%,var(--ink));
+        --seal-quiet:color-mix(in oklab,var(--seal) 14%,var(--paper));
+        --seal-onfill:var(--paper);
+        --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper))}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.9;min-height:100vh;-webkit-font-smoothing:antialiased;line-break:strict}
   /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る。回答本文には掛けない */
@@ -18,46 +28,46 @@
   @supports(word-break:auto-phrase){.q-prompt{word-break:auto-phrase;text-wrap:pretty}}
   .letter-wrap{max-width:600px;margin:0 auto;padding:42px 22px 90px}
   .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
-  .romaji{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.42em;color:var(--ink-soft);text-transform:uppercase}
-  .back{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--ink-soft);text-decoration:none;opacity:.8}
+  .romaji{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase}
+  .back{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--ink-mute);text-decoration:none;opacity:.8}
   .back:hover{opacity:1}
-  .lead{font-size:15px;letter-spacing:0.06em;color:var(--ink-soft);margin:0 0 26px;line-height:1.85}
+  .lead{font-size:15px;letter-spacing:0.06em;color:var(--ink-mute);margin:0 0 26px;line-height:1.85}
 
   /* 便箋（手紙プレビュー） */
-  .paper{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;
-         box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 12px 34px -20px rgba(58,46,37,0.55);
+  .paper{background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;
+         box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 12px 34px -20px rgba(22,22,22,0.55);
          padding:26px 24px;min-height:150px;position:relative;overflow:hidden}
-  .paper-head{font-size:12px;letter-spacing:0.12em;color:var(--ink-soft);padding-bottom:12px;margin-bottom:14px;border-bottom:1px dashed var(--line)}
+  .paper-head{font-size:12px;letter-spacing:0.12em;color:var(--ink-mute);padding-bottom:12px;margin-bottom:14px;border-bottom:1px dashed var(--rule)}
   .letter-body{font-size:16.5px;line-height:34px;color:var(--ink);word-break:break-word;overflow-wrap:anywhere;min-height:70px}
   .letter-body p{margin:0 0 6px;animation:rise .5s ease both}
-  .letter-empty{color:var(--ink-soft);opacity:.5;font-size:15px;line-height:32px}
+  .letter-empty{color:var(--ink-mute);opacity:.5;font-size:15px;line-height:32px}
   @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   /* 減モーション：本文段落のせり上がりを止める（htmxの opacity 変化は残す） */
   @media (prefers-reduced-motion:reduce){.letter-body p{animation:none}}
 
   /* 設問 */
   .q-area{margin-top:30px}
-  .q-mark{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.24em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:12px}
+  .q-mark{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.24em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:12px}
   .q-req{color:var(--seal);opacity:.85}
   .q-prompt{font-size:19px;line-height:1.75;letter-spacing:0.03em;margin:0 0 18px;color:var(--ink)}
   .q-area textarea{width:100%;background:transparent;border:0;resize:none;font-family:'Shippori Mincho',serif;
         font-size:17px;line-height:36px;color:var(--ink);min-height:108px;padding:0;
-        background-image:repeating-linear-gradient(transparent,transparent 35px,var(--line) 35px,var(--line) 36px)}
+        background-image:repeating-linear-gradient(transparent,transparent 35px,var(--rule) 35px,var(--rule) 36px)}
   .q-area textarea:focus{outline:none}
-  .q-area textarea::placeholder{color:var(--ink-soft);opacity:.5}
+  .q-area textarea::placeholder{color:var(--ink-mute);opacity:.5}
   .q-actions{display:flex;align-items:center;gap:18px;margin-top:20px;flex-wrap:wrap}
   .btn{font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.1em;border:1px solid var(--ink);
        background:var(--ink);color:var(--paper);padding:11px 26px;border-radius:26px;cursor:pointer;transition:opacity .2s}
   .btn:hover{opacity:.86}
-  .btn-ghost{background:transparent;color:var(--ink-soft);border:none;text-decoration:underline;text-underline-offset:4px;
+  .btn-ghost{background:transparent;color:var(--ink-mute);border:none;text-decoration:underline;text-underline-offset:4px;
        font-size:13px;letter-spacing:0.06em;cursor:pointer;padding:6px 2px}
   .btn-ghost:hover{color:var(--ink)}
   .seal-cta{text-align:center;padding:14px 0 6px}
-  .seal-cta .done-note{font-size:15px;color:var(--ink-soft);margin:0 0 22px;line-height:1.85}
+  .seal-cta .done-note{font-size:15px;color:var(--ink-mute);margin:0 0 22px;line-height:1.85}
   .seal-link{display:inline-block;margin-top:8px}
   .htmx-request textarea,.htmx-request .btn{opacity:.55;transition:opacity .2s}
   .seal-anytime{text-align:center;margin-top:48px}
-  .seal-anytime a{font-size:12.5px;letter-spacing:0.08em;color:var(--ink-soft);opacity:.72;text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
+  .seal-anytime a{font-size:12.5px;letter-spacing:0.08em;color:var(--ink-mute);opacity:.72;text-decoration:none;border-bottom:1px solid var(--rule);padding-bottom:2px}
   .seal-anytime a:hover{opacity:1;color:var(--ink)}
 </style>
 </head>

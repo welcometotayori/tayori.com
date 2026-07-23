@@ -8,7 +8,17 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
-  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0}
+  :root{--paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
+        --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));--paper-raised:#FFFFFF;
+        --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
+        --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
+        --ink-faint:color-mix(in oklab,var(--ink) 30%,var(--paper));
+        --rule:color-mix(in oklab,var(--kraft) 38%,var(--paper));
+        --rule-firm:color-mix(in oklab,var(--kraft) 62%,var(--paper));
+        --seal-hover:color-mix(in oklab,var(--seal) 86%,var(--ink));
+        --seal-quiet:color-mix(in oklab,var(--seal) 14%,var(--paper));
+        --seal-onfill:var(--paper);
+        --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper))}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
        min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;line-break:strict}
@@ -19,32 +29,32 @@
   /* 蝋封の演出 */
   .wax{width:96px;height:96px;margin:0 auto 34px;border-radius:50%;
        background:radial-gradient(circle at 38% 34%,#c96a50,var(--seal) 60%,#8f3b28);
-       box-shadow:0 12px 30px -12px rgba(143,59,40,.7),inset 0 2px 6px rgba(255,255,255,.25);
+       box-shadow:0 12px 30px -12px rgba(113,0,20,.7),inset 0 2px 6px rgba(255,255,255,.25);
        display:flex;align-items:center;justify-content:center;color:#f2d9cf;
        font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.16em;
        transform:scale(0);animation:stamp .7s cubic-bezier(.2,1.4,.5,1) .15s forwards}
   @keyframes stamp{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
   .sealed-msg{opacity:0;animation:fade .9s ease 1s forwards}
   .sealed-title{font-size:22px;letter-spacing:0.14em;margin:0 0 14px}
-  .sealed-sub{font-size:14.5px;line-height:1.95;color:var(--ink-soft);margin:0 0 30px}
+  .sealed-sub{font-size:14.5px;line-height:1.95;color:var(--ink-mute);margin:0 0 30px}
   @keyframes fade{to{opacity:1}}
 
   /* 封をした手紙の抜粋 */
   .excerpt{opacity:0;animation:fade 1s ease 1.4s forwards;
-           background:var(--paper-2);border:1px solid var(--line);border-radius:3px;
+           background:var(--paper-sunk);border:1px solid var(--rule);border-radius:3px;
            padding:22px 22px;text-align:left;font-size:15.5px;line-height:32px;color:var(--ink);
-           box-shadow:0 10px 30px -22px rgba(58,46,37,.5);margin-bottom:36px}
+           box-shadow:0 10px 30px -22px rgba(22,22,22,.5);margin-bottom:36px}
   .excerpt p{margin:0 0 4px}
-  .excerpt-empty{color:var(--ink-soft);opacity:.6;font-size:14px}
+  .excerpt-empty{color:var(--ink-mute);opacity:.6;font-size:14px}
 
   .home{opacity:0;animation:fade 1s ease 1.7s forwards;display:inline-block;
-        font-size:13px;letter-spacing:0.1em;color:var(--ink-soft);text-decoration:none;
-        border-bottom:1px solid var(--line);padding-bottom:2px}
+        font-size:13px;letter-spacing:0.1em;color:var(--ink-mute);text-decoration:none;
+        border-bottom:1px solid var(--rule);padding-bottom:2px}
   .home:hover{color:var(--ink)}
 
   {% if show_bookmark %}
   /* リテンション：演出の余韻が落ち着いた数秒後に、ふわっと。ボタンではなくテキスト。操作方法は書かない。 */
-  .bookmark{margin-top:52px;font-size:13.5px;letter-spacing:0.06em;color:var(--ink-soft);line-height:2;
+  .bookmark{margin-top:52px;font-size:13.5px;letter-spacing:0.06em;color:var(--ink-mute);line-height:2;
             opacity:0;transform:translateY(6px);animation:bmIn 2.4s ease 3.6s forwards}
   @keyframes bmIn{to{opacity:.82;transform:none}}
   {% endif %}

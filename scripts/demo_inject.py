@@ -11,7 +11,7 @@
         --text "今日の自分は、3か月後の自分を信頼できるだろうか。" \\
         --date 2026-05-01T08:30 \\
         --place 東京都渋谷区 \\
-        --color "#5b7c99" \\
+        --color "#C9D4D2" \\
         --arrive 2026-08-01T09:00
 
 引数:
@@ -19,7 +19,7 @@
     --date   投函日時（ISO形式。日付だけなら 12:00 扱い。省略時は今）
     --place  封じた場所の名前（下のプリセットにあれば座標も自動で入る）
     --lat/--lng  場所の座標（プリセットにない場所を使う時に指定）
-    --color  いまの気分の色（#rrggbb。省略時 #5b7c99）
+    --color  いまの気分の色（#rrggbb。省略時 #C9D4D2）
     --arrive 開封予定日時（ISO形式。省略時は今から30日後。過去にすれば「届いた」状態になる）
 
 本番（Render）では Shell から同じコマンドを実行する。DBの場所は app.py の
@@ -89,7 +89,7 @@ def main():
     ap.add_argument("--place", help="封じた場所の名前")
     ap.add_argument("--lat", type=float, help="場所の緯度（プリセット外の場所用）")
     ap.add_argument("--lng", type=float, help="場所の経度（プリセット外の場所用）")
-    ap.add_argument("--color", default="#5b7c99", help="いまの気分の色（#rrggbb）")
+    ap.add_argument("--color", default="#C9D4D2", help="いまの気分の色（#rrggbb）")
     ap.add_argument("--arrive", help="開封予定日時（ISO形式。省略時は今から30日後）")
     args = ap.parse_args()
 

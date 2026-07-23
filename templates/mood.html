@@ -76,17 +76,17 @@
     BLUR: 1.5,             // glow の blur 半径 px（1.0–3.0）
     UNOPENED_DRAW: 0.55,   // 未開封線：予定位置までの何割を描くか（0.4–0.7）
     SAT_MULT: 1.35,        // 手染め色は彩度が低く screen 合成で沈むので canvas 内でだけ上げる（1.2–1.6）
-    SAT_FLOOR: 18,         // 利休鼠(#8A8F86, S≈4)がただの白飛びにならないための下駄
+    SAT_FLOOR: 18,         // 沈(#8C7F80, S≈5)がただの白飛びにならないための下駄
     LUM_MULT: 0.85,
     JITTER_DEG: 2.5,       // 同じ気分の点が完全に一直線に重ならないための、封緘時刻由来の決定的な揺らぎ（0で純スポーク）
     FUTURE_GAIN: 0.10, FUTURE_EXP: 0.6,  // 未開封の予定位置：RMAX の外へどれだけ出るか
   };
 
-  // ── 手染め9スウォッチ。app.py の _MOOD_SWATCH_HEX / index.html の MOOD_SWATCHES と対 ──
-  // 角度は等間隔にしない：実際の色相（H）をそのまま使う。このパレットは「沈んだ→あたたかい」の
-  // 温度軸なので、色相はおよそ 203°→13° の弧に並ぶ＝宙は円ではなく扇になる（意図した形）。
-  const SWATCH_HEX = ['#4E5E68','#5B6B73','#728079','#8A8F86','#A7A492',
-                      '#C4B79E','#D8A96A','#C7724E','#B5543A'];
+  // ── 気分7色。app.py の _MOOD_SWATCH_HEX / index.html の MOOD_SWATCHES と対 ──
+  // 角度は等間隔にしない：実際の色相（H）をそのまま使う。並びは「静→明→暖→重」の温度順
+  //（凪→芽→陽→温→恋→憂→沈）。色相は青緑→黄→赤→紫へ散るので、宙は扇ではなく緩い環になる。
+  const SWATCH_HEX = ['#C9D4D2','#C4CDB4','#EBD9AE','#E8C4A8',
+                      '#DFAFAE','#C0B2C4','#8C7F80'];
 
   function hexToHsl(hex){
     const n = parseInt(hex.slice(1), 16);

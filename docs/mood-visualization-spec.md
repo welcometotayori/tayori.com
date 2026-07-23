@@ -62,7 +62,39 @@
 - **B Phase 3**: `static/js/mood_night_map.js`（Leaflet + canvas の夜間光描画）、`/night` ページ
 - `demo_mood_cells.json`: Phase 2 のデモ用。Phase 2 に着手する時に作る（今は宙ぶらりんの
   ファイルを置かない判断）。
-- 4色リブランド、既存 `/map` の調整、ホバー/クリック詳細、統計数値表示（元 spec §4 のまま）。
+- ホバー/クリック詳細、統計数値表示（元 spec §4 のまま）。
+
+---
+
+## 1.6. 追加実装（2026-07-23 夜 / v3.13）── 4色リブランド + 本人地図の aura 化
+
+別 spec「カラートークン刷新 + 気分の地図（エリア単位 aura）」に沿って実装。上の Phase2/3
+（**全ユーザー**の `mood_grid` を夜間光で描く公開地図）とは別物で、こちらは既存の**本人の**
+`/map`（`/api/map`）を aura 表現へ拡張したもの。共有ビューではないので `mood_grid` は使わない。
+
+1. **4色トークン全面差し替え**（旧 terracotta 系を*エイリアスなしで*削除）
+   - ベース: `--paper #F2F1ED` / `--ink #161616` / `--seal #710014` / `--kraft #B38F6F`。
+     派生はすべて `color-mix(in oklab, …)`（`--paper-sunk` `--ink-mute` `--rule` `--focus-ring` 等）。
+   - 全テンプレート + `static/js/trash/*` + admin/terms/privacy の旧 hex 直書き・
+     `rgba(58,46,37,…)` を新値へ。旧 `--paper-2/--ink-soft/--line/--teal/--shadow` は消滅。
+2. **気分 9→7 色**（`--mood-nagi…shizumi` + `--mood-sealed`）。並びは「静→明→暖→重」の
+   温度順（凪→芽→陽→温→恋→憂→沈）。`_MOOD_SWATCH_HEX` / `index.html MOOD_SWATCHES` /
+   `mood.html SWATCH_HEX` / demo スクリプトの色を同期。旧色は `_quantize_to_swatch` が最近傍へ丸める。
+   `_MOOD_SLUGS`（`app.py`）が hex→slug を担い、色は API に出さず CSS トークン `--mood-*` で対応。
+3. **`GET /api/map/moods`** — 本人の手紙を **area_name 単位**に集約。
+   - `moods` は**開封済みのみ**（封のままの色は出さない）。シャッフルして**最大8件**に切る
+     （配列長=件数になるため。件数・生座標・手紙 id・本文は返さない）。
+   - `has_sealed` は真偽値のみ。`center`/`bbox` はエリア内の丸め済み座標（`area_lat/lng`）から算出。
+   - `?until=` は `/api/map` と同じ「あの日の地図」に対応。
+4. **`templates/map.html`** — Carto Positron タイル + `grayscale/contrast/sepia` フィルタ、
+   z-index 450 の `mood` ペイン（`pointer-events:none`, `opacity .55`）、`.mood-aura`
+   （divIcon, `mix-blend-mode:multiply`, `blur`, `radial-gradient closest-side`）。
+   半径は **bbox 実寸**（件数非依存 = 密度を活動量として描かない）。合成色は `blendMoods` の
+   `color-mix` 逐次加重平均。点はエリア単位の合成色 `.mood-dot`（紙色リング）、未開封エリアに
+   `.mood-sealed-ring`。開封で来た時 `--aura-color` を `--mood-sealed`→合成色へ 0.9s 遷移
+   （`@property` + reduced-motion 即時）。現在地は状態色を足さず墨一色。
+   - 調整口: `--aura-blur 28px` / `--aura-opacity 0.42`（実データで要調整）。aura が 30 個超で
+     重い時は単一 canvas の `globalCompositeOperation='multiply'` へ描き直す（未着手）。
 
 ---
 

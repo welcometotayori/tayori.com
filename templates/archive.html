@@ -8,7 +8,17 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&family=Courier+Prime&display=swap');
-  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0;
+  :root{--paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
+        --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));--paper-raised:#FFFFFF;
+        --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
+        --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
+        --ink-faint:color-mix(in oklab,var(--ink) 30%,var(--paper));
+        --rule:color-mix(in oklab,var(--kraft) 38%,var(--paper));
+        --rule-firm:color-mix(in oklab,var(--kraft) 62%,var(--paper));
+        --seal-hover:color-mix(in oklab,var(--seal) 86%,var(--ink));
+        --seal-quiet:color-mix(in oklab,var(--seal) 14%,var(--paper));
+        --seal-onfill:var(--paper);
+        --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper));
         --ease-out:cubic-bezier(.23,1,.32,1)}
   *{box-sizing:border-box}
   html,body{margin:0;min-height:100%}
@@ -16,12 +26,12 @@
        font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
        -webkit-font-smoothing:antialiased;line-break:strict}
   header{display:flex;justify-content:space-between;align-items:baseline;
-         padding:16px 20px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+         padding:16px 20px 12px;border-bottom:1px solid var(--rule);background:var(--paper)}
   .ttl{font-size:15px;letter-spacing:0.18em}
   .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
-               color:var(--ink-soft);text-transform:uppercase;margin-left:10px}
-  .back{font-size:12.5px;letter-spacing:0.1em;color:var(--ink-soft);text-decoration:none;
-        border-bottom:1px solid var(--line);padding-bottom:1px}
+               color:var(--ink-mute);text-transform:uppercase;margin-left:10px}
+  .back{font-size:12.5px;letter-spacing:0.1em;color:var(--ink-mute);text-decoration:none;
+        border-bottom:1px solid var(--rule);padding-bottom:1px}
   .back:hover{color:var(--ink)}
 
   main{max-width:1100px;margin:0 auto;padding:26px 18px 60px;position:relative}
@@ -29,20 +39,20 @@
   .ground{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
   .ground .thread{position:absolute;left:-2%;width:104%;height:1px}
   .lead,.empty,.q-modes,#quiltGroups{position:relative;z-index:1}
-  .lead{text-align:center;font-size:12px;letter-spacing:0.1em;color:var(--ink-soft);margin:2px 0 26px;
+  .lead{text-align:center;font-size:12px;letter-spacing:0.1em;color:var(--ink-mute);margin:2px 0 26px;
         word-break:keep-all;overflow-wrap:anywhere}
-  .empty{text-align:center;color:var(--ink-soft);font-size:13px;letter-spacing:0.1em;padding:60px 0}
+  .empty{text-align:center;color:var(--ink-mute);font-size:13px;letter-spacing:0.1em;padding:60px 0}
 
   /* ── 言葉の編み物：一通が一枚のパッチになって、一枚の布に編まれる ──
      大きさ=字数、色=気分。未開封は色を宿さない編み目のまま（存在だけが見える）。 */
   .q-modes{display:flex;justify-content:center;gap:22px;margin:0 0 20px}
   .q-mode{background:none;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:11.5px;
-    letter-spacing:0.14em;color:var(--ink-soft);padding:3px 1px;transition:color .2s;
+    letter-spacing:0.14em;color:var(--ink-mute);padding:3px 1px;transition:color .2s;
     border-bottom:1px solid transparent}
   .q-mode.on{color:var(--ink);border-bottom-color:var(--seal)}
-  .q-mode:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  .q-mode:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
   .q-group{margin-bottom:26px}
-  .q-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-soft);
+  .q-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);
     text-transform:uppercase;margin:0 2px 8px;opacity:0.8}
   .q-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));grid-auto-rows:34px;
     grid-auto-flow:dense;gap:5px}
@@ -50,12 +60,12 @@
     transition:background-color .75s var(--ease-out),filter .75s var(--ease-out),opacity .75s var(--ease-out)}
   /* 単色だと平坦になるので、布の照りほどの淡い二色（派手なグラデーションにはしない） */
   .patch::after{content:'';position:absolute;inset:0;
-    background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent 45%,rgba(58,46,37,0.10))}
-  .patch:hover,.patch:focus-visible{outline:1px solid var(--ink-soft);outline-offset:2px}
+    background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent 45%,rgba(22,22,22,0.10))}
+  .patch:hover,.patch:focus-visible{outline:1px solid var(--ink-mute);outline-offset:2px}
   .patch.s2{grid-column:span 2}
   .patch.s3{grid-column:span 2;grid-row:span 2}
   .patch.s4{grid-column:span 3;grid-row:span 2}
-  .patch.wait,.patch.reveal{background-color:rgba(58,46,37,0.26);opacity:0.45;filter:grayscale(1)}
+  .patch.wait,.patch.reveal{background-color:rgba(22,22,22,0.26);opacity:0.45;filter:grayscale(1)}
   .patch.revealed{opacity:1;filter:none}
   /* 未開封のパッチに掛かる編み目（SVGパターン）。開封で色と入れ替わる */
   .q-weave{position:absolute;inset:0;width:100%;height:100%;display:block;transition:opacity .75s var(--ease-out)}
@@ -67,9 +77,9 @@
   .q-fray{position:absolute;inset:0;width:100%;height:100%;display:block}
 
   /* 触れた時のささやき：地名だけ。座標も日付も語らない */
-  .tip{position:fixed;z-index:50;pointer-events:none;background:var(--paper-2);border:1px solid var(--line);
+  .tip{position:fixed;z-index:50;pointer-events:none;background:var(--paper-sunk);border:1px solid var(--rule);
     border-radius:2px;color:var(--ink);font-size:11.5px;letter-spacing:0.08em;padding:4px 10px;
-    box-shadow:0 6px 18px -10px rgba(58,46,37,.5);opacity:0;transform:translate(-50%,-6px);
+    box-shadow:0 6px 18px -10px rgba(22,22,22,.5);opacity:0;transform:translate(-50%,-6px);
     transition:opacity .3s,transform .3s;white-space:nowrap}
   .tip.on{opacity:1;transform:translate(-50%,-10px)}
   .tip .pin{color:var(--seal);margin-right:5px;font-size:10px}
@@ -101,16 +111,16 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <pattern id="weavePat" width="6" height="6" patternUnits="userSpaceOnUse">
-        <rect width="6" height="6" fill="rgba(58,46,37,0.06)"/>
-        <path d="M0 1.5H6" stroke="rgba(242,235,221,0.55)" stroke-width="1"/>
-        <path d="M1.5 0V6" stroke="rgba(242,235,221,0.35)" stroke-width="1"/>
-        <path d="M0 4.5H6" stroke="rgba(58,46,37,0.10)" stroke-width="0.8"/>
-        <path d="M4.5 0V6" stroke="rgba(58,46,37,0.08)" stroke-width="0.8"/>
+        <rect width="6" height="6" fill="rgba(22,22,22,0.06)"/>
+        <path d="M0 1.5H6" stroke="rgba(242,241,237,0.55)" stroke-width="1"/>
+        <path d="M1.5 0V6" stroke="rgba(242,241,237,0.35)" stroke-width="1"/>
+        <path d="M0 4.5H6" stroke="rgba(22,22,22,0.10)" stroke-width="0.8"/>
+        <path d="M4.5 0V6" stroke="rgba(22,22,22,0.08)" stroke-width="0.8"/>
       </pattern>
       <!-- 解れ：溶けて還った色片の質感（斜めにほどけた糸） -->
       <pattern id="frayPat" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
-        <path d="M0 2H9" stroke="rgba(242,235,221,0.5)" stroke-width="0.8"/>
-        <path d="M0 6.5H7" stroke="rgba(58,46,37,0.14)" stroke-width="0.7"/>
+        <path d="M0 2H9" stroke="rgba(242,241,237,0.5)" stroke-width="0.8"/>
+        <path d="M0 6.5H7" stroke="rgba(22,22,22,0.14)" stroke-width="0.7"/>
       </pattern>
     </defs>
   </svg>
@@ -177,7 +187,7 @@
       // 編み目（SVGパターン）を掛けておく。開封の日、色と入れ替わる
       p.innerHTML='<svg class="q-weave" aria-hidden="true"><rect width="100%" height="100%" fill="url(#weavePat)"/></svg>';
     }else{
-      p.style.backgroundColor=L.mood_color||'rgba(58,46,37,0.22)';
+      p.style.backgroundColor=L.mood_color||'rgba(22,22,22,0.22)';
       p.setAttribute('aria-label','開封済みのたより');
       if(isFresh(L)){p.classList.add('reveal');revealLater(p,freshIdx());}
     }
@@ -189,7 +199,7 @@
   function scrapPatch(S){
     const p=document.createElement('div');
     p.className='patch scrap';
-    p.style.backgroundColor=S.mood_color||'rgba(58,46,37,0.22)';
+    p.style.backgroundColor=S.mood_color||'rgba(22,22,22,0.22)';
     p.setAttribute('aria-label','編み物に還った色');
     p.innerHTML='<svg class="q-fray" aria-hidden="true"><rect width="100%" height="100%" fill="url(#frayPat)"/></svg>';
     return p;

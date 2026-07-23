@@ -380,7 +380,7 @@ function init() {
     // 墨色に転ぶよう色を掛ける
     g.save();
     g.globalCompositeOperation = "source-in";
-    g.fillStyle = "rgba(58,46,37,1)";
+    g.fillStyle = "rgba(22,22,22,1)";
     g.fillRect(0, 0, shadow.width, shadow.height);
     g.restore();
   }
@@ -639,7 +639,7 @@ function init() {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", d);
     path.setAttribute("fill", "none");
-    path.setAttribute("stroke", "rgba(58,46,37,0.4)");
+    path.setAttribute("stroke", "rgba(22,22,22,0.4)");
     path.setAttribute("stroke-width", "0.9");
     path.setAttribute("stroke-linecap", "round");
     svg.appendChild(path);
@@ -711,7 +711,7 @@ function init() {
         `transform:translate(-50%,-50%) rotate(${Math.round(rnd() * 60 - 30)}deg);` +
         `z-index:${Math.min(27, Math.max(2, zi))};` +
         `filter:saturate(${(1 - 0.45 * p).toFixed(2)}) brightness(${depth ? 0.87 : 1}) ` +
-        `drop-shadow(0 ${depth ? 2 : 3}px ${depth ? 3 : 5}px rgba(58,46,37,${depth ? 0.2 : 0.38}));` +
+        `drop-shadow(0 ${depth ? 2 : 3}px ${depth ? 3 : 5}px rgba(22,22,22,${depth ? 0.2 : 0.38}));` +
         `opacity:${(1 - 0.22 * p).toFixed(2)};`;
       // 紙玉は本物のクシャ描画エンジンで描く：その手紙の本文が実際に折り込まれた玉になる。
       // 形は id から決まるので、いつ開いても同じ潰れ方のまま底に沈んでいる。

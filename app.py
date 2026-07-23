@@ -2117,6 +2117,54 @@ def api_map():
     return jsonify(points=points)
 
 
+@app.route("/api/map/moods")
+@login_required
+def api_map_moods():
+    # 気分の地図（エリア単位 aura）。サーバから返すのはエリアに集約済みのものだけ：
+    #   ・座標の生値・手紙id・本文は載せない（center/bbox はエリア内の丸め済み座標から出す）
+    #   ・moods は開封済みの手紙のみ。封をしたままの気分色はサーバから出さない（開封で初めて色が出る）
+    #   ・件数は返さない。moods の配列長がそのまま件数になるため、返す前にシャッフルし
+    #     8件を超えたら8件に切る（色の混ざり具合は8件あれば十分収束する）
+    #   ・has_sealed は真偽値のみ。数は出さない
+    # ?until=<ISO日時> は /api/map と同じ「あの日の地図」用（開封状態も当時の姿で判定）。
+    until = (request.args.get("until") or "").strip()[:32] or None
+    rows = get_db().execute(
+        """SELECT area_name, area_lat, area_lng, opened, opened_at, sent_date, seal_color
+           FROM letters
+           WHERE user_id=? AND area_name IS NOT NULL
+             AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
+        (uid(),)).fetchall()
+    areas = {}
+    for r in rows:
+        if until and (r["sent_date"] or "") > until:
+            continue   # その日にはまだ封をしていなかった
+        if until:
+            opened = bool(r["opened"]) and bool(r["opened_at"]) and r["opened_at"] <= until
+        else:
+            opened = bool(r["opened"])
+        a = areas.setdefault(r["area_name"], {"lats": [], "lngs": [], "moods": [], "sealed": False})
+        a["lats"].append(r["area_lat"])
+        a["lngs"].append(r["area_lng"])
+        if opened:
+            m = _mood_index(r["seal_color"])
+            if m is not None:
+                a["moods"].append(_MOOD_SLUGS[m])
+        else:
+            a["sealed"] = True
+    out = []
+    for name, a in areas.items():
+        random.shuffle(a["moods"])
+        out.append({
+            "id": name, "label": name,
+            "center": [round(sum(a["lats"]) / len(a["lats"]), 3),
+                       round(sum(a["lngs"]) / len(a["lngs"]), 3)],
+            "bbox": [[min(a["lats"]), min(a["lngs"])], [max(a["lats"]), max(a["lngs"])]],
+            "moods": a["moods"][:8],
+            "has_sealed": a["sealed"],
+        })
+    return jsonify(areas=out)
+
+
 # ── 言葉の編み物 ─────────────────────────────────────────────
 # 全レター横断の眺め。一通が一枚のパッチとして一枚の布に編まれる。地図と並行する別ビュー。
 # （「川で見る」は2026-07-22の仕様更新で廃止。単独の記録には情報量が薄いため）
@@ -2174,10 +2222,13 @@ AMBIENT_CACHE_SECONDS = 600 # 全ユーザー共通の集計なので10分キャ
 _ambient_cache = {"t": 0.0, "colors": []}
 _ambient_lock = threading.Lock()
 
-# 手染め9スウォッチ（index.html の MOOD_SWATCHES と対）。v3.7以前の自由色は最近傍へ丸め、
-# 珍しい色から個人が浮かび上がるのを防ぐ（色の量子化）。
-_MOOD_SWATCH_HEX = ["#4E5E68", "#5B6B73", "#728079", "#8A8F86", "#A7A492",
-                    "#C4B79E", "#D8A96A", "#C7724E", "#B5543A"]
+# 気分7色（index.html の MOOD_SWATCHES / mood.html の SWATCH_HEX と対）。
+# 並びは「静→明→暖→重」の温度順：凪→芽→陽→温→恋→憂→沈。
+# 旧9スウォッチ・v3.7以前の自由色は最近傍へ丸め、珍しい色から個人が浮かび上がるのを防ぐ（色の量子化）。
+_MOOD_SWATCH_HEX = ["#C9D4D2", "#C4CDB4", "#EBD9AE", "#E8C4A8",
+                    "#DFAFAE", "#C0B2C4", "#8C7F80"]
+# 地図APIが返す気分の識別子（hexは外に出さず、この slug と紙側のCSSトークン --mood-* で対応させる）
+_MOOD_SLUGS = ["nagi", "me", "hi", "on", "koi", "yuu", "shizumi"]
 
 
 def _hex_to_rgb(h):
@@ -2244,7 +2295,7 @@ _MOOD_SWATCH_INDEX = {h.lower(): i for i, h in enumerate(_MOOD_SWATCH_HEX)}
 
 
 def _mood_index(color):
-    """seal_color(HEX) → 手染め9スウォッチの番号(0-8)。v3.7以前の自由色は最近傍へ丸める。"""
+    """seal_color(HEX) → 気分7色の番号(0-6)。旧9スウォッチ・v3.7以前の自由色は最近傍へ丸める。"""
     q = _quantize_to_swatch(color)
     return _MOOD_SWATCH_INDEX.get(q.lower()) if q else None
 

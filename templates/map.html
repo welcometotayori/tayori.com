@@ -12,7 +12,26 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&family=Courier+Prime&display=swap');
-  :root{--paper:#F2EBDD;--paper-2:#EDE3D1;--ink:#3A2E25;--ink-soft:#6A5A4C;--seal:#B5543A;--line:#CBBBA0}
+  :root{
+    /* ベース4色（確定・変更不可）＋ color-mix 派生。個別のhexを足さない */
+    --paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
+    --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));
+    --paper-raised:#FFFFFF;
+    --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
+    --ink-mute:color-mix(in oklab,var(--ink) 52%,var(--paper));
+    --rule:color-mix(in oklab,var(--kraft) 38%,var(--paper));
+    --rule-firm:color-mix(in oklab,var(--kraft) 62%,var(--paper));
+    --seal-hover:color-mix(in oklab,var(--seal) 86%,var(--ink));
+    --seal-quiet:color-mix(in oklab,var(--seal) 14%,var(--paper));
+    --seal-onfill:var(--paper);
+    --focus-ring:color-mix(in oklab,var(--seal) 55%,var(--paper));
+    /* 気分7色（凪→芽→陽→温→恋→憂→沈の温度順） */
+    --mood-nagi:#C9D4D2;--mood-me:#C4CDB4;--mood-hi:#EBD9AE;--mood-on:#E8C4A8;
+    --mood-koi:#DFAFAE;--mood-yuu:#C0B2C4;--mood-shizumi:#8C7F80;
+    --mood-sealed:color-mix(in oklab,var(--kraft) 22%,var(--paper));
+    /* aura の実データ調整口 */
+    --aura-blur:28px;
+    --aura-opacity:0.42}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{background:var(--paper);color:var(--ink);
@@ -21,27 +40,48 @@
   /* 日本語の折り返し：定型文は文節（<wbr>）と句読点の後でだけ折る */
   .geo-ask p{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   header{display:flex;justify-content:space-between;align-items:baseline;
-         padding:16px 20px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+         padding:16px 20px 12px;border-bottom:1px solid var(--rule);background:var(--paper)}
   .ttl{font-size:15px;letter-spacing:0.18em}
   .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
-               color:var(--ink-soft);text-transform:uppercase;margin-left:10px}
-  .back{font-size:12.5px;letter-spacing:0.1em;color:var(--ink-soft);text-decoration:none;
-        border-bottom:1px solid var(--line);padding-bottom:1px}
+               color:var(--ink-mute);text-transform:uppercase;margin-left:10px}
+  .back{font-size:12.5px;letter-spacing:0.1em;color:var(--ink-mute);text-decoration:none;
+        border-bottom:1px solid var(--rule);padding-bottom:1px}
   .back:hover{color:var(--ink)}
-  #map{flex:1;background:var(--paper-2)}
-  /* タイルを紙の世界観へ少しだけ寄せる（彩度を落とし、わずかにセピアへ） */
-  .leaflet-tile{filter:grayscale(.3) sepia(.16) saturate(.8) brightness(1.02)}
+  #map{flex:1;background:var(--paper)}
+  /* ベースタイルを紙に寄せる（タイル自体はCarto Positronの淡いもの前提） */
+  .leaflet-tile-pane{filter:grayscale(1) contrast(0.82) brightness(1.06) sepia(0.14)}
+  .leaflet-container{background:var(--paper);font-family:inherit}
   /* 点に触れた時のささやき（エリア名と時間帯だけ） */
-  .area-tip{background:var(--paper-2);border:1px solid var(--line);border-radius:2px;
+  .area-tip,.mood-tip{background:var(--paper-raised);border:1px solid var(--rule);border-radius:2px;
             color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;
             font-size:12px;letter-spacing:0.08em;padding:5px 10px;
-            box-shadow:0 6px 18px -10px rgba(58,46,37,.5)}
-  .area-tip::before{display:none}
-  .leaflet-container{font-family:inherit}
+            box-shadow:0 6px 18px -10px rgba(22,22,22,.5)}
+  .area-tip::before,.mood-tip::before{display:none}
+  /* ── 気分の aura ──
+     --aura-color をアニメーション可能にする（開封時に --mood-sealed → 合成色へ0.9s）。
+     @property 未対応ブラウザでは遷移せず即時反映になるだけ（成立はする）。 */
+  @property --aura-color{syntax:'<color>';inherits:false;initial-value:transparent}
+  .mood-aura{
+    border-radius:50%;
+    mix-blend-mode:multiply;
+    opacity:var(--aura-opacity);
+    filter:blur(var(--aura-blur));
+    /* closest-side を使う：farthest-corner だと角まで伸びて縁が四角く見える */
+    background:radial-gradient(circle closest-side,
+                var(--aura-color) 0%,
+                transparent 72%);
+    will-change:transform;
+    transition:opacity .4s ease,--aura-color .9s ease}
+  @media (prefers-reduced-motion:reduce){
+    .mood-aura{transition:none}}
+  /* エリアの点：紙色の細いリング（SVG strokeで描く）＋わずかな影で aura の上でも沈まない */
+  .mood-dot{filter:drop-shadow(0 1px 2px color-mix(in oklab,var(--ink) 18%,transparent))}
+  /* 未開封の気配：ごく薄い無彩色の輪。色は出さない */
+  .mood-sealed-ring{border:1px solid var(--rule);border-radius:50%;opacity:.5}
   /* 位置情報がまだ許されていない時の、手紙のことばでの頼み（OS風の文言は使わない） */
   .geo-ask{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1000;
-    width:min(420px,calc(100% - 32px));background:var(--paper-2);border:1px solid var(--line);border-radius:4px;
-    padding:18px 20px 16px;box-shadow:0 18px 44px -18px rgba(58,46,37,.6);
+    width:min(420px,calc(100% - 32px));background:var(--paper-sunk);border:1px solid var(--rule);border-radius:4px;
+    padding:18px 20px 16px;box-shadow:0 18px 44px -18px rgba(22,22,22,.6);
     animation:geoIn .5s ease both;transition:opacity .4s,transform .4s}
   .geo-ask.bye{opacity:0;transform:translateX(-50%) translateY(8px);pointer-events:none}
   @keyframes geoIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
@@ -51,20 +91,20 @@
     cursor:pointer;border-radius:22px;padding:9px 18px;transition:opacity .2s,color .2s,border-color .2s}
   .geo-yes{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
   .geo-yes:hover{opacity:.86}
-  .geo-no{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
-  .geo-no:hover{color:var(--ink);border-color:var(--ink-soft)}
+  .geo-no{background:transparent;color:var(--ink-mute);border:1px solid var(--rule)}
+  .geo-no:hover{color:var(--ink);border-color:var(--ink-mute)}
   @media (prefers-reduced-motion:reduce){.geo-ask{animation:none;transition:none}}
   /* 「あの日⇄今日」の見比べ（開封画面から ?asof= 付きで来た時だけ現れる） */
   .cmp{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;gap:4px;
-    background:var(--paper-2);border:1px solid var(--line);border-radius:24px;padding:4px;
-    box-shadow:0 10px 26px -14px rgba(58,46,37,.55)}
+    background:var(--paper-sunk);border:1px solid var(--rule);border-radius:24px;padding:4px;
+    box-shadow:0 10px 26px -14px rgba(22,22,22,.55)}
   .cmp[hidden]{display:none}  /* display:flex が hidden 属性を上書きしないように */
   .cmp button{font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;font-size:12px;letter-spacing:0.08em;
-    border:0;border-radius:20px;padding:7px 14px;background:transparent;color:var(--ink-soft);cursor:pointer;transition:background .2s,color .2s}
+    border:0;border-radius:20px;padding:7px 14px;background:transparent;color:var(--ink-mute);cursor:pointer;transition:background .2s,color .2s}
   .cmp button.on{background:var(--ink);color:var(--paper)}
   /* 開封の弧を辿る封蝋（雫ほどの小さな点） */
   .seal-dot{width:14px;height:14px;border-radius:50%;background:var(--seal);
-    border:1px solid rgba(58,46,37,.55);box-shadow:0 2px 8px -2px rgba(58,46,37,.6)}
+    border:1px solid rgba(22,22,22,.55);box-shadow:0 2px 8px -2px rgba(22,22,22,.6)}
 </style>
 </head>
 <body>
@@ -101,12 +141,21 @@
 <script>
 (async function(){
   const map=L.map('map',{zoomControl:true,attributionControl:true});
-  // 下敷きはOSM一枚。かつては日本の範囲だけ国土地理院タイルを重ねていたが、
-  // 国外（旅先・移住先）では描けず、層も煩雑になるため一本化した。
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:19,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  // 下敷きはCarto Positron一枚（元から淡い。標準OSMだと彩度が残ってauraが埋もれる）。
+  // かつては日本の範囲だけ国土地理院タイルを重ねていたが、国外では描けず層も煩雑になるため一本化した。
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    maxZoom:19,subdomains:'abcd',
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
+
+  // ── moodペイン：tiles=200, overlay=400, marker=600, popup=700 の間（450）──
+  // blend mode は各auraの要素側に付ける。ペインに付けるとスタッキングコンテキストが
+  // 分離してタイルと合成されなくなる。ペイン全体はopacityだけで沈める。
+  map.createPane('mood');
+  const moodPane=map.getPane('mood');
+  moodPane.style.zIndex=450;
+  moodPane.style.pointerEvents='none';
+  moodPane.style.opacity='0.55';
 
   // ── 日照のオーバーレイ（ShadeMap）：その時刻の光と影を地図にまとわせる ──
   // キーが無い・WebGLが使えない環境では黙って素の地図のまま（無くても地図は成立する）。
@@ -138,10 +187,106 @@
   // 載せる前の呼び出しは wantShadeDate に控えるだけ（initShade がその日時で起動する）
   function shadeDate(d){if(!d||isNaN(d))return;wantShadeDate=d;if(shadeMap){try{shadeMap.setDate(d);}catch(e){}}}
 
-  // 点の色は「状態」で分ける（3色）。
-  //   現在地＝青 / 保存した場所（未開封）＝朱（封蝋の色） / 開封後の場所＝灰緑
-  // 表示は非対称：未開封は「場所名」だけ、現在地と開封後は「日時・時間帯・天気」＝時間と空気が主役。
-  const C_CURRENT='#5C7FA6', C_UNREAD='#B5543A', C_OPENED='#7D8B72';
+  // ── 色の解決 ──
+  // circleMarker の fillColor に var() が効かないブラウザがあるので、CSS変数（color-mixの
+  // ネスト含む）はダミー要素に当てて getComputedStyle で実色に解決してから渡す。
+  const probe=document.createElement('span');
+  document.body.appendChild(probe);
+  function resolveColor(cssColor){
+    probe.style.color=cssColor;
+    return getComputedStyle(probe).color;
+  }
+  const PAPER=resolveColor('var(--paper)'),INK=resolveColor('var(--ink)'),
+        INK_MUTE=resolveColor('var(--ink-mute)'),KRAFT=resolveColor('var(--kraft)');
+
+  // ── 気分色の合成：OKLabでの逐次加重平均。変換はブラウザ（color-mix）に任せる ──
+  // ネストの深さはサーバのサンプリング上限（8件）まで。8件あれば混色は十分収束する。
+  const MOOD_VAR=m=>`var(--mood-${m})`;
+  function blendMoods(moods){
+    if(!moods||moods.length===0)return 'var(--mood-sealed)';
+    return moods.map(MOOD_VAR).reduce((acc,c,i)=>
+      i===0?c
+           :`color-mix(in oklab, ${acc} ${(i/(i+1))*100}%, ${c})`
+    );
+  }
+
+  // ── auraの半径：件数ではなくbboxの実寸から出す ──
+  // 件数に紐づけると密度＝活動量の可視化になり、設計思想（件数を面積や濃度で表現しない）から外れる。
+  function auraRadiusPx(map,area){
+    const [sw,ne]=area.bbox;
+    const a=map.latLngToLayerPoint(L.latLng(sw));
+    const b=map.latLngToLayerPoint(L.latLng(ne));
+    const diag=Math.hypot(b.x-a.x,b.y-a.y);
+    return Math.min(Math.max(diag*0.58,64),260); // 下限64px 上限260px
+  }
+
+  // 点（とその上に載る線）はmarkerPane(z600)のSVGに描き、aura(450)より上へ出す
+  const dotRenderer=L.svg({pane:'markerPane'});
+
+  // ── moodレイヤー本体：エリアごとに aura + 未開封の輪 + 合成色の点 ──
+  function createMoodLayer(list){
+    const auraGroup=L.layerGroup();
+    const dotGroup=L.layerGroup();
+    const auras=[];
+    const byLabel={};
+    list.forEach(area=>{
+      const color=blendMoods(area.moods);
+
+      // aura（本人不在のクリック対象にしない：interactive:false・ペインもpointer-events:none）
+      const el=document.createElement('div');
+      el.className='mood-aura';
+      el.style.setProperty('--aura-color',color);
+      const icon=L.divIcon({html:el,className:'',iconSize:[0,0]});
+      L.marker(area.center,{icon,pane:'mood',interactive:false,keyboard:false}).addTo(auraGroup);
+
+      // 未開封の気配：auraとは別の、ごく薄い無彩色の輪（数は描かない）
+      let ringEl=null;
+      if(area.has_sealed){
+        ringEl=document.createElement('div');
+        ringEl.className='mood-sealed-ring';
+        const ricon=L.divIcon({html:ringEl,className:'',iconSize:[0,0]});
+        L.marker(area.center,{icon:ricon,pane:'mood',interactive:false,keyboard:false}).addTo(auraGroup);
+      }
+
+      // マーカー本体：紙色の細いリングを一枚挟むと、auraの上でも点が沈まない
+      const dot=L.circleMarker(area.center,{
+        renderer:dotRenderer,
+        radius:5,
+        color:PAPER,weight:1.5,opacity:1,
+        fillColor:area.moods.length?resolveColor(color):resolveColor('var(--mood-sealed)'),
+        fillOpacity:0.95,
+        className:'mood-dot'
+      }).addTo(dotGroup);
+      dot.bindTooltip(area.label,{direction:'top',offset:[0,-8],className:'mood-tip'});
+
+      auras.push({area,el,ringEl});
+      byLabel[area.label]={el,color};
+    });
+
+    function resize(){
+      if(!map._loaded)return;  // view確定前は測れない（frameAndIntro後に呼び直す）
+      auras.forEach(({area,el,ringEl})=>{
+        const r=auraRadiusPx(map,area);
+        [el,ringEl].forEach(n=>{
+          if(!n)return;
+          n.style.width=`${r*2}px`;
+          n.style.height=`${r*2}px`;
+          n.style.marginLeft=`${-r}px`;
+          n.style.marginTop=`${-r}px`;
+        });
+      });
+    }
+    map.on('zoomend',resize);
+    resize();
+
+    return {
+      add(){auraGroup.addTo(map);dotGroup.addTo(map);resize();},
+      remove(){map.removeLayer(auraGroup);map.removeLayer(dotGroup);},
+      resize,byLabel,
+      destroy(){map.off('zoomend',resize);}
+    };
+  }
+
   const BUCKET_JP={morning:'朝',day:'昼',evening:'夕',night:'夜'};
   const WX_JP={snow:'雪',rain:'雨',fog:'霧',cloud:'曇り',clear:'晴れ'};
 
@@ -169,39 +314,55 @@
   // どちらの地図も、いま（開封の瞬間）に取りにいく最新のデータから描く。
   const ASOF=((new URLSearchParams(location.search)).get('asof')||'').slice(0,19)||null;
 
-  let points=[],pointsThen=null;
+  // エリアに集約済みのものだけを取りにいく（生座標・手紙id・件数はサーバから来ない）。
+  // 開封の弧（?asof= の時だけ）には /api/map の点が要るので、その時だけ併せて取る。
+  let areas=[],areasThen=null,points=[];
   try{
-    const r=await fetch('/api/map',{credentials:'same-origin'});
+    const r=await fetch('/api/map/moods',{credentials:'same-origin'});
     if(r.status===401){location.href='/';return;}
-    points=((await r.json())||{}).points||[];
+    areas=((await r.json())||{}).areas||[];
     if(ASOF){
-      const r2=await fetch('/api/map?until='+encodeURIComponent(ASOF),{credentials:'same-origin'});
-      if(r2.ok)pointsThen=((await r2.json())||{}).points||[];
+      const [r2,r3]=await Promise.all([
+        fetch('/api/map/moods?until='+encodeURIComponent(ASOF),{credentials:'same-origin'}),
+        fetch('/api/map',{credentials:'same-origin'})
+      ]);
+      if(r2.ok)areasThen=((await r2.json())||{}).areas||[];
+      if(r3.ok)points=((await r3.json())||{}).points||[];
     }
   }catch(e){/* 取れなくても地図はそのまま（説明文は出さない） */}
 
+  const REDUCE=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  const layerNow=createMoodLayer(areas);
+  const layerThen=(ASOF&&areasThen)?createMoodLayer(areasThen):null;
+  const currentLayer=L.layerGroup();   // 現在地は「今日」の地図の住人
   const latlngs=[];
-  const layerNow=L.layerGroup();                       // 今日の点（現在地の青もここに入る）
-  const layerThen=(ASOF&&pointsThen)?L.layerGroup():null;  // あの日＝封をした日時点の点
-  function draw(pts,layer){
-    pts.forEach(p=>{
-      if(p.area_lat==null||p.area_lng==null)return;
-      const ll=[p.area_lat,p.area_lng];latlngs.push(ll);
-      const m=L.circleMarker(ll,{
-        radius:7.5,stroke:true,color:'#3A2E25',weight:1.25,opacity:0.75,
-        fillColor:p.opened?C_OPENED:C_UNREAD,
-        fillOpacity:0.75   // 細い墨の縁で地図から浮かせる。重なった点は塗りが濃くなり密度も伝わる
-      }).addTo(layer);
-      // 未開封＝場所そのものが主役（場所名だけ）。開封後＝封をした時間と空気が主役。
-      whisper(m,p.opened?airLabel(p.sent_at,p.time_bucket,p.weather):(p.area_name||''));
-    });
+  areas.forEach(a=>{latlngs.push(a.bbox[0],a.bbox[1]);});
+
+  // ── 開封の一滴 ──
+  // 開封画面から来た時、封をしていたエリアのauraを --mood-sealed から合成色へ0.9秒かけて
+  // 落とす（封蝋を開ける演出の直後に、地図側で一滴落ちる形）。reduced-motionでは即時反映。
+  let pendingDrop=null;
+  function armDrop(){
+    if(REDUCE||!ASOF)return;   // 動きを控える設定では、最初から合成色のまま
+    const pt=points.find(q=>q.opened&&(q.sent_at||'').slice(0,19)===ASOF);
+    const e=pt&&layerNow.byLabel[pt.area_name];
+    if(!e)return;
+    e.el.style.setProperty('--aura-color','var(--mood-sealed)');
+    pendingDrop=e;
   }
-  draw(points,layerNow);
-  if(layerThen)draw(pointsThen,layerThen);
+  function performDrop(){
+    if(!pendingDrop)return;
+    const e=pendingDrop;pendingDrop=null;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      e.el.style.setProperty('--aura-color',e.color);
+    }));
+  }
+  armDrop();
 
   if(layerThen){
-    // まず「あの日」から。今日に切り替えると、その間に増えた点・開いた封が現れる。
-    layerThen.addTo(map);
+    // まず「あの日」から。今日に切り替えると、その間に増えたエリア・開いた封の色が現れる。
+    layerThen.add();
     shadeDate(new Date(ASOF));  // あの日の面には、封をした瞬間の光を
     const bar=document.getElementById('cmp');bar.hidden=false;
     const d=new Date(ASOF);
@@ -209,14 +370,19 @@
       'あの日 · '+d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate();
     bar.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
       bar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-      if(b.dataset.side==='now'){map.removeLayer(layerThen);layerNow.addTo(map);shadeDate(new Date());}
-      else{map.removeLayer(layerNow);layerThen.addTo(map);shadeDate(new Date(ASOF));}
+      if(b.dataset.side==='now'){
+        layerThen.remove();layerNow.add();currentLayer.addTo(map);
+        shadeDate(new Date());
+        performDrop();   // 今日の面をはじめて見た時に、一滴落ちる
+      }else{
+        layerNow.remove();map.removeLayer(currentLayer);layerThen.add();
+        shadeDate(new Date(ASOF));
+      }
     }));
   }else{
-    layerNow.addTo(map);
+    layerNow.add();
+    currentLayer.addTo(map);
   }
-
-  const REDUCE=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches;
 
   function frameAndIntro(){
     if(latlngs.length){
@@ -225,7 +391,9 @@
       map.setView([30,15],2);  // まだ点がない時は、固定の静かな世界図
     }
     initShade();  // view が確定してから日照オーバーレイを載せる（未設定だと addTo が例外）
+    layerNow.resize();if(layerThen)layerThen.resize();  // view確定後にauraの寸法を当てる
     drawOpeningArc();
+    if(!layerThen)setTimeout(performDrop,2400);  // 見比べ無しの時：弧の演出が落ち着いた頃に一滴
   }
   // コンテナが高さ0のまま寄る（fitBounds）とズームが最大に張り付いて壊れる
   // （非表示タブでの復元・埋め込みブラウザ・プリレンダリング等）。
@@ -273,12 +441,14 @@
     // 弧の全体（両端と頂点）が見えるように寄り直す。上のfitBoundsより優先
     map.fitBounds(L.latLngBounds([sealed,opened,bezier(0.5)]),{padding:[56,56],maxZoom:13});
     const arc=L.curve(['M',sealed,'Q',control,opened],
-      {color:'#6A5A4C',weight:2,dashArray:'4,6',fill:false,opacity:0,interactive:false}).addTo(map);
-    // 着いたあと：弧は薄く残り、開いた場所に灰緑の点が残る（触れると土地の名まえ）
+      {renderer:dotRenderer,   // auraの下で滲まないよう、点と同じ面（markerPane）に引く
+       color:INK_MUTE,weight:2,dashArray:'4,6',fill:false,opacity:0,interactive:false}).addTo(map);
+    // 着いたあと：弧は薄く残り、開いた場所に耳色（kraft）の点が残る（触れると土地の名まえ）
     function settle(){
       arc.setStyle({opacity:0.45});
-      const m=L.circleMarker(opened,{radius:6,stroke:true,color:'#3A2E25',weight:1.25,
-        opacity:0.75,fillColor:C_OPENED,fillOpacity:0.75}).addTo(map);
+      const m=L.circleMarker(opened,{renderer:dotRenderer,radius:6,
+        color:PAPER,weight:1.5,opacity:1,
+        fillColor:KRAFT,fillOpacity:0.9,className:'mood-dot'}).addTo(map);
       whisper(m,p.open_area_name||'');
     }
     if(REDUCE){settle();return;}  // 動きを控える設定では、静かな弧と点だけ
@@ -324,15 +494,16 @@
     const lat=Math.round(e.latlng.lat*1000)/1000,
           lng=Math.round(e.latlng.lng*1000)/1000;
     // 現在地は「今日」の地図の住人。あの日⇄今日の見比べでは、今日の側にだけ現れる。
+    // 色は状態色を足さず墨一色（いま・ここに居る、という事実だけを描く）。
     L.circleMarker([lat,lng],{
-      radius:14,stroke:false,
-      fillColor:C_CURRENT,fillOpacity:0.18,
+      renderer:dotRenderer,radius:14,stroke:false,
+      fillColor:INK,fillOpacity:0.12,
       interactive:false          // ハロー自体はクリック/ホバー判定を持たない
-    }).addTo(layerNow);
+    }).addTo(currentLayer);
     const m=L.circleMarker([lat,lng],{
-      radius:8,color:C_CURRENT,weight:2,opacity:0.9,
-      fillColor:C_CURRENT,fillOpacity:0.75
-    }).addTo(layerNow);
+      renderer:dotRenderer,radius:7,color:PAPER,weight:1.5,opacity:1,
+      fillColor:INK,fillOpacity:0.8,className:'mood-dot'
+    }).addTo(currentLayer);
     if(!ASOF)map.setView([lat,lng],12);  // 現在地の周辺へ。エリア精度なので寄りすぎない
     let wx=null;
     try{

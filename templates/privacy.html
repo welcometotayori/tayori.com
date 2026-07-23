@@ -6,19 +6,23 @@
 {% set og_type = 'article' %}
 {% include '_head.html' %}
 <style>
-  body { background: #F2EBDD; color: #3A2E25; font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', serif; line-height: 1.95; padding: 48px 20px 64px; max-width: 720px; margin: 0 auto; line-break: strict; }
+  :root{--paper:#F2F1ED;--ink:#161616;--seal:#710014;--kraft:#B38F6F;
+        --paper-sunk:color-mix(in oklab,var(--paper) 92%,var(--ink));
+        --ink-body:color-mix(in oklab,var(--ink) 82%,var(--paper));
+        --rule:color-mix(in oklab,var(--kraft) 38%,var(--paper))}
+  body { background: var(--paper); color: var(--ink); font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', serif; line-height: 1.95; padding: 48px 20px 64px; max-width: 720px; margin: 0 auto; line-break: strict; }
   h1 { font-size: 25px; text-align: center; letter-spacing: 0.08em; margin-bottom: 8px; }
   .lead-meta { text-align: center; font-size: 12px; color: #9c8f7c; letter-spacing: 0.05em; margin-bottom: 36px; }
-  h2 { font-size: 16px; color: #B5543A; margin: 34px 0 10px; border-bottom: 1px solid #CBBBA0; padding-bottom: 5px; letter-spacing: 0.03em; }
-  h3 { font-size: 14px; color: #3A2E25; margin: 18px 0 6px; font-weight: 600; }
-  p, li { font-size: 13.5px; letter-spacing: 0.03em; color: #6A5A4C; margin-bottom: 9px; }
+  h2 { font-size: 16px; color: var(--seal); margin: 34px 0 10px; border-bottom: 1px solid var(--rule); padding-bottom: 5px; letter-spacing: 0.03em; }
+  h3 { font-size: 14px; color: var(--ink); margin: 18px 0 6px; font-weight: 600; }
+  p, li { font-size: 13.5px; letter-spacing: 0.03em; color: var(--ink-body); margin-bottom: 9px; }
   ul, ol { padding-left: 22px; margin-bottom: 10px; }
   li { margin-bottom: 6px; }
-  .intro { font-size: 13.5px; color: #6A5A4C; background: #EDE3D1; border: 1px solid #CBBBA0; border-left: 3px solid #B5543A; border-radius: 3px; padding: 14px 16px; margin-bottom: 8px; }
+  .intro { font-size: 13.5px; color: var(--ink-body); background: var(--paper-sunk); border: 1px solid var(--rule); border-left: 3px solid var(--seal); border-radius: 3px; padding: 14px 16px; margin-bottom: 8px; }
   table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
-  th, td { border: 1px solid #CBBBA0; padding: 8px 10px; font-size: 12.5px; text-align: left; color: #6A5A4C; vertical-align: top; }
-  th { background: #EDE3D1; color: #3A2E25; font-weight: 600; white-space: nowrap; }
-  a { color: #6B8478; }
+  th, td { border: 1px solid var(--rule); padding: 8px 10px; font-size: 12.5px; text-align: left; color: var(--ink-body); vertical-align: top; }
+  th { background: var(--paper-sunk); color: var(--ink); font-weight: 600; white-space: nowrap; }
+  a { color: var(--seal); }
   .foot { text-align: center; margin-top: 56px; font-size: 12px; color: #9c8f7c; }
 </style>
 </head>
