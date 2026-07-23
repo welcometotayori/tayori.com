@@ -367,6 +367,30 @@ def _seed_questions(db):
 
 _init_db_done = False
 
+def _compute_grid_id(lat, lng):
+    """area_lat/lng を0.1度セルへ丸めた識別子 "{lat}_{lng}"（約11km四方）。
+    位置なし手紙は None。丸めは新規付与とバックフィルで同一式を使う（文字列一致が命）。"""
+    if lat is None or lng is None:
+        return None
+    try:
+        return f"{round(float(lat), 1)}_{round(float(lng), 1)}"
+    except (TypeError, ValueError):
+        return None
+
+
+def _backfill_grid_ids(db):
+    """既存の手紙に grid_id を一度だけ付与する。丸めは Python 側で行い、
+    compute_grid_id と完全一致させる（SQLite の ROUND→TEXT 変換の桁化けを避ける）。"""
+    rows = db.execute(
+        "SELECT id, area_lat, area_lng FROM letters "
+        "WHERE grid_id IS NULL AND area_lat IS NOT NULL AND area_lng IS NOT NULL"
+    ).fetchall()
+    for r in rows:
+        gid = _compute_grid_id(r["area_lat"], r["area_lng"])
+        if gid:
+            db.execute("UPDATE letters SET grid_id=? WHERE id=?", (gid, r["id"]))
+
+
 def init_db():
     global _init_db_done
     if _init_db_done:
@@ -507,6 +531,16 @@ def init_db():
             # ほどける日時（2026-07-22「ほどけるまで」）。この日時を過ぎた紙玉は
             # 色片(woven_scraps)へ溶け、本文と筆跡は物理的に消える（不可逆）。
             "ALTER TABLE unemptyable_trash ADD COLUMN unravel_at TEXT",
+            # 気分の地図（Mood Night Map / 2026-07-23）。A(気分の宙)・B(地図)で共通の集計基盤。
+            #   grid_id                  … area_lat/lng を0.1度に丸めたセル識別子 "{lat}_{lng}"（約11km四方）
+            #   excluded_from_aggregate  … A・B共通のオプトアウト。0=集計に含める(既定) / 1=外す
+            "ALTER TABLE letters ADD COLUMN grid_id TEXT",
+            "ALTER TABLE letters ADD COLUMN excluded_from_aggregate INTEGER DEFAULT 0",
+            # ユーザー単位のオプトアウト意思。ONにすると既存・今後すべての手紙を集計から外す。
+            # letters.excluded_from_aggregate は投函時にこの値から写す（集計クエリは手紙側だけ見ればよい）。
+            "ALTER TABLE users ADD COLUMN aggregate_opt_out INTEGER DEFAULT 0",
+            # 気分の地図のリリース告知（事後同意）。一度出したらこの時刻を立てて再表示しない。
+            "ALTER TABLE users ADD COLUMN night_map_notice_seen_at TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -518,6 +552,23 @@ def init_db():
         db.execute(
             "UPDATE unemptyable_trash SET unravel_at=? WHERE unravel_at IS NULL",
             ((datetime.now() + timedelta(days=7)).isoformat(timespec="seconds"),))
+
+        # ── 気分の地図（Mood Night Map）の集計テーブル ────────────────
+        # Postgres なら MATERIALIZED VIEW だが、たよりは SQLite なので普通のテーブルとして持ち、
+        # 日次で作り直す（_refresh_mood_grid）。しきい値10通未満のセルはそもそも入れない。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS mood_grid (
+                grid_id TEXT NOT NULL,
+                mood    INTEGER NOT NULL,
+                n       INTEGER NOT NULL,
+                latest  TEXT,
+                lat     REAL,
+                lng     REAL,
+                PRIMARY KEY (grid_id, mood)
+            )""")
+        # grid_id バックフィル: 丸めは Python の compute_grid_id と完全一致させる必要がある
+        # （SQLite の CAST(ROUND(x,1) AS TEXT) は "33.600000000000001" 等の桁化けを起こすため使わない）。
+        _backfill_grid_ids(db)
 
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
@@ -630,7 +681,8 @@ def current_user():
     if not u:
         return None
     return get_db().execute(
-        "SELECT id,username,email,email_verified,onboarded FROM users WHERE id=?", (u,)
+        "SELECT id,username,email,email_verified,onboarded,"
+        "aggregate_opt_out,night_map_notice_seen_at FROM users WHERE id=?", (u,)
     ).fetchone()
 
 
@@ -1189,11 +1241,15 @@ def api_me():
     u = current_user()
     if not u:
         return jsonify(auth=False, weather_enabled=NETWORK_ENABLED)
+    keys = u.keys()
     return jsonify(auth=True, username=u["username"],
                    is_admin=(u["username"] == "admin"),
-                   email=u["email"] if "email" in u.keys() else None,
-                   email_verified=bool(u["email_verified"]) if "email_verified" in u.keys() else False,
-                   onboarded=bool(u["onboarded"]) if "onboarded" in u.keys() else True,
+                   email=u["email"] if "email" in keys else None,
+                   email_verified=bool(u["email_verified"]) if "email_verified" in keys else False,
+                   onboarded=bool(u["onboarded"]) if "onboarded" in keys else True,
+                   # 気分の地図: 集計オプトアウトの状態と、リリース告知を出すべきか
+                   aggregate_opt_out=bool(u["aggregate_opt_out"]) if "aggregate_opt_out" in keys else False,
+                   night_map_notice=not bool(u["night_map_notice_seen_at"]) if "night_map_notice_seen_at" in keys else True,
                    weather_enabled=NETWORK_ENABLED)
 
 
@@ -1254,6 +1310,39 @@ def api_change_password():
         return jsonify(error="新しいパスワードは8文字以上にしてください。"), 400
     with _WRITE_LOCK:
         db.execute("UPDATE users SET pw_hash=? WHERE id=?", (_hash_pw(new), uid()))
+        db.commit()
+    return jsonify(ok=True)
+
+
+@app.route("/api/settings/aggregate-opt-out", methods=["GET", "POST"])
+@login_required
+def api_aggregate_opt_out():
+    """気分の地図（A・B共通）の集計から自分の手紙を外す/戻す。
+    ONにするとユーザーの既存・今後すべての手紙が対象（今後ぶんは投函時に写す）。
+    集計テーブルは日次更新なので、地図への反映は即時ではない（意図的）。"""
+    db = get_db()
+    if request.method == "POST":
+        out = 1 if request.get_json(force=True).get("opt_out") else 0
+        with _WRITE_LOCK:
+            db.execute("UPDATE users SET aggregate_opt_out=? WHERE id=?", (out, uid()))
+            db.execute("UPDATE letters SET excluded_from_aggregate=? WHERE user_id=?", (out, uid()))
+            db.commit()
+        return jsonify(ok=True, opt_out=bool(out))
+    row = db.execute(
+        "SELECT COALESCE(aggregate_opt_out,0) AS o FROM users WHERE id=?", (uid(),)).fetchone()
+    return jsonify(opt_out=bool(row and row["o"]))
+
+
+@app.route("/api/settings/night-map-notice-seen", methods=["POST"])
+@login_required
+def api_night_map_notice_seen():
+    """気分の地図リリース告知を一度出したら既読にする（再表示しない）。"""
+    db = get_db()
+    with _WRITE_LOCK:
+        db.execute(
+            "UPDATE users SET night_map_notice_seen_at=? "
+            "WHERE id=? AND night_map_notice_seen_at IS NULL",
+            (datetime.now().isoformat(timespec="seconds"), uid()))
         db.commit()
     return jsonify(ok=True)
 
@@ -1815,6 +1904,7 @@ def start_notifier(interval=None):
         # 起動直後の登録とDBで競合する温床だった）。初回は起動から約5分後にずらす。
         last_backup = time.time() - backup_hours * 3600 + 300
         last_dissolve = 0.0
+        last_mood_grid = 0.0    # 気分の地図の集計。0.0 起点で起動直後に一度作る
         time.sleep(grace + 8)   # persist は notifier より少し後ろにずらす
         while True:
             try:
@@ -1835,6 +1925,18 @@ def start_notifier(interval=None):
                         _db.close()
             except Exception as e:
                 print(f"[たより] 溶解バッチでエラー（継続）: {e}", flush=True)
+            try:
+                # 気分の地図: 集計テーブルを日次で作り直す（即時反映しないのが設計）
+                if time.time() - last_mood_grid >= 86400:
+                    last_mood_grid = time.time()
+                    _db = _connect()
+                    try:
+                        c = _refresh_mood_grid(_db)
+                        print(f"[たより] 気分の地図: {c}セルを更新", flush=True)
+                    finally:
+                        _db.close()
+            except Exception as e:
+                print(f"[たより] 気分の地図の更新でエラー（継続）: {e}", flush=True)
             try:
                 if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:
                     ok = _run_backup_to_s3()
@@ -2126,6 +2228,139 @@ def api_amimono_ambient():
     return jsonify(colors=colors)
 
 
+# ── 気分の宙（mood space）────────────────────────────────────
+# 全ユーザーの手紙を、地理ではなく感情の座標に置く集合ビュー（/mood）。
+# 返すのは「気分の番号・封じた時刻・開いた時刻（未開封なら開く予定）」だけ。
+# 誰の手紙か・どこでか・何が書かれているかは、サーバも返さない。
+# 時刻は1分に丸める（秒単位の一致から個人の行動が浮かばないように。
+# どの期間表示でも1分は1px未満なので、絵は変わらない）。
+
+MOOD_SPACE_RANGES = {"1d": 1, "1w": 7, "1m": 30, "1y": 365, "all": None}
+MOOD_SPACE_CACHE_SECONDS = 300  # 全ユーザー共通の集計なので5分キャッシュ（無料枠のDB負荷対策）
+_mood_space_cache = {}          # range -> {"t": epoch, "body": dict}
+_mood_space_lock = threading.Lock()
+
+_MOOD_SWATCH_INDEX = {h.lower(): i for i, h in enumerate(_MOOD_SWATCH_HEX)}
+
+
+def _mood_index(color):
+    """seal_color(HEX) → 手染め9スウォッチの番号(0-8)。v3.7以前の自由色は最近傍へ丸める。"""
+    q = _quantize_to_swatch(color)
+    return _MOOD_SWATCH_INDEX.get(q.lower()) if q else None
+
+
+def _iso_to_epoch_min(s):
+    """ISOローカル日時文字列 → UNIX秒（1分丸め）。日付だけの旧データは0時扱い。壊れた値は None。"""
+    if not s:
+        return None
+    try:
+        t = datetime.fromisoformat(str(s).strip()[:19]).timestamp()
+    except (ValueError, TypeError):
+        return None
+    return int(t // 60) * 60
+
+
+@app.route("/mood")
+def mood_page():
+    guard = _page_login_guard()
+    if guard:
+        return guard
+    return render_template("mood.html")
+
+
+@app.route("/api/mood-space")
+@login_required
+def api_mood_space():
+    rng = (request.args.get("range") or "all").strip()
+    if rng not in MOOD_SPACE_RANGES:
+        rng = "all"
+    now = time.time()
+    with _mood_space_lock:
+        c = _mood_space_cache.get(rng)
+        if c and now - c["t"] < MOOD_SPACE_CACHE_SECONDS:
+            return jsonify(c["body"])
+    days = MOOD_SPACE_RANGES[rng]
+    # SELECT * は使わない：本文(poem)・位置(area_*)・idの類を絶対に載せないため、列を指で数えて書く。
+    # excluded_from_aggregate は A・B 共通のオプトアウト。宙（A）も地図（B）も同じ意思を尊重する。
+    where = ("COALESCE(demo_mode,0)=0 AND COALESCE(excluded_from_aggregate,0)=0 "
+             "AND seal_color IS NOT NULL AND seal_color<>''")
+    params = []
+    if days is not None:
+        # sent_date はISO文字列なので文字列比較で時系列になる（/api/map と同じ流儀）
+        params.append((datetime.now() - timedelta(days=days)).isoformat(timespec="seconds"))
+        where += " AND sent_date>=?"
+    rows = get_db().execute(
+        "SELECT seal_color, sent_date, opened, opened_at, arrive_at, arrive_date "
+        "FROM letters WHERE " + where + " ORDER BY sent_date ASC", params).fetchall()
+    points, oldest = [], None
+    for r in rows:
+        m = _mood_index(r["seal_color"])
+        s = _iso_to_epoch_min(r["sent_date"])
+        if m is None or s is None:
+            continue
+        p = {"m": m, "s": s, "o": None}
+        if _letter_opened(r):
+            # opened_at列が無い時代の旧データは「開けるようになった時刻」で代用（無ければ封緘時刻）
+            p["o"] = (_iso_to_epoch_min(r["opened_at"]) or _iso_to_epoch_min(r["arrive_at"])
+                      or _iso_to_epoch_min(r["arrive_date"]) or s)
+        else:
+            d = _iso_to_epoch_min(r["arrive_at"]) or _iso_to_epoch_min(r["arrive_date"])
+            if d:
+                p["d"] = d
+        if oldest is None or s < oldest:
+            oldest = s
+        points.append(p)
+    body = {"now": int(now), "range": rng, "oldest": oldest, "points": points}
+    with _mood_space_lock:
+        _mood_space_cache[rng] = {"t": now, "body": body}
+    return jsonify(body)
+
+
+# ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
+# Postgres なら MATERIALIZED VIEW + REFRESH だが、たよりは SQLite なので普通のテーブルを
+# 日次で作り直す（maintenance_loop から呼ぶ）。個票・本文・ID・生座標には一切触れない。
+MOOD_GRID_THRESHOLD = 10   # 匿名性のしきい値。下げないこと（母数が小さいと色が個人を指す）
+
+
+def _refresh_mood_grid(db):
+    """0.1度セル×気分ごとに10通以上まとまった分だけを mood_grid に残す。
+    近傍量子化(_mood_index)が要るので集計は Python 側で行う。lat/lng はセル内平均
+    （セル中心ではなく平均にすることで境界のグリッド感が緩む）。返り値は残ったセル数。"""
+    agg = {}   # (grid_id, mood) -> [n, latest, lat_sum, lng_sum]
+    rows = db.execute(
+        "SELECT grid_id, seal_color, sent_date, area_lat, area_lng FROM letters "
+        "WHERE grid_id IS NOT NULL AND COALESCE(demo_mode,0)=0 "
+        "AND COALESCE(excluded_from_aggregate,0)=0 "
+        "AND seal_color IS NOT NULL AND seal_color<>''").fetchall()
+    for r in rows:
+        if r["area_lat"] is None or r["area_lng"] is None:
+            continue
+        m = _mood_index(r["seal_color"])
+        if m is None:
+            continue
+        a = agg.get((r["grid_id"], m))
+        if a is None:
+            agg[(r["grid_id"], m)] = [1, r["sent_date"], r["area_lat"], r["area_lng"]]
+        else:
+            a[0] += 1
+            if r["sent_date"] and (a[1] is None or r["sent_date"] > a[1]):
+                a[1] = r["sent_date"]
+            a[2] += r["area_lat"]
+            a[3] += r["area_lng"]
+    with _WRITE_LOCK:
+        db.execute("DELETE FROM mood_grid")
+        kept = 0
+        for (gid, m), (n, latest, lat_s, lng_s) in agg.items():
+            if n < MOOD_GRID_THRESHOLD:      # しきい値未満はそもそも入れない
+                continue
+            db.execute(
+                "INSERT INTO mood_grid (grid_id,mood,n,latest,lat,lng) VALUES (?,?,?,?,?,?)",
+                (gid, m, n, latest, lat_s / n, lng_s / n))
+            kept += 1
+        db.commit()
+    return kept
+
+
 @app.route("/api/letters")
 @login_required
 def api_letters():
@@ -2222,15 +2457,23 @@ def api_create_letter():
 
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
+    # 気分の地図（A・B）用: エリア座標を0.1度セルへ丸めた grid_id を、位置を保存するのと同じ
+    # トランザクションで入れる。集計から抜けている人の手紙は、投函時点で excluded を立てておく
+    # （後で一括UPDATEしなくても集計クエリは letters 側だけ見ればよい）。
+    grid_id = _compute_grid_id(area_lat, area_lng)
+    _optout = db.execute(
+        "SELECT COALESCE(aggregate_opt_out,0) AS o FROM users WHERE id=?", (uid(),)).fetchone()
+    excluded = 1 if (_optout and _optout["o"]) else 0
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
-             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical),
+             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
+             grid_id, excluded),
         )
         db.commit()
     # 開封のお知らせメールは認証済みアドレスにしか送られない（_check_and_notify の条件と対）。

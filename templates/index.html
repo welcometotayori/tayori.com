@@ -772,6 +772,16 @@
     font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;padding:10px;border-radius:3px;transition:color .2s,border-color .2s}
   .acct-save:hover{color:var(--seal);border-color:var(--seal)}
   .acct-hint{max-width:360px;margin:0 auto 22px;font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-soft);opacity:0.85;letter-spacing:0.03em}
+  /* 気分の地図の集計オプトアウト（設定内） */
+  .agg-toggle{display:flex;align-items:center;gap:9px;cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink);margin-bottom:8px}
+  .agg-toggle input{width:16px;height:16px;accent-color:var(--seal);cursor:pointer;flex:0 0 auto}
+  .agg-hint{margin-bottom:0;word-break:keep-all}
+  /* 気分の地図のリリース告知モーダル */
+  .nn-body{max-width:360px;margin:0 auto 8px;text-align:left;word-break:keep-all}
+  .nn-body p{font-family:'Shippori Mincho',serif;font-size:14px;line-height:2;color:var(--ink);margin:0 0 14px}
+  .nn-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .nn-ok{width:auto;padding:10px 26px}
 
   /* ── 開封時の気分タグ ── */
   .strata-dot.mood{background:var(--seal);opacity:0.7}
@@ -873,9 +883,31 @@
       <input type="password" id="setPwNew" class="acct-input" autocomplete="new-password" placeholder="新しいパスワード（8文字以上）">
       <button class="acct-save" id="setPwBtn">パスワードを変更</button>
     </div>
+    <div class="acct-sec">
+      <label class="acct-label">気分の地図</label>
+      <label class="agg-toggle"><input type="checkbox" id="setAggOut"><span>気分の地図に含める</span></label>
+      <div class="acct-hint agg-hint">あなたの手紙の「気分の色」だけが、<wbr>10通以上まとまった地域の光として<wbr>地図に加わります。<wbr>手紙の内容・場所の詳細・書いた日時は<wbr>使いません。</div>
+    </div>
     <div class="acct-hint">※確認メール・通知メールが<wbr><span style="white-space:nowrap">迷惑メール（スパム）に</span><wbr>入ることがあります。<wbr>その場合は<wbr>「迷惑メールではない」を<wbr>押すと、<wbr>次から届きやすくなります。</div>
     <div class="portrait-actions">
       <button class="portrait-close" id="acctClose">とじる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 気分の地図のリリース告知（事後同意）。一度だけ出し、既読を立てて再表示しない。 -->
+<div class="portrait-ov" id="nightNoticeOv">
+  <div class="portrait-inner">
+    <div class="portrait-mark">JP<br>たより<br>Map</div>
+    <h2 class="portrait-title">気分の地図</h2>
+    <div class="nn-body">
+      <p>たよりに、<wbr>「気分の地図」が<wbr>灯りました。</p>
+      <p>あなたの手紙の「気分の色」だけが、<wbr>10通以上まとまった地域の光として<wbr>地図に加わります。<wbr>手紙の内容・場所の詳細・書いた日時は<wbr>使いません。</p>
+      <p>加わりたくないときは、<wbr>下のボタン、<wbr>または設定からいつでも外せます。</p>
+    </div>
+    <div class="portrait-actions nn-actions">
+      <button class="portrait-close" id="nnOptOut">地図に含めない</button>
+      <button class="acct-save nn-ok" id="nnOk">わかりました</button>
     </div>
   </div>
 </div>
@@ -1159,6 +1191,7 @@
 
   // メールの開封リンク（/open/たよりID）から来た場合、そのたよりIDがここに入る
   let pendingOpenId = "{{ open_letter_id }}" || null;
+  let _showNightNotice = false;   // 気分の地図のリリース告知を一度だけ出すためのフラグ（boot時に決まる）
   
   // 💡 【ログイン問題を解決する通信強化】
   const api=(u,o)=>{
@@ -1824,7 +1857,8 @@ async function detectWeather(){
     // 天気が取れない時もバナーの直後＝受信の先頭に出し、地図への道を絶やさない。
     {const mr=document.createElement('div');mr.className='map-link-row';
      mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>'+
-       '<a class="map-link" href="/archive">言葉の編み物<span class="sub">amimono</span></a>';
+       '<a class="map-link" href="/archive">言葉の編み物<span class="sub">amimono</span></a>'+
+       '<a class="map-link" href="/mood">気分の宙<span class="sub">mood</span></a>';
      mailList.appendChild(mr);}
     renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
     if(!received.length && !inTransit.length){
@@ -2602,6 +2636,8 @@ async function detectWeather(){
     }else{
       loadMail();
     }
+    // 気分の地図のリリース告知（一度だけ）。オンボーディング直後には出さない（boot時のみ立つ）
+    if(_showNightNotice){_showNightNotice=false;showNightMapNotice();}
   }
 
   // ---------- コンセプト導入画面（初回・設問の前） ----------
@@ -2767,10 +2803,28 @@ async function detectWeather(){
 
   // ── アカウント設定（名前・パスワードの変更） ──
   const acctOv=document.getElementById('acctOv');
+  const aggOut=document.getElementById('setAggOut');
   document.getElementById('settingsBtn').addEventListener('click',()=>{
     document.getElementById('setName').value=document.getElementById('acctName').textContent||'';
     document.getElementById('setPwCur').value='';document.getElementById('setPwNew').value='';
+    // 気分の地図の集計オプトアウト状態を読む（チェック＝含める）
+    api('/api/settings/aggregate-opt-out').then(r=>{aggOut.checked=!(r&&r.opt_out);}).catch(()=>{});
     acctOv.classList.add('on');acctOv.scrollTop=0;
+  });
+  aggOut.addEventListener('change',async()=>{
+    const res=await api('/api/settings/aggregate-opt-out',{method:'POST',body:JSON.stringify({opt_out:!aggOut.checked})});
+    if(res&&res.ok){flash(res.opt_out?'気分の地図から外しました。反映は翌日以降です。':'気分の地図に含めます。反映は翌日以降です。');}
+    else{aggOut.checked=!aggOut.checked;flash('設定できませんでした。');}
+  });
+
+  // ── 気分の地図のリリース告知（一度きり・事後同意）──
+  const nightNoticeOv=document.getElementById('nightNoticeOv');
+  function showNightMapNotice(){nightNoticeOv.classList.add('on');nightNoticeOv.scrollTop=0;}
+  function _markNightSeen(){api('/api/settings/night-map-notice-seen',{method:'POST',body:'{}'}).catch(()=>{});}
+  document.getElementById('nnOk').addEventListener('click',()=>{nightNoticeOv.classList.remove('on');_markNightSeen();});
+  document.getElementById('nnOptOut').addEventListener('click',async()=>{
+    await api('/api/settings/aggregate-opt-out',{method:'POST',body:JSON.stringify({opt_out:true})});
+    nightNoticeOv.classList.remove('on');_markNightSeen();flash('気分の地図には含めません。');
   });
   document.getElementById('acctClose').addEventListener('click',()=>acctOv.classList.remove('on'));
   document.getElementById('setNameBtn').addEventListener('click',async()=>{
@@ -2914,6 +2968,7 @@ async function detectWeather(){
     if(me.auth){
       // Adminは一般ユーザーUIを使わない（管理ダッシュボードへ直行）
       if(me.is_admin){window.location.href='/admin.welcometotayori';return;}
+      _showNightNotice=!!me.night_map_notice;   // 気分の地図の告知を一度だけ
       enterApp(me.username,me.email,me.email_verified,me.onboarded);
     }
   })();
