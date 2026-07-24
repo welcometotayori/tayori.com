@@ -2398,6 +2398,19 @@ def _mood_words_from_poem(poem, extra_block=None):
     return words
 
 
+def _mood_name_block_for_user(db, user_id):
+    """そのユーザーの登録名を正規化した集合を返す（自分の名前を語から除くため）。
+    投函時のemos自動生成と気分の宙の本人経路で共用する。"""
+    urow = db.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+    block = set()
+    if urow and urow["username"]:
+        for part in re.split(r"[\s　]+", urow["username"]):
+            n = _mood_norm_word(part)
+            if n:
+                block.add(n)
+    return block
+
+
 def _mood_letter(r, now, blur=False, allow_body=False, extra_block=None):
     """letters行 → v7の手紙dict。対象外（開封済み・到着済み・語なし）は None。
     blur=True は他人の手紙：色相を7色量子化後の値に、日数を7日単位に丸める。
@@ -2481,13 +2494,7 @@ def _mood_space_all_letters():
 def api_mood_space():
     db = get_db()
     # 本人の登録名は「人の名前」として宙に出さない（本文抽出で自分の名前が漏れるのを防ぐ）。
-    urow = db.execute("SELECT username FROM users WHERE id=?", (uid(),)).fetchone()
-    extra_block = set()
-    if urow and urow["username"]:
-        for part in re.split(r"[\s　]+", urow["username"]):
-            n = _mood_norm_word(part)
-            if n:
-                extra_block.add(n)
+    extra_block = _mood_name_block_for_user(db, uid())
     # 本人の手紙だけ poem を読む（本文からの語抽出＝C案は本人限定）。emos の有無で絞らない。
     rows = db.execute(
         f"SELECT {_MOOD_COLS}, poem FROM letters WHERE user_id=?", (uid(),)).fetchall()
@@ -2646,6 +2653,12 @@ def api_create_letter():
 
     sent_iso = datetime.now().isoformat(timespec="seconds")
     db = get_db()
+    # 気分の宙(v7)の語ネットワーク用タグを、投函時に本文から生成して保存しておく。
+    # 抽出は本人環境で行い保存するのは「語」だけなので本文秘匿の鉄則に反せず、以後は
+    # 他者経路（本文を読まない）でも安全に共有できる。写真/声だけの手紙は空タグ。
+    emos_json = json.dumps(
+        _mood_words_from_poem(poem, _mood_name_block_for_user(db, uid())),
+        ensure_ascii=False)
     # 気分の地図（A・B）用: エリア座標を0.1度セルへ丸めた grid_id を、位置を保存するのと同じ
     # トランザクションで入れる。集計から抜けている人の手紙は、投函時点で excluded を立てておく
     # （後で一括UPDATEしなくても集計クエリは letters 側だけ見ればよい）。
@@ -2657,9 +2670,10 @@ def api_create_letter():
         db.execute(
             """INSERT INTO letters
                (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,'[]',?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
              data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
+             emos_json,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
              seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
              grid_id, excluded),
