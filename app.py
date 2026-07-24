@@ -2248,10 +2248,10 @@ def _quantize_to_swatch(color):
     return best
 
 
-# ── 気分の宙（mood space / 色の星空）──────────────────────────
-# 2026-07-24 リデザイン：封をされた・まだ開封日が来ていない「本人の」手紙が、
-# 気分の色の光の点として暗い宙に浮かぶ。返すのは色と「開封日までの残り日数」だけ。
-# 本文・日付・件名・場所は一切返さない（残り日数はサイズ計算のためだけに使い、UIには出さない）。
+# ── 気分の宙（mood space / v7・語のネットワーク）──────────────
+# 2026-07-24 v7：点の散布ではなく、手紙のタグ（＝年表の感情タグ emos）そのものが星になる。
+# 返すのは語・色相・季節・時間帯・天気・エリアのハッシュ・開封までの残り日数・封じてからの経過だけ。
+# 本文・日付・件名・タイトル・生の地名は一切返さない。id はハッシュ化して差分同期にのみ使う。
 
 _MOOD_SWATCH_INDEX = {h.lower(): i for i, h in enumerate(_MOOD_SWATCH_HEX)}
 
@@ -2270,75 +2270,239 @@ def mood_page():
     return render_template("mood.html")
 
 
-# 他の人の気配（2026-07-24 追加）：封の中でまだ開封日が来ていない「誰かの」手紙も、
-# 遠くの小さな星として同じ宙に浮かぶ。demo除外・オプトアウト尊重は地図(B)と同じ意思。
-# 生の自由色はHSLの微妙な値が個人を指しうるので、外に出すのは7色に量子化した後だけ。
-# 全ユーザー横断クエリなのでグローバルキャッシュを挟む（60秒＝ポーリングと同じ周期）。
+# v7 の語の材料。1〜3語のタグ・8変数のメタデータを手紙単位で返す。
+# 他ユーザー分も同じスキーマで混ぜる（クライアントは自分/他人を区別しない）。
+# demo除外・オプトアウト尊重は地図(B)と同じ意思。他人の色相は7色量子化後の値だけを出し、
+# 他人の日数は7日単位に丸める（細かい残日数・経過は個人のスケジュールを指しうるため）。
 _OTHERS_CACHE_SECONDS = 60
-_OTHERS_MAX = 160          # 画面に出す他者の星の上限。超えた分は毎回ランダムに間引く
+_OTHERS_MAX = 120          # 宙に混ぜる他者の手紙の上限。超えた分は毎回ランダムに間引く
 _others_lock = threading.Lock()
-_others_cache = {"t": 0.0, "pairs": []}   # pairs: (user_id, mood_index)
+_others_cache = {"t": 0.0, "letters": []}   # letters: (user_id, letter_dict)
+
+_MOOD_BAND = {"morning": "morning", "day": "noon", "evening": "evening", "night": "night"}
 
 
-def _mood_space_all_pairs():
-    """封の中の全ユーザーの (user_id, 気分番号) を返す。呼び出し側で本人分を除く。"""
+def _mood_season(sent_date):
+    try:
+        m = int(sent_date[5:7])
+    except (TypeError, ValueError, IndexError):
+        return "winter"
+    if 3 <= m <= 5:
+        return "spring"
+    if 6 <= m <= 8:
+        return "summer"
+    if 9 <= m <= 11:
+        return "autumn"
+    return "winter"
+
+
+def _mood_band(row):
+    b = _MOOD_BAND.get(row["time_bucket"] if "time_bucket" in row.keys() else None)
+    if b:
+        return b
+    try:
+        h = int(row["sent_date"][11:13])
+    except (TypeError, ValueError, IndexError):
+        return "night"
+    if 5 <= h < 11:
+        return "morning"
+    if 11 <= h < 16:
+        return "noon"
+    if 16 <= h < 19:
+        return "evening"
+    return "night"
+
+
+def _mood_weather(row):
+    """封入時の気象を4分類に丸める（fogはcloudへ）。記録がなければcloud。"""
+    cond = None
+    if row["seal_env"]:
+        try:
+            cond = (json.loads(row["seal_env"]) or {}).get("condition")
+        except (ValueError, TypeError):
+            cond = None
+    cond = cond or row["weather_event"]
+    if cond in ("clear", "cloud", "rain", "snow"):
+        return cond
+    return "cloud"
+
+
+def _mood_hue(color):
+    """色文字列(HSL/HEX) → 色相 0–359。色なし・解釈不能は None。"""
+    if not color:
+        return None
+    m = _HSL_RE.match(color.strip())
+    if m:
+        return int(float(m.group(1)) % 360)
+    rgb = _hex_to_rgb(color)
+    if rgb is None:
+        return None
+    h, _l, _s = colorsys.rgb_to_hls(*(c / 255.0 for c in rgb))
+    return int(h * 360) % 360
+
+
+# ── 気分の宙：人の名前・あだ名を宙に出さないフィルタ（2026-07-24）──
+# 本文抽出（C案）で名前が漏れるのを防ぐ。完全な人名判定は形態素解析なしには不可能なので
+# best-effort：明示ブロックリスト＋あだ名接尾辞＋各ユーザーの登録名で落とす。
+# これで捕まえられない未知の人名（例「健太」「マリア」）は regex では検出不能＝残る。
+_MOOD_NAME_BLOCK = {
+    "筒井", "筒井晃生", "つつい", "ツツイ", "tsutsui",
+    "こう", "こうちゃん", "こうくん", "コウ", "つつこう", "ツツコウ",
+    "テスト", "てすと", "test",
+}
+# この語尾で終わる語は人の呼び名とみなして落とす（あだ名接尾辞）
+_MOOD_NICK_SUFFIX = ("ちゃん", "チャン", "くん", "クン", "君",
+                     "さん", "サン", "たん", "タン", "っち", "ッチ")
+
+
+def _mood_norm_word(s):
+    """比較用に正規化：小文字化＋全角英数→半角。"""
+    x = str(s or "").strip().lower()
+    return "".join(
+        chr(ord(c) - 0xFEE0) if ("ａ" <= c <= "ｚ" or "Ａ" <= c <= "Ｚ" or "０" <= c <= "９") else c
+        for c in x)
+
+
+def _mood_name_blocked(word, extra=None):
+    """word が人の名前・あだ名なら True。extra はそのユーザーの登録名など（正規化済み集合）。"""
+    w = _mood_norm_word(word)
+    if not w:
+        return True
+    if w in _MOOD_NAME_BLOCK or (extra and w in extra):
+        return True
+    return any(word.endswith(s) for s in _MOOD_NICK_SUFFIX)
+
+
+def _mood_words_from_poem(poem, extra_block=None):
+    """本文から名詞相当の語を最大3つ抜く（章題抽出器 _CH_WORD_RE を流用）。
+    人の名前・あだ名（_mood_name_blocked）は除く。
+    ★重要：これは封の中（未開封）の本文からの抽出であり、本文秘匿の鉄則の例外。
+    2026-07-24 ユーザーの明示的な選択（C案）で、本人自身の手紙にのみ許可。
+    他ユーザーの手紙には絶対に適用しない（呼び出し側で own のみ渡す）。"""
+    src = poem or ""
+    seen, words = set(), []
+    for m in _CH_WORD_RE.finditer(src):
+        w = m.group(0).strip()
+        if not w or w in _CH_WORD_STOP or w in seen:
+            continue
+        if _mood_name_blocked(w, extra_block):
+            continue
+        # 語の直後に敬称・あだ名接尾辞が続くなら人の呼び名とみなす（例「田中くん」→田中を落とす）
+        tail = src[m.end():m.end() + 3]
+        if any(tail.startswith(s) for s in _MOOD_NICK_SUFFIX):
+            continue
+        seen.add(w)
+        words.append(w[:24])
+        if len(words) >= 3:
+            break
+    return words
+
+
+def _mood_letter(r, now, blur=False, allow_body=False, extra_block=None):
+    """letters行 → v7の手紙dict。対象外（開封済み・到着済み・語なし）は None。
+    blur=True は他人の手紙：色相を7色量子化後の値に、日数を7日単位に丸める。
+    allow_body=True（本人のみ）は emos が無い時、本文から語を抽出する（C案・本文秘匿の例外）。
+    人の名前・あだ名は emos タグ・抽出語の両方から除く（extra_block は本人の登録名など）。"""
+    try:
+        if _letter_opened(r) or _is_arrived(r):
+            return None
+    except (TypeError, ValueError):
+        return None
+    try:
+        emos = json.loads(r["emos"] or "[]")
+    except (ValueError, TypeError):
+        emos = []
+    tags = [str(e).strip()[:24] for e in emos
+            if str(e).strip() and not _mood_name_blocked(str(e).strip(), extra_block)][:3]
+    if not tags and allow_body and "poem" in r.keys():
+        tags = _mood_words_from_poem(r["poem"], extra_block)
+    if not tags:
+        return None   # 語のない手紙は宙に出ない（空配列は返さない）
+    arrive = ((r["demo_arrive_at"] if r["demo_mode"] else None)
+              or r["arrive_at"] or (r["arrive_date"] + "T00:00:00"))
+    try:
+        until = max(0, (datetime.fromisoformat(arrive) - now).days)
+        since = max(0, (now - datetime.fromisoformat(r["sent_date"][:19])).days)
+    except (TypeError, ValueError):
+        return None
+    hue = _mood_hue(_quantize_to_swatch(r["seal_color"]) if blur else r["seal_color"])
+    if blur:
+        until = (until // 7) * 7
+        since = (since // 7) * 7
+    # エリアは平文を出さずハッシュだけ。クライアントは同一判定にしか使わない。
+    # 位置なしの手紙は手紙ごとに別の値＝どこの語とも「同じ土地」にならない。
+    area_src = r["area_name"] or ("letter:" + r["id"])
+    return {
+        "id": hashlib.sha256(("mood:" + r["id"]).encode()).hexdigest()[:12],
+        "tags": tags,
+        "hue": hue,
+        "season": _mood_season(r["sent_date"]),
+        "band": _mood_band(r),
+        "weather": _mood_weather(r),
+        "area": hashlib.sha256(area_src.encode()).hexdigest()[:6],
+        "daysUntilOpen": until,
+        "daysSinceSealed": since,
+    }
+
+
+# 気分の宙が letters から読んでよい列。SELECT * は使わない：
+# 本文(poem)・生座標(area_lat/lng)・件名相当を絶対に載せないため、列を指で数えて書く。
+_MOOD_COLS = ("id, user_id, emos, seal_color, sent_date, time_bucket, seal_env, "
+              "area_name, opened, opened_at, arrive_at, arrive_date, "
+              "demo_mode, demo_arrive_at, weather_event, weather_met_at")
+
+
+def _mood_space_all_letters():
+    """封の中の全ユーザーの (user_id, 手紙dict) を返す。呼び出し側で本人分を除く。
+    全ユーザー横断クエリなのでグローバルキャッシュを挟む（60秒＝ポーリングと同じ周期）。"""
     now = time.time()
     with _others_lock:
         if now - _others_cache["t"] < _OTHERS_CACHE_SECONDS:
-            return _others_cache["pairs"]
+            return _others_cache["letters"]
     rows = get_db().execute(
-        "SELECT user_id, seal_color, opened, opened_at, arrive_at, arrive_date, "
-        "       demo_mode, demo_arrive_at, weather_event, weather_met_at "
-        "FROM letters WHERE COALESCE(demo_mode,0)=0 "
+        f"SELECT {_MOOD_COLS} FROM letters "
+        "WHERE COALESCE(demo_mode,0)=0 "
         "AND COALESCE(excluded_from_aggregate,0)=0 "
-        "AND seal_color IS NOT NULL AND seal_color<>''").fetchall()
-    pairs = []
+        "AND COALESCE(emos,'[]')<>'[]'").fetchall()
+    dt_now = datetime.now()
+    letters = []
     for r in rows:
-        try:
-            if _letter_opened(r) or _is_arrived(r):
-                continue
-        except (TypeError, ValueError):
-            continue
-        m = _mood_index(r["seal_color"])
-        if m is not None:
-            pairs.append((r["user_id"], m))
+        d = _mood_letter(r, dt_now, blur=True)
+        if d:
+            letters.append((r["user_id"], d))
     with _others_lock:
         _others_cache["t"] = time.time()
-        _others_cache["pairs"] = pairs
-    return pairs
+        _others_cache["letters"] = letters
+    return letters
 
 
 @app.route("/api/mood-space")
 @login_required
 def api_mood_space():
-    # SELECT * は使わない：本文(poem)・場所(area_*)を絶対に載せないため、列を指で数えて書く。
-    # id も返さない（点はタップしても中身に辿り着けない＝「そこにある」だけ）。
-    rows = get_db().execute(
-        "SELECT seal_color, opened, opened_at, arrive_at, arrive_date, "
-        "       demo_mode, demo_arrive_at, weather_event, weather_met_at "
-        "FROM letters WHERE user_id=?", (uid(),)).fetchall()
+    db = get_db()
+    # 本人の登録名は「人の名前」として宙に出さない（本文抽出で自分の名前が漏れるのを防ぐ）。
+    urow = db.execute("SELECT username FROM users WHERE id=?", (uid(),)).fetchone()
+    extra_block = set()
+    if urow and urow["username"]:
+        for part in re.split(r"[\s　]+", urow["username"]):
+            n = _mood_norm_word(part)
+            if n:
+                extra_block.add(n)
+    # 本人の手紙だけ poem を読む（本文からの語抽出＝C案は本人限定）。emos の有無で絞らない。
+    rows = db.execute(
+        f"SELECT {_MOOD_COLS}, poem FROM letters WHERE user_id=?", (uid(),)).fetchall()
     now = datetime.now()
-    points = []
+    letters = []
     for r in rows:
-        if _letter_opened(r) or _is_arrived(r):
-            continue   # 宙に浮かぶのは、封の中でまだ開封日が来ていない手紙だけ
-        arrive = ((r["demo_arrive_at"] if r["demo_mode"] else None)
-                  or r["arrive_at"] or (r["arrive_date"] + "T00:00:00"))
-        try:
-            remaining = max(0, (datetime.fromisoformat(arrive) - now).days)
-        except (TypeError, ValueError):
-            continue
-        # 色を選ばず封じた手紙は c=null（クライアント側で無彩の点として浮かべる）
-        points.append({"c": r["seal_color"] or None, "d": remaining})
-    random.shuffle(points)   # 並び順から投函順を消す（返すのは色と残り日数だけ）
-
-    # 他の人の星：量子化済みの色だけ。残り日数もIDも返さない（大きさの手掛かりを渡さない）
-    others = [_MOOD_SWATCH_HEX[m] for u, m in _mood_space_all_pairs() if u != uid()]
+        d = _mood_letter(r, now, allow_body=True, extra_block=extra_block)
+        if d:
+            letters.append(d)
+    others = [d for u, d in _mood_space_all_letters() if u != uid()]
     if len(others) > _OTHERS_MAX:
         others = random.sample(others, _OTHERS_MAX)
-    else:
-        random.shuffle(others)
-    return jsonify(points=points, others=others)
+    letters += others
+    random.shuffle(letters)   # 並び順から投函順・自分/他人の境目を消す
+    return jsonify(letters=letters)
 
 
 # ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
