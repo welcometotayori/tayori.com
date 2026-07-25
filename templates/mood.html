@@ -6,9 +6,11 @@
 <title>宙 — たより</title>
 <meta name="robots" content="noindex,nofollow">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#08080D">
+{# 素材と寸法は宙・棚・紙で共通（_sky_tokens.html が唯一の情報源） #}
+{% include '_sky_tokens.html' %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Courier+Prime&display=swap');
-  /* ══ 宙 v12（2026-07-25）══════════════════════════════
+  /* ══ 宙 v14（2026-07-25）══════════════════════════════
      宙にあるのは、放たれたことばそのものだけ。
      語（タグ）を星として浮かべる v7/v8 の canvas は畳んだ（宙は本文だけの場所へ）。
 
@@ -17,203 +19,427 @@
         ただし必ず偶然の重みが混ざるので、同じ顔ぶれにはならない。
 
      数字も凡例も軸も出さない。一覧も検索もない。一方通行の宙。
+
+     ── v14 でやったこと ──────────────────────────────
+     ① 漂うことばに触れられるようになった（受け止める → 印を結ぶ／手元に残す）。
+     ② 素材と寸法を _sky_tokens.html の一枚へ畳んだ（宙・棚・紙で共通）。
+        以前は rgba(250,248,243, .34/.4/.42/.45/.5/.52/.55/.58/.6/.62/.7/.72/.74/.76/.8/.85/.86/.88/.9/.92/.93/.95)
+        と透明度が20種類以上あり、これが「機械が並べた画面」に見える最大の原因だった。
+     ③ 触れるものは全部 44px 以上・押した瞬間に応える・hover だけに頼らない。
+     ④ 材質は「罫」と「霞」の二つだけ。カードも錠剤も影も作らない。
+     ⑤ 動きは現在値から始めて中断できる（Apple §3）。出現は不透明度だけでなく
+        ぼけと縮尺を一緒に動かす＝紙が立ち上がるように現れる（Apple §12）。
      ════════════════════════════════════════════════ */
-  :root{--space:#08080D;--chalk:#FAF8F3;--thread:#B38F6F}
-  *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden}
-  body{background:var(--space);color:var(--chalk);
-       font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-       -webkit-font-smoothing:antialiased}
   header{position:fixed;top:0;left:0;right:0;z-index:10;
          display:flex;justify-content:space-between;align-items:baseline;
-         padding:16px 20px 12px;pointer-events:none}
-  .ttl{font-size:15px;letter-spacing:0.18em;color:var(--chalk);opacity:.85}
-  .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
-               color:var(--thread);text-transform:uppercase;margin-left:10px}
-  /* スクリーンリーダー向けの、いま宙にあることばの一覧（視覚的には出さない） */
-  .sr-words{position:absolute;width:1px;height:1px;overflow:hidden;
-            clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;margin:-1px}
+         padding:var(--s2) var(--s3);pointer-events:none}
+  .ttl{font-size:var(--t-title);letter-spacing:var(--tr-title);color:var(--ink-2)}
+  .ttl .romaji{font-family:'Courier Prime',monospace;font-size:var(--t-mono);
+               letter-spacing:var(--tr-mono);color:var(--thread);
+               text-transform:uppercase;margin-left:var(--s1)}
+
+  /* ── 栞（v13）──────────────────────────────────────────
+     宙そのものは説明の場所ではない（数字も凡例も出さない）。だから
+     「この宙について／理念／運営者／お問い合わせ」は宙の外の紙に置き、ここから開く。
+     閉じている間は一語だけ。開くと縦に罫が一本立ち、行が並ぶ（箱は作らない）。
+     押せる語の姿（.ruled）は _sky_tokens.html に置いた共通の作法。 */
+  .shiori{pointer-events:auto;min-height:var(--touch);
+          padding:14px 4px 13px 10px;font-size:12.5px;letter-spacing:0.26em}
+  .shiori-list{position:fixed;top:50px;right:20px;z-index:16;margin:0;padding:6px 0 6px 20px;
+               list-style:none;display:flex;flex-direction:column;align-items:flex-end;
+               border-right:1px solid var(--rule);
+               opacity:0;transform:translateY(-6px);scale:.99;pointer-events:none;
+               transition:opacity .34s ease,transform .42s var(--ease),scale .42s var(--ease)}
+  .shiori-list.on{opacity:1;transform:none;scale:1;pointer-events:auto}
+  /* 行の後ろに霞をひと刷け（ことばの上に重なっても読めるように・v12.1と同じ作法） */
+  .shiori-list::before{content:'';position:absolute;right:-14px;top:-14px;bottom:-14px;left:-26px;
+        z-index:-1;pointer-events:none;
+        background:radial-gradient(72% 62% at 78% 50%,
+                   rgba(8,8,13,.95) 0%,var(--veil) 52%,rgba(8,8,13,0) 92%);
+        backdrop-filter:blur(8px) saturate(80%);-webkit-backdrop-filter:blur(8px) saturate(80%);
+        -webkit-mask-image:radial-gradient(72% 64% at 78% 50%,#000 0%,#000 54%,transparent 92%);
+                mask-image:radial-gradient(72% 64% at 78% 50%,#000 0%,#000 54%,transparent 92%)}
+  .shiori-list a{display:block;min-height:var(--touch);padding:14px 8px 13px 0;
+                 text-decoration:none;color:var(--ink-2);font-size:12.5px;
+                 letter-spacing:0.18em;text-align:right;transition:color .22s var(--ease)}
+  .shiori-list a:hover{color:var(--ink-1)}
+  .shiori-list a:active{opacity:.62}
+  .shiori-list .thin a{font-size:11.5px;letter-spacing:0.14em;color:var(--ink-4);
+                       min-height:38px;padding:11px 8px 10px 0}
+  @media (prefers-reduced-motion: reduce){ .shiori-list{transition:opacity .3s ease;transform:none} }
+  @media (prefers-reduced-transparency: reduce){
+    .shiori-list::before{backdrop-filter:none;-webkit-backdrop-filter:none;
+          background:radial-gradient(76% 66% at 78% 50%,
+                     rgba(8,8,13,.99) 0%,rgba(8,8,13,.97) 58%,rgba(8,8,13,0) 94%)}
+  }
 
   /* ══ 漂うことば・放つ・ランディング（v2〜v12）══════════════
      放たれた本文が、闇の中へひとつずつゆっくり流れ込む。
      操作UIは最小限：未登録は「はじめる」、登録済みは「放つ」だけ。 */
   .drift-layer{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden}
-  /* 現れ方は「打鍵の再生」。だから淡くフェードインするのは1.4秒で終え、
-     あとは一字ずつ書かれていくのに任せる（v11.1 TypeTrace復活）。 */
-  .drift{position:absolute;max-width:17em;color:rgba(250,248,243,.92);
-         font-size:13.5px;line-height:2.2;letter-spacing:0.12em;white-space:pre-wrap;
-         transition:opacity 1.4s ease,transform 60s linear;opacity:0;will-change:transform,opacity}
+  /* ── 漂うことば（v14：触れられる）─────────────────────────────
+     現れ方は「打鍵の再生」＋材質の立ち上がり：不透明度だけでなく、ぼけと縮尺を
+     一緒に戻す（ただ点いたり消えたりすると板に見える／Apple §12）。
+     動きの秒数は JS が --in / --life に入れる（transitionDuration を位置で並べると
+     プロパティを足すたびに壊れるため、変数で名前をつけて渡す）。
+     padding と同値の負の margin ＝ 見た目の位置を変えずに指の的だけを24px広げる。
+     scale は transform とは別プロパティなので、漂いの translate とぶつからない。 */
+  .drift{position:absolute;max-width:17em;color:var(--ink-1);
+         font-size:var(--t-word);line-height:2.2;letter-spacing:var(--tr-word);
+         white-space:pre-wrap;padding:12px;margin:-12px;
+         pointer-events:auto;cursor:pointer;touch-action:manipulation;
+         -webkit-tap-highlight-color:transparent;
+         opacity:0;filter:blur(5px);scale:.985;
+         --in:1.1s; --life:60s;
+         transition:opacity var(--in) var(--ease),filter var(--in) var(--ease),
+                    scale var(--in) var(--ease),transform var(--life) linear;
+         will-change:transform,opacity,filter}
   .drift.v{writing-mode:vertical-rl;max-width:none;max-height:62vh}
-  .drift.on{opacity:.86}
-  .drift.out{transition:opacity 5s ease,transform 60s linear;opacity:0}
+  .drift.on{opacity:.86;filter:blur(0);scale:1}
+  .drift.out{opacity:0;filter:blur(4px)}
+  /* 押した瞬間、指の下で紙が明るくなる（transform は漂いが使っているので触らない） */
+  .drift:active{opacity:1}
+  .drift:focus-visible{outline:1px solid var(--rule);outline-offset:8px}
+  /* 受け止めたことば：漂いを止め、はっきりと、少しだけ手前に */
+  .drift.held{opacity:1;filter:blur(0);scale:1.03;color:var(--chalk);z-index:2}
+
+  /* ── 受け止めたことばに添う、二つの行い（v14）────────────────
+     ことばの隣にそっと現れる。箱は作らず、罫と霞だけ。
+     出どころ（そのことば）から立ち上がるように見せる＝transform-origin は JS が指す。 */
+  .hold{position:fixed;z-index:15;display:flex;flex-direction:column;gap:2px;
+        padding:var(--s2) var(--s3);
+        opacity:0;scale:.97;pointer-events:none;
+        transition:opacity .26s var(--ease),scale .3s var(--ease)}
+  .hold.on{opacity:1;scale:1;pointer-events:auto}
+  .hold::before{content:'';position:absolute;inset:-10px -14px;z-index:-1;pointer-events:none;
+        background:radial-gradient(68% 66% at 50% 50%,
+                   rgba(8,8,13,.96) 0%,var(--veil) 54%,rgba(8,8,13,0) 92%);
+        backdrop-filter:blur(9px) saturate(80%);-webkit-backdrop-filter:blur(9px) saturate(80%);
+        -webkit-mask-image:radial-gradient(66% 64% at 50% 50%,#000 0%,#000 56%,transparent 92%);
+                mask-image:radial-gradient(66% 64% at 50% 50%,#000 0%,#000 56%,transparent 92%)}
+  /* 印と棚は同じ形の兄弟。丸い点＝印、角のある紙片＝棚（v13の作法を引き継ぐ） */
+  .hold-act{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
+            background:none;border:none;padding:11px 2px;font-family:inherit;
+            font-size:var(--t-meta);letter-spacing:0.16em;color:var(--ink-2);
+            white-space:nowrap;transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .hold-act:hover{color:var(--ink-1)}
+  .hold-act:active{opacity:.62}
+  .hold-act .dot{width:7px;height:7px;border:1px solid var(--thread);background:transparent;
+                 border-radius:50%;transition:background .32s var(--ease)}
+  .hold-act.keep .dot{border-radius:1px}
+  .hold-act.on{color:var(--ink-1)}
+  .hold-act.on .dot{background:var(--thread)}
+  .hold-note{margin:0;padding:4px 2px 0;max-width:17em;font-size:11.5px;line-height:2;
+             letter-spacing:0.1em;color:var(--ink-3);
+             word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .hold-note a{display:inline-block;min-height:36px;padding:9px 2px 0}
+  .hold-note a{color:var(--thread);text-decoration:underline;text-underline-offset:3px}
+  @media (prefers-reduced-motion: reduce){
+    .hold{transition:opacity .2s ease;scale:1}
+    .drift{transition:opacity 1.4s ease;filter:none;scale:1}
+    .drift.held{scale:1}
+  }
+  @media (prefers-reduced-transparency: reduce){
+    .hold::before{backdrop-filter:none;-webkit-backdrop-filter:none;
+          background:radial-gradient(70% 68% at 50% 50%,
+                     rgba(8,8,13,.99) 0%,rgba(8,8,13,.97) 58%,rgba(8,8,13,0) 94%)}
+  }
+
+  /* ── 宙のたより（読み込みに失敗した／何も漂っていない時の、ひとこと）── */
+  /* 宙のまんなかに置く：説明も導線も端に寄っているので、空いているのは真ん中だけ
+     （下辺に置くと、未登録の人にはランディングのコピーと重なる／v14で踏んだ） */
+  .whisper{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+           z-index:9;max-width:min(86vw,30em);text-align:center;
+           font-size:var(--t-body);line-height:2.2;letter-spacing:var(--tr-body);
+           color:var(--ink-3);text-shadow:0 0 16px rgba(8,8,13,.95);
+           opacity:0;transition:opacity .8s var(--ease);pointer-events:none;
+           word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .whisper.on{opacity:1}
   /* 書いている最中の筆先。縦書きの時は横棒に倒す（棚のtrace-caretと同じ作法） */
   .tcaret{display:inline-block;width:2px;height:1.05em;background:currentColor;margin-left:1px;
           vertical-align:-0.16em;opacity:.75;animation:tblink .9s steps(1) infinite}
   .drift.v .tcaret,.read-body:not(.h) .tcaret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0}
   @keyframes tblink{0%,49%{opacity:.75}50%,100%{opacity:0}}
-  @media (prefers-reduced-motion: reduce){ .drift{transition:opacity 2s ease} .tcaret{animation:none} }
+  @media (prefers-reduced-motion: reduce){ .tcaret{animation:none} }
+
+  /* ── 説明の後ろの霞（v12.1）────────────────────────────
+     ことばの上に説明が重なって読めなかった。置き場所は JS 側で避けるが、
+     それでも近づいた時のために、文字の後ろに材質をひと刷け敷く。
+     カードでも枠でもない：輪郭のない霞で、後ろのことばがぼやけて沈むだけ。
+     （縁が見えると「AIの作った箱」になるので、mask で霞ごと端を消す） */
+  .lp::before,.about::before,.cast-btn::before{
+        content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+        pointer-events:none;z-index:-1;
+        background:radial-gradient(62% 64% at 50% 50%,
+                   rgba(8,8,13,.94) 0%,rgba(8,8,13,.82) 44%,rgba(8,8,13,0) 78%);
+        backdrop-filter:blur(7px) saturate(80%);
+        -webkit-backdrop-filter:blur(7px) saturate(80%);
+        -webkit-mask-image:radial-gradient(60% 62% at 50% 50%,#000 0%,#000 44%,transparent 78%);
+                mask-image:radial-gradient(60% 62% at 50% 50%,#000 0%,#000 44%,transparent 78%)}
+  /* 霞の大きさは、それぞれの声の大きさに合わせる（大きい面ほど厚く見える＝Apple §12） */
+  .lp::before{width:min(760px,124%);height:calc(100% + 120px)}
+  .about::before{width:min(720px,124%);height:calc(100% + 96px)}
+  .cast-btn::before{width:300px;height:180px;backdrop-filter:blur(5px);
+                    -webkit-backdrop-filter:blur(5px)}
+  /* 透明度を控えたい人には、ぼかしをやめて霞を濃くする（Apple §14） */
+  @media (prefers-reduced-transparency: reduce){
+    .lp::before,.about::before,.cast-btn::before{
+          backdrop-filter:none;-webkit-backdrop-filter:none;
+          background:radial-gradient(62% 64% at 50% 50%,
+                     rgba(8,8,13,.99) 0%,rgba(8,8,13,.96) 50%,rgba(8,8,13,0) 82%)}
+  }
 
   /* ランディング（未登録）：コピーと、はじめる導線だけ */
-  .lp{position:fixed;left:0;right:0;bottom:9vh;z-index:11;text-align:center;padding:0 24px}
-  .lp-copy{margin:0 0 26px;font-size:14.5px;line-height:2.4;letter-spacing:0.16em;
-           color:rgba(250,248,243,.88);text-shadow:0 0 18px rgba(8,8,13,.9);
+  .lp{position:fixed;left:0;right:0;bottom:9vh;z-index:11;text-align:center;padding:0 var(--s3)}
+  /* 霞の上の文字は、一段はっきりさせる（Apple のvibrancy：薄い灰色にしない） */
+  .lp-copy{margin:0 0 var(--s4);font-size:var(--t-lead);line-height:2.4;
+           letter-spacing:var(--tr-lead);
+           color:var(--ink-1);text-shadow:0 0 18px rgba(8,8,13,.9);
            word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   /* 帰還（§4）のひとこと。主コピーより一段ひいた声で */
-  .lp-copy-sub{margin:-14px 0 26px;font-size:12px;color:rgba(250,248,243,.6)}
-  .lp-cta{display:inline-block;color:var(--chalk);text-decoration:none;
-          font-size:13.5px;letter-spacing:0.3em;padding:13px 34px 12px;
-          border:1px solid rgba(250,248,243,.34);border-radius:2px;
-          background:rgba(8,8,13,.35);transition:border-color .3s,background .3s}
-  .lp-cta:hover{border-color:rgba(250,248,243,.7);background:rgba(8,8,13,.6)}
+  .lp-copy-sub{margin:-18px 0 var(--s4);font-size:var(--t-meta);letter-spacing:var(--tr-body);
+               color:var(--ink-3)}
+  /* 唯一の「紙片」＝はじめる。宙で縁を持つのはこれだけ（他は全部 罫 一本） */
+  .lp-cta{display:inline-block;color:var(--ink-1);text-decoration:none;
+          font-size:13.5px;letter-spacing:0.3em;padding:15px 34px 14px;min-height:var(--touch);
+          border:1px solid var(--rule-act);border-radius:var(--edge);
+          background:rgba(8,8,13,.35);
+          transition:border-color .22s var(--ease),background .22s var(--ease),opacity .22s var(--ease)}
+  .lp-cta:hover{border-color:var(--thread);background:rgba(8,8,13,.62)}
+  .lp-cta:active{opacity:.72}
   .lp-cta .sub{display:block;margin-top:5px;font-family:'Courier Prime',monospace;
                font-size:9px;letter-spacing:0.4em;color:var(--thread);text-transform:uppercase}
 
   /* この宙について（v12）：初めて来た人が「何が起きる場所か」を掴めないままだったので、
      宙の上のほうに二行だけ置く。全文は同じ画面の中で、そっと開く。 */
-  .about{position:fixed;left:0;right:0;top:56px;z-index:11;text-align:center;padding:0 24px;
+  .about{position:fixed;left:0;right:0;top:56px;z-index:11;text-align:center;padding:0 var(--s3);
          pointer-events:none}
-  .about p{margin:0 0 10px;font-size:12px;line-height:2.2;letter-spacing:0.1em;
-           color:rgba(250,248,243,.58);text-shadow:0 0 16px rgba(8,8,13,.95);
+  .about p{margin:0 0 var(--s2);font-size:var(--t-meta);line-height:2.2;
+           letter-spacing:var(--tr-body);
+           color:var(--ink-2);text-shadow:0 0 16px rgba(8,8,13,.95);
            word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
-  .about-more{pointer-events:auto;min-height:44px;background:none;border:none;
-              color:rgba(250,248,243,.5);font-family:inherit;font-size:11.5px;
-              letter-spacing:0.22em;cursor:pointer;padding:11px 8px;
-              border-bottom:1px solid rgba(179,143,111,.4);transition:color .3s,border-color .3s}
-  .about-more:hover{color:var(--chalk);border-color:var(--thread)}
+  .about-more{pointer-events:auto;min-height:var(--touch);padding:13px 10px;
+              font-size:11.5px;letter-spacing:0.22em}
+  /* 全文は、宙の上に「材質が立ち上がる」ように現れる：ぼけと縮尺を同時に動かす
+     （ただ不透明度が変わるだけだと、板が点いたり消えたりして見える／Apple §12） */
   .about-full{position:fixed;inset:0;z-index:14;display:flex;align-items:center;
-              justify-content:center;padding:24px;background:rgba(8,8,13,.95);
-              opacity:0;transition:opacity .6s ease;pointer-events:none}
-  .about-full.on{opacity:1;pointer-events:auto}
+              justify-content:center;padding:24px;background:rgba(8,8,13,.82);
+              backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);
+              opacity:0;pointer-events:none;
+              transition:opacity .5s ease,backdrop-filter .55s ease,-webkit-backdrop-filter .55s ease}
+  .about-full.on{opacity:1;pointer-events:auto;
+                 backdrop-filter:blur(16px) saturate(85%);
+                 -webkit-backdrop-filter:blur(16px) saturate(85%)}
+  .about-doc{transform:scale(.986) translateY(8px);
+             transition:transform .55s cubic-bezier(.2,.8,.2,1)}
+  .about-full.on .about-doc{transform:none}
+  @media (prefers-reduced-motion: reduce){
+    .about-doc{transition:none;transform:none}
+  }
+  @media (prefers-reduced-transparency: reduce){
+    .about-full{background:rgba(8,8,13,.98)}
+    .about-full.on{backdrop-filter:none;-webkit-backdrop-filter:none}
+  }
+  /* ぼかした材質の上の文字は、平たい灰色にしない（Apple のvibrancy／§12） */
   .about-doc{max-width:min(92vw,460px);max-height:82vh;overflow:auto;
-             font-size:13px;line-height:2.3;letter-spacing:0.08em;
-             color:rgba(250,248,243,.86)}
-  .about-doc h2{margin:0 0 22px;font-size:13.5px;font-weight:500;letter-spacing:0.3em;
-                color:rgba(250,248,243,.7)}
-  .about-doc p{margin:0 0 22px;word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
-  .about-doc .contact{font-size:11.5px;color:rgba(250,248,243,.5)}
+             font-size:var(--t-body);line-height:2.3;letter-spacing:0.085em;
+             color:var(--ink-1)}
+  .about-doc h2{margin:0 0 var(--s4);font-size:13.5px;font-weight:500;letter-spacing:0.3em;
+                color:var(--ink-3)}
+  .about-doc p{margin:0 0 var(--s4);word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .about-doc .contact{font-size:11.5px;color:var(--ink-4)}
   .about-doc .contact a{color:var(--thread);text-decoration:underline;text-underline-offset:3px}
-  .about-doc .about-close{display:block;margin:6px auto 0;min-height:44px;background:none;
-             border:none;border-bottom:1px solid rgba(179,143,111,.55);
-             color:rgba(250,248,243,.55);font-family:inherit;font-size:12px;
-             letter-spacing:0.24em;cursor:pointer;padding:12px 20px}
+  .about-doc .about-close{display:block;margin:var(--s1) auto 0;min-height:var(--touch);
+             padding:13px 20px;font-size:12px;letter-spacing:0.24em}
 
   /* 放つ（登録済み）：宙の下辺に静かな一語 */
   .cast-btn{position:fixed;left:50%;bottom:7vh;transform:translateX(-50%);z-index:11;
-            background:none;border:none;border-bottom:1px solid rgba(179,143,111,.55);
-            color:rgba(250,248,243,.8);font-family:inherit;font-size:15px;letter-spacing:0.5em;
-            padding:6px 18px 8px 23px;cursor:pointer;transition:color .3s,border-color .3s}
-  .cast-btn:hover{color:var(--chalk);border-color:var(--thread)}
+            min-height:var(--touch);color:var(--ink-2);font-size:15px;letter-spacing:0.5em;
+            padding:12px 18px 13px 23px}
+  /* 書く柱が立っている間は、下の「放つ」は退く。
+     柱の背景が半透明なので、放つ／宙 へ 放 つ が二つ並んで見えていた（v12.1） */
+  .cast-btn.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
 
-  /* 宙の中で書く：モーダルではなく、宙が少し暗くなり書く柱が立つ */
+  /* 宙の中で書く：モーダルではなく、宙が少し暗くなり書く柱が立つ。
+     v14：書いている間は宙をもう一段うしろへ下げる（暗くする＋薄くぼかす）。
+     漂うことばが便箋の裏で読めていると、自分の字と他人の字が混ざって落ち着かない
+     （＝Apple §12「集中させたい時は、背後を暗くして押しやる」）。消すのではなく、退かせる。 */
   .cast{position:fixed;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;
-        background:rgba(8,8,13,.55);opacity:0;transition:opacity .6s ease;pointer-events:none}
-  .cast.on{opacity:1;pointer-events:auto}
-  .cast-inner{display:flex;flex-direction:column;align-items:center;gap:18px;
-              padding:20px;max-width:92vw}
-  .cast textarea{writing-mode:vertical-rl;height:min(52vh,380px);width:auto;min-width:3.4em;
+        background:rgba(8,8,13,.55);opacity:0;pointer-events:none;
+        backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);
+        transition:opacity .6s var(--ease),backdrop-filter .6s var(--ease),
+                   -webkit-backdrop-filter .6s var(--ease)}
+  .cast.on{opacity:1;pointer-events:auto;background:rgba(8,8,13,.74);
+           backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+  @media (prefers-reduced-transparency: reduce){
+    .cast.on{background:rgba(8,8,13,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
+  }
+  /* position:relative ＝ 自前カーソル（.vcaret）とミラー要素の座標の基準 */
+  .cast-inner{position:relative;display:flex;flex-direction:column;align-items:center;
+              gap:var(--s2);padding:var(--s3);max-width:92vw}
+  /* ── 宙の便箋：4本の縦罫（v13.1）────────────────────────────
+     列幅＝line-height（--cw）、1列 --cch 字。4列 × 20字 = 80字＝本文の上限とちょうど同じ。
+     箱の寸法を固定するのが要点：これまで width:auto だったので、字が増えて列が伸びるたび
+     箱そのものが広がり、中央寄せのせいで書いている場所が左へずれていた
+     （＝カーソルが動いて見えた原因の半分）。空でも罫は4本立っている（便箋の姿）。
+     画面が低い端末では字面と列幅だけを詰め、20字×4列の関係は崩さない。 */
+  .cast{--cw:36px;--fs:17px;--cch:20}
+  /* 柱の総丈 ＝ 便箋 + 307px（字数・色の二段・放つ・添え書き・間）。
+     v14で色の帯の的を44pxに広げた分だけ丈が伸びたので、しきい値もその分下げてある。
+     低い画面では字面と列幅だけを詰め、20字×4列の関係は絶対に崩さない。 */
+  @media (max-height:740px){ .cast{--cw:32px;--fs:15px} }
+  @media (max-height:690px){ .cast{--cw:28px;--fs:13px} }
+  @media (max-height:640px){ .cast{--cw:26px;--fs:12px} }
+  .cast textarea{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+        line-break:strict;
+        /* +3px は「20字目が1px足りずに次の列へ落ちる」のを防ぐ遊び（字送りの端数のため） */
+        width:calc(var(--cw) * 4);height:calc(var(--cch) * (var(--fs) + 0.14em) + 3px);
         background:none;border:none;outline:none;resize:none;color:var(--chalk);
-        font-family:inherit;font-size:17px;line-height:2.3;letter-spacing:0.14em;
-        caret-color:var(--thread);overflow:hidden}
-  .cast textarea::placeholder{color:rgba(250,248,243,.3)}
-  .cast-count{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.3em;
-              color:rgba(250,248,243,.4)}
+        font-family:inherit;font-size:var(--fs);line-height:var(--cw);letter-spacing:0.14em;
+        padding:0;overflow:hidden;
+        /* 縦罫は列の境目に一本ずつ。vertical-rl は右から埋まるので 270deg（右→左）で数える */
+        background-image:repeating-linear-gradient(270deg,
+              transparent,transparent calc(var(--cw) - 1px),
+              var(--rule-faint) calc(var(--cw) - 1px),var(--rule-faint) var(--cw));
+        /* ネイティブカーソルは縦書きだと字面まで縮むので隠し、.vcaret を重ねる */
+        caret-color:transparent}
+  .cast textarea::placeholder{color:var(--ink-4)}
+  /* 自前カーソル：列幅いっぱい（＝横書きの行と同じ背丈）の横棒。
+     追従アニメーションは付けない——ここは「置いた場所に、ちゃんと在る」ことが主題で、
+     滑らせるとそれ自体が不安定に見える（宙の他のUIは spring で動くが、ここは例外）。 */
+  .vcaret{position:absolute;height:2px;border-radius:1px;background:var(--thread);
+          pointer-events:none;display:none;animation:vcaretBlink .9s steps(1) infinite}
+  @keyframes vcaretBlink{50%{opacity:0}}
+  @media (prefers-reduced-motion: reduce){ .vcaret{animation:none} }
+  .cast-count{font-family:'Courier Prime',monospace;font-size:var(--t-mono);
+              letter-spacing:0.3em;color:var(--ink-4)}
   /* 色｜v11.1：パステル固定をやめ、色相バー＋トーンバーの二段に戻す。
-     上＝色相（鮮やかなまま全周）、下＝淡い⇄鮮やか⇄深い。選んだ色はその場で文字にのる。 */
-  .picker{display:flex;flex-direction:column;gap:11px;align-items:center}
-  .colorbar{position:relative;width:min(70vw,300px);height:11px;border-radius:6px;cursor:pointer;
-            touch-action:none;box-shadow:inset 0 0 0 1px rgba(250,248,243,.14)}
-  .huebar{background:linear-gradient(90deg,
+     上＝色相（鮮やかなまま全周）、下＝淡い⇄鮮やか⇄深い。選んだ色はその場で文字にのる。
+     v14：帯の見た目は11pxのまま、指の的だけ上下パディングで44pxに広げた
+     （background-clip:content-box なので、色は細い帯にしか乗らない）。 */
+  .picker{display:flex;flex-direction:column;gap:2px;align-items:center}
+  /* box-sizing:content-box が要点：global の border-box では height:11px に padding が
+     食われて帯そのものが消える（＝色が見えなくなる）。ここだけ content-box に戻す。 */
+  .colorbar{position:relative;box-sizing:content-box;width:min(70vw,300px);height:11px;
+            padding:17px 0;background-clip:content-box;border-radius:6px;
+            cursor:pointer;touch-action:none}
+  .huebar{background-image:linear-gradient(90deg,
             hsl(0,80%,60%),hsl(40,80%,60%),hsl(80,80%,60%),hsl(120,80%,60%),
             hsl(160,80%,60%),hsl(200,80%,60%),hsl(240,80%,60%),hsl(280,80%,60%),
             hsl(320,80%,60%),hsl(360,80%,60%))}
-  .tonebar{background:linear-gradient(90deg,hsl(0,22%,88%),hsl(0,80%,60%),hsl(0,62%,32%))}
-  .bar-knob{position:absolute;top:50%;left:0;width:18px;height:18px;border-radius:50%;
-            transform:translate(-50%,-50%);border:1.5px solid rgba(250,248,243,.9);
+  .tonebar{background-image:linear-gradient(90deg,hsl(0,22%,88%),hsl(0,80%,60%),hsl(0,62%,32%))}
+  .bar-knob{position:absolute;top:50%;left:0;width:20px;height:20px;border-radius:50%;
+            transform:translate(-50%,-50%);border:1.5px solid var(--chalk);
             background:transparent;pointer-events:none;
-            box-shadow:0 0 10px rgba(0,0,0,.6);transition:background .18s}
-  .cast-row{display:flex;gap:26px;align-items:baseline}
-  .cast-send{background:none;border:none;border-bottom:1px solid rgba(179,143,111,.6);
-             color:var(--chalk);font-family:inherit;font-size:14.5px;letter-spacing:0.4em;
-             padding:4px 10px 7px 14px;cursor:pointer}
-  .cast-send:disabled{opacity:.35;cursor:default}
-  .cast-close{background:none;border:none;color:rgba(250,248,243,.45);font-family:inherit;
-              font-size:12px;letter-spacing:0.24em;cursor:pointer;padding:4px}
-  .cast-note{margin:0;font-size:11px;line-height:2.1;letter-spacing:0.1em;
-             color:rgba(250,248,243,.42);text-align:center}
+            box-shadow:0 0 10px rgba(0,0,0,.6);transition:background .18s var(--ease)}
+  .cast-row{display:flex;gap:var(--s4);align-items:center}
+  .cast-send{border-bottom-color:var(--rule-act);color:var(--ink-1);
+             font-size:14.5px;letter-spacing:0.4em;min-height:var(--touch);
+             padding:12px 10px 13px 14px}
+  .cast-send:disabled{opacity:.35;cursor:default;border-color:var(--rule-faint)}
+  .cast-close{border-bottom-color:transparent;color:var(--ink-3);font-size:12px;
+              letter-spacing:0.24em;min-height:var(--touch);padding:12px 8px}
+  .cast-close:hover{border-bottom-color:var(--rule-act)}
+  .cast-note{margin:0;font-size:11.5px;line-height:2.1;letter-spacing:var(--tr-body);
+             color:var(--ink-4);text-align:center}
   /* 開く：メールの開封リンク（/open/<id>）から宙に着地したときだけ立ち上がる柱。
      書く柱（.cast）と同じ作法で、宙が暗くなり、本文がひと筋立つ。 */
   .read{position:fixed;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;
         background:rgba(8,8,13,.72);opacity:0;transition:opacity .6s ease;pointer-events:none}
   .read.on{opacity:1;pointer-events:auto}
-  .read-inner{display:flex;flex-direction:column;align-items:center;gap:22px;
-              padding:24px;max-width:92vw}
+  .read-inner{display:flex;flex-direction:column;align-items:center;gap:var(--s4);
+              padding:var(--s3);max-width:92vw}
   .read-body{writing-mode:vertical-rl;max-height:min(62vh,520px);overflow:auto;
              color:var(--chalk);font-size:17px;line-height:2.4;letter-spacing:0.14em;
              white-space:pre-wrap;outline:none}
   .read-body.h{writing-mode:horizontal-tb;max-width:22em;max-height:62vh}
   .read-note{margin:0;font-size:11.5px;line-height:2;letter-spacing:0.14em;
-             color:rgba(250,248,243,.52);text-align:center;white-space:pre-line}
-  .read-close{min-height:44px;background:none;border:none;
-              border-bottom:1px solid rgba(179,143,111,.55);color:rgba(250,248,243,.55);
-              font-family:inherit;font-size:12px;letter-spacing:0.24em;cursor:pointer;
-              padding:12px 20px;transition:color .3s,border-color .3s}
-  .read-close:hover{color:var(--chalk);border-color:var(--thread)}
-  /* だれかのことばに結ぶ、静かな印（放った人には何も伝わらない） */
-  .like-mark{display:inline-flex;align-items:center;gap:9px;min-height:44px;background:none;
-             border:none;color:rgba(250,248,243,.55);font-family:inherit;font-size:12px;
-             letter-spacing:0.2em;cursor:pointer;padding:10px 4px;transition:color .3s}
+             color:var(--ink-3);text-align:center;white-space:pre-line}
+  .read-close{min-height:var(--touch);padding:13px 20px;font-size:12px;letter-spacing:0.24em}
+  /* だれかのことばに結ぶ、静かな印（放った人には何も伝わらない）
+     宙で漂うことばに触れた時の .hold-act と同じ形（同じ行いは同じ姿・Apple §16 familiarity） */
+  .like-mark{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
+             background:none;border:none;color:var(--ink-3);font-family:inherit;
+             font-size:var(--t-meta);letter-spacing:0.16em;padding:11px 4px;
+             transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .like-mark:hover{color:var(--ink-1)}
+  .like-mark:active{opacity:.62}
   .like-mark .dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--thread);
-                  background:transparent;transition:background .4s}
-  .like-mark.on{color:rgba(250,248,243,.85)}
+                  background:transparent;transition:background .32s var(--ease)}
+  .like-mark.on{color:var(--ink-1)}
   .like-mark.on .dot{background:var(--thread)}
   /* display指定があると[hidden]のUA既定を上書きしてしまうので明示する
      （印は他人のことばにだけ。自分の帰ってきたことばには出さない） */
   .like-mark[hidden]{display:none}
+  /* 棚のしるしは丸くしない：紙片（付箋）を挟む行為なので、角のある小さな四角（v13） */
+  .keep-mark .dot{border-radius:1px}
 
   /* ── 宙のすみで待っている、だれかのことば（棚を畳んだので宙側へ・v11.1）──
      数も、だれのものかも言わない。ただ「降りてきた」ことだけが灯る。 */
-  .arrivals{position:fixed;right:20px;top:52px;z-index:11;display:flex;flex-direction:column;
-            align-items:flex-end;gap:10px}
-  .arrival{display:flex;align-items:center;gap:9px;background:none;border:none;cursor:pointer;
-           font-family:inherit;font-size:12px;letter-spacing:0.14em;padding:8px 2px;
-           color:rgba(250,248,243,.62);transition:color .3s;
+  .arrivals{position:fixed;right:20px;top:48px;z-index:11;display:flex;flex-direction:column;
+            align-items:flex-end;gap:2px;transition:opacity .34s var(--ease)}
+  /* 栞が開いている間は、同じ場所にいる「降りてきました」は退く（v13） */
+  .arrivals.away{opacity:0;pointer-events:none}
+  .arrival{display:flex;align-items:center;gap:10px;background:none;border:none;
+           font-family:inherit;font-size:var(--t-meta);letter-spacing:var(--tr-body);
+           min-height:var(--touch);padding:12px 2px;
+           color:var(--ink-3);transition:color .22s var(--ease),opacity .22s var(--ease);
            text-shadow:0 0 14px rgba(8,8,13,.95)}
-  .arrival:hover{color:var(--chalk)}
+  .arrival:hover{color:var(--ink-1)}
+  .arrival:active{opacity:.62}
   .arrival .seal{width:9px;height:9px;border-radius:50%;background:var(--thread);
                  box-shadow:0 0 12px currentColor;animation:sealPulse 4.5s ease-in-out infinite}
   /* 開封済みの控え。クラス名は .read を避ける（読む柱 .read と衝突するため） */
-  .arrival.done{color:rgba(250,248,243,.34)}
-  .arrival.done .seal{background:none;box-shadow:none;border:1px solid rgba(179,143,111,.6);animation:none}
+  .arrival.done{color:var(--ink-4)}
+  .arrival.done .seal{background:none;box-shadow:none;border:1px solid var(--rule);animation:none}
   @keyframes sealPulse{0%,100%{opacity:.55}50%{opacity:1}}
   @media (prefers-reduced-motion: reduce){ .arrival .seal{animation:none} }
 
-  /* 相談窓口のしおり（宙の闇の中でも読める、静かな紙片） */
+  /* 相談窓口のしおり（宙の闇の中でも読める、静かな紙片。宙で唯一、縁のある面） */
   .care-note{position:fixed;left:50%;bottom:8vh;transform:translate(-50%,8px);z-index:13;
-             max-width:min(88vw,420px);padding:18px 22px;background:rgba(15,15,22,.92);
-             border:1px solid rgba(250,248,243,.16);border-left:2px solid var(--thread);
-             font-size:12.5px;line-height:2.2;letter-spacing:0.06em;color:rgba(250,248,243,.9);
-             opacity:0;transition:opacity .8s ease,transform .8s ease}
+             max-width:min(88vw,420px);padding:var(--s3) 22px;background:rgba(15,15,22,.94);
+             border-left:2px solid var(--thread);border-radius:var(--edge);
+             box-shadow:0 0 0 1px rgba(250,248,243,.14);
+             font-size:12.5px;line-height:2.2;letter-spacing:0.06em;color:var(--ink-1);
+             opacity:0;transition:opacity .8s var(--ease),transform .8s var(--ease)}
   .care-note.on{opacity:1;transform:translate(-50%,0)}
-  .care-note p{margin:0 0 10px}
+  .care-note p{margin:0 0 var(--s2)}
   .care-note a{color:var(--thread);text-decoration:underline;text-underline-offset:3px}
-  .care-note .care-close{display:block;margin:4px 0 0 auto;background:none;border:none;
-             color:rgba(250,248,243,.5);font-family:inherit;font-size:11px;letter-spacing:0.2em;
-             cursor:pointer;border-bottom:1px solid currentColor;padding:2px 1px}
+  .care-note .care-close{display:block;margin:var(--s1) 0 0 auto;min-height:var(--touch);
+             color:var(--ink-3);font-size:11.5px;letter-spacing:0.2em;padding:12px 2px}
+  @media (prefers-reduced-motion: reduce){ .care-note{transition:opacity .4s ease;transform:translate(-50%,0)} }
 </style>
 </head>
 <body>
   <header>
     <div class="ttl">宙<span class="romaji">sky</span></div>
+    <button class="shiori ruled" id="shioriBtn" type="button" aria-expanded="false"
+            aria-controls="shioriList" aria-label="栞（この宙について・理念・お問い合わせ）">栞</button>
   </header>
-  <div class="drift-layer" id="driftLayer" aria-hidden="true"></div>
-  <ul class="sr-words" id="skyWords" aria-label="いま宙にあることば"></ul>
+  <ul class="shiori-list" id="shioriList">
+    <li><a href="/about">この宙について</a></li>
+    <li><a href="/philosophy">理念</a></li>
+    {% if logged_in %}<li><a href="/shelf">手元の棚</a></li>{% endif %}
+    <li><a href="/operator">運営者</a></li>
+    <li><a href="/contact">お問い合わせ</a></li>
+    <li class="thin"><a href="/terms">利用規約</a></li>
+    <li class="thin"><a href="/privacy">プライバシー</a></li>
+  </ul>
+  <!-- 漂うことば。v14 で触れられるようになったので、読み上げ用の別リスト（.sr-words）は畳んだ
+       （ことばそのものが辿れる要素になったので、同じ内容を二度読ませない） -->
+  <div class="drift-layer" id="driftLayer" aria-label="漂っていることば"></div>
+  <!-- 受け止めたことばに添う、二つの行い。中身は JS が入れる -->
+  <div class="hold" id="hold" role="group" aria-label="このことばに、する" hidden></div>
+  <!-- 宙が空っぽの時・遠い時のひとこと -->
+  <p class="whisper" id="whisper" aria-live="polite"></p>
 
   {% if not logged_in %}
   <!-- 宙の上のほう：何が起きる場所なのかを、二行だけ。全文はその場で開く -->
   <div class="about">
     <p>ここは、<wbr>行き先を<wbr>決めずに<wbr>ことばを<wbr>放つ<wbr>場所です。<br>
        だれかが<wbr>偶然<wbr>ひらくかもしれないし、<wbr>だれにも<wbr>読まれないまま<wbr>漂うかもしれない。</p>
-    <button class="about-more" id="aboutMore" type="button">この宙について</button>
+    <button class="about-more ruled" id="aboutMore" type="button">この宙について</button>
   </div>
   <!-- ランディング＝宙。眺めるのに登録は要らない。放つ時だけ、はじめる画面へ -->
   <div class="lp">
@@ -239,15 +465,17 @@
       <p>ここは<wbr>共有（シェア）の<wbr>場所ではなく、<br>
          意味のない<wbr>言葉が、<wbr>だれかの<wbr>意味に<wbr>なるための<wbr>宙です。</p>
       <p class="contact">お問い合わせ　<a href="mailto:tayoriletter@gmail.com">tayoriletter@gmail.com</a></p>
-      <button class="about-close" id="aboutClose" type="button">とじる</button>
+      <button class="about-close ruled" id="aboutClose" type="button">とじる</button>
     </div>
   </div>
   {% else %}
   <div class="arrivals" id="arrivals" aria-live="polite"></div>
-  <button class="cast-btn" id="castBtn" type="button">放つ</button>
+  <button class="cast-btn ruled" id="castBtn" type="button">放つ</button>
   <div class="cast" id="castPane" aria-hidden="true">
     <div class="cast-inner">
       <textarea id="castText" maxlength="80" placeholder="ことばを、宙へ。" aria-label="宙へ放つことば"></textarea>
+      <!-- 縦書き用の自前カーソル（ネイティブは字面まで縮み、位置も定まらないため） -->
+      <div class="vcaret" id="castCaret"></div>
       <div class="cast-count"><span id="castCount">0</span> / 80</div>
       <div class="picker">
         <div class="colorbar huebar" id="hueBar" role="slider" aria-label="いまの気分の色（色相）"
@@ -256,8 +484,8 @@
              aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
       </div>
       <div class="cast-row">
-        <button class="cast-send" id="castSend" type="button">宙 へ 放 つ</button>
-        <button class="cast-close" id="castClose" type="button">とじる</button>
+        <button class="cast-send ruled" id="castSend" type="button">宙 へ 放 つ</button>
+        <button class="cast-close ruled" id="castClose" type="button">とじる</button>
       </div>
       <p class="cast-note">放ったことばは、匿名のまま宙を漂い、<br>いつか、知らない誰かのもとへ降ります。<br>あなた自身にも、忘れた頃に。</p>
     </div>
@@ -269,7 +497,12 @@
       <button class="like-mark" id="readLike" type="button" aria-pressed="false" hidden>
         <span class="dot" aria-hidden="true"></span><span class="txt">このことばに、印を結ぶ</span>
       </button>
-      <button class="read-close" id="readClose" type="button">とじる</button>
+      <!-- 印とは別の行為（v13 §9）。印＝その場のしるし／棚＝手元に残すこと。
+           残せるのは、いまこの柱で開いたことばだけ（降ってきた他人のも、帰ってきた自分のも） -->
+      <button class="like-mark keep-mark" id="readKeep" type="button" aria-pressed="false" hidden>
+        <span class="dot" aria-hidden="true"></span><span class="txt">手元に、残す</span>
+      </button>
+      <button class="read-close ruled" id="readClose" type="button">とじる</button>
     </div>
   </div>
   {% endif %}
@@ -346,60 +579,149 @@
   }
 
   /* ── 漂うことば ── */
-  // いま宙にあることばを、スクリーンリーダーにも同じだけ渡す
-  // （語のcanvasを畳んだので、読み上げの受け皿はこちらへ移った）
-  const srList=document.getElementById('skyWords');
-  const srLive=new Map();   // 浮かんでいる要素 → 本文
-  function srSync(){
-    let h='';
-    srLive.forEach(p=>{h+='<li>'+esc(p)+'</li>';});
-    srList.innerHTML=h;
-  }
-
+  const liveEls=new Set();   // いま浮かんでいる要素（定員をこれで数える）
   let pool=[]; const shown=new Set(), live=new Set();  // live=いま画面に浮かんでいることば（同じ一筆を同時に重ねない）
+  // 自分で放った直後の一筆は id を持たない（サーバの宙idはまだ手元に無い）ので、
+  // id だけでは「もう浮かんでいる」と分からず、数秒後に同じことばが二重に書かれていた。
+  // 本文そのものでも重なりを見る（同じことばは、宙に同時に一つだけ）。
+  const liveText=new Map();   // 本文 → いま浮かんでいる枚数
   const MAX_LIVE=7;         // 同時に浮かべる上限（増やしすぎると宙が騒がしくなる）
   let seeded=false;
+  /* 宙のひとこと（v14）：闇なので「読み込み中」は出さない。
+     何も漂っていない時と、宙に届かなかった時だけ、そっと一行置く。 */
+  const whisperEl=document.getElementById('whisper');
+  let whisperT=0;
+  function whisper(html,hold){
+    clearTimeout(whisperT);
+    if(!html){whisperEl.classList.remove('on');return;}
+    whisperEl.innerHTML=html;
+    whisperEl.classList.add('on');
+    if(hold)whisperT=setTimeout(()=>whisperEl.classList.remove('on'),hold);
+  }
   function fetchWords(){
     fetch('/api/sky').then(r=>r.ok?r.json():null)
       .then(d=>{
-        if(d&&d.words) pool=d.words;
+        if(!d||!d.words) throw new Error('sky');
+        pool=d.words;
+        if(!pool.length){
+          whisper(LOGGED_IN
+            ? 'いま、<wbr>宙には<wbr>何も<wbr>漂っていません。<br>最初の<wbr>ひとことを、<wbr>放って<wbr>みてください。'
+            : 'いま、<wbr>宙には<wbr>何も<wbr>漂っていません。');
+        }else if(!liveEls.size){ whisper(''); }
         // ことばが揃った瞬間から書きはじめる（暗闇のまま数秒待たせない）
         if(!seeded&&pool.length){seeded=true;[0,1100,2500,4200,6200].forEach(ms=>setTimeout(driftOne,ms));}
       })
-      .catch(()=>{});
+      .catch(()=>{
+        if(!pool.length) whisper('宙が<wbr>遠いようです。<br>すこし<wbr>待ってから、<wbr>もう一度。',9000);
+      });
   }
+  /* ── 置き場所をえらぶ（v12.1）───────────────────────────
+     完全ランダムだったので、説明の真上や他のことばの上に平気で降りていた。
+     宙は広いのだから、空いているところへ置けばいい。厳密な衝突判定はせず、
+     候補をいくつか投げて「いちばん重ならない」ところを採る（外れても静かに置く）。 */
+  function boxOf(el){
+    const r=el.getBoundingClientRect();
+    return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};
+  }
+  function overlapArea(a,b){
+    const w=Math.min(a.right,b.right)-Math.max(a.left,b.left);
+    const h=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);
+    return (w>0&&h>0)?w*h:0;
+  }
+  function pickSpot(poem,vertical){
+    // 位置は vw/vh で置く（画面の寸法がJSから読めない場面でも、CSSは正しく解いてくれる）。
+    // 採寸はあくまで「どの候補がいちばん空いているか」を選ぶためだけに使う。
+    const W=document.documentElement.clientWidth||innerWidth||0;
+    const H=document.documentElement.clientHeight||innerHeight||0;
+    const cand=()=>({x:4+Math.random()*84,y:6+Math.random()*70});   // % 座標
+    if(!(W>0&&H>0)) return cand();     // 採寸できない時は、素直に偶然へ委ねる
+    // 説明・導線・操作は「文字が読めること」が最優先。ことば同士より重い罰を置く
+    const keep=[...document.querySelectorAll('header,.lp,.about,.cast-btn,.arrivals,.shiori-list.on')]
+      .map(boxOf).filter(r=>r.right>r.left&&r.bottom>r.top);
+    const others=[...layer.children].map(boxOf).filter(r=>r.right>r.left);
+    // 書き上がった時の大きさを見積もる（縦書きは字数だけ下へ伸び、溢れると横へ列が増える）
+    const len=Math.max(1,[...String(poem)].length);
+    const per=19, maxRun=vertical?H*0.62:Math.min(230,W*0.8);
+    const run=Math.min(len*per,maxRun);
+    const lines=Math.max(1,Math.ceil(len*per/maxRun));
+    const w=vertical?lines*30:run, h=vertical?run:lines*30;
+    let best=null;
+    for(let i=0;i<16;i++){
+      const c=cand(), x=c.x/100*W, y=c.y/100*H;
+      const r={left:x,top:y,right:x+w,bottom:y+h};
+      let cost=0;
+      keep.forEach(k=>{cost+=overlapArea(r,k)*4;});
+      others.forEach(o=>{cost+=overlapArea(r,o);});
+      if(r.right>W-8) cost+=(r.right-(W-8))*400;      // 画面外へはみ出すのも「読めない」
+      if(r.bottom>H-8) cost+=(r.bottom-(H-8))*400;
+      if(!best||cost<best.cost) best={x:c.x,y:c.y,cost:cost};
+      if(!cost) break;                                 // 完全に空いていれば探索終了
+    }
+    return best;
+  }
+
   function spawnDrift(poem,color,vertical,id,steps){
     if(!poem) return;
     if(id)live.add(id);
     const el=document.createElement('div');
     el.className='drift'+(vertical?' v':'');
-    const x=6+Math.random()*72, y=10+Math.random()*62;
-    el.style.left=x+'vw'; el.style.top=y+'vh';
+    const spot=pickSpot(poem,vertical);
+    el.style.left=spot.x+'vw'; el.style.top=spot.y+'vh';
     const c=tintOf(color);
     if(c){ el.style.color=c.text; el.style.textShadow='0 0 18px '+c.glow; }
     const life=REDUCED?18000:(26000+Math.random()*20000);
-    el.style.transitionDuration='1.4s,'+life+'ms';
+    // 秒数は名前で渡す（transitionDuration を位置で並べると、プロパティを足すたびに壊れる）
+    el.style.setProperty('--in','1.1s');
+    el.style.setProperty('--life',life+'ms');
+    // 触れられることを、要素そのものに持たせる（読み上げも辿れる）
+    el.setAttribute('role','button');
+    el.setAttribute('tabindex','0');
+    el.setAttribute('aria-label','宙のことば：'+poem+'。ひらくと、印を結ぶ・手元に残すができます。');
+    el._poem=poem; el._sid=id||null; el._color=color||null;
+    el._life=life; el._born=performance.now();
+    el.addEventListener('click',()=>catchWord(el));
+    el.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){e.preventDefault();catchWord(el);}});
     layer.appendChild(el);
-    srLive.set(el,poem); srSync();
+    liveEls.add(el);
+    liveText.set(poem,(liveText.get(poem)||0)+1);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       el.classList.add('on');
       if(!REDUCED){
         const dx=(Math.random()-0.5)*90, dy=-(18+Math.random()*50);
-        el.style.transform='translate('+dx+'px,'+dy+'px)';
+        el._to='translate('+dx+'px,'+dy+'px)';
+        el.style.transform=el._to;
       }
       playType(el,poem,steps);          // ここで一字ずつ書かれていく
     }));
-    setTimeout(()=>{
-      el.style.transitionDuration='5s,'+life+'ms';
+    // 消えぎわと片づけ。受け止めている間は止めるので、時計は付け外しできる形で持つ
+    el._fadeAt=Math.max(6000,life-5600);
+    armDrift(el);
+  }
+  /* 消える時計を掛ける／外す。受け止めた間はことばを消さない（手の中にある紙は勝手に飛ばない） */
+  function armDrift(el){
+    const left=el._fadeAt-(performance.now()-el._born);
+    el._t1=setTimeout(()=>{
+      el.style.setProperty('--in','4.5s');
       el.classList.add('out');
-    },Math.max(6000,life-5600));
-    setTimeout(()=>{el.remove();srLive.delete(el);srSync();if(id)live.delete(id);},life+900);
+      el._t2=setTimeout(()=>removeDrift(el),5400);
+    },Math.max(600,left));
+  }
+  function disarmDrift(el){ clearTimeout(el._t1); clearTimeout(el._t2); }
+  function removeDrift(el){
+    el.remove(); liveEls.delete(el);
+    const n=(liveText.get(el._poem)||1)-1;
+    if(n>0)liveText.set(el._poem,n); else liveText.delete(el._poem);
+    if(el._sid)live.delete(el._sid);
+    if(held===el) release();
   }
   function driftOne(){
-    if(!pool.length||live.size>=MAX_LIVE) return;
+    // 定員は「いま実際に浮かんでいる枚数」で見る（自分で放った一筆も数に入る）
+    if(!pool.length||liveEls.size>=MAX_LIVE) return;
     // 画面に浮かんでいる一筆は選ばない。未出のものを優先し、出尽くしたら再演を許す
-    const fresh=pool.filter(w=>!live.has(w.id)&&!shown.has(w.id));
-    const again=pool.filter(w=>!live.has(w.id));
+    const busy=w=>live.has(w.id)||liveText.has(w.poem);
+    const fresh=pool.filter(w=>!busy(w)&&!shown.has(w.id));
+    const again=pool.filter(w=>!busy(w));
     const src=fresh.length?fresh:again;
     if(!src.length) return;   // 全部いま浮かんでいる＝この回は何も足さない
     const pick=src[Math.floor(Math.random()*src.length)];
@@ -413,6 +735,164 @@
     setTimeout(()=>{driftOne();tick();},4500+Math.random()*5500);
   })();
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) fetchWords(); });
+
+  /* ══ ことばを受け止める（v14）════════════════════════════════
+     漂っていることばに触れると、そのことばだけが漂うのをやめて手のうちに残る。
+     隣に二つの行いが立ち上がる：印を結ぶ／手元に残す。
+     ・止め方は「いまの見えている位置から」（Apple §3：目標値ではなく現在値から始める）。
+       matrix を読んで transition を切り、その値で固定する＝掴んだ瞬間に飛ばない。
+     ・放すと、残りの寿命でまた漂いはじめる（中断できて、戻せる）。
+     ・触れている間は消える時計を外す（手の中の紙が勝手に飛んでいかない）。
+     ・未登録の人にも受け止めさせる。印と棚は要るが、それは静かに知らせるだけ。 */
+  const holdBox=document.getElementById('hold');
+  let held=null;                       // いま受け止めていることば
+  // marks=印を結んだ公開id / kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
+  const marks=new Set(), kept=new Set();
+
+  function freezeAt(el){
+    // いま見えている transform をそのまま固定する（現在値から止める）
+    const m=getComputedStyle(el).transform;
+    el.style.transition='none';
+    el.style.transform=(m&&m!=='none')?m:'';
+    void el.offsetHeight;              // ここで確定させてから、また動ける状態へ戻す
+    el.style.transition='';
+  }
+  function catchWord(el){
+    if(held===el){ release(); return; }
+    if(held) release();
+    held=el;
+    disarmDrift(el);
+    el.classList.remove('out');
+    el.style.setProperty('--in','.34s');
+    freezeAt(el);
+    el.classList.add('held');
+    renderHold();
+    placeHold();
+  }
+  function release(){
+    const el=held; held=null;
+    holdBox.classList.remove('on');
+    setTimeout(()=>{ if(!held)holdBox.hidden=true; },300);
+    if(!el||!el.isConnected) return;
+    el.classList.remove('held');
+    el.style.setProperty('--in','1.1s');
+    // 残りの寿命でまた漂いだす（掴む前と同じ向きへ、続きから）
+    if(!REDUCED&&el._to){
+      el.style.setProperty('--life',Math.max(4000,el._life-(performance.now()-el._born))+'ms');
+      el.style.transform=el._to;
+    }
+    armDrift(el);
+  }
+  /* 行いは、そのことばの隣に置く（出どころから立ち上がる／Apple §7）。
+     画面からはみ出す時だけ、内側へ寄せる。 */
+  function placeHold(){
+    if(!held) return;
+    const r=held.getBoundingClientRect(), W=innerWidth, H=innerHeight;
+    holdBox.hidden=false;
+    holdBox.classList.remove('on');
+    void holdBox.offsetHeight;
+    const b=holdBox.getBoundingClientRect();
+    let x=r.left+r.width/2-b.width/2, y=r.bottom+6;
+    if(y+b.height>H-12) y=Math.max(12,r.top-b.height-6);   // 下が窮屈なら上へ
+    x=Math.min(Math.max(12,x),Math.max(12,W-b.width-12));
+    y=Math.min(Math.max(12,y),Math.max(12,H-b.height-12));
+    holdBox.style.left=x+'px'; holdBox.style.top=y+'px';
+    holdBox.style.transformOrigin=(r.left+r.width/2-x)+'px 0px';
+    // 立ち上がりは1フレーム置いてから（置いた場所を先に描かせる）。rAF ではなく時計を使う：
+    // 画面が伏せられている間 rAF は止まるので、「見える」ことを rAF に賭けない。
+    setTimeout(()=>{ if(held)holdBox.classList.add('on'); },16);
+  }
+  function renderHold(){
+    if(!held) return;
+    if(!LOGGED_IN){
+      holdBox.innerHTML='<p class="hold-note">このことばに<wbr>印を<wbr>結んだり、<wbr>'+
+        '手元に<wbr>残したり<wbr>できます。<br><a href="/?start=1">はじめる</a></p>';
+      return;
+    }
+    const m=marks.has(held._sid), s=kept.has('drift:'+held._sid);
+    holdBox.innerHTML=
+      '<button type="button" class="hold-act mark'+(m?' on':'')+'" aria-pressed="'+(m?'true':'false')+'">'+
+        '<span class="dot" aria-hidden="true"></span><span class="txt">'+
+        (m?'印を結びました':'このことばに、印を結ぶ')+'</span></button>'+
+      '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
+        '<span class="dot" aria-hidden="true"></span><span class="txt">'+
+        (s?'棚に、残しました':'手元に、残す')+'</span></button>';
+    holdBox.querySelector('.mark').addEventListener('click',()=>toggleMark(held));
+    holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
+  }
+  function paintAct(sel,on,onTxt,offTxt){
+    const b=holdBox.querySelector(sel); if(!b) return;
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-pressed',on?'true':'false');
+    b.querySelector('.txt').textContent=on?onTxt:offTxt;
+  }
+  async function toggleMark(el){
+    if(!el||!el._sid) return;
+    const on=!marks.has(el._sid);
+    if(on)marks.add(el._sid); else marks.delete(el._sid);
+    paintAct('.mark',on,'印を結びました','このことばに、印を結ぶ');
+    try{
+      const r=await fetch('/api/sky/word/'+el._sid+'/mark',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({on:on})});
+      if(!r.ok)throw new Error('mark');
+    }catch(e){
+      if(on)marks.delete(el._sid); else marks.add(el._sid);
+      paintAct('.mark',!on,'印を結びました','このことばに、印を結ぶ');
+      whisper('いま、<wbr>宙に<wbr>手が<wbr>届きませんでした。',6000);
+    }
+  }
+  async function toggleKeep(el){
+    if(!el||!el._sid) return;
+    const key='drift:'+el._sid, on=!kept.has(key);
+    if(on)kept.add(key); else kept.delete(key);
+    paintAct('.keep',on,'棚に、残しました','手元に、残す');
+    try{
+      const r=await fetch('/api/shelf',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({src:'drift',ref:el._sid,on:on})});
+      if(!r.ok)throw new Error('keep');
+    }catch(e){
+      if(on)kept.delete(key); else kept.add(key);
+      paintAct('.keep',!on,'棚に、残しました','手元に、残す');
+      whisper('いま、<wbr>棚に<wbr>届きませんでした。',6000);
+    }
+  }
+  // 宙の何もない所を触ったら放す（Escでも）
+  document.addEventListener('pointerdown',e=>{
+    if(held&&!holdBox.contains(e.target)&&e.target!==held&&!held.contains(e.target)) release();
+  },true);
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&held){const el=held;release();el.focus();} });
+  addEventListener('resize',()=>{ if(held)placeHold(); });
+  // 自分の印と棚を持ってくる（自分の記録しか出ない）
+  function fetchMine(){
+    if(!LOGGED_IN) return;
+    fetch('/api/sky/mine').then(r=>r.ok?r.json():null).then(d=>{
+      if(!d) return;
+      marks.clear();(d.marks||[]).forEach(h=>marks.add(h));
+      kept.clear();(d.kept||[]).forEach(k=>kept.add(k.src+':'+k.ref));
+      if(held)renderHold();
+      // 読む柱を開いたまま棚が変わることもある（同じ集合を見ているので、札だけ塗り直す）
+      if(typeof readRef!=='undefined'&&readRef)setKeep(kept.has(keptKey(readRef)));
+    }).catch(()=>{});
+  }
+  fetchMine();
+
+  /* ── 栞（宙の外の紙へ渡る、右上の一語）── */
+  (function(){
+    const sb=document.getElementById('shioriBtn'), sl=document.getElementById('shioriList'),
+          arr=document.getElementById('arrivals');
+    if(!(sb&&sl)) return;
+    const setOpen=on=>{
+      sl.classList.toggle('on',on);
+      sb.setAttribute('aria-expanded',on?'true':'false');
+      if(arr)arr.classList.toggle('away',on);   // 同じ場所にいる「降りてきました」は退く
+    };
+    sb.addEventListener('click',e=>{e.stopPropagation();setOpen(!sl.classList.contains('on'));});
+    document.addEventListener('click',e=>{
+      if(sl.classList.contains('on')&&!sl.contains(e.target)&&e.target!==sb)setOpen(false);});
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Escape'&&sl.classList.contains('on')){setOpen(false);sb.focus();}});
+  })();
 
   /* ── この宙について（未登録の入口にだけ）── */
   const aMore=document.getElementById('aboutMore'),aFull=document.getElementById('aboutFull');
@@ -434,7 +914,8 @@
         ta=document.getElementById('castText'),cnt=document.getElementById('castCount'),
         send=document.getElementById('castSend'),close=document.getElementById('castClose'),
         hueBar=document.getElementById('hueBar'),hueKnob=document.getElementById('hueKnob'),
-        toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob');
+        toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob'),
+        vcaret=document.getElementById('castCaret');
 
   /* ── 気分の色（v12）──
      色相 × トーン（淡い⇄鮮やか⇄深い）の二段。宙は真っ暗なので明度の下限は46%まで。
@@ -455,12 +936,15 @@
     hueKnob.style.background='hsl('+H+',80%,60%)';
     toneKnob.style.left=(T*100)+'%';
     toneKnob.style.background=col;
-    toneBar.style.background='linear-gradient(90deg,hsl('+H+',24%,88%),hsl('+H+',78%,64%),hsl('+H+',66%,46%))';
+    // background ではなく backgroundImage に入れる：短縮形は background-clip を
+    // 初期値に戻すので、帯が padding いっぱいまで太って「巨大な色の板」になる（v14で踏んだ）
+    toneBar.style.backgroundImage='linear-gradient(90deg,hsl('+H+',24%,88%),hsl('+H+',78%,64%),hsl('+H+',66%,46%))';
     hueBar.setAttribute('aria-valuenow',H);
     toneBar.setAttribute('aria-valuenow',Math.round(T*100));
     // 選んだ色は、書いている文字にそのままのる（宙に放たれた後と同じ見え方に）
-    ta.style.color=col; ta.style.caretColor=col;
+    ta.style.color=col;
     ta.style.textShadow='0 0 22px hsla('+c.h+','+c.s+'%,'+c.l+'%,.45)';
+    vcaret.style.background=col;      // 筆先も同じ色（ネイティブは透明にしてある）
   }
   function wireBar(bar,onPick){
     const pick=ev=>{
@@ -480,6 +964,67 @@
       T=Math.max(0,Math.min(1,T+(e.key==='ArrowRight'?0.05:-0.05)));paint();}});
   paint();   // 既定の色を最初から文字とつまみにのせておく
 
+  /* ── 縦書きの筆先（自前カーソル・v13.1）────────────────────────
+     縦書きのネイティブカーソルは、行ボックス（列幅）ではなく字面（font-size）に連動して
+     縮む。しかも列の中でどこに立つかが定まらないので、書いている位置が揺れて見えていた。
+     カーソルの寸法を指定するCSSは存在しない（caret-color は色だけ）ので、ネイティブは
+     透明にして、列幅いっぱいの横棒を入力位置に重ねる（便箋＝index.html と同じ作法）。
+
+     位置はミラー要素で測る：textarea のスタイルを写した隠しdivに「ここまでの本文＋全角の
+     マーカー」を入れ、マーカーの offsetTop（列のどこまで書いたか）と列の中心を読む。
+     全角グリフは列の中央に置かれるので、中心基準で測らないと約8pxずれる。 */
+  const MIRROR_PROPS=['boxSizing','paddingTop','paddingRight','paddingBottom','paddingLeft',
+    'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+    'fontFamily','fontSize','fontWeight','fontStyle','fontVariant','letterSpacing','lineHeight',
+    'textTransform','wordSpacing','writingMode','webkitWritingMode','textOrientation','lineBreak',
+    'fontFeatureSettings','wordBreak','overflowWrap','tabSize','direction'];
+  function caretPoint(el,pos){
+    const cs=getComputedStyle(el),div=document.createElement('div'),s=div.style;
+    s.position='absolute';s.visibility='hidden';s.top='0';s.left='-9999px';
+    s.whiteSpace='pre-wrap';s.overflow='hidden';
+    s.boxSizing='border-box';s.width=el.offsetWidth+'px';s.height=el.offsetHeight+'px';
+    MIRROR_PROPS.forEach(p=>{s[p]=cs[p];});
+    div.textContent=el.value.substring(0,pos);
+    const mark=document.createElement('span');
+    mark.textContent='　';                        // 全角ひとつ。列の中央に置かれる
+    div.appendChild(mark);
+    el.parentNode.appendChild(div);
+    const top=mark.offsetTop, centerX=mark.offsetLeft+mark.offsetWidth/2;
+    // 列がぴったり埋まった時、行末の全角空白は次の列へ送られず、その列の末尾にぶら下がる
+    // （空白の hanging）。放っておくと20字目・40字目…で筆先が「いま書き終えた列の下端」に
+    // 出てしまい、次の字が現れる場所（次の列の頭）とずれる。ぶら下がりを見つけたら呼び側で送る。
+    // 判定は「字送り半分」を遊びに取る（列の最後の字と、ぶら下がりは1字ぶん離れている）。
+    const cb=div.clientHeight-(parseFloat(cs.paddingBottom)||0);
+    const over=(top+mark.offsetHeight)>(cb+mark.offsetHeight/2);
+    el.parentNode.removeChild(div);
+    return {top:top,centerX:centerX,over:over};
+  }
+  function drawCaret(){
+    if(document.activeElement!==ta){vcaret.style.display='none';return;}
+    const cw=parseFloat(getComputedStyle(ta).lineHeight)||36;   // 列幅＝カーソルの長さ
+    const p=caretPoint(ta,ta.selectionStart);
+    const x0=ta.offsetLeft, y0=ta.offsetTop, w=ta.clientWidth, h=ta.clientHeight;
+    // ぶら下がっていたら、本当の入力位置は次の列の頭（縦書きなので左へ一列）
+    const cx=p.over?p.centerX-cw:p.centerX, cy=p.over?0:p.top;
+    let x=x0+cx-cw/2-ta.scrollLeft, y=y0+cy-ta.scrollTop-1;
+    // 80字＝ちょうど4列。埋まり切ると「次の字の場所」は5列目＝紙の外になるので、
+    // 最後の列の終わり（左端の列の下）に置く。筆先が紙から出ていかないための留め。
+    if(x<x0){ x=x0; y=y0+h-3; }
+    x=Math.min(Math.max(x,x0),x0+w-cw);
+    y=Math.min(Math.max(y,y0),y0+h-3);
+    vcaret.style.width=cw+'px';
+    vcaret.style.left=x.toFixed(1)+'px';
+    vcaret.style.top=y.toFixed(1)+'px';
+    vcaret.style.display='block';
+    // 打鍵の直後は必ず点いている状態から数え直す（書いている最中に消えていると不安になる）
+    vcaret.style.animation='none';void vcaret.offsetHeight;vcaret.style.animation='';
+  }
+  ['input','click','keyup','focus','select','scroll','compositionend']
+    .forEach(ev=>ta.addEventListener(ev,drawCaret));
+  ta.addEventListener('blur',()=>{vcaret.style.display='none';});
+  document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)drawCaret();});
+  addEventListener('resize',()=>{if(document.activeElement===ta)drawCaret();});
+
   // 打鍵スナップショット（TypeTrace）。書いていた時の迷いごと封じて、再生に使う
   let trace=[],traceT0=0;
   ta.addEventListener('input',()=>{
@@ -488,8 +1033,12 @@
     if(!trace.length)traceT0=now;
     if(trace.length<3000)trace.push({t:Math.round(now-traceT0),v:ta.value});
   });
-  function open(){pane.classList.add('on');pane.setAttribute('aria-hidden','false');ta.focus();}
-  function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');}
+  function open(){release();                          // 受け止めていたことばは、そっと放す
+                  pane.classList.add('on');pane.setAttribute('aria-hidden','false');
+                  btn.classList.add('away');ta.focus();
+                  requestAnimationFrame(drawCaret);}   // 柱が立った直後から筆先を置く
+  function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');
+                  btn.classList.remove('away');vcaret.style.display='none';}
   btn.addEventListener('click',open);
   close.addEventListener('click',shut);
   pane.addEventListener('click',e=>{if(e.target===pane)shut();});
@@ -501,7 +1050,7 @@
       '<p>もし、誰かに話したくなったら——<br>'+
       '<a href="https://www.mhlw.go.jp/mamorouyokokoro/" target="_blank" rel="noopener">まもろうよ こころ（相談窓口のまとめ）</a><br>'+
       'いのちの電話 <a href="tel:0570-783-556">0570-783-556</a> ／ よりそいホットライン <a href="tel:0120-279-338">0120-279-338</a></p>'+
-      '<button type="button" class="care-close">とじる</button>';
+      '<button type="button" class="care-close ruled">とじる</button>';
     n.querySelector('.care-close').addEventListener('click',()=>n.remove());
     document.body.appendChild(n);
     requestAnimationFrame(()=>n.classList.add('on'));
@@ -522,7 +1071,7 @@
         shut();
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
-        ta.value='';cnt.textContent='0';H=H0;T=T0;trace=[];traceT0=0;paint();
+        ta.value='';cnt.textContent='0';H=H0;T=T0;trace=[];traceT0=0;paint();drawCaret();
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
         setTimeout(fetchWords,600);
         if(d.care)setTimeout(showCareNote,1600);
@@ -537,12 +1086,12 @@
      帰ってきたその時しか読めない——だから「あの日の、あなたのことば」と名指す。 */
   const rp=document.getElementById('readPane'),rb=document.getElementById('readBody'),
         rn=document.getElementById('readNote'),rc=document.getElementById('readClose'),
-        rl=document.getElementById('readLike');
+        rl=document.getElementById('readLike'),rk=document.getElementById('readKeep');
   let readDid=null;
   function shutRead(){
     rp.classList.remove('on');rp.setAttribute('aria-hidden','true');
     rb._run=(rb._run||0)+1;      // 再生中なら止める
-    readDid=null;
+    readDid=null;readRef=null;
     if(location.search.indexOf('open=')>=0) history.replaceState(null,'','/mood');
   }
   rc.addEventListener('click',shutRead);
@@ -566,13 +1115,43 @@
       else{const A=arrivals.find(x=>String(x.did)===String(readDid));if(A)A.liked=on;}
     }catch(e){setLike(!on);}
   });
+  /* ── 手元の棚（v13 §9）──
+     残せるのは、いまこの柱で開いたことばだけ。宙を漂っていることばには手を伸ばせない
+     （宙のidは逆引きできないハッシュのまま＝棚のために匿名性へ穴を開けない）。 */
+  let readRef=null;              // {src:'sky'|'mine', ref:id}
+  // 棚の控え（kept）は宙の受け止めと同じ集合を使う。書式も 'src:ref' で揃えてある
+  function keptKey(r){return r?(r.src+':'+r.ref):'';}
+  function setKeep(on){
+    rk.classList.toggle('on',!!on);
+    rk.setAttribute('aria-pressed',on?'true':'false');
+    rk.querySelector('.txt').textContent=on?'棚に、残しました':'手元に、残す';
+  }
+  rk.addEventListener('click',async()=>{
+    if(!readRef)return;
+    const on=!rk.classList.contains('on');
+    setKeep(on);
+    try{
+      const r=await fetch('/api/shelf',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({src:readRef.src,ref:readRef.ref,on:on})});
+      const d=await r.json().catch(()=>null);
+      if(r.ok&&d&&d.ok){ if(on)kept.add(keptKey(readRef)); else kept.delete(keptKey(readRef)); }
+      else setKeep(!on);
+    }catch(e){ setKeep(!on); }
+  });
+
   function showRead(o){
+    release();                    // 宙で受け止めていたことばは、柱が立つ前に放す
     readDid=o.did||null;
     rb.classList.toggle('h',!o.vertical);
     rb.textContent='';
     rn.textContent=o.note||'';
     // 印は他人のことばにだけ（did がある＝降ってきたことば）
     rl.hidden=!o.did;
+    // 棚は、他人のことばにも自分の帰ってきたことばにも結べる
+    readRef=o.did?{src:'sky',ref:o.did}:(o.lid?{src:'mine',ref:o.lid}:null);
+    rk.hidden=!readRef;
+    if(readRef)setKeep(kept.has(keptKey(readRef)));
     rp.setAttribute('aria-label',o.mine?'あの日の、あなたのことば':'降りてきたことば');
     if(o.did)setLike(!!o.liked);
     const c=tintOf(o.color);
@@ -582,7 +1161,7 @@
     playType(rb,o.poem||'',o.steps);
   }
   function showReadError(msg){
-    readDid=null;rl.hidden=true;
+    readDid=null;readRef=null;rl.hidden=true;rk.hidden=true;
     rb.classList.add('h');rb.style.color='';rb._run=(rb._run||0)+1;
     rb.textContent=msg;rn.textContent='';
     rp.classList.add('on');rp.setAttribute('aria-hidden','false');rb.focus();
@@ -657,7 +1236,8 @@
           const p=String(L.sent_date||'').slice(0,10).split('-');
           const day=p.length===3?('封をした日　'+p[0]+'年'+(+p[1])+'月'+(+p[2])+'日'):'';
           showRead({poem:L.poem||'',vertical:L.vertical,color:L.seal_color,steps:steps,
-                    mine:true,note:'あの日の、あなたのことば'+(day?'\n'+day:'')});
+                    mine:true,lid:OPEN_ID,
+                    note:'あの日の、あなたのことば'+(day?'\n'+day:'')});
         }else{
           showReadError((d&&d.error)||'そのたよりは開けませんでした。');
         }

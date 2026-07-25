@@ -62,6 +62,9 @@
     --mood-koi:#DFAFAE;--mood-yuu:#C0B2C4;--mood-shizumi:#8C7F80;
     --mood-sealed:color-mix(in oklab,var(--kraft) 22%,var(--paper));
     --vert-pad:16px;   /* 縦書きブロック共通の上下パディング */
+    /* 触れるものの最小寸法（v14）。宙（_sky_tokens.html）と同じ約束を、紙の側にも通す。
+       文字の大きさは変えず、余白だけを広げて44pxを満たすこと（見た目を太らせない）。 */
+    --touch:44px;
     /* モーション・トークン：曲線を一箇所に集約（値は既存の手書きcubic-bezierと同一） */
     --ease-soft:cubic-bezier(.2,.9,.3,1);     /* カードのせり上がり・封蝋の戻り */
     --ease-sink:cubic-bezier(.32,.06,.4,1);   /* 封蝋が沈む */
@@ -163,8 +166,10 @@
   .hand-btn.on{color:var(--ink)}
   .hand-btn.on>span:first-child{background:rgba(42,37,34,0.05);border-color:var(--ink);color:var(--ink)}
   .kuzu-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px}
-  .kuzu-bin{background:none;border:0;cursor:pointer;padding:8px;color:var(--ink-mute);opacity:0.5;transition:opacity .25s}
+  .kuzu-bin{background:none;border:0;cursor:pointer;min-width:var(--touch);min-height:var(--touch);
+    padding:8px 10px;color:var(--ink-mute);opacity:0.5;transition:opacity .25s}
   .kuzu-bin:hover{opacity:0.9}
+  .kuzu-bin:active{opacity:0.62}
   .kuzu-bin svg{width:24px;height:28px;display:block}
   .kuzu-nudge{animation:kuzuNudge .5s var(--ease-soft)}
   @keyframes kuzuNudge{30%{transform:translateY(2px) rotate(-4deg)}65%{transform:translateY(0) rotate(2deg)}}
@@ -329,6 +334,7 @@
     letter-spacing:0.06em;margin-top:10px}
   .send{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:0.22em;padding:16px;border-radius:1px;transition:background .25s}
   .send:hover{background:var(--seal)}
+  .send:active{transform:scale(0.99);transition-duration:.1s}   /* 押した瞬間に応える（v14） */
   .send:focus-visible,.gate-submit:focus-visible,.concept-go:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
   .send:hover{background:var(--seal)}
   .note{text-align:center;font-family:'Shippori Mincho',serif;font-size:12px;color:var(--ink-mute);margin-top:16px;letter-spacing:0.06em;line-height:1.9}
@@ -557,10 +563,13 @@
   .tl-intro{font-family:'Shippori Mincho',serif;font-size:13px;color:var(--ink-mute);text-align:center;margin-bottom:8px;letter-spacing:0.06em;line-height:1.9}
   /* 封をした場所（地図）への、静かな導線。空気の一文（wx-banner）のすぐ下に置く */
   .map-link-row{text-align:center;margin:8px 0 26px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
-  .map-link{display:inline-flex;align-items:center;gap:8px;font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;
+  .map-link{display:inline-flex;align-items:center;gap:8px;min-height:var(--touch);
+            font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.12em;
             color:var(--ink);text-decoration:none;background:var(--paper);border:1px solid var(--rule);border-radius:22px;
-            padding:9px 18px;box-shadow:0 6px 16px -10px rgba(90,70,50,0.5);transition:border-color .2s,box-shadow .2s,transform .2s}
+            padding:11px 18px;box-shadow:0 6px 16px -10px rgba(90,70,50,0.5);
+            transition:border-color .2s,box-shadow .2s,transform .2s}
   .map-link:hover{border-color:var(--ink-mute);box-shadow:0 9px 22px -10px rgba(90,70,50,0.62);transform:translateY(-1px)}
+  .map-link:active{transform:translateY(0) scale(0.985)}   /* 押した瞬間に応える（v14） */
   .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;text-transform:uppercase}
   .tl-filter{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 26px}
   .tl{position:relative;margin-left:14px;padding-left:26px;border-left:1.5px solid var(--rule)}
@@ -601,8 +610,12 @@
        7色スウォッチを廃し、色相バー＋彩度×明度フィールドで自由に選ぶ。
        保存形式は 'hsl(H, S%, L%)'（CSSにもサーバにもこのまま渡る）。 */
   .mood-picker{flex:1;min-width:200px;display:flex;flex-direction:column;gap:12px}
-  .mp-hue{position:relative;height:28px;border-radius:14px;cursor:pointer;touch-action:none;
-    background:linear-gradient(to right,hsl(0,100%,50%),hsl(60,100%,50%),hsl(120,100%,50%),hsl(180,100%,50%),hsl(240,100%,50%),hsl(300,100%,50%),hsl(360,100%,50%))}
+  /* 色相バー：帯の見た目は28pxのまま、指の的だけ上下パディングで44pxに広げる（v14）。
+     box-sizing:content-box が要点——global の border-box では height が padding に食われて帯が痩せる。
+     背景は background-image に入れる（短縮形は background-clip を初期値に戻して帯が太る）。 */
+  .mp-hue{position:relative;box-sizing:content-box;height:28px;padding:8px 0;background-clip:content-box;
+    border-radius:14px;cursor:pointer;touch-action:none;
+    background-image:linear-gradient(to right,hsl(0,100%,50%),hsl(60,100%,50%),hsl(120,100%,50%),hsl(180,100%,50%),hsl(240,100%,50%),hsl(300,100%,50%),hsl(360,100%,50%))}
   /* 彩度×明度：横=彩度0→100%、縦=明度100→0%。白→透明→黒 を H の彩度グラデの上に重ねる */
   .mp-sv{position:relative;height:200px;border-radius:6px;cursor:pointer;touch-action:none;
     background:linear-gradient(to bottom,#fff,rgba(255,255,255,0) 50%,rgba(0,0,0,0) 50%,#000),
@@ -615,7 +628,7 @@
   .mp-preview.has{border:1px solid rgba(42,37,34,0.22);box-shadow:0 3px 8px -4px rgba(90,70,50,0.5)}
   .mood-picker.compact{min-width:0;gap:9px}
   .mood-picker.compact .mp-sv{height:130px}
-  .mood-picker.compact .mp-hue{height:22px;border-radius:11px}
+  .mood-picker.compact .mp-hue{height:22px;padding:11px 0;border-radius:11px}
   .mood-picker.compact .mp-preview{width:30px;height:30px}
 
   /* ── 読み終えたたよりの棚（library）──
@@ -646,6 +659,14 @@
   .recolor-hint{font-family:'Shippori Mincho',serif;font-size:10px;color:var(--ink-mute);opacity:0.75;letter-spacing:0.03em;margin-top:4px;text-align:center}
 
   footer{text-align:center;margin-top:50px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.24em;color:var(--ink-mute);opacity:0.6}
+  /* 足元の行き先（v14）：18pxしかなく指で押せなかったので、余白だけを広げて44pxにする。
+     並びは中央寄せの一行のまま、狭い画面では折り返す。 */
+  footer nav{display:flex;flex-wrap:wrap;justify-content:center;gap:0 18px}
+  footer nav a{display:inline-flex;align-items:center;justify-content:center;
+    min-height:var(--touch);min-width:var(--touch);   /* 「理念」の2文字も指で押せる幅に */
+    padding:13px 2px;margin:0 !important;transition:color .2s,opacity .2s}
+  footer nav a:hover{color:var(--seal)}
+  footer nav a:active{opacity:0.62}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
 
   /* auth gate */
@@ -660,23 +681,33 @@
   .gate-form::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:var(--rule);
     -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
   .gate-tabs{display:flex;gap:26px;justify-content:center;margin-bottom:26px;border-bottom:1px solid var(--rule)}
-  .gate-tab{flex:0 0 auto;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.14em;color:var(--ink-mute);padding:10px 6px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s}
+  .gate-tab{flex:0 0 auto;min-height:var(--touch);background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.14em;color:var(--ink-mute);padding:12px 8px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s}
   .gate-tab:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
   .gate-tab.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--seal)}
   .gate-field{text-align:left;margin-bottom:16px}
   .gate-field label{display:block;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-mute);margin-bottom:6px}
-  .gate-field input{width:100%;background:transparent;border:0;border-bottom:1px solid var(--rule);border-radius:0;padding:10px 2px;
+  .gate-field input{width:100%;min-height:var(--touch);background:transparent;border:0;border-bottom:1px solid var(--rule);border-radius:0;padding:11px 2px;
     font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink);transition:border-color .2s}
   .gate-field input:focus{outline:none;border-bottom-color:var(--seal)}
   .pw-wrap{position:relative}
   .pw-wrap input{padding-right:54px;width:100%}
-  .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-mute);padding:6px 8px}
+  .pw-toggle{position:absolute;right:2px;top:50%;transform:translateY(-50%);
+    min-width:var(--touch);min-height:var(--touch);display:inline-flex;align-items:center;justify-content:center;
+    background:none;border:0;cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-mute);padding:6px 8px;
+    transition:color .2s,opacity .2s}
+  .pw-toggle:active{opacity:0.62}
   .pw-toggle:hover{color:var(--seal)}
   .gate-submit{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:15px;letter-spacing:0.2em;padding:14px;border-radius:1px;transition:background .25s;margin-top:4px}
   .gate-submit:hover{background:var(--seal)}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
+  /* 門の足元（v14）：44pxの帯として押せるように。行の見た目は変えない */
+  .gate-hint{display:flex;flex-wrap:wrap;justify-content:center;gap:0 18px;margin-top:10px}
+  .gate-hint a{display:inline-flex;align-items:center;justify-content:center;
+    min-height:var(--touch);min-width:var(--touch);padding:13px 2px;color:var(--seal);
+    font-size:12px;letter-spacing:0.06em;transition:opacity .2s}
+  .gate-hint a:active{opacity:0.62}
   .gate-hint{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-mute);margin-top:18px;opacity:0.8}
   .gate-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-mute);margin-top:9px;padding:9px 11px;border:1px solid var(--rule);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-sunk)}
   .gate-note b{color:var(--seal);font-weight:600}
@@ -741,13 +772,23 @@
     font-size:24px;line-height:1.3;color:var(--ink);letter-spacing:0.04em;text-transform:none;margin:2px 0 14px}
   /* 印刷物の署名欄のように、控えめなテキスト操作を余白で仕切る（ピル＝アプリUI感を排す）。
      折り返しに弱い縦罫は使わず、余白だけで間をとる。 */
-  .acct-actions{display:flex;justify-content:center;align-items:center;gap:6px 20px;flex-wrap:wrap}
+  .acct-actions{display:flex;justify-content:center;align-items:center;gap:0 20px;flex-wrap:wrap}
+  /* v14：署名欄の操作も指で触れる寸法（44px）に。見た目の文字は変えず、余白だけを広げる */
   .acct button{display:inline-flex;align-items:center;gap:6px;background:transparent;border:0;cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:12.5px;color:var(--ink-mute);letter-spacing:0.07em;padding:7px 4px;transition:color .2s}
+    min-height:var(--touch);font-family:'Shippori Mincho',serif;font-size:12.5px;color:var(--ink-mute);
+    letter-spacing:0.07em;padding:13px 4px;transition:color .2s,opacity .2s}
   .acct button:hover{color:var(--seal)}
+  .acct button:active{opacity:0.62}
   .acct button svg,.wx-enable-btn svg{width:14px;height:14px;flex:0 0 auto;vertical-align:-2px;opacity:0.85}
   .ink-spin{animation:inkspin .8s linear infinite;transform-origin:center}
   @keyframes inkspin{to{transform:rotate(360deg)}}
+
+  /* ── 押した瞬間の応答（v14）──────────────────────────────
+     宙と同じ約束：離すのを待たず、触れた瞬間に画面が応える。
+     文字色や枠は変えず、沈む/薄れるだけ（見た目の秩序を壊さない）。 */
+  .tab:active,.mini-act:active,.acct-save:active,.portrait-close:active,
+  .gate-tab:active,.trash-close:active{opacity:0.62}
+  .gate-submit:active{transform:scale(0.99);transition-duration:.1s}
   .app-hidden{display:none}
 
   /* ── 30の質問オンボーディング ── */
@@ -821,8 +862,10 @@
   .portrait-go:hover{background:var(--seal);transform:translateY(-1px)}
   .portrait-go:active{transform:translateY(0)}
   .portrait-go:disabled{opacity:0.45;cursor:default;background:var(--rule);transform:none}
-  .portrait-close{width:100%;background:none;border:1px solid var(--rule);cursor:pointer;font-family:'Shippori Mincho',serif;
-    font-size:13px;color:var(--ink-mute);letter-spacing:0.1em;padding:11px;border-radius:3px;transition:color .2s,border-color .2s}
+  .portrait-close{width:100%;min-height:var(--touch);background:none;border:1px solid var(--rule);cursor:pointer;
+    font-family:'Shippori Mincho',serif;
+    font-size:13px;color:var(--ink-mute);letter-spacing:0.1em;padding:12px;border-radius:3px;
+    transition:color .2s,border-color .2s,opacity .2s}
   .portrait-close:hover{color:var(--seal);border-color:var(--seal)}
   /* ── 三ヶ月ごとの章（年表タブ上部のキュレーション） ── */
   .chapters{margin:6px 0 40px}
@@ -863,14 +906,19 @@
   .acct-input{width:100%;background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:11px 13px;margin-bottom:9px;
     font-family:'Shippori Mincho',serif;font-size:15px;color:var(--ink)}
   .acct-input:focus{outline:none;border-color:var(--seal)}
-  .acct-save{width:100%;background:transparent;border:1px solid var(--rule);color:var(--ink-mute);cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;padding:10px;border-radius:3px;transition:color .2s,border-color .2s}
+  .acct-save{width:100%;min-height:var(--touch);background:transparent;border:1px solid var(--rule);
+    color:var(--ink-mute);cursor:pointer;
+    font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;padding:12px;border-radius:3px;
+    transition:color .2s,border-color .2s,opacity .2s}
   .acct-save:hover{color:var(--seal);border-color:var(--seal)}
   .acct-hint{max-width:360px;margin:0 auto 22px;font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-mute);opacity:0.85;letter-spacing:0.03em}
   /* 気分の地図の集計オプトアウト（設定内） */
-  .agg-toggle{display:flex;align-items:center;gap:9px;cursor:pointer;
-    font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink);margin-bottom:8px}
-  .agg-toggle input{width:16px;height:16px;accent-color:var(--seal);cursor:pointer;flex:0 0 auto}
+  /* v14：的は札（label）ぜんぶ。小さな四角だけを狙わせない（44px の帯として押せる） */
+  .agg-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:var(--touch);
+    padding:10px 2px;font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink);
+    margin-bottom:0;transition:opacity .2s}
+  .agg-toggle:active{opacity:0.62}
+  .agg-toggle input{width:19px;height:19px;accent-color:var(--seal);cursor:pointer;flex:0 0 auto}
   .agg-hint{margin-bottom:0;word-break:keep-all}
   /* 気分の地図のリリース告知モーダル */
   .nn-body{max-width:360px;margin:0 auto 8px;text-align:left;word-break:keep-all}
@@ -914,9 +962,10 @@
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
       <div class="gate-err" id="gErr"></div>
-      <div class="gate-hint" style="text-align: center; margin-top: 16px;">
-        <a href="/terms" target="_blank" style="color:var(--seal);">利用規約</a>　<a href="/privacy" target="_blank" style="color:var(--seal);">プライバシーポリシー</a>
-      </div>
+      <!-- 門の足元。18pxしかなく指で押せなかったので、余白だけを広げて44pxにした（v14） -->
+      <nav class="gate-hint" aria-label="門の足元">
+        <a href="/terms" target="_blank">利用規約</a><a href="/privacy" target="_blank">プライバシーポリシー</a>
+      </nav>
     </div>
   </div>
 </div>
@@ -1116,6 +1165,9 @@
   <footer>
     遅 れ て 届 く 自 分 へ の 手 紙<br>
     <nav aria-label="フッター" style="margin-top:16px; font-family:'Shippori Mincho', serif; letter-spacing:0.05em;">
+      <a href="/about" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">この宙について</a>
+      <a href="/philosophy" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">理念</a>
+      <a href="/contact" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">お問い合わせ</a>
       <a href="/terms" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">利用規約</a>
       <a href="/privacy" target="_blank" style="color:var(--ink-mute); text-decoration:none;">プライバシーポリシー</a>
     </nav>
@@ -1523,8 +1575,13 @@
     el.parentNode.appendChild(div);
     // offsetLeft+幅/2 ＝ その列の中心（マーカーは line-height 幅の列の中央に来る）
     const top=span.offsetTop, centerX=span.offsetLeft+span.offsetWidth/2;
+    // 列がぴったり埋まった時、行末の全角空白は次の列へ送られず、その列の末尾にぶら下がる
+    // （空白の hanging）。放っておくと20字目・40字目…でカーソルが「いま書き終えた列の下端」に
+    // 出てしまい、次の字が現れる場所（次の列の頭）とずれる。判定は字送り半分を遊びに取る。
+    const cb=div.clientHeight-(parseFloat(cs.paddingBottom)||0);
+    const over=(top+span.offsetHeight)>(cb+span.offsetHeight/2);
     el.parentNode.removeChild(div);
-    return {top,centerX};
+    return {top,centerX,over};
   }
   // 縦書きカーソルは瞬間移動ではなく response≈.12s の微追従（§11 フレーム連続性）。
   // stiffness/dampingを高く取り、字送り1列を瞬時に近い速さで詰める＝打鍵の速さは殺さない。表示直後は滑らせず即置き。
@@ -1533,8 +1590,17 @@
   function drawPoemCaret(){
     if(!composeVertical||document.activeElement!==poemEl){poemCaret.style.display='none';caretShown=false;return;}
     const p=caretPoint(poemEl,poemEl.selectionStart);
-    const x=poemEl.offsetLeft+p.centerX-POEM_LH/2-poemEl.scrollLeft;   // 列の中心に36px棒を載せる
-    const y=poemEl.offsetTop+p.top-poemEl.scrollTop;
+    // ぶら下がっていたら、本当の入力位置は次の列の頭（縦書きなので左へ一列）
+    const pcs=getComputedStyle(poemEl);
+    const padT=parseFloat(pcs.paddingTop)||0, padB=parseFloat(pcs.paddingBottom)||0;
+    const cx=p.over?p.centerX-POEM_LH:p.centerX, cy=p.over?padT:p.top;
+    const x0=poemEl.offsetLeft,y0=poemEl.offsetTop,w=poemEl.clientWidth,h=poemEl.clientHeight;
+    let x=x0+cx-POEM_LH/2-poemEl.scrollLeft;   // 列の中心に36px棒を載せる
+    let y=y0+cy-poemEl.scrollTop;
+    // 便箋が埋まり切ると「次の字の場所」は5列目＝紙の外になる。最後の列の終わりに留める
+    if(x<x0){ x=x0; y=y0+h-padB-2; }
+    x=Math.min(Math.max(x,x0),x0+w-POEM_LH);
+    y=Math.min(Math.max(y,y0+padT),y0+h-padB-2);
     poemCaret.style.width=POEM_LH+'px';    // 列幅(=line-height)いっぱい＝横書きと同寸
     poemCaret.style.display='block';
     poemCaret.style.animation='none';void poemCaret.offsetHeight;poemCaret.style.animation='';  // 打鍵直後は点灯

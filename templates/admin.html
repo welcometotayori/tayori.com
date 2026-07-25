@@ -269,6 +269,58 @@
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
+        /* ---- 承認キュー（宙の門番 / v13 §8） ---- */
+        .queue-note {
+            background: #fdf9ef;
+            border: 1px solid #ece0c6;
+            color: #7a6534;
+            font-size: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+        .q-card {
+            border: 1px solid #e7e5e4;
+            border-left: 3px solid #B38F6F;
+            border-radius: 10px;
+            padding: 14px 16px;
+            background: #fff;
+            margin-bottom: 10px;
+        }
+        .q-poem {
+            font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
+            font-size: 15px;
+            line-height: 1.9;
+            color: #1c1917;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+        .q-meta {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 11.5px;
+            color: #a8a29e;
+        }
+        .q-acts { margin-left: auto; display: flex; gap: 8px; }
+        .q-btn {
+            border: 1px solid #d6d3d1;
+            background: #fff;
+            border-radius: 6px;
+            font: inherit;
+            font-size: 12px;
+            padding: 7px 14px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .q-btn.go { border-color: #9dbdae; color: #3f6d5b; }
+        .q-btn.go:hover { background: #eef5f1; }
+        .q-btn.no { border-color: #e0b7ae; color: #8d3323; }
+        .q-btn.no:hover { background: #fdf2f0; }
+        .q-done { font-size: 12px; color: #a8a29e; }
+
         /* ---- 最近の便り（中身つき） ---- */
         .content-warn {
             background: #fef3f2;
@@ -515,6 +567,31 @@
             <div class="trend-note">棒は各日の新規登録数。バーにカーソルを合わせると累計が出ます。</div>
         </div>
 
+        <div class="section-title">宙の承認キュー（{{ pending_sky | length }}）</div>
+        <div class="queue-note">
+            門番（キーワード照合）がグレーと見たことばだけが、ここで待っています。<strong>掲載</strong>を押した瞬間に宙へ出て、だれか一人への配達も始まります。<strong>却下</strong>すると宙には出ませんが、本文は本人の手元に残り、帰還メールもそのまま生きています。<br>
+            放った本人には、どちらも通知されません（自分のことばのその後を知らない、という宙の非対称性）。掲載しないと決めたことば：{{ blocked_count }} 通。
+        </div>
+        {% if pending_sky %}
+        <div id="skyQueue">
+            {% for Q in pending_sky %}
+            <div class="q-card" id="q-{{ Q.id }}">
+                <div class="q-poem">{{ Q.poem }}</div>
+                <div class="q-meta">
+                    <span>{{ Q.username }}</span>
+                    <span>放った日 {{ Q.sent_date[:10] }}</span>
+                    <span class="q-acts">
+                        <button class="q-btn go" onclick="moderateSky('{{ Q.id }}','approve')">掲載する</button>
+                        <button class="q-btn no" onclick="moderateSky('{{ Q.id }}','reject')">却下する</button>
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="trend-note">いま、承認を待っていることばはありません。</p>
+        {% endif %}
+
         {% if read_content %}
         <div class="section-title">最近の便り（中身つき）</div>
         <div class="content-warn">
@@ -682,6 +759,26 @@
             }
         }
         document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+        // 宙の承認キュー（v13 §8）。裁定はその場で一行に畳む（ページを再読み込みしない）
+        async function moderateSky(id, verdict){
+            const card = document.getElementById('q-' + id);
+            const btns = card ? card.querySelectorAll('.q-btn') : [];
+            btns.forEach(b => b.disabled = true);
+            try {
+                const res = await fetch('/api/admin/sky/' + id + '/' + verdict, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+                const d = await res.json().catch(() => null);
+                if (!res.ok || !(d && d.ok)) throw new Error((d && d.error) || '裁定に失敗しました。');
+                if (card) {
+                    card.innerHTML = '<div class="q-done">' +
+                        (verdict === 'approve' ? '宙へ出しました。' : '宙には出しません。') + '</div>';
+                }
+            } catch (err) {
+                btns.forEach(b => b.disabled = false);
+                alert('エラー: ' + err.message);
+            }
+        }
 
         function deleteUser(uid, username) {
             if (!confirm(`ユーザー「${username}」を完全に削除しますか？\n\n※このユーザーに関連するすべての便り、下書き、対話スレッドのデータも同時に物理削除されます。この操作は取り消せません。`)) {

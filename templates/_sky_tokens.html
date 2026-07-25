@@ -1,0 +1,56 @@
+{# ══ 宙の素材と寸法（v14）══════════════════════════════════════
+   宙（/mood）・手元の棚（/shelf）・宙の外の紙（/about ほか）で共通のトークン。
+   ここが唯一の情報源。面ごとに透明度や余白を作り直さないこと——それをやった結果が
+   v13 までの「rgba(250,248,243,…) が20種類以上」＝機械が並べた画面の見え方だった。
+
+   文字は4段だけ（--ink-1〜4）。--ink-4 が下限で、#08080D に対して 5.07:1
+   （WCAG AA 4.5:1 を割らない最小値）。新しい透明度が欲しくなったら、まず
+   「この4段のどれか」で足りないか考える。
+   罫は2種＋操作用1種。--rule-act は「押せる」ことを示す罫だけに使う
+   （非文字コントラスト 3:1 を満たす濃さ＝3.46:1）。 #}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Courier+Prime&display=swap');
+  :root{
+    /* ── 素材：闇と、紙の白と、封の糸の三色しかない ── */
+    --space:#08080D; --chalk:#FAF8F3; --thread:#B38F6F;
+    /* ── 文字の四段 ── */
+    --ink-1:rgba(250,248,243,.95);   /* ことば本体 */
+    --ink-2:rgba(250,248,243,.80);   /* 説明・操作の主 */
+    --ink-3:rgba(250,248,243,.62);   /* 添え書き・副 */
+    --ink-4:rgba(250,248,243,.50);   /* 数字・控え（下限） */
+    /* ── 罫と霞 ── */
+    --rule-act:rgba(179,143,111,.66);  /* 押せることを示す罫だけ */
+    --rule:rgba(179,143,111,.46);
+    --rule-faint:rgba(179,143,111,.22);
+    --veil:rgba(8,8,13,.86);
+    /* ── 字：大きいほど字間を詰める（tracking はサイズ固有／Apple §15）── */
+    --t-title:15px;  --tr-title:.18em;
+    --t-lead:14.5px; --tr-lead:.14em;
+    --t-word:13.5px; --tr-word:.12em;
+    --t-body:13px;   --tr-body:.09em;
+    --t-meta:12px;   --tr-meta:.2em;
+    --t-mono:10px;   --tr-mono:.34em;
+    /* ── 余白の六段 ── */
+    --s1:8px; --s2:12px; --s3:20px; --s4:32px; --s5:52px; --s6:84px;
+    --edge:2px;                       /* 紙の縁。丸い錠剤も12pxのカードも作らない */
+    --ease:cubic-bezier(.2,.8,.2,1);  /* 出る時。消える時は少し速く */
+    --touch:44px;                     /* 触れるものの最小 */
+  }
+  *{box-sizing:border-box}
+  body{background:var(--space);color:var(--ink-1);
+       font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+       -webkit-font-smoothing:antialiased;line-break:strict}
+  /* 触れるものの共通作法：指の即応・押した瞬間に応える・焦点が見える */
+  button,a{touch-action:manipulation}
+  button{cursor:pointer}
+  :where(button,a,[tabindex]):focus-visible{outline:1px solid var(--rule);outline-offset:5px}
+  /* 罫を一本ひいた語＝この世界で「押せる」ことの唯一の合図 */
+  .ruled{background:none;border:none;border-bottom:1px solid var(--rule-act);
+         color:var(--ink-2);font-family:inherit;font-size:var(--t-meta);
+         letter-spacing:var(--tr-meta);
+         transition:color .22s var(--ease),border-color .22s var(--ease),opacity .22s var(--ease)}
+  .ruled:hover{color:var(--ink-1);border-color:var(--thread)}
+  .ruled:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
+  /* 日本語の折り返しは文節で。ユーザーの本文には介入しない */
+  .jp{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+</style>
