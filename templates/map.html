@@ -71,7 +71,8 @@
                 var(--aura-color) 0%,
                 transparent 72%);
     will-change:transform;
-    transition:opacity .4s ease,--aura-color .9s ease}
+    /* 一滴：対称な ease ではなく減速して着地する曲線（§11）。沈む速さ --drip-dur は開封の勢いで変わる（既定.9s） */
+    transition:opacity .4s ease,--aura-color var(--drip-dur,.9s) cubic-bezier(.16,1,.3,1)}
   @media (prefers-reduced-motion:reduce){
     .mood-aura{transition:none}}
   /* エリアの点：紙色の細いリング（SVG strokeで描く）＋わずかな影で aura の上でも沈まない */
@@ -354,6 +355,9 @@
   function performDrop(){
     if(!pendingDrop)return;
     const e=pendingDrop;pendingDrop=null;
+    // 開封の勢い(vigor 0..1)を沈む速さへ渡す：強く開けた→決然と速く(.55s)／そっと→ゆっくり(1.05s)。一度使ったら消す。
+    let vigor=0;try{const v=sessionStorage.getItem('tayori_open_vigor');if(v!=null){vigor=Math.max(0,Math.min(1,parseFloat(v)||0));sessionStorage.removeItem('tayori_open_vigor');}}catch(_){}
+    e.el.style.setProperty('--drip-dur',(1.05-0.5*vigor).toFixed(2)+'s');
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       e.el.style.setProperty('--aura-color',e.color);
     }));

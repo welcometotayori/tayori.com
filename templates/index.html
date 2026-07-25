@@ -89,18 +89,21 @@
   .stamp{position:absolute;top:34px;right:6px;width:62px;height:62px;border:1.5px solid var(--seal);border-radius:50%;color:var(--seal);
     font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;
     text-align:center;transform:rotate(-11deg);opacity:0.7;line-height:1.3}
-  h1{font-family:'Shippori Mincho',serif;font-weight:600;font-size:42px;letter-spacing:0.18em;margin-bottom:6px}
+  h1{font-family:'Shippori Mincho',serif;font-weight:600;font-size:42px;letter-spacing:0.14em;margin-bottom:6px}
   .romaji{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
   .tagline{margin-top:20px;font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink-mute);letter-spacing:0.08em}
   .rule{height:1px;background:var(--rule);margin:8px 0 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
-  .tabs{display:flex;gap:28px;justify-content:center;margin:26px 0 22px;border-bottom:1px solid var(--rule)}
+  .tabs{display:flex;gap:28px;justify-content:center;margin:26px 0 22px;border-bottom:1px solid var(--rule);position:relative}
   .tab{flex:0 0 auto;background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.14em;color:var(--ink-mute);padding:12px 10px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s;position:relative}
   .tab:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
   .tab.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--seal)}
+  /* 下線バーをJSでspring滑走させる（旧→新タブへ）。JS不在/失敗時は上のbox-shadowが下線を保つ（§7 空間の連続性） */
+  .tabs.has-underline .tab.on{box-shadow:none}
+  .tab-underline{position:absolute;bottom:-1px;left:0;height:2px;width:0;background:var(--seal);pointer-events:none;will-change:transform,width}
   .tab .sub{display:block;font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.2em;margin-top:2px;opacity:0.6}
-  .panel{display:none;animation:fade .5s ease both}
+  .panel{display:none;animation:fadePanel .12s ease both}    /* 中身は120msの素早いクロスフェード。空間の連続性は下線バーが担う */
   .panel.on{display:block}
-  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes fadePanel{from{opacity:0}to{opacity:1}}
   .envelope{background:var(--paper);border:1px solid var(--rule);border-radius:2px;box-shadow:0 1px 0 rgba(255,255,255,0.5) inset,0 2px 10px -7px rgba(90,70,50,0.3);position:relative;overflow:hidden}
   .env-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px dashed var(--rule);font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-mute)}
   /* 写真プレビュー（ボタンは voice-btn と同形にし、選んだ写真はここに表示） */
@@ -253,12 +256,15 @@
   .env-foot{padding:16px 18px 20px;border-top:1px dashed var(--rule)}
   .field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;flex-wrap:wrap;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute)}
   .field-row>label{white-space:nowrap;padding-top:6px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;text-transform:none}
-  .chips{display:flex;gap:7px;flex-wrap:wrap;flex:1}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;flex:1;position:relative}
   /* 囲みは角ばらせず、消印のような丸囲みに（2026-07-22）。
      ベタ塗りには戻さない：選択＝朱の線と薄い染みだけで示す */
-  .chip{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;border:1px solid var(--rule);background:transparent;color:var(--ink-mute);padding:7px 15px;border-radius:999px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+  .chip{position:relative;z-index:1;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;border:1px solid var(--rule);background:transparent;color:var(--ink-mute);padding:7px 15px;border-radius:999px;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
   .chip:hover{border-color:var(--ink-mute);color:var(--ink)}
   .chip.on{background:rgba(113,0,20,0.07);border-color:var(--seal);color:var(--seal)}
+  /* 選択マーカー：JSで候補間をspring移動（タブ下線と同じ手＝#6 一貫性）。マーカー有効時はchipの塗りをマーカーへ移す */
+  .chips.has-marker .chip.on{background:transparent;border-color:transparent}
+  .chip-marker{position:absolute;top:0;left:0;height:0;width:0;border:1px solid var(--seal);border-radius:999px;background:rgba(113,0,20,0.07);pointer-events:none;z-index:0;will-change:transform,width,height}
   .chip:focus-visible,.date-pick:focus-visible,.voice-btn:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
   .when-extra{margin-top:-4px}
   .date-pick{font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.06em;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:999px;padding:7px 15px;cursor:pointer}
@@ -1188,7 +1194,54 @@
   // メールの開封リンク（/open/たよりID）から来た場合、そのたよりIDがここに入る
   let pendingOpenId = "{{ open_letter_id }}" || null;
   let _showNightNotice = false;   // 気分の地図のリリース告知を一度だけ出すためのフラグ（boot時に決まる）
-  
+
+  // ── モーション基盤：臨界減衰バネ（開封の「封蝋剥がし」と同じ物理を全UIの標準に） ──
+  // from→to を rAF で補間。既定は damping≈1.0（オーバーシュート無し・response≈.35＝ドロワー相当）。
+  // 剥がしの springBack(2133) と同じ k=520/c=46 を踏襲。返り値を呼べば途中で中断できる（§3 中断可能）。
+  const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches);
+  function spring1d(from,to,opts){
+    opts=opts||{};
+    const k=opts.stiffness||520, c=opts.damping||46, onframe=opts.onframe||function(){}, onrest=opts.onrest;
+    let x=from, v=opts.v0||0, last=performance.now(), raf=0;
+    (function step(now){
+      let dt=(now-last)/1000; if(dt>.032)dt=.032; last=now;
+      v += (-k*(x-to) - c*v)*dt;  x += v*dt;
+      if(Math.abs(x-to)<.4 && Math.abs(v)<8){ onframe(to); if(onrest)onrest(); return; }
+      onframe(x); raf=requestAnimationFrame(step);
+    })(last);
+    return function(){ if(raf)cancelAnimationFrame(raf); };
+  }
+
+  // チップ群の選択マーカー：候補間を x/y/幅/高さの独立バネで滑走（§3 2Dを分解・タブ下線と同じ手＝#6 一貫性）。
+  // 既存のclickハンドラが .on を付け替えた後、バブリングで拾って追従。折り返し・非表示（幅0）にも耐える。
+  const chipMarkers=[];   // 各群の即時再配置関数（表示切替時に同期で載せ直す＝ResizeObserverの発火待ちに依らない）
+  function reflowChipMarkers(){chipMarkers.forEach(f=>{try{f();}catch(_){}});}
+  function wireChipMarker(container){
+    if(!container||container.__marker)return; container.__marker=true;
+    const mk=document.createElement('span'); mk.className='chip-marker'; container.appendChild(mk);
+    let mx=0,my=0,mw=0,mh=0,cx=null,cy=null,cw=null,ch=null;
+    const stop=()=>{cx&&cx();cy&&cy();cw&&cw();ch&&ch();};
+    function place(animate){
+      const on=container.querySelector('.chip.on');
+      if(!on||on.offsetWidth===0){mk.style.opacity='0';return;}
+      mk.style.opacity='1';
+      const x=on.offsetLeft,y=on.offsetTop,w=on.offsetWidth,h=on.offsetHeight;
+      if(!animate||REDUCE){stop();mx=x;my=y;mw=w;mh=h;
+        mk.style.transform='translate('+x+'px,'+y+'px)';mk.style.width=w+'px';mk.style.height=h+'px';return;}
+      stop();
+      const paintT=()=>mk.style.transform='translate('+mx.toFixed(1)+'px,'+my.toFixed(1)+'px)';
+      cx=spring1d(mx,x,{onframe:v=>{mx=v;paintT();}});
+      cy=spring1d(my,y,{onframe:v=>{my=v;paintT();}});
+      cw=spring1d(mw,w,{onframe:v=>{mw=v;mk.style.width=v.toFixed(1)+'px';}});
+      ch=spring1d(mh,h,{onframe:v=>{mh=v;mk.style.height=v.toFixed(1)+'px';}});
+    }
+    container.classList.add('has-marker');
+    place(false);
+    chipMarkers.push(()=>place(false));   // 表示切替時に同期で載せ直す
+    container.addEventListener('click',e=>{ if(e.target.closest('.chip'))requestAnimationFrame(()=>place(true)); });
+    if(window.ResizeObserver){new ResizeObserver(()=>place(false)).observe(container);}  // 折り返し・ウィンドウ幅変化で載せ直す
+  }
+
   // 💡 【ログイン問題を解決する通信強化】
   const api=(u,o)=>{
     // 15秒で必ず打ち切る。サーバーが詰まっても無限「送信中」にならないようにする保険。
@@ -1253,10 +1306,32 @@
   refreshTodayStamp();
   setInterval(refreshTodayStamp,30000);
 
+  const tabsBar=document.querySelector('.tabs');
   const tabs=document.querySelectorAll('.tab');
   const panels={compose:document.getElementById('compose'),mailbox:document.getElementById('mailbox'),timeline:document.getElementById('timeline')};
+  // 下線バー：旧→新タブへ springで滑走（§7 空間の連続性）。開封の剥がしと同じ物理を最頻の操作へ。
+  // 幅を測れた時だけ has-underline を付け、それまでは box-shadow の下線を保つ（ゲート裏で幅0の間の保険）。
+  const tabBar=document.createElement('span');tabBar.className='tab-underline';
+  let tabUX=0,tabUW=0,cancelTabX=null,cancelTabW=null;
+  function underlineTo(el,animate){
+    if(!el||el.offsetWidth===0)return;
+    const x=el.offsetLeft, w=el.offsetWidth;
+    cancelTabX&&cancelTabX();cancelTabW&&cancelTabW();
+    if(!animate||REDUCE){tabUX=x;tabUW=w;tabBar.style.transform='translateX('+x+'px)';tabBar.style.width=w+'px';return;}
+    cancelTabX=spring1d(tabUX,x,{onframe:v=>{tabUX=v;tabBar.style.transform='translateX('+v+'px)';}});
+    cancelTabW=spring1d(tabUW,w,{onframe:v=>{tabUW=v;tabBar.style.width=v+'px';}});
+  }
+  if(tabsBar){
+    tabsBar.appendChild(tabBar);
+    const placeInitial=()=>{const on=tabsBar.querySelector('.tab.on');if(on&&on.offsetWidth>0){underlineTo(on,false);tabsBar.classList.add('has-underline');}};
+    placeInitial();
+    if(window.ResizeObserver){new ResizeObserver(placeInitial).observe(tabsBar);}  // ゲート解除で幅が0→実寸になった時に載せ直す
+    window.addEventListener('resize',()=>underlineTo(tabsBar.querySelector('.tab.on'),false));
+  }
   function goTab(name){tabs.forEach(x=>x.classList.toggle('on',x.dataset.p===name));
     Object.entries(panels).forEach(([k,p])=>p.classList.toggle('on',k===name));
+    if(tabsBar)underlineTo(tabsBar.querySelector('.tab.on'),true);
+    reflowChipMarkers();   // 非表示だった群のマーカーを、表示された瞬間に同期で載せ直す
     if(name==='compose')updateCount();  // 便箋に戻ってきた時にカウンター表示を確かめ直す
     if(name==='mailbox')loadMail();if(name==='timeline')loadTimeline();}
   tabs.forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.p)));
@@ -1413,19 +1488,25 @@
     el.parentNode.removeChild(div);
     return {top,centerX};
   }
+  // 縦書きカーソルは瞬間移動ではなく response≈.12s の微追従（§11 フレーム連続性）。
+  // stiffness/dampingを高く取り、字送り1列を瞬時に近い速さで詰める＝打鍵の速さは殺さない。表示直後は滑らせず即置き。
+  let caretX=0,caretY=0,caretShown=false,cCX=null,cCY=null;
+  function paintCaret(){poemCaret.style.left=caretX.toFixed(1)+'px';poemCaret.style.top=(caretY-1).toFixed(1)+'px';}
   function drawPoemCaret(){
-    if(!composeVertical||document.activeElement!==poemEl){poemCaret.style.display='none';return;}
+    if(!composeVertical||document.activeElement!==poemEl){poemCaret.style.display='none';caretShown=false;return;}
     const p=caretPoint(poemEl,poemEl.selectionStart);
     const x=poemEl.offsetLeft+p.centerX-POEM_LH/2-poemEl.scrollLeft;   // 列の中心に36px棒を載せる
     const y=poemEl.offsetTop+p.top-poemEl.scrollTop;
-    poemCaret.style.left=x+'px';
-    poemCaret.style.top=(y-1)+'px';        // 2px厚を文字境界に載せる
     poemCaret.style.width=POEM_LH+'px';    // 列幅(=line-height)いっぱい＝横書きと同寸
     poemCaret.style.display='block';
     poemCaret.style.animation='none';void poemCaret.offsetHeight;poemCaret.style.animation='';  // 打鍵直後は点灯
+    if(!caretShown||REDUCE){cCX&&cCX();cCY&&cCY();caretX=x;caretY=y;caretShown=true;paintCaret();return;}  // 出現直後は古い位置から飛ばさない
+    cCX&&cCX();cCY&&cCY();                                 // 追従中の打鍵は現在位置から掴み直す（§3）
+    cCX=spring1d(caretX,x,{stiffness:1400,damping:75,onframe:v=>{caretX=v;paintCaret();}});
+    cCY=spring1d(caretY,y,{stiffness:1400,damping:75,onframe:v=>{caretY=v;paintCaret();}});
   }
   ['input','click','keyup','select','focus','scroll'].forEach(ev=>poemEl.addEventListener(ev,drawPoemCaret));
-  poemEl.addEventListener('blur',()=>{poemCaret.style.display='none';});
+  poemEl.addEventListener('blur',()=>{poemCaret.style.display='none';caretShown=false;});
   document.addEventListener('selectionchange',()=>{if(document.activeElement===poemEl)drawPoemCaret();});
 
   // voice
@@ -1485,7 +1566,9 @@
   document.querySelectorAll('#whenChips .chip').forEach(c=>c.addEventListener('click',()=>{
     document.querySelectorAll('#whenChips .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');whenMode=c.dataset.mode;
     dateRow.style.display=whenMode==='date'?'flex':'none';eventRow.style.display=whenMode==='event'?'flex':'none';
-    randomRow.style.display=whenMode==='random'?'flex':'none';if(whenMode==='rel')whenDays=parseInt(c.dataset.d);updateReadout();}));
+    randomRow.style.display=whenMode==='random'?'flex':'none';if(whenMode==='rel')whenDays=parseInt(c.dataset.d);
+    reflowChipMarkers();   // 出来事/ランダムの行が表示された瞬間に、その群のマーカーを同期で載せ直す
+    updateReadout();}));
   dateInput.min=isoDate(today); // デモ用：今日も選べる
   dateInput.addEventListener('change',()=>{pickedDate=dateInput.value?new Date(dateInput.value+'T00:00:00'):null;updateReadout();});
   document.querySelectorAll('#eventChips .chip').forEach(c=>c.addEventListener('click',()=>{
@@ -1493,6 +1576,9 @@
   document.querySelectorAll('#randomRange .chip').forEach(c=>c.addEventListener('click',()=>{
     document.querySelectorAll('#randomRange .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
     randomLo=parseInt(c.dataset.lo);randomHi=parseInt(c.dataset.hi);updateReadout();}));
+  wireChipMarker(document.getElementById('whenChips'));
+  wireChipMarker(document.getElementById('eventChips'));
+  wireChipMarker(document.getElementById('randomRange'));
   updateReadout();
 
   // time of day
@@ -1606,6 +1692,20 @@
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
+  // 投函ボタン：pointerdownで即 scale(.97)（§1 押した瞬間に反応）、離すとバネで戻る。
+  // transformはCSS transition対象外なので押下は瞬時、戻りだけ spring1d が担う（release=小さな勢い→わずかに生きた収束）。
+  (function(){
+    const b=document.getElementById('sendBtn'); if(!b)return;
+    let cancel=null;
+    b.addEventListener('pointerdown',()=>{ if(cancel){cancel();cancel=null;} b.style.transform='scale(.97)'; });
+    const back=()=>{ if(!b.style.transform)return;
+      if(REDUCE){b.style.transform='';return;}
+      if(cancel)cancel();
+      cancel=spring1d(.97,1,{stiffness:600,damping:42,onframe:s=>b.style.transform='scale('+s+')',onrest:()=>{b.style.transform='';cancel=null;}}); };
+    b.addEventListener('pointerup',back);
+    b.addEventListener('pointercancel',back);
+    b.addEventListener('pointerleave',back);
+  })();
   document.getElementById('sendBtn').addEventListener('click',async()=>{
     // 行頭の字下げや空行（意図した余白）は保つ。空かどうかの判定にだけ trim を使う。
     const poemRaw=poemEl.value.replace(/\s+$/,''),poem=poemRaw.trim();
@@ -2143,6 +2243,9 @@ async function detectWeather(){
     }
     function confirm(){
       if(done)return;done=true;active=false;stopSpring();
+      // 剥がしの「勢い」だけを地図へ運ぶ（§5 の精神：生の速度はページ遷移で陳腐化するので、
+      // 強く開けた/そっと開けたという性質を vigor 0..1 に写し、地図の一滴の沈む速さへ渡す）。
+      try{sessionStorage.setItem('tayori_open_vigor',String(Math.min(1,Math.abs(vel)/1600)));}catch(_){}
       if(navigator.vibrate){try{navigator.vibrate(50);}catch(e){}}  // 対応端末だけ・失敗しても無視
       track.classList.remove('grab');  // transitionを戻し、最後のひと剥がれを滑らかに
       wax.style.transform='translateX('+(limit()+12)+'px) translateY(-22px) scale(.55) rotate(32deg)';
@@ -2485,6 +2588,7 @@ async function detectWeather(){
   let tlFilter='all';
   document.querySelectorAll('#tlFilter .chip').forEach(c=>c.addEventListener('click',()=>{
     document.querySelectorAll('#tlFilter .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');tlFilter=c.dataset.emo;renderTimeline();}));
+  wireChipMarker(document.getElementById('tlFilter'));
   let tlNodes=[];
   async function loadTimeline(){loadChapters();const {nodes}=await api('/api/timeline');tlNodes=nodes;renderTimeline();}
 
