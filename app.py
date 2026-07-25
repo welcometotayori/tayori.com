@@ -2207,7 +2207,7 @@ def _check_and_notify():
             if r["mode"] == "sky" and (r["poem"] or "").strip():
                 # 帰還（§4.2）：メールそのものが「あの日」の追体験になる。
                 # 本文と、放った日の記録（日付・曜日・天気・気温・時刻）を静かに並べる。
-                subject = "たより — 宙から、あなたのことばが帰ってきました"
+                subject = "たより — あなたのことばが帰ってきました"
                 body = (
                     f"{r['username']} さんへ。\n"
                     "あの日、あなたはこう書いていました。\n\n"
@@ -2219,10 +2219,10 @@ def _check_and_notify():
                 )
             elif r["mode"] == "sky":
                 # 写真・声だけのことば：本文が無いので、開封のリンクだけをそっと置く
-                subject = "たより — 宙から、ことばが降りてきました"
+                subject = "たより — ことばが降りてきました"
                 body = (
                     f"{r['username']} さんへ。\n"
-                    "いつかのあなたが宙へ放ったものが、いま降りてきました。\n"
+                    "いつかのあなたが tayori-たより- へ放ったものが、いま降りてきました。\n"
                     "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
                     f"{open_url}\n\n"
                     "tayori ーたより\n"
@@ -2284,12 +2284,12 @@ def _check_and_notify():
             except (TypeError, ValueError):
                 continue
             unsub_url = f"{BASE_URL}/unsubscribe/{r['unsub']}" if r["unsub"] else None
-            subject = "たより — 宙から、だれかのことばが届きました"
+            subject = "たより — だれかのことばが届きました"
             body = (
                 f"{r['username']} さんへ。\n"
-                "知らないだれかが宙へ放ったことばが、あなたのもとへ降りてきました。\n"
+                "知らないだれかが tayori-たより- へ放ったことばが、あなたのもとへ降りてきました。\n"
                 "だれの、いつのことばかは、だれにもわかりません。\n"
-                "宙のすみで、封蝋がそっと待っています。\n"
+                "tayori-たより- のすみで、封蝋がそっと待っています。\n"
                 f"{BASE_URL}/mood\n\n"
                 "tayori ーたより\n"
                 + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
@@ -3587,7 +3587,7 @@ def api_sky_word_mark(h):
     got = _sky_index().get(h)
     if not got:
         # 宙から降ろされた・キャッシュが入れ替わった。静かに「もう無い」と伝える
-        return jsonify(error="そのことばは、もう宙にありません。"), 404
+        return jsonify(error="そのことばは、もう tayori-たより- にありません。"), 404
     letter_id = got[0]
     on = bool((request.get_json(silent=True) or {}).get("on", True))
     db = get_db()

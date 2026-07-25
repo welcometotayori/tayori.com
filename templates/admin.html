@@ -567,10 +567,10 @@
             <div class="trend-note">棒は各日の新規登録数。バーにカーソルを合わせると累計が出ます。</div>
         </div>
 
-        <div class="section-title">宙の承認キュー（{{ pending_sky | length }}）</div>
+        <div class="section-title">tayori-たより- の承認キュー（{{ pending_sky | length }}）</div>
         <div class="queue-note">
-            門番（キーワード照合）がグレーと見たことばだけが、ここで待っています。<strong>掲載</strong>を押した瞬間に宙へ出て、だれか一人への配達も始まります。<strong>却下</strong>すると宙には出ませんが、本文は本人の手元に残り、帰還メールもそのまま生きています。<br>
-            放った本人には、どちらも通知されません（自分のことばのその後を知らない、という宙の非対称性）。掲載しないと決めたことば：{{ blocked_count }} 通。
+            門番（キーワード照合）がグレーと見たことばだけが、ここで待っています。<strong>掲載</strong>を押した瞬間に tayori-たより- へ出て、だれか一人への配達も始まります。<strong>却下</strong>すると tayori-たより- には出ませんが、本文は本人の手元に残り、帰還メールもそのまま生きています。<br>
+            放った本人には、どちらも通知されません（自分のことばのその後を知らない、という tayori-たより- の非対称性）。掲載しないと決めたことば：{{ blocked_count }} 通。
         </div>
         {% if pending_sky %}
         <div id="skyQueue">
@@ -772,7 +772,7 @@
                 if (!res.ok || !(d && d.ok)) throw new Error((d && d.error) || '裁定に失敗しました。');
                 if (card) {
                     card.innerHTML = '<div class="q-done">' +
-                        (verdict === 'approve' ? '宙へ出しました。' : '宙には出しません。') + '</div>';
+                        (verdict === 'approve' ? 'tayori-たより- へ出しました。' : 'tayori-たより- には出しません。') + '</div>';
                 }
             } catch (err) {
                 btns.forEach(b => b.disabled = false);

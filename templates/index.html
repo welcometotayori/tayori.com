@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-{% set page_title = 'tayori-たより-｜意味のない言葉を、宙へ放つ' %}
-{% set page_desc = 'tayori-たより- は、いまの気分の言葉を宙へ放つ場所です。放った言葉は匿名のまま誰かのもとへ漂い、そしてある日、あの日のあなたの言葉が、ふと帰ってきます。' %}
+{% set page_title = 'tayori-たより-｜意味のない言葉を、放つ' %}
+{% set page_desc = 'tayori-たより- は、いまの気分の言葉を放つ場所です。放った言葉は匿名のまま誰かのもとへ漂い、そしてある日、あの日のあなたの言葉が、ふと帰ってきます。' %}
 {% include '_head.html' %}
 <script type="application/ld+json">
 {
@@ -935,9 +935,9 @@
 <body>
 <div class="gate" id="gate">
   <div class="gate-card">
-    <h1>たより<span class="vh"> — 意味のない言葉を、宙へ放つ。それはいつか、知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
+    <h1>たより<span class="vh"> — 意味のない言葉を、放つ。それはいつか、知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
     <div class="romaji">tayori</div>
-    <div class="gate-tag">ことばを宙へ放つために。<br>はじめに、あなたの名前を。</div>
+    <div class="gate-tag">ことばを tayori-たより- へ放つために。<br>はじめに、あなたの名前を。</div>
     <div class="gate-form">
       <div class="gate-tabs">
         <button class="gate-tab on" data-g="login">ログイン</button>
@@ -1061,7 +1061,7 @@
     <div class="stamp">JP<br>たより<br>POST</div>
     <h1>たより</h1>
     <div class="romaji">tayori</div>
-    <div class="tagline">宙へ放つ。忘れた頃に、ふと降ってくる。</div>
+    <div class="tagline">tayori-たより- へ放つ。忘れた頃に、ふと降ってくる。</div>
     <div class="rule"></div>
     <div class="acct" id="acctBar">
       <span class="acct-id">差出人</span><b id="acctName">—</b>
@@ -1108,17 +1108,17 @@
       <div class="env-foot">
         <!-- 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も選ばない
              （「未来の自分へ」の遅延郵便UIは仕様§6で撤去。帰還はサーバの乱数だけが知っている） -->
-        <div class="weather-note show" id="skyNote">宛先も、日時もありません。<wbr>放ったことばは宙にのぼり、<wbr>忘れた頃に、<wbr>ふとあなたのもとへ<wbr>降りてきます。</div>
+        <div class="weather-note show" id="skyNote">宛先も、日時もありません。<wbr>放ったことばは tayori-たより- にのぼり、<wbr>忘れた頃に、<wbr>ふとあなたのもとへ<wbr>降りてきます。</div>
         <div class="field-row">
           <label>いまの色：</label>
           <div class="mood-picker" id="sealSwatches"></div>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。<wbr>開封の日に、<wbr>もう一度選んで<wbr>見比べます</div>
-        <button class="send" id="sendBtn">宙 へ 放 つ</button>
+        <button class="send" id="sendBtn">tayori-たより- へ 放 つ</button>
       </div>
     </div>
     <p class="note">送った瞬間、<wbr>これは見えなくなります。<br>いいねも、既読も、<wbr>ここにはありません。</p>
-    <div class="map-link-row" style="justify-content:center;margin-top:10px"><a class="map-link" href="/mood">放ったことばの浮かぶ宙へ<span class="sub">sky</span></a></div>
+    <div class="map-link-row" style="justify-content:center;margin-top:10px"><a class="map-link" href="/mood">放ったことばの浮かぶ tayori-たより- へ</a></div>
     <!-- 「問いをたどって綴る一筆箋」への導線はヘッダーとタブの間へ移設（2026-07-20） -->
   </section>
 
@@ -1165,7 +1165,7 @@
   <footer>
     遅 れ て 届 く 自 分 へ の 手 紙<br>
     <nav aria-label="フッター" style="margin-top:16px; font-family:'Shippori Mincho', serif; letter-spacing:0.05em;">
-      <a href="/about" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">この宙について</a>
+      <a href="/about" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">tayoriについて</a>
       <a href="/philosophy" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">理念</a>
       <a href="/contact" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">お問い合わせ</a>
       <a href="/terms" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">利用規約</a>
@@ -1762,7 +1762,7 @@
     // 宙へ放つ：日時に関わる欄は一切送らない（arrive_at はサーバの乱数が決める）
     const timing={mode:'sky'};
 
-    sealCap.textContent='宙へ放ちました';sealing.classList.add('on');
+    sealCap.textContent='tayori-たより- へ放ちました';sealing.classList.add('on');
     // エリア変換が走っていれば少しだけ待つ。間に合わなければ位置なしで確定する
     // （封じる体験の即時性 > 位置データの完全性）。
     if(_areaPromise&&!currentArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
@@ -1776,7 +1776,7 @@
     },timing,areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は「受信」の下の「封の中」の棚に並ぶ。
     setTimeout(()=>{sealing.classList.remove('on');clearCompose();loadMail();
-      flash('宙へ放ちました。いつか、ふと降りてきます。');
+      flash('tayori-たより- へ放ちました。いつか、ふと降りてきます。');
       // 相談窓口の静かな導線：放ったことばにそのシグナルがあった時、本人にだけそっと出す。
       // 判定はサーバのキーワード照合のみで、結果はどこにも保存されない。
       if(sealRes&&sealRes.ok&&sealRes.care){setTimeout(showCareNote,1200);}
@@ -1795,7 +1795,7 @@
   function showCareNote(){
     if(document.querySelector('.care-note'))return;
     const n=document.createElement('div');n.className='care-note';
-    n.innerHTML='<p>ことばは、宙が預かりました。<br>いまは、そっとここに置いておきますね。</p>'+
+    n.innerHTML='<p>ことばは、tayori-たより- が預かりました。<br>いまは、そっとここに置いておきますね。</p>'+
       '<p>もし、誰かに話したくなったら——</p>'+
       '<p class="care-links"><a href="https://www.mhlw.go.jp/mamorouyokokoro/" target="_blank" rel="noopener">まもろうよ こころ（相談窓口のまとめ）</a><br>'+
       'いのちの電話 <a href="tel:0570-783-556">0570-783-556</a><br>'+
@@ -1981,7 +1981,7 @@ async function detectWeather(){
     // 天気が取れない時もバナーの直後＝受信の先頭に出し、地図への道を絶やさない。
     {const mr=document.createElement('div');mr.className='map-link-row';
      mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>'+
-       '<a class="map-link" href="/mood">宙<span class="sub">sky</span></a>';
+       '<a class="map-link" href="/mood">たより<span class="sub">tayori</span></a>';
      mailList.appendChild(mr);}
     renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
     if(!received.length && !inTransit.length && !skyArrivals.length){
@@ -2001,7 +2001,7 @@ async function detectWeather(){
       if(L.opened)return;
       const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
       // 宙から降りてきたことばは「いつ書いたか」を開封まで明かさない（SENT行も伏せる）
-      el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">'+(L.sky?'宙から、いつかのあなたのことば':'過去のあなたから')+'</div>'+
+      el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">'+(L.sky?'tayori-たより- から、いつかのあなたのことば':'過去のあなたから')+'</div>'+
         (L.sky?'<div class="ago" style="margin-top:4px;color:var(--seal)">いま、降りてきました</div>'
               :'<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
                '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>')+
@@ -2074,7 +2074,7 @@ async function detectWeather(){
       let whenHtml;
       if(S.sky){
         // 宙へ放ったことば：残り時間も予定日もサーバから来ない（放ちっぱなし）
-        whenHtml='<div class="shelf-when">宙にあります</div>';
+        whenHtml='<div class="shelf-when">tayori-たより- にあります</div>';
       }else if(S.waiting_weather){
         whenHtml='<div class="shelf-when">'+esc(WEVENT_LABEL[S.weather_event]||'天気')+'を待っています</div>';
       }else if(S.arrive_hidden){
@@ -2084,7 +2084,7 @@ async function detectWeather(){
         const ts=Math.floor(Date.now()/1000)+(S.seconds_left||0);
         whenHtml='<div class="shelf-when countdown" data-arrive-ts="'+ts+'">'+esc(humanGapFromSeconds(S.seconds_left||0))+'</div>';
       }
-      el.innerHTML='<div class="wax mini">'+(S.sky?'宙':'緘')+'</div><div class="shelf-body">'+whenHtml+
+      el.innerHTML='<div class="wax mini">'+(S.sky?'た':'緘')+'</div><div class="shelf-body">'+whenHtml+
         '<div class="shelf-meta">'+(S.sky?'放った日 ':'投函 ')+fmtSent(S.sent_date)+(S.sky||S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
         (extras.length?' · '+extras.join('・')+'入り':'')+'</div>'+
         sealedInfoHTML(S,false)+
@@ -2418,13 +2418,13 @@ async function detectWeather(){
     if(!skyArrivals.length)return;
     const lbl=document.createElement('div');lbl.className='shelf-label';
     lbl.style.cssText='margin:34px 0 16px;text-align:center';
-    lbl.textContent='― 宙から · だれかのことば ―';
+    lbl.textContent='― tayori-たより- から · だれかのことば ―';
     mailList.appendChild(lbl);
     skyArrivals.forEach(A=>{
       const el=document.createElement('div');el.className='letter';el.dataset.did=A.did;
       if(!A.opened){
         el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div>'+
-          '<div class="from">知らないだれかが、宙へ放ったことば</div>'+
+          '<div class="from">知らないだれかが、tayori-たより- へ放ったことば</div>'+
           '<div class="ago" style="margin-top:4px;color:var(--seal)">あなたのもとへ、降りてきました</div>'+
           (A.char_count?'<div class="sc-note">'+A.char_count+'字を、封じています</div>':'')+
           (A.color?'<div class="sc-meta"><span class="sc-chip" style="background:'+esc(A.color)+'"></span></div>':'')+
@@ -2438,7 +2438,7 @@ async function detectWeather(){
   }
   function renderSkyOpen(A){
     const pv=!!A.vertical;
-    let h='<div class="postmark"><span>宙から · だれかのことば</span><div class="pm-circle">たより<br>sky</div></div>';
+    let h='<div class="postmark"><span>tayori-たより- から · だれかのことば</span><div class="pm-circle">たより<br>tayori</div></div>';
     h+='<div class="letter-body">';
     if(A.poem)h+='<div class="letter-poem'+(pv?' vertical':'')+'">'+(pv?tcy(esc(A.poem)):esc(A.poem))+'</div>';
     h+='<button type="button" class="like-mark'+(A.liked?' on':'')+'" data-slike="'+A.did+'" aria-pressed="'+(A.liked?'true':'false')+'">'+
@@ -2458,7 +2458,7 @@ async function detectWeather(){
 
   function renderOpenLetter(L,i,sent){
     let h='';
-    h+='<div class="postmark"><span>'+(L.sky?'宙から · いつかのあなた':'受信 · 過去のあなた')+'</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
+    h+='<div class="postmark"><span>'+(L.sky?'tayori-たより- から · いつかのあなた':'受信 · 過去のあなた')+'</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'" alt="この便りに添えられた写真">';
     h+='<div class="letter-body">';
     // 宙から降りてきたことばの核：「この日の、この時間に、あなたはこれを書いていました」
@@ -2480,7 +2480,7 @@ async function detectWeather(){
 
     // 届いた時の自分の記録（封をした日 → 開けた日の「層」）
     h+='<div class="strata">';
-    h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmtSent(L.sent_date)+'</span><span class="strata-what">'+(L.sky?'宙へ放った':'封をした')+'</span></div>';
+    h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmtSent(L.sent_date)+'</span><span class="strata-what">'+(L.sky?'tayori-たより- へ放った':'封をした')+'</span></div>';
     if(L.opened_at)
       h+='<div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">'+fmtDateTime(L.opened_at)+'</span><span class="strata-what">封を開けた</span></div>';
     if(L.reflect_count>0)
@@ -2687,13 +2687,13 @@ async function detectWeather(){
   async function sealTextToFuture(text){
     const t=(text||'').trim();
     if(!t){flash('放つ言葉がありません。');return;}
-    sealCap.textContent='宙へ放ちました';sealing.classList.add('on');
+    sealCap.textContent='tayori-たより- へ放ちました';sealing.classList.add('on');
     await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({poem:t,
       mode:'sky',
       from_reply:true,
       seal_env:currentWeather||null   // 放った瞬間の空気は、このことばにも必ず記録する（表示と記録は分離）
     },areaPayload()))});
-    setTimeout(()=>{sealing.classList.remove('on');flash('今の返事も、宙へ。いつか、ふと帰ってきます。');goTab('mailbox');},1700);}
+    setTimeout(()=>{sealing.classList.remove('on');flash('今の返事も、tayori-たより- へ。いつか、ふと帰ってきます。');goTab('mailbox');},1700);}
 
   // timeline
   let tlFilter='all';
