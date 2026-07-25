@@ -2109,8 +2109,8 @@ def _check_and_notify():
                 f"{r['username']} さんへ。\n"
                 "知らないだれかが宙へ放ったことばが、あなたのもとへ降りてきました。\n"
                 "だれの、いつのことばかは、だれにもわかりません。\n"
-                "受信の棚で、封蝋がそっと待っています。\n"
-                f"{BASE_URL}/?app=1\n\n"
+                "宙のすみで、封蝋がそっと待っています。\n"
+                f"{BASE_URL}/mood\n\n"
                 "tayori ーたより\n"
                 + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
             )
@@ -2489,10 +2489,11 @@ def _quantize_to_swatch(color):
     return best
 
 
-# ── 気分の宙（mood space / v7・語のネットワーク）──────────────
-# 2026-07-24 v7：点の散布ではなく、手紙のタグ（＝年表の感情タグ emos）そのものが星になる。
-# 返すのは語・色相・季節・時間帯・天気・エリアのハッシュ・開封までの残り日数・封じてからの経過だけ。
-# 本文・日付・件名・タイトル・生の地名は一切返さない。id はハッシュ化して差分同期にのみ使う。
+# ── 気分の色（7色量子化）と、宙の「いま」を測る補助 ────────────
+# 2026-07-25 v12：語（タグ）を漂わせる v7/v8 の系統は廃止した（宙に出るのは放たれた本文だけ）。
+# ここに残る _mood_season / _mood_hour / _mood_weather は、宙を見ているいまの季節・時刻・天気と
+# 手紙のそれを比べる（＝共鳴の重みを出す）ために /api/sky が使う。
+# 語抽出（_mood_words_from_poem ほか）は投函時の emos 生成＝年表の感情タグとして残る。
 
 _MOOD_SWATCH_INDEX = {h.lower(): i for i, h in enumerate(_MOOD_SWATCH_HEX)}
 
@@ -2515,15 +2516,6 @@ def mood_page():
         open_id = ""
     return render_template("mood.html", logged_in=logged_in, open_letter_id=open_id)
 
-
-# v7 の語の材料。1〜3語のタグ・8変数のメタデータを手紙単位で返す。
-# 他ユーザー分も同じスキーマで混ぜる（クライアントは自分/他人を区別しない）。
-# demo除外・オプトアウト尊重は地図(B)と同じ意思。他人の色相は7色量子化後の値だけを出し、
-# 他人の日数は7日単位に丸める（細かい残日数・経過は個人のスケジュールを指しうるため）。
-_OTHERS_CACHE_SECONDS = 60
-_OTHERS_MAX = 120          # 宙に混ぜる他者の手紙の上限。超えた分は毎回ランダムに間引く
-_others_lock = threading.Lock()
-_others_cache = {"t": 0.0, "letters": []}   # letters: (user_id, letter_dict)
 
 # v8: time_bucket（4値enum）の参照は停止。列は既存データ互換のため残すが、
 # 宙へは sent_date から出す連続時刻(0.0–24.0)だけを渡す。読めない行の逃げ道にのみ使う。
@@ -2568,23 +2560,9 @@ def _mood_weather(row):
     return "cloud"
 
 
-def _mood_hue(color):
-    """色文字列(HSL/HEX) → 色相 0–359。色なし・解釈不能は None。"""
-    if not color:
-        return None
-    m = _HSL_RE.match(color.strip())
-    if m:
-        return int(float(m.group(1)) % 360)
-    rgb = _hex_to_rgb(color)
-    if rgb is None:
-        return None
-    h, _l, _s = colorsys.rgb_to_hls(*(c / 255.0 for c in rgb))
-    return int(h * 360) % 360
-
-
-# ── 気分の宙：人の名前・あだ名を宙に出さないフィルタ（2026-07-24）──
-# 本文抽出（C案）で名前が漏れるのを防ぐ。完全な人名判定は形態素解析なしには不可能なので
-# best-effort：明示ブロックリスト＋あだ名接尾辞＋各ユーザーの登録名で落とす。
+# ── 語から人の名前・あだ名を落とすフィルタ（2026-07-24）──
+# 投函時の emos 生成（＝年表の感情タグ）で名前が混じるのを防ぐ。完全な人名判定は形態素解析
+# なしには不可能なので best-effort：明示ブロックリスト＋あだ名接尾辞＋各ユーザーの登録名で落とす。
 # これで捕まえられない未知の人名（例「健太」「マリア」）は regex では検出不能＝残る。
 _MOOD_NAME_BLOCK = {
     "筒井", "筒井晃生", "つつい", "ツツイ", "tsutsui",
@@ -2617,9 +2595,8 @@ def _mood_name_blocked(word, extra=None):
 def _mood_words_from_poem(poem, extra_block=None):
     """本文から名詞相当の語を最大3つ抜く（章題抽出器 _CH_WORD_RE を流用）。
     人の名前・あだ名（_mood_name_blocked）は除く。
-    ★重要：これは封の中（未開封）の本文からの抽出であり、本文秘匿の鉄則の例外。
-    2026-07-24 ユーザーの明示的な選択（C案）で、本人自身の手紙にのみ許可。
-    他ユーザーの手紙には絶対に適用しない（呼び出し側で own のみ渡す）。"""
+    投函時に本人の環境で呼び、抜いた語だけを emos として保存する（年表の感情タグ）。
+    抜いた語を他人へ見せる経路は無い（2026-07-25 v12 で語の宙は廃止）。"""
     src = poem or ""
     seen, words = set(), []
     for m in _CH_WORD_RE.finditer(src):
@@ -2641,7 +2618,7 @@ def _mood_words_from_poem(poem, extra_block=None):
 
 def _mood_name_block_for_user(db, user_id):
     """そのユーザーの登録名を正規化した集合を返す（自分の名前を語から除くため）。
-    投函時のemos自動生成と気分の宙の本人経路で共用する。"""
+    投函時の emos 自動生成で使う。"""
     urow = db.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
     block = set()
     if urow and urow["username"]:
@@ -2652,148 +2629,167 @@ def _mood_name_block_for_user(db, user_id):
     return block
 
 
-def _mood_letter(r, now, blur=False, allow_body=False, extra_block=None):
-    """letters行 → v8の手紙dict。対象外（開封済み・到着済み・語なし）は None。
-    blur=True は他人の手紙：色相を7色量子化後の値に、日数を7日単位・時刻を1時間に丸める。
-    allow_body=True（本人のみ）は emos が無い時、本文から語を抽出する（C案・本文秘匿の例外）。
-    人の名前・あだ名は emos タグ・抽出語の両方から除く（extra_block は本人の登録名など）。"""
-    try:
-        if _letter_opened(r) or _is_arrived(r):
-            return None
-    except (TypeError, ValueError):
-        return None
-    try:
-        emos = json.loads(r["emos"] or "[]")
-    except (ValueError, TypeError):
-        emos = []
-    tags = [str(e).strip()[:24] for e in emos
-            if str(e).strip() and not _mood_name_blocked(str(e).strip(), extra_block)][:3]
-    if not tags and allow_body and "poem" in r.keys():
-        tags = _mood_words_from_poem(r["poem"], extra_block)
-    if not tags:
-        return None   # 語のない手紙は宙に出ない（空配列は返さない）
-    arrive = ((r["demo_arrive_at"] if r["demo_mode"] else None)
-              or r["arrive_at"] or (r["arrive_date"] + "T00:00:00"))
-    try:
-        until = max(0, (datetime.fromisoformat(arrive) - now).days)
-        since = max(0, (now - datetime.fromisoformat(r["sent_date"][:19])).days)
-    except (TypeError, ValueError):
-        return None
-    hue = _mood_hue(_quantize_to_swatch(r["seal_color"]) if blur else r["seal_color"])
-    hour = _mood_hour(r)
-    if blur:
-        until = (until // 7) * 7
-        since = (since // 7) * 7
-        hour = float(int(hour))   # 他人の封入時刻は分を出さない（1時間に丸める）
-    # エリアは平文を出さずハッシュだけ。クライアントは同一判定にしか使わない。
-    # 位置なしの手紙は手紙ごとに別の値＝どこの語とも「同じ土地」にならない。
-    area_src = r["area_name"] or ("letter:" + r["id"])
-    return {
-        "id": hashlib.sha256(("mood:" + r["id"]).encode()).hexdigest()[:12],
-        "tags": tags,
-        "hue": hue,
-        "season": _mood_season(r["sent_date"]),
-        "hour": hour,
-        "weather": _mood_weather(r),
-        "area": hashlib.sha256(area_src.encode()).hexdigest()[:6],
-        "daysUntilOpen": until,
-        "daysSinceSealed": since,
-    }
-
-
-# 気分の宙が letters から読んでよい列。SELECT * は使わない：
-# 本文(poem)・生座標(area_lat/lng)・件名相当を絶対に載せないため、列を指で数えて書く。
-_MOOD_COLS = ("id, user_id, emos, seal_color, sent_date, time_bucket, seal_env, "
-              "area_name, opened, opened_at, arrive_at, arrive_date, "
-              "demo_mode, demo_arrive_at, weather_event, weather_met_at")
-
-
-def _mood_space_all_letters():
-    """封の中の全ユーザーの (user_id, 手紙dict) を返す。呼び出し側で本人分を除く。
-    全ユーザー横断クエリなのでグローバルキャッシュを挟む（60秒＝ポーリングと同じ周期）。"""
-    now = time.time()
-    with _others_lock:
-        if now - _others_cache["t"] < _OTHERS_CACHE_SECONDS:
-            return _others_cache["letters"]
-    rows = get_db().execute(
-        f"SELECT {_MOOD_COLS} FROM letters "
-        "WHERE COALESCE(demo_mode,0)=0 "
-        "AND COALESCE(excluded_from_aggregate,0)=0 "
-        "AND COALESCE(emos,'[]')<>'[]'").fetchall()
-    dt_now = datetime.now()
-    letters = []
-    for r in rows:
-        d = _mood_letter(r, dt_now, blur=True)
-        if d:
-            letters.append((r["user_id"], d))
-    with _others_lock:
-        _others_cache["t"] = time.time()
-        _others_cache["letters"] = letters
-    return letters
-
-
-@app.route("/api/mood-space")
-@login_required
-def api_mood_space():
-    db = get_db()
-    # 本人の登録名は「人の名前」として宙に出さない（本文抽出で自分の名前が漏れるのを防ぐ）。
-    extra_block = _mood_name_block_for_user(db, uid())
-    # 本人の手紙だけ poem を読む（本文からの語抽出＝C案は本人限定）。emos の有無で絞らない。
-    rows = db.execute(
-        f"SELECT {_MOOD_COLS}, poem FROM letters WHERE user_id=?", (uid(),)).fetchall()
-    now = datetime.now()
-    letters = []
-    for r in rows:
-        d = _mood_letter(r, now, allow_body=True, extra_block=extra_block)
-        if d:
-            letters.append(d)
-    others = [d for u, d in _mood_space_all_letters() if u != uid()]
-    if len(others) > _OTHERS_MAX:
-        others = random.sample(others, _OTHERS_MAX)
-    letters += others
-    random.shuffle(letters)   # 並び順から投函順・自分/他人の境目を消す
-    return jsonify(letters=letters)
-
-
 # ── 宙を漂うことば（公開・匿名）────────────────────────────────
 # 放たれた本文テキストそのものを、未登録の訪問者にも見せる（2026-07-25 宙モードv2で
 # 「宙に放ったことばに限り」本文のサーバ側秘匿を解除。letter モードの秘匿は不変）。
 # 書き手を指す一切（ID・名前・場所・正確な日時・写真・声）は載せない。
 # ケアのシグナルを含むことばは保存時に宙へ入れない上、ここでも読み出し時に再フィルタする（二重防御）。
-_SKY_CACHE_SECONDS = 60
+_SKY_CACHE_SECONDS = 15
 # 宙の表示密度（§1.2【A】）：一度に漂わせる他者のことばの上限。世界の見え方を
 # 決める変数なので、デプロイ後も環境変数で詰められるようにしておく。
 _SKY_MAX = _env_num("TAYORI_SKY_MAX", 40, 1, 500, cast=int)
 _sky_lock = threading.Lock()
-_sky_cache = {"t": 0.0, "words": []}
+# pool: (公開dict, 季節, 封じた時刻0.0-24.0, 天気) の組。公開dict だけがクライアントへ出る。
+_sky_cache = {"t": 0.0, "pool": []}
+
+# ── 共鳴の重み（2026-07-25 v12）──────────────────────────
+# 「いま宙を見ているこの瞬間」の季節・時刻・天気と重なることばが浮かびやすくなる。
+# ただし上位固定にはしない：スコアを重みにした抽選なので、毎回ちがう顔ぶれになる。
+# w_noise は必ず効かせる（これが無いと同じことばばかり浮いて「宙」でなくなる）。
+_SKY_W_SEASON = _env_num("TAYORI_SKY_W_SEASON", 1.0, 0.0, 10.0)
+_SKY_W_WEATHER = _env_num("TAYORI_SKY_W_WEATHER", 1.0, 0.0, 10.0)
+_SKY_W_HOUR = _env_num("TAYORI_SKY_W_HOUR", 0.8, 0.0, 10.0)
+_SKY_W_NOISE = _env_num("TAYORI_SKY_W_NOISE", 0.6, 0.01, 10.0)
+# 時刻の重なりが0になるまでの隔たり（既定6時間）
+_SKY_HOUR_SPAN = _env_num("TAYORI_SKY_HOUR_SPAN", 6.0, 0.5, 12.0)
+# 母数が小さいうちは共鳴を弱める（【F】）。ことばがこの数に届くまで、季節・天気・時刻の
+# 重みを母数に比例して薄め、ほぼ偶然だけで浮かべる。数通しかない宙で重みを効かせると、
+# 「今日と重なる一通」だけが毎回出てきて宙が止まって見えるため。
+_SKY_RESONANCE_N = _env_num("TAYORI_SKY_RESONANCE_N", 120, 1, 100000, cast=int)
+
+# いまの空模様。外への問い合わせでリクエストを待たせないよう、裏で取りに行って置いておく。
+# 鍵は見ている人のIPのハッシュ（生IPはメモリにも置かない）。値は4分類の天気だけ。
+_NOW_WX_TTL = 900.0        # 15分。空はそんなに速く変わらない
+_NOW_WX_MAX = 500          # 鍵の上限（超えたら古い順に捨てる）
+_now_wx_lock = threading.Lock()
+_now_wx = {}               # key -> {"t": float, "cond": str, "busy": bool}
 
 
-@app.route("/api/sky")
-def api_sky():
+def _now_wx_fetch(key, client_ip, lat, lon):
+    """裏で天気を取ってキャッシュへ置く。失敗しても宙は cloud のまま静かに続く。"""
+    cond = "cloud"
+    try:
+        if lat is None or lon is None:
+            g = _ip_geolocate(client_ip)
+            if g:
+                lat, lon = g[0], g[1]
+        if lat is not None and lon is not None:
+            wx = fetch_weather(lat, lon)
+            # fog は _mood_weather と同じく cloud へ寄せる（手紙側と分類を揃える）
+            if wx and wx.get("condition") in ("clear", "cloud", "rain", "snow"):
+                cond = wx["condition"]
+    except Exception as e:
+        print(f"[宙のいまの天気: 取得失敗] {e}", flush=True)
+    finally:
+        with _now_wx_lock:
+            _now_wx[key] = {"t": time.time(), "cond": cond, "busy": False}
+
+
+def _sky_now_weather():
+    """宙を見ているいまの天気を4分類で返す。手元に無ければ cloud を返し、裏で取りに行く
+    （/api/sky は20秒ごとに叩かれるので、待たせるより次の周回で本当の空になる方がよい）。"""
+    if not NETWORK_ENABLED:
+        return "cloud"
+    ip = _client_ip()
+    key = hashlib.sha256(("wx:" + ip).encode()).hexdigest()[:12]
+    now = time.time()
+    with _now_wx_lock:
+        e = _now_wx.get(key)
+        if e and (now - e["t"] < _NOW_WX_TTL or e["busy"]):
+            return e["cond"]
+        if len(_now_wx) >= _NOW_WX_MAX:
+            for k in sorted(_now_wx, key=lambda k: _now_wx[k]["t"])[:_NOW_WX_MAX // 4]:
+                _now_wx.pop(k, None)
+        cond = e["cond"] if e else "cloud"
+        _now_wx[key] = {"t": (e["t"] if e else 0.0), "cond": cond, "busy": True}
+    # ログイン済みなら天気画面で置いていった最後の座標を使う（IP推定より当たる）
+    lat = lon = None
+    if session.get("uid"):
+        try:
+            r = get_db().execute("SELECT last_lat, last_lon FROM users WHERE id=?",
+                                 (session["uid"],)).fetchone()
+            if r and r["last_lat"] and r["last_lon"]:
+                lat, lon = r["last_lat"], r["last_lon"]
+        except Exception:
+            pass
+    threading.Thread(target=_now_wx_fetch, args=(key, ip, lat, lon), daemon=True).start()
+    return cond
+
+
+def _sky_cache_bust():
+    """放った瞬間に宙へ映るように、ことばの共有キャッシュをいま無効化する。
+    （待ち時間の正体はサーバ側キャッシュだったので、投函の書き込み直後にここを叩く）"""
+    with _sky_lock:
+        _sky_cache["t"] = 0.0
+
+
+def _sky_pool():
+    """宙に出せることば全部（本文＋共鳴の材料）。DBとケア再判定だけをキャッシュする。
+    抽選は毎リクエスト行う：季節・時刻・天気は見るたびに変わるので、選んだ結果を
+    寝かせると『いまと響き合う』が15秒古い『いま』になってしまう。"""
     now = time.time()
     with _sky_lock:
         if now - _sky_cache["t"] < _SKY_CACHE_SECONDS:
-            return jsonify(words=_sky_cache["words"])
+            return _sky_cache["pool"]
     rows = get_db().execute(
-        "SELECT id, poem, seal_color, vertical FROM letters "
+        "SELECT id, poem, seal_color, vertical, sent_date, time_bucket, seal_env, weather_event "
+        "FROM letters "
         "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>''").fetchall()
     pool = []
     for r in rows:
         if _needs_care(r["poem"]):
             continue
-        pool.append({
-            "id": hashlib.sha256(("sky:" + r["id"]).encode()).hexdigest()[:12],
-            "poem": r["poem"],
-            "color": r["seal_color"],
-            "vertical": bool(r["vertical"]),
-        })
-    if len(pool) > _SKY_MAX:
-        pool = random.sample(pool, _SKY_MAX)
-    random.shuffle(pool)
+        pool.append((
+            {
+                "id": hashlib.sha256(("sky:" + r["id"]).encode()).hexdigest()[:12],
+                "poem": r["poem"],
+                "color": r["seal_color"],
+                "vertical": bool(r["vertical"]),
+            },
+            _mood_season(r["sent_date"]),
+            _mood_hour(r),
+            _mood_weather(r),
+        ))
     with _sky_lock:
         _sky_cache["t"] = time.time()
-        _sky_cache["words"] = pool
-    return jsonify(words=pool)
+        _sky_cache["pool"] = pool
+    return pool
+
+
+def _sky_score(entry, season, hour, weather, reso):
+    """いまとの重なり。0に張り付かないよう、必ず noise を足してから返す。"""
+    s = _SKY_W_NOISE * random.random() + 1e-9
+    if reso <= 0:
+        return s
+    if entry[1] == season:
+        s += _SKY_W_SEASON * reso
+    if entry[3] == weather:
+        s += _SKY_W_WEATHER * reso
+    d = abs(entry[2] - hour) % 24.0
+    d = min(d, 24.0 - d)                      # 23時と1時は2時間しか離れていない
+    s += _SKY_W_HOUR * reso * max(0.0, 1.0 - d / _SKY_HOUR_SPAN)
+    return s
+
+
+@app.route("/api/sky")
+def api_sky():
+    pool = _sky_pool()
+    now = datetime.now()
+    season = _mood_season(now.isoformat())
+    hour = now.hour + now.minute / 60.0
+    weather = _sky_now_weather()
+    reso = min(1.0, len(pool) / float(_SKY_RESONANCE_N))
+    if len(pool) > _SKY_MAX:
+        # スコアを重みにした非復元抽選（Efraimidis–Spirakis）。上位固定にしないので
+        # 「今日と響き合う一通」が毎回必ず来るわけではない＝偶然性は死なない。
+        keyed = sorted(pool,
+                       key=lambda e: random.random() ** (1.0 / _sky_score(e, season, hour, weather, reso)),
+                       reverse=True)[:_SKY_MAX]
+        words = [e[0] for e in keyed]
+    else:
+        words = [e[0] for e in pool]
+    random.shuffle(words)   # 並び順からは何も推測させない
+    return jsonify(words=words)
 
 
 # ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
@@ -3003,6 +2999,7 @@ def api_create_letter():
     # 写真・声だけのことばは配らない（他人に渡るのはテキストだけ＝写り込み等の身元漏れを防ぐ）。
     if mode == "sky" and poem:
         _assign_sky_delivery(db, lid, uid())
+        _sky_cache_bust()   # 次に誰が /api/sky を叩いても、このことばがもう入っている
     # care は相談窓口の一文を本人にだけ添えるための、その場かぎりのフラグ。どこにも保存しない。
     return jsonify(id=lid, ok=True, notify_off=bool(notify_reason), notify_reason=notify_reason,
                    care=care)
@@ -3195,6 +3192,28 @@ def api_like_letter(lid):
                          (liked_at, lid, uid()))
         get_db().commit()
     return jsonify(ok=True, liked=bool(liked_at))
+
+
+@app.route("/api/sky/arrivals")
+@login_required
+def api_sky_arrivals():
+    """宙で受け取る「だれかのことば」（2026-07-25 v11.1：棚を畳んだので宙側へ移設）。
+    降る時刻が来た配達だけを返す——まだ降っていない配達は存在ごと伏せる。
+    本文は開封済みの再訪時だけ同梱し、初回の本文配信は開封API（§1.5）のレスポンスに限る。"""
+    rows = get_db().execute(
+        "SELECT d.id AS did, d.opened_at, d.liked_at, l.poem, l.seal_color, l.vertical"
+        "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
+        " WHERE d.recipient=? AND d.deliver_at<=? ORDER BY d.deliver_at DESC",
+        (uid(), datetime.now().isoformat(timespec="seconds"))).fetchall()
+    out = []
+    for r in rows:
+        a = {"did": r["did"], "opened": bool(r["opened_at"]), "liked": bool(r["liked_at"]),
+             "char_count": len(r["poem"] or ""), "color": r["seal_color"],
+             "vertical": bool(r["vertical"])}
+        if r["opened_at"]:
+            a["poem"] = r["poem"]
+        out.append(a)
+    return jsonify(arrivals=out)
 
 
 @app.route("/api/sky/<did>/open", methods=["POST"])

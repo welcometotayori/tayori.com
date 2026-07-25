@@ -681,6 +681,58 @@
   .gate-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-mute);margin-top:9px;padding:9px 11px;border:1px solid var(--rule);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-sunk)}
   .gate-note b{color:var(--seal);font-weight:600}
 
+  /* ══ 門と導入は「宙」の色で（2026-07-25 v11.1）══════════════════
+     たよりのはじまりは /mood の宙。そこから来て、そこへ帰る画面なので、
+     紙の色ではなく宙の色（闇・チョーク・糸）に合わせる。
+     トークンをこのスコープだけ差し替えるので、下のルールは元のまま効く。 */
+  /* 後段の .concept{background:var(--paper)} に負けないよう body 起点で一段強くする */
+  body .gate,body .concept{
+    --paper:#0B0B12;
+    --ground:#08080D;
+    --ink:#FAF8F3;
+    --seal:#C7A57F;                    /* 封蝋の代わりに、宙の糸の色 */
+    --kraft:#B38F6F;
+    --paper-sunk:rgba(250,248,243,.05);
+    --paper-raised:#12121A;
+    --ink-strong:#FAF8F3;
+    --ink-body:rgba(250,248,243,.84);
+    --ink-mute:rgba(250,248,243,.56);
+    --ink-faint:rgba(250,248,243,.3);
+    --rule:rgba(250,248,243,.15);
+    --rule-firm:rgba(179,143,111,.5);
+    --focus-ring:rgba(199,165,127,.75);
+    color:var(--ink);
+    background:#08080D;
+    /* 遠い星の気配だけ。宙のcanvasは持ち込まず、静止した粒でほのめかす */
+    background-image:
+      radial-gradient(1.4px 1.4px at 18% 22%,rgba(250,248,243,.42),transparent),
+      radial-gradient(1.1px 1.1px at 72% 16%,rgba(250,248,243,.30),transparent),
+      radial-gradient(1.6px 1.6px at 84% 63%,rgba(199,165,127,.34),transparent),
+      radial-gradient(1.1px 1.1px at 33% 78%,rgba(250,248,243,.26),transparent),
+      radial-gradient(1.3px 1.3px at 57% 44%,rgba(250,248,243,.20),transparent),
+      radial-gradient(1px 1px at 8% 58%,rgba(199,165,127,.28),transparent),
+      radial-gradient(circle at 50% 34%,rgba(179,143,111,.10),transparent 58%)}
+  body .gate h1,body .concept-title{text-shadow:0 0 26px rgba(8,8,13,.9)}
+  body .gate .romaji,body .concept-mark{color:var(--seal);border-color:rgba(199,165,127,.55)}
+  /* 塗りつぶしのボタンは闇に浮く白い板になるので、宙と同じ「線だけの一語」に */
+  body .gate-submit,body .concept-go{background:rgba(8,8,13,.4);color:var(--ink);
+    border:1px solid rgba(250,248,243,.32);border-radius:2px;
+    transition:border-color .3s,background .3s}
+  body .gate-submit:hover,body .concept-go:hover{background:rgba(8,8,13,.7);
+    border-color:rgba(250,248,243,.68);transform:none}
+  body .gate-tab.on{box-shadow:inset 0 -2px 0 var(--seal)}
+  body .gate-field input,body .gate-field input:focus{background:transparent;color:var(--ink)}
+  body .gate-field input::placeholder{color:var(--ink-faint)}
+  /* ブラウザの自動入力が白地に戻してしまうのを、内側の影で塗り直す */
+  .gate-field input:-webkit-autofill,
+  .gate-field input:-webkit-autofill:focus{
+    -webkit-text-fill-color:#FAF8F3;
+    -webkit-box-shadow:0 0 0 1000px #0B0B12 inset;
+    caret-color:#FAF8F3}
+  .gate-err{color:#E8A9A0}
+  .gate-note{background:rgba(250,248,243,.04);border-color:rgba(250,248,243,.14);
+    border-left-color:var(--seal)}
+
   /* account bar */
   /* 案A：差出人の氏名を中央で主役に、その下に操作ボタンを横並び */
   .acct{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:16px}

@@ -8,26 +8,15 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Courier+Prime&display=swap');
-  /* ══ 気分の宙 v7（2026-07-24）══════════════════════════
-     星は点ではなく、語そのもの。手紙のタグが宙に浮かぶ。
+  /* ══ 宙 v12（2026-07-25）══════════════════════════════
+     宙にあるのは、放たれたことばそのものだけ。
+     語（タグ）を星として浮かべる v7/v8 の canvas は畳んだ（宙は本文だけの場所へ）。
 
-     【位置｜重み付きMDS（Kamada-Kawai）】
-        D(i,j) = √( Σ w_v · d_v(i,j)² ) / √( Σ w_v )
-        L(i,j) = L_MIN + D · (L_MAX − L_MIN)
-        F(i,j) = k · ( ‖p_i − p_j‖ − L(i,j) )
-        w_tag = 1.0 を主軸に、8変数すべてが座標に参加する。
+     浮かぶことばの選ばれ方はサーバ側（/api/sky）：
+        いまの季節・時刻・天気と重なることばが浮かびやすい重み付き抽選。
+        ただし必ず偶然の重みが混ざるので、同じ顔ぶれにはならない。
 
-     【動き｜時間の変数を運動に割り当てる】
-        落ち着き　　＝ 封じてからの経過（古い語ほど止まる）
-        現れる遅さ　＝ 開封日までの距離（遠い語ほどゆっくり滲み出る）
-        呼吸の周期　＝ 開封までの残り時間（脈拍には見えない速さに抑える）
-        入る方向　　＝ 時間帯（朝は上から、夜は下から。昼は右、夕は左）
-
-     【非位置チャネル】
-        大きさ＝開封日の近さ／色相＝気分の色／彩度＝季節
-        明度＝時間帯／不透明度＝経過／瞬きとにじみ＝天気
-
-     数字も凡例も軸も出さない。操作もない。一方通行の宙。
+     数字も凡例も軸も出さない。一覧も検索もない。一方通行の宙。
      ════════════════════════════════════════════════ */
   :root{--space:#08080D;--chalk:#FAF8F3;--thread:#B38F6F}
   *{box-sizing:border-box}
@@ -41,30 +30,34 @@
   .ttl{font-size:15px;letter-spacing:0.18em;color:var(--chalk);opacity:.85}
   .ttl .romaji{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.34em;
                color:var(--thread);text-transform:uppercase;margin-left:10px}
-  .back{font-size:12.5px;letter-spacing:0.1em;color:rgba(250,248,243,.55);text-decoration:none;
-        border-bottom:1px solid rgba(179,143,111,.45);padding-bottom:1px;transition:color .2s;
-        pointer-events:auto}
-  .back:hover{color:var(--chalk)}
-  canvas{position:fixed;inset:0;display:block}
-  /* スクリーンリーダー向けの語リスト（視覚的には出さない） */
+  /* スクリーンリーダー向けの、いま宙にあることばの一覧（視覚的には出さない） */
   .sr-words{position:absolute;width:1px;height:1px;overflow:hidden;
             clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;margin:-1px}
 
-  /* ══ 宙モードv2（2026-07-25）＝漂うことば・放つ・ランディング ══
-     語の星（canvas）の上に、放たれた本文がDOMでゆっくり流れ込む。
+  /* ══ 漂うことば・放つ・ランディング（v2〜v12）══════════════
+     放たれた本文が、闇の中へひとつずつゆっくり流れ込む。
      操作UIは最小限：未登録は「はじめる」、登録済みは「放つ」だけ。 */
   .drift-layer{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden}
-  .drift{position:absolute;max-width:17em;color:rgba(250,248,243,.0);
+  /* 現れ方は「打鍵の再生」。だから淡くフェードインするのは1.4秒で終え、
+     あとは一字ずつ書かれていくのに任せる（v11.1 TypeTrace復活）。 */
+  .drift{position:absolute;max-width:17em;color:rgba(250,248,243,.92);
          font-size:13.5px;line-height:2.2;letter-spacing:0.12em;white-space:pre-wrap;
-         transition:opacity 6s ease,transform 60s linear;opacity:0;will-change:transform,opacity}
+         transition:opacity 1.4s ease,transform 60s linear;opacity:0;will-change:transform,opacity}
   .drift.v{writing-mode:vertical-rl;max-width:none;max-height:62vh}
-  .drift.on{opacity:.82;color:rgba(250,248,243,.92)}
-  @media (prefers-reduced-motion: reduce){ .drift{transition:opacity 2s ease} }
+  .drift.on{opacity:.86}
+  .drift.out{transition:opacity 5s ease,transform 60s linear;opacity:0}
+  /* 書いている最中の筆先。縦書きの時は横棒に倒す（棚のtrace-caretと同じ作法） */
+  .tcaret{display:inline-block;width:2px;height:1.05em;background:currentColor;margin-left:1px;
+          vertical-align:-0.16em;opacity:.75;animation:tblink .9s steps(1) infinite}
+  .drift.v .tcaret,.read-body:not(.h) .tcaret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0}
+  @keyframes tblink{0%,49%{opacity:.75}50%,100%{opacity:0}}
+  @media (prefers-reduced-motion: reduce){ .drift{transition:opacity 2s ease} .tcaret{animation:none} }
 
   /* ランディング（未登録）：コピーと、はじめる導線だけ */
   .lp{position:fixed;left:0;right:0;bottom:9vh;z-index:11;text-align:center;padding:0 24px}
   .lp-copy{margin:0 0 26px;font-size:14.5px;line-height:2.4;letter-spacing:0.16em;
-           color:rgba(250,248,243,.88);text-shadow:0 0 18px rgba(8,8,13,.9)}
+           color:rgba(250,248,243,.88);text-shadow:0 0 18px rgba(8,8,13,.9);
+           word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   /* 帰還（§4）のひとこと。主コピーより一段ひいた声で */
   .lp-copy-sub{margin:-14px 0 26px;font-size:12px;color:rgba(250,248,243,.6)}
   .lp-cta{display:inline-block;color:var(--chalk);text-decoration:none;
@@ -74,6 +67,35 @@
   .lp-cta:hover{border-color:rgba(250,248,243,.7);background:rgba(8,8,13,.6)}
   .lp-cta .sub{display:block;margin-top:5px;font-family:'Courier Prime',monospace;
                font-size:9px;letter-spacing:0.4em;color:var(--thread);text-transform:uppercase}
+
+  /* この宙について（v12）：初めて来た人が「何が起きる場所か」を掴めないままだったので、
+     宙の上のほうに二行だけ置く。全文は同じ画面の中で、そっと開く。 */
+  .about{position:fixed;left:0;right:0;top:56px;z-index:11;text-align:center;padding:0 24px;
+         pointer-events:none}
+  .about p{margin:0 0 10px;font-size:12px;line-height:2.2;letter-spacing:0.1em;
+           color:rgba(250,248,243,.58);text-shadow:0 0 16px rgba(8,8,13,.95);
+           word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .about-more{pointer-events:auto;min-height:44px;background:none;border:none;
+              color:rgba(250,248,243,.5);font-family:inherit;font-size:11.5px;
+              letter-spacing:0.22em;cursor:pointer;padding:11px 8px;
+              border-bottom:1px solid rgba(179,143,111,.4);transition:color .3s,border-color .3s}
+  .about-more:hover{color:var(--chalk);border-color:var(--thread)}
+  .about-full{position:fixed;inset:0;z-index:14;display:flex;align-items:center;
+              justify-content:center;padding:24px;background:rgba(8,8,13,.95);
+              opacity:0;transition:opacity .6s ease;pointer-events:none}
+  .about-full.on{opacity:1;pointer-events:auto}
+  .about-doc{max-width:min(92vw,460px);max-height:82vh;overflow:auto;
+             font-size:13px;line-height:2.3;letter-spacing:0.08em;
+             color:rgba(250,248,243,.86)}
+  .about-doc h2{margin:0 0 22px;font-size:13.5px;font-weight:500;letter-spacing:0.3em;
+                color:rgba(250,248,243,.7)}
+  .about-doc p{margin:0 0 22px;word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .about-doc .contact{font-size:11.5px;color:rgba(250,248,243,.5)}
+  .about-doc .contact a{color:var(--thread);text-decoration:underline;text-underline-offset:3px}
+  .about-doc .about-close{display:block;margin:6px auto 0;min-height:44px;background:none;
+             border:none;border-bottom:1px solid rgba(179,143,111,.55);
+             color:rgba(250,248,243,.55);font-family:inherit;font-size:12px;
+             letter-spacing:0.24em;cursor:pointer;padding:12px 20px}
 
   /* 放つ（登録済み）：宙の下辺に静かな一語 */
   .cast-btn{position:fixed;left:50%;bottom:7vh;transform:translateX(-50%);z-index:11;
@@ -95,16 +117,20 @@
   .cast textarea::placeholder{color:rgba(250,248,243,.3)}
   .cast-count{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.3em;
               color:rgba(250,248,243,.4)}
-  /* 色相バー：彩度・明度はパステル域に固定し、色相だけを滑らせる（§1.1） */
-  .huebar{position:relative;width:min(70vw,300px);height:10px;border-radius:5px;cursor:pointer;
-          background:linear-gradient(90deg,
-            hsl(0,42%,74%),hsl(40,42%,74%),hsl(80,42%,74%),hsl(120,42%,74%),
-            hsl(160,42%,74%),hsl(200,42%,74%),hsl(240,42%,74%),hsl(280,42%,74%),
-            hsl(320,42%,74%),hsl(360,42%,74%));
-          opacity:.85;touch-action:none}
-  .hue-knob{position:absolute;top:50%;left:0;width:18px;height:18px;border-radius:50%;
+  /* 色｜v11.1：パステル固定をやめ、色相バー＋トーンバーの二段に戻す。
+     上＝色相（鮮やかなまま全周）、下＝淡い⇄鮮やか⇄深い。選んだ色はその場で文字にのる。 */
+  .picker{display:flex;flex-direction:column;gap:11px;align-items:center}
+  .colorbar{position:relative;width:min(70vw,300px);height:11px;border-radius:6px;cursor:pointer;
+            touch-action:none;box-shadow:inset 0 0 0 1px rgba(250,248,243,.14)}
+  .huebar{background:linear-gradient(90deg,
+            hsl(0,80%,60%),hsl(40,80%,60%),hsl(80,80%,60%),hsl(120,80%,60%),
+            hsl(160,80%,60%),hsl(200,80%,60%),hsl(240,80%,60%),hsl(280,80%,60%),
+            hsl(320,80%,60%),hsl(360,80%,60%))}
+  .tonebar{background:linear-gradient(90deg,hsl(0,22%,88%),hsl(0,80%,60%),hsl(0,62%,32%))}
+  .bar-knob{position:absolute;top:50%;left:0;width:18px;height:18px;border-radius:50%;
             transform:translate(-50%,-50%);border:1.5px solid rgba(250,248,243,.9);
-            background:transparent;pointer-events:none;transition:background .2s}
+            background:transparent;pointer-events:none;
+            box-shadow:0 0 10px rgba(0,0,0,.6);transition:background .18s}
   .cast-row{display:flex;gap:26px;align-items:baseline}
   .cast-send{background:none;border:none;border-bottom:1px solid rgba(179,143,111,.6);
              color:var(--chalk);font-family:inherit;font-size:14.5px;letter-spacing:0.4em;
@@ -126,12 +152,40 @@
              white-space:pre-wrap;outline:none}
   .read-body.h{writing-mode:horizontal-tb;max-width:22em;max-height:62vh}
   .read-note{margin:0;font-size:11.5px;line-height:2;letter-spacing:0.14em;
-             color:rgba(250,248,243,.52);text-align:center}
+             color:rgba(250,248,243,.52);text-align:center;white-space:pre-line}
   .read-close{min-height:44px;background:none;border:none;
               border-bottom:1px solid rgba(179,143,111,.55);color:rgba(250,248,243,.55);
               font-family:inherit;font-size:12px;letter-spacing:0.24em;cursor:pointer;
               padding:12px 20px;transition:color .3s,border-color .3s}
   .read-close:hover{color:var(--chalk);border-color:var(--thread)}
+  /* だれかのことばに結ぶ、静かな印（放った人には何も伝わらない） */
+  .like-mark{display:inline-flex;align-items:center;gap:9px;min-height:44px;background:none;
+             border:none;color:rgba(250,248,243,.55);font-family:inherit;font-size:12px;
+             letter-spacing:0.2em;cursor:pointer;padding:10px 4px;transition:color .3s}
+  .like-mark .dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--thread);
+                  background:transparent;transition:background .4s}
+  .like-mark.on{color:rgba(250,248,243,.85)}
+  .like-mark.on .dot{background:var(--thread)}
+  /* display指定があると[hidden]のUA既定を上書きしてしまうので明示する
+     （印は他人のことばにだけ。自分の帰ってきたことばには出さない） */
+  .like-mark[hidden]{display:none}
+
+  /* ── 宙のすみで待っている、だれかのことば（棚を畳んだので宙側へ・v11.1）──
+     数も、だれのものかも言わない。ただ「降りてきた」ことだけが灯る。 */
+  .arrivals{position:fixed;right:20px;top:52px;z-index:11;display:flex;flex-direction:column;
+            align-items:flex-end;gap:10px}
+  .arrival{display:flex;align-items:center;gap:9px;background:none;border:none;cursor:pointer;
+           font-family:inherit;font-size:12px;letter-spacing:0.14em;padding:8px 2px;
+           color:rgba(250,248,243,.62);transition:color .3s;
+           text-shadow:0 0 14px rgba(8,8,13,.95)}
+  .arrival:hover{color:var(--chalk)}
+  .arrival .seal{width:9px;height:9px;border-radius:50%;background:var(--thread);
+                 box-shadow:0 0 12px currentColor;animation:sealPulse 4.5s ease-in-out infinite}
+  /* 開封済みの控え。クラス名は .read を避ける（読む柱 .read と衝突するため） */
+  .arrival.done{color:rgba(250,248,243,.34)}
+  .arrival.done .seal{background:none;box-shadow:none;border:1px solid rgba(179,143,111,.6);animation:none}
+  @keyframes sealPulse{0%,100%{opacity:.55}50%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){ .arrival .seal{animation:none} }
 
   /* 相談窓口のしおり（宙の闇の中でも読める、静かな紙片） */
   .care-note{position:fixed;left:50%;bottom:8vh;transform:translate(-50%,8px);z-index:13;
@@ -150,27 +204,57 @@
 <body>
   <header>
     <div class="ttl">宙<span class="romaji">sky</span></div>
-    {% if logged_in %}<a class="back" href="/?app=1">棚へ</a>{% endif %}
   </header>
-  <canvas id="sky" aria-label="放たれたことばと、封じられた手紙の言葉が浮かんでいます"></canvas>
   <div class="drift-layer" id="driftLayer" aria-hidden="true"></div>
-  <ul class="sr-words" id="skyWords" aria-label="いま宙にある言葉"></ul>
+  <ul class="sr-words" id="skyWords" aria-label="いま宙にあることば"></ul>
 
   {% if not logged_in %}
+  <!-- 宙の上のほう：何が起きる場所なのかを、二行だけ。全文はその場で開く -->
+  <div class="about">
+    <p>ここは、<wbr>行き先を<wbr>決めずに<wbr>ことばを<wbr>放つ<wbr>場所です。<br>
+       だれかが<wbr>偶然<wbr>ひらくかもしれないし、<wbr>だれにも<wbr>読まれないまま<wbr>漂うかもしれない。</p>
+    <button class="about-more" id="aboutMore" type="button">この宙について</button>
+  </div>
   <!-- ランディング＝宙。眺めるのに登録は要らない。放つ時だけ、はじめる画面へ -->
   <div class="lp">
-    <p class="lp-copy">意味のない言葉を、宙へ放つ。<br>それはいつか、知らない誰かの意味になる。</p>
-    <p class="lp-copy lp-copy-sub">そしてある日、あの日のあなたの言葉が、<br>ふっと帰ってくる。</p>
+    <p class="lp-copy">意味のない<wbr>言葉を、<wbr>宙へ<wbr>放つ。<br>それは<wbr>いつか、<wbr>知らない<wbr>誰かの<wbr>意味に<wbr>なる。</p>
+    <p class="lp-copy lp-copy-sub">そして<wbr>ある日、<wbr>あの日の<wbr>あなたの<wbr>言葉が、<br>ふっと<wbr>帰ってくる。</p>
     <a class="lp-cta" href="/?start=1">ことばを放つ<span class="sub">はじめる</span></a>
   </div>
+  <div class="about-full" id="aboutFull" role="dialog" aria-modal="true"
+       aria-label="この宙について" aria-hidden="true">
+    <div class="about-doc" id="aboutDoc" tabindex="-1">
+      <h2>気分の宙について</h2>
+      <p>ここは、<wbr>行き先を<wbr>決めずに<wbr>手紙を<wbr>放つ<wbr>場所です。<br>
+         放たれた<wbr>手紙は、<wbr>宙を<wbr>漂います。<br>
+         だれかが<wbr>偶然<wbr>それを<wbr>開くかもしれないし、<br>
+         だれにも<wbr>読まれないまま<wbr>漂い続けるかもしれない。</p>
+      <p>放った<wbr>手紙が、<wbr>いつ・<wbr>だれに・<wbr>どんな意味で<wbr>届くかは、<br>
+         放った<wbr>あなたにも<wbr>分かりません。</p>
+      <p>そして<wbr>ある日、<wbr>あの日の<wbr>あなたの<wbr>手紙が、<br>
+         ふっと<wbr>メールで<wbr>帰ってきます。<br>
+         ——何月何日、<wbr>その日の<wbr>天気と、<wbr>気温と、<wbr>時刻を<wbr>添えて。</p>
+      <p>いいねは<wbr>できても、<wbr>返事は<wbr>できません。<br>
+         だれが<wbr>書いたかも、<wbr>分かりません。</p>
+      <p>ここは<wbr>共有（シェア）の<wbr>場所ではなく、<br>
+         意味のない<wbr>言葉が、<wbr>だれかの<wbr>意味に<wbr>なるための<wbr>宙です。</p>
+      <p class="contact">お問い合わせ　<a href="mailto:tayoriletter@gmail.com">tayoriletter@gmail.com</a></p>
+      <button class="about-close" id="aboutClose" type="button">とじる</button>
+    </div>
+  </div>
   {% else %}
+  <div class="arrivals" id="arrivals" aria-live="polite"></div>
   <button class="cast-btn" id="castBtn" type="button">放つ</button>
   <div class="cast" id="castPane" aria-hidden="true">
     <div class="cast-inner">
       <textarea id="castText" maxlength="80" placeholder="ことばを、宙へ。" aria-label="宙へ放つことば"></textarea>
       <div class="cast-count"><span id="castCount">0</span> / 80</div>
-      <div class="huebar" id="hueBar" role="slider" aria-label="いまの気分の色（色相）"
-           aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="hue-knob" id="hueKnob"></span></div>
+      <div class="picker">
+        <div class="colorbar huebar" id="hueBar" role="slider" aria-label="いまの気分の色（色相）"
+             aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
+        <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
+             aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
+      </div>
       <div class="cast-row">
         <button class="cast-send" id="castSend" type="button">宙 へ 放 つ</button>
         <button class="cast-close" id="castClose" type="button">とじる</button>
@@ -178,309 +262,17 @@
       <p class="cast-note">放ったことばは、匿名のまま宙を漂い、<br>いつか、知らない誰かのもとへ降ります。<br>あなた自身にも、忘れた頃に。</p>
     </div>
   </div>
-  <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="届いたたより" aria-hidden="true">
+  <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
     <div class="read-inner">
       <div class="read-body" id="readBody" tabindex="-1"></div>
       <p class="read-note" id="readNote"></p>
+      <button class="like-mark" id="readLike" type="button" aria-pressed="false" hidden>
+        <span class="dot" aria-hidden="true"></span><span class="txt">このことばに、印を結ぶ</span>
+      </button>
       <button class="read-close" id="readClose" type="button">とじる</button>
     </div>
   </div>
   {% endif %}
-
-<script>
-(function(){
-  'use strict';
-  const cv=document.getElementById('sky'), ctx=cv.getContext('2d');
-  const srList=document.getElementById('skyWords');
-  const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let W=0,H=0,DPR=1,t=0;
-
-  /* ── 重み：語が主軸 ── */
-  const WEIGHT={ tag:1.00, hue:0.25, area:0.20, season:0.15, band:0.15,
-                 until:0.10, since:0.10, weather:0.10 };
-  let WSUM=0; for(const k in WEIGHT) WSUM+=WEIGHT[k];
-  const WNORM=Math.sqrt(WSUM);
-
-  /* ── バネ ── */
-  const L_MIN=30, L_MAX=560, K_SPRING=0.0026, K_REPEL=0.055, K_CENTER=0.00018;
-
-  /* ── 動きの意味（時間の変数）── */
-  const DAMP_NEW=0.940, DAMP_OLD=0.780;         // 落ち着き＝経過
-  const ARRIVE_MIN=90,  ARRIVE_SPAN=420;        // 現れる遅さ＝開封までの距離
-  const BREATH_SLOW=0.0022, BREATH_SPAN=0.0042; // 呼吸＝残り時間（脈に見えない速さ）
-  const ENTRY_DEG={ morning:-90, noon:0, evening:180, night:90 }; // 入る方向＝時間帯
-  const FADE_OUT=90;                            // 開封された手紙の語が消えるまで（frames）
-  const MAX_WORDS=150;                          // 語の上限（step は O(n²)）
-
-  /* ── 非位置チャネル ── */
-  const SIZE_MIN=11, SIZE_MAX=30, HORIZON=400;
-  const OP_NEW=0.95, OP_OLD=0.24, FADE_SPAN=730;
-  const SAT_LOW=16, SAT_HIGH=70, LUM_NIGHT=46, LUM_MORNING=88;
-
-  const WEATHER={
-    clear:{speed:2.0,depth:0.38,blur:0.35}, cloud:{speed:0.7,depth:0.12,blur:0.9},
-    rain:{speed:1.1,depth:0.26,blur:1.9},   snow:{speed:0.42,depth:0.30,blur:1.4}
-  };
-  const WDIST={
-    clear:{clear:0,cloud:0.35,rain:0.85,snow:0.75},
-    cloud:{clear:0.35,cloud:0,rain:0.45,snow:0.50},
-    rain:{clear:0.85,cloud:0.45,rain:0,snow:0.40},
-    snow:{clear:0.75,cloud:0.50,rain:0.40,snow:0}
-  };
-  const SEASON={spring:0.62,summer:1.0,autumn:0.44,winter:0.0};
-  const SEASON_DEG={spring:90,summer:180,autumn:270,winter:0};
-  const BAND={morning:1.0,noon:0.78,evening:0.42,night:0.0};
-  const BAND_DEG={morning:90,noon:180,evening:270,night:0};
-
-  let words=[], letters=[];
-  const byId=new Map();      // 手紙id(ハッシュ) → L。60秒ごとの差分同期に使う
-  const areaPhase={};        // 同じ土地の語は一緒に息をする（場所→位相）
-  let wuid=0;                // 語の通し番号＝Dキャッシュの鍵
-  const dcache=new Map();    // "uidA:uidB" → D(i,j)。入力が不変なので毎フレーム再計算しない
-
-  function resize(){
-    DPR=Math.min(devicePixelRatio||1,2);
-    W=innerWidth;H=innerHeight;
-    cv.width=W*DPR;cv.height=H*DPR;
-    cv.style.width=W+'px';cv.style.height=H+'px';
-    ctx.setTransform(DPR,0,0,DPR,0,0);
-  }
-  addEventListener('resize',resize);
-
-  /* 前後の空白・記号を落とし、全角英数→半角・大文字→小文字。
-     かな/カナ・漢字/かなは寄せない（表記も本人の選択であるため）。 */
-  function normTag(s){
-    let x=String(s||'').trim().toLowerCase();
-    x=x.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-    return x.replace(/^[\s、。,.!?！？「」『』\-–—_#]+|[\s、。,.!?！？「」『』\-–—_#]+$/g,'');
-  }
-  function circ(a,b,p){ let d=Math.abs(a-b)%p; if(d>p/2) d=p-d; return d/(p/2); }
-  function jac(A,B){ let n=0; A.forEach(v=>{if(B.has(v))n++;}); const u=A.size+B.size-n; return u?1-n/u:1; }
-  function dTag(a,b){ if(a.tag===b.tag) return 0; if(a.L===b.L) return 0.55; return jac(a.L.set,b.L.set); }
-
-  function D(a,b){
-    const A=a.L,B=b.L; let s=0;
-    s+=WEIGHT.tag*Math.pow(dTag(a,b),2);
-    s+=WEIGHT.hue*Math.pow((A.hue==null||B.hue==null)?0.5:circ(A.hue,B.hue,360),2);
-    s+=WEIGHT.area*Math.pow(A.area===B.area?0:1,2);
-    s+=WEIGHT.season*Math.pow(circ(SEASON_DEG[A.season]||0,SEASON_DEG[B.season]||0,360),2);
-    s+=WEIGHT.band*Math.pow(circ(BAND_DEG[A.band]||0,BAND_DEG[B.band]||0,360),2);
-    s+=WEIGHT.until*Math.pow(Math.abs(A.until-B.until)/HORIZON,2);
-    s+=WEIGHT.since*Math.pow(Math.abs(A.since-B.since)/FADE_SPAN,2);
-    s+=WEIGHT.weather*Math.pow((WDIST[A.weather]||WDIST.cloud)[B.weather]||0.5,2);
-    return Math.sqrt(s)/WNORM;
-  }
-  function Dc(a,b){
-    const k=a.uid<b.uid?a.uid+':'+b.uid:b.uid+':'+a.uid;
-    let v=dcache.get(k);
-    if(v===undefined){ v=D(a,b); dcache.set(k,v); }
-    return v;
-  }
-
-  function seal(d){
-    const tags=(d.tags||[]).map(normTag).filter(Boolean).slice(0,3);
-    if(!tags.length) return;
-    if(areaPhase[d.area]===undefined) areaPhase[d.area]=Math.random()*Math.PI*2;
-
-    const until=Math.min(Math.max(0,d.daysUntilOpen||0),HORIZON);
-    const since=Math.min(Math.max(0,d.daysSinceSealed||0),FADE_SPAN);
-    const near = 1-until/HORIZON;          // 0=遠い未来 … 1=もうすぐ開く
-    const age  = since/FADE_SPAN;          // 0=封じたばかり … 1=古い
-
-    const L={
-      id:d.id, set:new Set(tags), hue:d.hue, area:d.area, season:d.season, band:d.band,
-      weather:(WEATHER[d.weather]?d.weather:'cloud'), until:until, since:since,
-      size: SIZE_MIN+near*(SIZE_MAX-SIZE_MIN),
-      op:   OP_NEW+age*(OP_OLD-OP_NEW),
-      sat:  SAT_LOW+(SEASON[d.season]??0.5)*(SAT_HIGH-SAT_LOW),
-      lum:  LUM_NIGHT+(BAND[d.band]??0.5)*(LUM_MORNING-LUM_NIGHT),
-      wx:   WEATHER[d.weather]||WEATHER.cloud,
-      aph:  areaPhase[d.area], born:t, words:[], dying:0,
-      // ── 動きの意味 ──
-      damp:   DAMP_NEW+age*(DAMP_OLD-DAMP_NEW),          // A: 古いほど止まる
-      arrive: REDUCED?90:ARRIVE_MIN+(until/HORIZON)*ARRIVE_SPAN, // B: 遠いほど遅く現れる
-      omega:  BREATH_SLOW+near*BREATH_SPAN               // C: 近いほど短い周期
-    };
-
-    // 入ってくる方向＝時間帯
-    const deg=(ENTRY_DEG[d.band]??0)*Math.PI/180;
-    const jitter=(Math.random()-0.5)*0.5;
-    const R=Math.max(W,H)*0.78;
-    const ex=W/2+Math.cos(deg+jitter)*R, ey=H/2+Math.sin(deg+jitter)*R;
-
-    tags.forEach(tag=>{
-      const w={ tag:tag, L:L, uid:wuid++, ph:Math.random()*Math.PI*2,
-        x:ex+(Math.random()-0.5)*40, y:ey+(Math.random()-0.5)*40,
-        vx:0, vy:0, born:t, hw:0 };
-      // 文字幅を生成時に確定させる（初回フレームの反発抜けを防ぐ）
-      ctx.font=`500 ${L.size.toFixed(1)}px 'Shippori Mincho',serif`;
-      w.hw=ctx.measureText(tag).width;
-      words.push(w); L.words.push(w);
-    });
-    letters.push(L);
-    byId.set(d.id,L);
-  }
-
-  // 開封された（宙から消えるべき）手紙：語をフェードアウトへ
-  function unseal(L){ if(!L.dying) L.dying=t||1; }
-
-  // フェードアウトが終わった手紙を配列から外し、Dキャッシュも無効化する
-  function cleanup(){
-    for(let i=letters.length-1;i>=0;i--){
-      const L=letters[i];
-      if(!L.dying||t-L.dying<FADE_OUT) continue;
-      L.words.forEach(w=>{
-        const idx=words.indexOf(w);
-        if(idx>=0) words.splice(idx,1);
-        for(const k of dcache.keys()){
-          const p=k.split(':');
-          if(+p[0]===w.uid||+p[1]===w.uid) dcache.delete(k);
-        }
-      });
-      letters.splice(i,1);
-      byId.delete(L.id);
-    }
-  }
-
-  function step(){
-    const n=words.length;
-    for(let i=0;i<n;i++){
-      for(let j=i+1;j<n;j++){
-        const a=words[i],b=words[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const d=Math.sqrt(dx*dx+dy*dy)||0.01;
-        const ux=dx/d, uy=dy/d;
-        const Dij=Dc(a,b);
-        const Lij=L_MIN+Dij*(L_MAX-L_MIN);
-        // 引く力のみ距離で減衰（遠いペアまで等しく引くと宙全体が団子になる）
-        const k=(d>Lij)?K_SPRING*(1-Dij*0.75):K_SPRING;
-        const f=(d-Lij)*k;
-        a.vx+=ux*f; a.vy+=uy*f; b.vx-=ux*f; b.vy-=uy*f;
-        const min=(a.hw+b.hw)*0.55+10;
-        if(d<min){
-          const r=(min-d)*K_REPEL;
-          a.vx-=ux*r; a.vy-=uy*r; b.vx+=ux*r; b.vy+=uy*r;
-        }
-      }
-    }
-    words.forEach(w=>{
-      w.vx+=(W/2-w.x)*K_CENTER; w.vy+=(H/2-w.y)*K_CENTER;
-      // 落ち着き＝経過。新しい語ほど減衰が弱く、まだ位置が定まらない
-      w.vx*=w.L.damp; w.vy*=w.L.damp;
-      w.x+=w.vx; w.y+=w.vy;
-      const m=30;
-      w.x=Math.max(m,Math.min(W-m,w.x));
-      w.y=Math.max(m,Math.min(H-m,w.y));
-    });
-  }
-
-  function fadeOf(L){
-    let f=Math.min(1,(t-L.born)/L.arrive);
-    f=f*f*(3-2*f);                                   // smoothstep
-    if(L.dying) f*=Math.max(0,1-(t-L.dying)/FADE_OUT);
-    return f;
-  }
-
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    ctx.globalCompositeOperation='lighter';
-
-    // 糸：同じ手紙から生まれた語どうし。ほぼ見えない濃度に留める
-    ctx.lineWidth=0.5;
-    letters.forEach(L=>{
-      const arr=Math.min(1,(t-L.born)/L.arrive);
-      if(arr<0.6||L.words.length<2) return;
-      const f=L.dying?Math.max(0,1-(t-L.dying)/FADE_OUT):1;
-      if(f<=0) return;
-      ctx.strokeStyle=`rgba(179,143,111,${(0.05*arr*f).toFixed(3)})`;
-      for(let i=0;i<L.words.length;i++) for(let j=i+1;j<L.words.length;j++){
-        ctx.beginPath();
-        ctx.moveTo(L.words[i].x,L.words[i].y);
-        ctx.lineTo(L.words[j].x,L.words[j].y);
-        ctx.stroke();
-      }
-    });
-
-    words.forEach(w=>{
-      const L=w.L;
-      // 現れる遅さ＝開封までの距離（開封済みはここで滲み消える）
-      const ease=fadeOf(L);
-      if(ease<=0) return;
-      // 瞬き＝天気。位相は語ごと（全語が同時に瞬かないように）
-      const tw=REDUCED?1:1-L.wx.depth*(0.5+0.5*Math.sin(t*0.018*L.wx.speed+w.ph));
-      // 呼吸＝残り時間。位相は場所で揃う
-      const breath=REDUCED?1:0.86+0.14*Math.sin(t*L.omega+L.aph);
-      const op=L.op*tw*breath*ease;
-      const size=L.size*(0.82+0.18*ease);
-      const col=(l,o)=> L.hue==null
-        ? `hsla(228,7%,${l}%,${o})`
-        : `hsla(${L.hue},${L.sat}%,${l}%,${o})`;
-
-      ctx.font=`500 ${size.toFixed(1)}px 'Shippori Mincho','Hiragino Mincho ProN',serif`;
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.shadowColor=col(L.lum,Math.min(1,op*0.85));
-      ctx.shadowBlur=size*L.wx.blur;
-      ctx.fillStyle=col(Math.min(94,L.lum+8),op);
-      ctx.fillText(w.tag,w.x,w.y);
-      ctx.shadowBlur=0;
-    });
-    ctx.globalCompositeOperation='source-over';
-  }
-
-  function loop(){ t++; cleanup(); step(); draw(); requestAnimationFrame(loop); }
-
-  /* ── 今との同期（60秒ごと・タブ復帰時）──
-     差分のみ反映する：新しい手紙は seal()、消えた手紙（開封済み）はフェードアウト。
-     全再構築はしない（位置の記憶＝宙の連続性を保つ）。 */
-  function sync(data){
-    const incoming=new Map();
-    (data.letters||[]).forEach(d=>{
-      if(d&&d.id&&(d.tags||[]).length) incoming.set(d.id,d);
-    });
-    // 語150の定員：封じてから日が浅い（新しい）手紙を優先して残す
-    let count=0; const keep=new Set();
-    [...incoming.values()]
-      .sort((a,b)=>(a.daysSinceSealed||0)-(b.daysSinceSealed||0))
-      .forEach(d=>{
-        const n=Math.min((d.tags||[]).length,3);
-        if(count+n<=MAX_WORDS){ count+=n; keep.add(d.id); }
-      });
-    byId.forEach((L,id)=>{ if(!keep.has(id)) unseal(L); });
-    keep.forEach(id=>{ if(!byId.has(id)) seal(incoming.get(id)); });
-    updateWordList();
-  }
-
-  // スクリーンリーダー向け：いま宙にある語だけ（色・位置・日付は読み上げない）
-  function updateWordList(){
-    const seen=new Set();
-    let h='';
-    letters.forEach(L=>{
-      if(L.dying) return;
-      L.words.forEach(w=>{
-        if(seen.has(w.tag)) return;
-        seen.add(w.tag);
-        h+='<li>'+w.tag.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</li>';
-      });
-    });
-    srList.innerHTML=h;
-  }
-
-  function fetchSky(){
-    fetch('/api/mood-space')
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d) sync(d); })
-      .catch(()=>{});   // 失敗しても暗闇のまま（この画面にエラーの文字は置かない）
-  }
-
-  resize();
-  loop();
-  fetchSky();
-  setInterval(fetchSky,30000);                      // 60秒＝サーバ側キャッシュと同じ周期
-  document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden) fetchSky();                // タブに戻ってきた時は待たずに今へ
-  });
-})();
-</script>
 
 <script>
 /* ══ 宙モードv2：漂うことば・放つ ══════════════════════════
@@ -492,42 +284,119 @@
   const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const layer=document.getElementById('driftLayer');
 
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  }
+  /* 気分の色を、宙で読める文字色とにじみに割る。
+     v11.1で色が濃くなったので、文字は選んだ色より一段明るく、にじみは選んだ色そのままで。 */
+  function tintOf(color){
+    const m=/hsl\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%/.exec(color||'');
+    if(m){
+      const h=+m[1],s=+m[2],l=+m[3];
+      return {text:'hsl('+h+','+Math.min(94,s+6)+'%,'+Math.min(88,l+18)+'%)',
+              glow:'hsla('+h+','+s+'%,'+l+'%,.55)', solid:'hsl('+h+','+s+'%,'+l+'%)'};
+    }
+    if(/^#[0-9a-f]{3,8}$/i.test(color||'')) return {text:color,glow:color,solid:color};  // 旧スウォッチ（HEX）
+    return null;
+  }
+
+  /* ══ タイプ再生（TypeTrace）｜v11.1で復活 ══════════════════
+     ことばは「置いてある」のではなく「いま書かれている」ものとして宙に現れる。
+     ・自分が書いたもの＝実際の打鍵スナップショット（迷いも消しも、そのまま）
+     ・他の人のことば＝本文から自然な打鍵を合成する
+       （他人の trace は配らない。消した文字＝本人が消したことばまで見えてしまうため） */
+  function normTrace(steps){
+    const out=[];let prev=0,acc=0;
+    for(const s of steps){
+      const at=+(s.t||0);
+      acc+=Math.min(Math.max(0,at-prev),900);   // 長すぎる「間」は0.9秒に丸める
+      prev=at;
+      out.push({at:acc,v:String(s.v==null?'':s.v)});
+    }
+    const total=out.length?out[out.length-1].at:0;
+    if(total>9000){const k=9000/total;out.forEach(o=>o.at*=k);}   // 全体は9秒に収める
+    return out;
+  }
+  function synthTrace(text){
+    const chars=[...String(text||'')];
+    const out=[];let acc=0,v='';
+    chars.forEach((c,i)=>{
+      let d=48+Math.random()*66;
+      if(/[、。！？…]/.test(c)) d+=240+Math.random()*260;        // 句読点のあとは息をつく
+      else if(c==='\n') d+=340+Math.random()*280;
+      else if(i&&Math.random()<0.055) d+=220+Math.random()*400;  // ふと止まる
+      acc+=d; v+=c; out.push({at:acc,v:v});
+    });
+    return out;
+  }
+  function playType(el,text,steps,done){
+    const run=(el._run=(el._run||0)+1);
+    const norm=(steps&&steps.length>1)?normTrace(steps):synthTrace(text);
+    if(REDUCED||norm.length<2){el.textContent=text;if(done)done();return;}
+    const caret='<span class="tcaret"></span>';
+    let i=0;const t0=performance.now();
+    el.innerHTML=esc(norm[0].v)+caret;
+    requestAnimationFrame(function frame(now){
+      if(el._run!==run||!el.isConnected) return;      // 閉じた・別のことばに差し替わった
+      const e=now-t0;
+      while(i<norm.length&&norm[i].at<=e){el.innerHTML=esc(norm[i].v)+caret;i++;}
+      if(i<norm.length) requestAnimationFrame(frame);
+      else{ el.textContent=text; if(done)done(); }
+    });
+  }
+
   /* ── 漂うことば ── */
+  // いま宙にあることばを、スクリーンリーダーにも同じだけ渡す
+  // （語のcanvasを畳んだので、読み上げの受け皿はこちらへ移った）
+  const srList=document.getElementById('skyWords');
+  const srLive=new Map();   // 浮かんでいる要素 → 本文
+  function srSync(){
+    let h='';
+    srLive.forEach(p=>{h+='<li>'+esc(p)+'</li>';});
+    srList.innerHTML=h;
+  }
+
   let pool=[]; const shown=new Set(), live=new Set();  // live=いま画面に浮かんでいることば（同じ一筆を同時に重ねない）
+  const MAX_LIVE=7;         // 同時に浮かべる上限（増やしすぎると宙が騒がしくなる）
+  let seeded=false;
   function fetchWords(){
     fetch('/api/sky').then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d&&d.words) pool=d.words; })
+      .then(d=>{
+        if(d&&d.words) pool=d.words;
+        // ことばが揃った瞬間から書きはじめる（暗闇のまま数秒待たせない）
+        if(!seeded&&pool.length){seeded=true;[0,1100,2500,4200,6200].forEach(ms=>setTimeout(driftOne,ms));}
+      })
       .catch(()=>{});
   }
-  function hueOf(color){
-    const m=/hsl\(\s*(\d+)/.exec(color||'');
-    return m?+m[1]:null;
-  }
-  function spawnDrift(poem,color,vertical,id){
+  function spawnDrift(poem,color,vertical,id,steps){
     if(!poem) return;
     if(id)live.add(id);
     const el=document.createElement('div');
     el.className='drift'+(vertical?' v':'');
-    el.textContent=poem;
     const x=6+Math.random()*72, y=10+Math.random()*62;
     el.style.left=x+'vw'; el.style.top=y+'vh';
-    const h=hueOf(color);
-    if(h!=null) el.style.textShadow='0 0 16px hsla('+h+',55%,72%,.5)';
-    const life=REDUCED?18000:(30000+Math.random()*24000);
-    el.style.transitionDuration='6s,'+life+'ms';
+    const c=tintOf(color);
+    if(c){ el.style.color=c.text; el.style.textShadow='0 0 18px '+c.glow; }
+    const life=REDUCED?18000:(26000+Math.random()*20000);
+    el.style.transitionDuration='1.4s,'+life+'ms';
     layer.appendChild(el);
+    srLive.set(el,poem); srSync();
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       el.classList.add('on');
       if(!REDUCED){
         const dx=(Math.random()-0.5)*90, dy=-(18+Math.random()*50);
         el.style.transform='translate('+dx+'px,'+dy+'px)';
       }
+      playType(el,poem,steps);          // ここで一字ずつ書かれていく
     }));
-    setTimeout(()=>{el.classList.remove('on');},Math.max(4000,life-6500));
-    setTimeout(()=>{el.remove();if(id)live.delete(id);},life+800);
+    setTimeout(()=>{
+      el.style.transitionDuration='5s,'+life+'ms';
+      el.classList.add('out');
+    },Math.max(6000,life-5600));
+    setTimeout(()=>{el.remove();srLive.delete(el);srSync();if(id)live.delete(id);},life+900);
   }
   function driftOne(){
-    if(!pool.length) return;
+    if(!pool.length||live.size>=MAX_LIVE) return;
     // 画面に浮かんでいる一筆は選ばない。未出のものを優先し、出尽くしたら再演を許す
     const fresh=pool.filter(w=>!live.has(w.id)&&!shown.has(w.id));
     const again=pool.filter(w=>!live.has(w.id));
@@ -537,14 +406,26 @@
     shown.add(pick.id); if(shown.size>300) shown.clear();
     spawnDrift(pick.poem,pick.color,pick.vertical,pick.id);
   }
-  // はじめの数語は早めに（ランディングが暗闇のままにならないように）、以後はゆっくり
+  // 反映の待ち時間を削る（v11.1）：取得は20秒ごと、流れ込みは4.5〜10秒ごと
   fetchWords();
-  setInterval(fetchWords,60000);
-  [2200,6500,11500].forEach(ms=>setTimeout(driftOne,ms));
+  setInterval(fetchWords,20000);
   (function tick(){
-    setTimeout(()=>{driftOne();tick();},11000+Math.random()*14000);
+    setTimeout(()=>{driftOne();tick();},4500+Math.random()*5500);
   })();
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) fetchWords(); });
+
+  /* ── この宙について（未登録の入口にだけ）── */
+  const aMore=document.getElementById('aboutMore'),aFull=document.getElementById('aboutFull');
+  if(aMore&&aFull){
+    const aDoc=document.getElementById('aboutDoc');
+    const openAbout=()=>{aFull.classList.add('on');aFull.setAttribute('aria-hidden','false');aDoc.focus();};
+    const shutAbout=()=>{aFull.classList.remove('on');aFull.setAttribute('aria-hidden','true');aMore.focus();};
+    aMore.addEventListener('click',openAbout);
+    document.getElementById('aboutClose').addEventListener('click',shutAbout);
+    aFull.addEventListener('click',e=>{if(e.target===aFull)shutAbout();});
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Escape'&&aFull.classList.contains('on'))shutAbout();});
+  }
 
   if(!LOGGED_IN) return;
 
@@ -552,25 +433,61 @@
   const pane=document.getElementById('castPane'),btn=document.getElementById('castBtn'),
         ta=document.getElementById('castText'),cnt=document.getElementById('castCount'),
         send=document.getElementById('castSend'),close=document.getElementById('castClose'),
-        bar=document.getElementById('hueBar'),knob=document.getElementById('hueKnob');
-  let H=null;  // 未選択も許す（色を選ばず放ってよい）
-  function paintKnob(){
-    if(H==null){knob.style.background='transparent';bar.removeAttribute('aria-valuenow');return;}
-    knob.style.left=(H/360*100)+'%';
-    knob.style.background='hsl('+H+', 42%, 74%)';
-    bar.setAttribute('aria-valuenow',H);
+        hueBar=document.getElementById('hueBar'),hueKnob=document.getElementById('hueKnob'),
+        toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob');
+
+  /* ── 気分の色（v12）──
+     色相 × トーン（淡い⇄鮮やか⇄深い）の二段。宙は真っ暗なので明度の下限は46%まで。
+     v12で「色をえらばない」を畳んだ：放たれたことばには必ず色がのる。
+     触らなければ既定の色（藍寄りの淡い青）のまま放たれる＝書く手は止まらない。 */
+  const H0=210, T0=0.28;      // 既定＝淡いほうへ寄せた青。宙の闇でも読める明るさ
+  let H=H0, T=T0;
+  function toneColor(h,p){
+    let s,l;
+    if(p<0.5){ const k=p/0.5;       s=24+(78-24)*k; l=88+(64-88)*k; }   // 淡い → 鮮やか
+    else{      const k=(p-0.5)/0.5; s=78+(66-78)*k; l=64+(46-64)*k; }   // 鮮やか → 深い
+    return {h:h,s:Math.round(s),l:Math.round(l)};
   }
-  function pickHue(ev){
-    const r=bar.getBoundingClientRect();
-    H=Math.round(Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width))*360)%360;
-    paintKnob();
+  const cssOf=c=>'hsl('+c.h+', '+c.s+'%, '+c.l+'%)';
+  function paint(){
+    const c=toneColor(H,T), col=cssOf(c);
+    hueKnob.style.left=(H/360*100)+'%';
+    hueKnob.style.background='hsl('+H+',80%,60%)';
+    toneKnob.style.left=(T*100)+'%';
+    toneKnob.style.background=col;
+    toneBar.style.background='linear-gradient(90deg,hsl('+H+',24%,88%),hsl('+H+',78%,64%),hsl('+H+',66%,46%))';
+    hueBar.setAttribute('aria-valuenow',H);
+    toneBar.setAttribute('aria-valuenow',Math.round(T*100));
+    // 選んだ色は、書いている文字にそのままのる（宙に放たれた後と同じ見え方に）
+    ta.style.color=col; ta.style.caretColor=col;
+    ta.style.textShadow='0 0 22px hsla('+c.h+','+c.s+'%,'+c.l+'%,.45)';
   }
-  bar.addEventListener('pointerdown',e=>{bar.setPointerCapture(e.pointerId);pickHue(e);});
-  bar.addEventListener('pointermove',e=>{if(e.buttons)pickHue(e);});
-  bar.addEventListener('keydown',e=>{
+  function wireBar(bar,onPick){
+    const pick=ev=>{
+      const r=bar.getBoundingClientRect();
+      onPick(Math.max(0,Math.min(1,(ev.clientX-r.left)/(r.width||1))));
+    };
+    bar.addEventListener('pointerdown',e=>{bar.setPointerCapture(e.pointerId);pick(e);});
+    bar.addEventListener('pointermove',e=>{if(e.buttons)pick(e);});
+  }
+  wireBar(hueBar,p=>{H=Math.round(p*360)%360;paint();});
+  wireBar(toneBar,p=>{T=p;paint();});
+  hueBar.addEventListener('keydown',e=>{
     if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();
-      H=((H==null?180:H)+(e.key==='ArrowRight'?6:-6)+360)%360;paintKnob();}});
-  ta.addEventListener('input',()=>{cnt.textContent=ta.value.length;});
+      H=(H+(e.key==='ArrowRight'?6:-6)+360)%360;paint();}});
+  toneBar.addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();
+      T=Math.max(0,Math.min(1,T+(e.key==='ArrowRight'?0.05:-0.05)));paint();}});
+  paint();   // 既定の色を最初から文字とつまみにのせておく
+
+  // 打鍵スナップショット（TypeTrace）。書いていた時の迷いごと封じて、再生に使う
+  let trace=[],traceT0=0;
+  ta.addEventListener('input',()=>{
+    cnt.textContent=ta.value.length;
+    const now=performance.now();
+    if(!trace.length)traceT0=now;
+    if(trace.length<3000)trace.push({t:Math.round(now-traceT0),v:ta.value});
+  });
   function open(){pane.classList.add('on');pane.setAttribute('aria-hidden','false');ta.focus();}
   function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');}
   btn.addEventListener('click',open);
@@ -594,36 +511,135 @@
     const poem=ta.value.replace(/\s+$/,'');
     if(!poem.trim())return;
     send.disabled=true;
+    const color=cssOf(toneColor(H,T));   // 放たれることばには必ず色がのる（v12）
+    const steps=(trace.length>1?trace.slice():null);
     try{
       const res=await fetch('/api/letters',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({mode:'sky',poem:poem,
-          seal_color:(H==null?null:'hsl('+H+', 42%, 74%)'),vertical:1})});
+        body:JSON.stringify({mode:'sky',poem:poem,seal_color:color,vertical:1,trace:steps})});
       const d=await res.json().catch(()=>null);
       if(res.ok&&d&&d.ok){
         shut();
-        // 放ったことばが、そのまま宙にのぼる（自分の目の前で一度だけ）
-        spawnDrift(poem,(H==null?null:'hsl('+H+', 42%, 74%)'),true);
-        ta.value='';cnt.textContent='0';H=null;paintKnob();
+        // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
+        spawnDrift(poem,color,true,null,steps);
+        ta.value='';cnt.textContent='0';H=H0;T=T0;trace=[];traceT0=0;paint();
+        // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
+        setTimeout(fetchWords,600);
         if(d.care)setTimeout(showCareNote,1600);
       }
     }finally{send.disabled=false;}
   });
 
-  /* ── 開く（メールの開封リンクから宙に着地したとき）──
-     棚へ降ろさず、宙の中で封をほどく。開封APIのレスポンスで初めて本文が届く。 */
+  /* ── 開く柱 ──
+     棚へ降ろさず、宙の中で封をほどく。帰ってきた自分のことばも、宙から降ってきた
+     だれかのことばも、ここでタイプ再生されながら立ち上がる。
+     v12：文言だけ出し分ける。だれかのことばは宙にずっと在るが、自分のことばは
+     帰ってきたその時しか読めない——だから「あの日の、あなたのことば」と名指す。 */
+  const rp=document.getElementById('readPane'),rb=document.getElementById('readBody'),
+        rn=document.getElementById('readNote'),rc=document.getElementById('readClose'),
+        rl=document.getElementById('readLike');
+  let readDid=null;
+  function shutRead(){
+    rp.classList.remove('on');rp.setAttribute('aria-hidden','true');
+    rb._run=(rb._run||0)+1;      // 再生中なら止める
+    readDid=null;
+    if(location.search.indexOf('open=')>=0) history.replaceState(null,'','/mood');
+  }
+  rc.addEventListener('click',shutRead);
+  rp.addEventListener('click',e=>{if(e.target===rp)shutRead();});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&rp.classList.contains('on'))shutRead();});
+  function setLike(on){
+    rl.classList.toggle('on',!!on);
+    rl.setAttribute('aria-pressed',on?'true':'false');
+    rl.querySelector('.txt').textContent=on?'印を結びました':'このことばに、印を結ぶ';
+  }
+  rl.addEventListener('click',async()=>{
+    if(!readDid)return;
+    const on=!rl.classList.contains('on');
+    setLike(on);
+    try{
+      const r=await fetch('/api/sky/'+readDid+'/like',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({on:on})});
+      const d=await r.json().catch(()=>null);
+      if(!(r.ok&&d&&d.ok))setLike(!on);
+      else{const A=arrivals.find(x=>String(x.did)===String(readDid));if(A)A.liked=on;}
+    }catch(e){setLike(!on);}
+  });
+  function showRead(o){
+    readDid=o.did||null;
+    rb.classList.toggle('h',!o.vertical);
+    rb.textContent='';
+    rn.textContent=o.note||'';
+    // 印は他人のことばにだけ（did がある＝降ってきたことば）
+    rl.hidden=!o.did;
+    rp.setAttribute('aria-label',o.mine?'あの日の、あなたのことば':'降りてきたことば');
+    if(o.did)setLike(!!o.liked);
+    const c=tintOf(o.color);
+    rb.style.color=c?c.text:'';
+    rp.classList.add('on');rp.setAttribute('aria-hidden','false');
+    rb.focus();
+    playType(rb,o.poem||'',o.steps);
+  }
+  function showReadError(msg){
+    readDid=null;rl.hidden=true;
+    rb.classList.add('h');rb.style.color='';rb._run=(rb._run||0)+1;
+    rb.textContent=msg;rn.textContent='';
+    rp.classList.add('on');rp.setAttribute('aria-hidden','false');rb.focus();
+  }
+
+  /* ── 宙のすみで待っている、だれかのことば（旧・受信の棚）──
+     数も、だれのものかも言わない。降りてきたことだけが、そこに灯る。 */
+  const arrBox=document.getElementById('arrivals');
+  let arrivals=[];
+  function renderArrivals(){
+    arrBox.innerHTML='';
+    // 未開封を先に。多すぎても宙が掲示板にならないよう4つまで
+    const list=arrivals.slice().sort((a,b)=>(a.opened?1:0)-(b.opened?1:0)).slice(0,4);
+    list.forEach(A=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='arrival'+(A.opened?' done':'');
+      b.innerHTML='<span class="seal" aria-hidden="true"></span><span>'+
+        (A.opened?'もう一度、開く':'ことばが、降りてきました')+'</span>';
+      const c=tintOf(A.color);
+      if(c&&!A.opened)b.querySelector('.seal').style.background=c.solid;
+      b.addEventListener('click',()=>openArrival(A));
+      arrBox.appendChild(b);
+    });
+  }
+  function fetchArrivals(){
+    fetch('/api/sky/arrivals').then(r=>r.ok?r.json():null)
+      .then(d=>{if(d&&d.arrivals){arrivals=d.arrivals;renderArrivals();}})
+      .catch(()=>{});
+  }
+  const ANON_NOTE='だれの、いつのことばかは、だれにもわかりません。';
+  async function openArrival(A){
+    if(A.opened){
+      showRead({poem:A.poem,vertical:A.vertical,color:A.color,note:ANON_NOTE,
+                did:A.did,liked:A.liked});
+      return;
+    }
+    try{
+      const res=await fetch('/api/sky/'+A.did+'/open',
+        {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      const d=await res.json().catch(()=>null);
+      if(res.ok&&d&&d.ok){
+        A.opened=true;A.poem=d.poem;A.vertical=d.vertical;A.liked=d.liked;A.color=d.color;
+        renderArrivals();
+        showRead({poem:d.poem,vertical:d.vertical,color:d.color,note:ANON_NOTE,
+                  did:A.did,liked:d.liked});
+      }else{
+        showReadError((d&&d.error)||'そのことばは開けませんでした。');
+      }
+    }catch(e){ showReadError('そのことばは開けませんでした。'); }
+  }
+  fetchArrivals();
+  setInterval(fetchArrivals,90000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) fetchArrivals(); });
+
+  /* ── 開く（メールの開封リンクから宙に着地したとき）── */
   const OPEN_ID="{{ open_letter_id|default('') }}";
   if(OPEN_ID){
-    const rp=document.getElementById('readPane'),rb=document.getElementById('readBody'),
-          rn=document.getElementById('readNote'),rc=document.getElementById('readClose');
-    const shutRead=()=>{
-      rp.classList.remove('on');rp.setAttribute('aria-hidden','true');
-      history.replaceState(null,'','/mood');   // 再読み込みで二度開かないように
-    };
-    rc.addEventListener('click',shutRead);
-    rp.addEventListener('click',e=>{if(e.target===rp)shutRead();});
-    document.addEventListener('keydown',e=>{
-      if(e.key==='Escape'&&rp.classList.contains('on'))shutRead();});
     (async()=>{
       try{
         const res=await fetch('/api/letters/'+OPEN_ID+'/open',
@@ -631,23 +647,21 @@
         const d=await res.json().catch(()=>null);
         if(res.ok&&d&&d.ok){
           const L=d.letter||{};
-          rb.classList.toggle('h',!L.vertical);
-          rb.textContent=L.poem||'';
+          // 自分のことばだけは、打鍵そのものを再生できる（迷いも、書き直しも）
+          let steps=null;
+          try{
+            const t=await fetch('/api/letters/'+OPEN_ID+'/trace').then(r=>r.ok?r.json():null);
+            if(t&&Array.isArray(t.trace))steps=t.trace;
+          }catch(e){}
           // 日付は機械の刻印ではなく、そっと添える一行に（ISOのままは出さない）
           const p=String(L.sent_date||'').slice(0,10).split('-');
-          rn.textContent=p.length===3?('封をした日　'+p[0]+'年'+(+p[1])+'月'+(+p[2])+'日'):'';
+          const day=p.length===3?('封をした日　'+p[0]+'年'+(+p[1])+'月'+(+p[2])+'日'):'';
+          showRead({poem:L.poem||'',vertical:L.vertical,color:L.seal_color,steps:steps,
+                    mine:true,note:'あの日の、あなたのことば'+(day?'\n'+day:'')});
         }else{
-          rb.classList.add('h');
-          rb.textContent=(d&&d.error)||'そのたよりは開けませんでした。';
-          rn.textContent='';
+          showReadError((d&&d.error)||'そのたよりは開けませんでした。');
         }
-      }catch(e){
-        rb.classList.add('h');
-        rb.textContent='そのたよりは開けませんでした。';
-        rn.textContent='';
-      }
-      rp.classList.add('on');rp.setAttribute('aria-hidden','false');
-      rb.focus();
+      }catch(e){ showReadError('そのたよりは開けませんでした。'); }
     })();
   }
 })();
