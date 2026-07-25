@@ -570,6 +570,16 @@ def init_db():
             "ALTER TABLE users ADD COLUMN aggregate_opt_out INTEGER DEFAULT 0",
             # 気分の地図のリリース告知（事後同意）。一度出したらこの時刻を立てて再表示しない。
             "ALTER TABLE users ADD COLUMN night_map_notice_seen_at TEXT",
+            # 宙モード（2026-07-25）。mode='sky' は宛先も日時も選ばず「宙へ放った」ことば。
+            # 降ってくる日時（arrive_at）はサーバが3日〜1年の対数乱数で内部生成し、本人には一切見せない
+            # （sealed_meta からも落とす）。mode='letter'（既定）は従来の「未来の自分へ」。
+            "ALTER TABLE letters ADD COLUMN mode TEXT DEFAULT 'letter'",
+            # 降ってきたことばへの静かな印（いいね）。受け手（＝この手紙の持ち主）の記録としてだけ持ち、
+            # 集計もランキングも通知もしない。NULL=印なし / ISO日時=印を結んだ時。
+            "ALTER TABLE letters ADD COLUMN liked_at TEXT",
+            # 未来の自分への帰還（2026-07-25 全面刷新）。ことばは一度きりでなく、
+            # 帰るたびに数え、上限（TAYORI_SKY_RETURN_MAX）までまた宙へ戻る。
+            "ALTER TABLE letters ADD COLUMN returned_count INTEGER DEFAULT 0",
         ):
             try:
                 db.execute(stmt)
@@ -603,6 +613,25 @@ def init_db():
         # grid_id バックフィル: 丸めは Python の compute_grid_id と完全一致させる必要がある
         # （SQLite の CAST(ROUND(x,1) AS TEXT) は "33.600000000000001" 等の桁化けを起こすため使わない）。
         _backfill_grid_ids(db)
+
+        # ── 宙の配達（2026-07-25 宙モードv2）─────────────────────────
+        # 放たれたことばは、自分にいつか降る（letters.arrive_at）のに加えて、他のだれか一人にも届く。
+        # その配達だけをこのテーブルに持ち、作者側の letters には何も書き戻さない
+        # （届いたか・開かれたか・印を結ばれたかを、作者は一切知れないという1.5の担保）。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS sky_deliveries (
+                id         TEXT PRIMARY KEY,
+                letter_id  TEXT NOT NULL,
+                recipient  TEXT NOT NULL,
+                deliver_at TEXT NOT NULL,
+                opened_at  TEXT,
+                liked_at   TEXT,
+                notified   INTEGER DEFAULT 0,
+                notify_attempts INTEGER DEFAULT 0,
+                notify_failed   INTEGER DEFAULT 0,
+                created    TEXT NOT NULL,
+                UNIQUE(letter_id, recipient)
+            )""")
 
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
@@ -1005,13 +1034,23 @@ def index():
     u = current_user()
     if u and u["username"] == "admin":
         return redirect("/admin.welcometotayori")
+    # ホーム＝宙（2026-07-25 全面刷新）。登録の有無にかかわらず、開くとまず宙が広がる。
+    # ?start=1 は宙の「はじめる」から来た人（ログイン/登録画面）、?app=1 は宙から
+    # 「棚」へ降りてきた人（帰還したことばを開く・設定などの機能画面）。
+    if not (request.args.get("start") or request.args.get("app")):
+        return redirect("/mood")
     return render_template("index.html", open_letter_id="")
 
 @app.route("/open/<lid>")
 def open_letter_page(lid):
     safe = lid if re.fullmatch(r"[A-Za-z0-9]{1,32}", lid or "") else ""
-    # 手紙の中身はユーザーの内面そのもの。検索には絶対に載せない。
-    return render_template("index.html", open_letter_id=safe, robots="noindex,nofollow")
+    # 開封は宙の中で行う（2026-07-25）。棚（index）には降ろさない。
+    # 未ログインなら、ログインのあとで同じたよりへ戻れるよう控えだけ session に置いて門へ送る。
+    if not session.get("uid"):
+        if safe:
+            session["pending_open"] = safe
+        return redirect("/?start=1")
+    return redirect("/mood?open=" + safe if safe else "/mood")
 
 @app.route("/terms")
 def terms_page():
@@ -1380,8 +1419,85 @@ def api_night_map_notice_seen():
     return jsonify(ok=True)
 
 
+def _is_sky(row):
+    """宙へ放たれたことばか（mode='sky'）。mode 列が無い旧行・NULL は従来の手紙として扱う。"""
+    keys = row.keys() if hasattr(row, "keys") else []
+    return "mode" in keys and row["mode"] == "sky"
+
+
+def _env_num(name, default, lo, hi, cast=float):
+    """帰還・配布まわりの調整値。頻度は通知疲れと忘却の間の綱引きなので、
+    デプロイ後も環境変数だけで動かせるようにしておく（仕様書§4.4・§8）。"""
+    try:
+        v = cast(os.environ.get(name, ""))
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, v))
+
+
+# 未来の自分への帰還（§4）：最短〜最長と、同じことばが帰ってこられる回数。
+SKY_RETURN_MIN_DAYS = _env_num("TAYORI_SKY_RETURN_MIN_DAYS", 3.0, 0.01, 3650.0)
+SKY_RETURN_MAX_DAYS = _env_num("TAYORI_SKY_RETURN_MAX_DAYS", 365.0, SKY_RETURN_MIN_DAYS, 3650.0)
+SKY_RETURN_MAX = _env_num("TAYORI_SKY_RETURN_MAX", 3, 1, 100, cast=int)
+# 宙への配布（§5.3）：ひとつのことばを何人の他者へ届けるか。初期はユーザーが少なく
+# 「誰にも届かないまま滞留」しやすいので、増やす側に倒せるようにしておく。
+SKY_FANOUT = _env_num("TAYORI_SKY_FANOUT", 1, 1, 20, cast=int)
+
+
+def _sky_arrive_at(now=None):
+    """宙に放ったことばが降ってくる日時。最短〜最長（既定3日〜1年）の対数一様乱数
+    （近い方寄り：中央値およそ1ヶ月、数日〜数週間が多く、たまに半年・1年後にふと降る）。
+    この値は本人に一切見せない内部パラメータ。レスポンスにも封印カードにも出さない。"""
+    now = now or datetime.now()
+    days = SKY_RETURN_MIN_DAYS * ((SKY_RETURN_MAX_DAYS / SKY_RETURN_MIN_DAYS) ** random.random())
+    # 降る時刻も日常の中に散らす（7時〜22時）。深夜に通知メールが鳴らないように。
+    at = now + timedelta(days=days)
+    return at.replace(hour=random.randint(7, 22), minute=random.randint(0, 59),
+                      second=0, microsecond=0)
+
+
+# 放つ時だけ通す最小限のキーワード照合。結果は配布経路…ではなく「相談窓口の一文を添えるか」
+# だけに使い、判定も本文もどこにも記録・保存・学習しない（AIにも読ませない）。
+_CARE_PATTERNS = (
+    "死にたい", "死のう", "死にたく", "死んでしまいたい", "自殺",
+    "消えたい", "消えてしまいたい", "いなくなりたい",
+    "リストカット", "リスカ", "生きていたくない", "生きるのがつらい", "生きるのが辛い",
+)
+
+
+def _needs_care(poem):
+    t = (poem or "").strip()
+    return bool(t) and any(p in t for p in _CARE_PATTERNS)
+
+
+def _assign_sky_delivery(db, letter_id, author_id):
+    """放たれたことばを、他のだれかへ（SKY_FANOUT 人まで・既定1人）。受け手も降る日時も
+    乱数で決め、作者には何も返さない（作者側の letters には書き戻さない＝届いたか・
+    開かれたかを作者は一切知れない）。相手がいない（利用者が一人だけの）時は静かに諦める。
+    admin・demo には配らない（システム用アカウントに落ちたことばは誰にも読まれないまま消えるため）。"""
+    recs = db.execute(
+        "SELECT id FROM users WHERE id<>? AND username NOT IN ('admin','demo') "
+        "ORDER BY RANDOM() LIMIT ?",
+        (author_id, SKY_FANOUT)).fetchall()
+    if not recs:
+        return
+    with _WRITE_LOCK:
+        for rec in recs:
+            db.execute(
+                "INSERT OR IGNORE INTO sky_deliveries (id, letter_id, recipient, deliver_at, created)"
+                " VALUES (?,?,?,?,?)",
+                (secrets.token_hex(8), letter_id, rec["id"],
+                 _sky_arrive_at().isoformat(timespec="seconds"),
+                 datetime.now().isoformat(timespec="seconds")))
+        db.commit()
+
+
 def _is_arrived(row):
     keys = row.keys() if hasattr(row, "keys") else []
+    # 一度開封されたことばは、永遠に「到着済み」。複数回帰還（returned_count）で
+    # arrive_at が未来へ再抽選されても、本人の棚から封の中へ戻したりはしない。
+    if _letter_opened(row):
+        return True
     # デモ手紙の上書き開封日時は天気待ちより優先（デモ操作で自由に開けられるようにするため）
     if "demo_mode" in keys and row["demo_mode"] and row["demo_arrive_at"]:
         return datetime.fromisoformat(row["demo_arrive_at"]) <= datetime.now()
@@ -1416,6 +1532,8 @@ def letter_to_dict(row, include_thread=True):
     d["from_reply"] = bool(d["from_reply"])
     d["vertical"] = bool(d.get("vertical"))  # 縦書きで封入された手紙
     d["demo_mode"] = bool(d.get("demo_mode"))  # デモ用（開封予定日時を自由に動かせる）
+    d["sky"] = _is_sky(row)                  # 宙へ放たれたことば
+    d["liked"] = bool(d.get("liked_at"))     # 降ってきたことばに結んだ静かな印
     d["arrived"] = _is_arrived(row)
     
     if d.get("seal_env"): d["seal_env"] = json.loads(d["seal_env"])
@@ -1481,6 +1599,7 @@ def openable_meta(row):
         "demo_arrive_at": row["demo_arrive_at"] if "demo_arrive_at" in keys else None,
         "has_photo": bool(row["photo"]),
         "has_voice": bool(row["voice"]),
+        "sky": _is_sky(row),
     }
     m.update(_sealed_card_fields(row))
     return m
@@ -1511,6 +1630,14 @@ def sealed_meta(row):
     }
     # 封印カード（§3-1）の表示情報：投函日・場所・時間帯・天気・気分の色・「◯字を封じた」＋墨の塊
     out.update(_sealed_card_fields(row))
+    # 宙へ放たれたことばは「放ちっぱなし」。いつ降るかの手がかり（残り時間・予定日時）を
+    # ネットワークに一切流さない。放った日と気配だけがカードに残る。
+    if _is_sky(row):
+        out.update(sky=True, seconds_left=None, arrive_at=None,
+                   arrive_date=None, arrive_label="", arrive_hidden=True,
+                   waiting_weather=False)
+    else:
+        out["sky"] = False
     return out
 
 def _smtp_config():
@@ -1829,13 +1956,47 @@ def _check_weather_events():
         db.close()
 
 
+_JP_WEEKDAYS = ("月", "火", "水", "木", "金", "土", "日")
+
+
+def _sky_return_record(sent_iso, seal_env_json):
+    """帰還メール（§4.2）に添える「あの日の記録」。日付・曜日・天気・気温・時刻を
+    静かな2行にする。記録が欠けている項目は黙って落とす（無い事を説明しない）。"""
+    lines = []
+    try:
+        dt = datetime.fromisoformat(sent_iso)
+        lines.append(f"  {dt.year}年{dt.month}月{dt.day}日  {_JP_WEEKDAYS[dt.weekday()]}曜日")
+        clock = f"時刻：{dt.hour:02d}:{dt.minute:02d}"
+    except (TypeError, ValueError):
+        clock = ""
+    env = None
+    try:
+        env = json.loads(seal_env_json) if seal_env_json else None
+    except (TypeError, ValueError):
+        pass
+    parts = []
+    if isinstance(env, dict):
+        cond = _WX_JP.get(env.get("condition"))
+        if cond:
+            parts.append(f"天気：{cond}")
+        if env.get("temp") is not None:
+            parts.append(f"気温：{round(env['temp'])}℃")
+    if clock:
+        parts.append(clock)
+    if parts:
+        lines.append("  " + "　".join(parts))
+    return ("\n".join(lines) + "\n") if lines else ""
+
+
 def _check_and_notify():
     db = _connect()
     try:
         now = datetime.now()
         rows = db.execute(
             """SELECT l.id AS lid, l.arrive_at, l.arrive_date, l.arrive_label,
-                      l.weather_event AS wevent, l.weather_met_at AS wmet,
+                      l.weather_event AS wevent, l.weather_met_at AS wmet, l.mode AS mode,
+                      l.poem AS poem, l.sent_date AS sent_date, l.seal_env AS seal_env,
+                      COALESCE(l.returned_count,0) AS returned,
                       COALESCE(l.notify_attempts,0) AS attempts,
                       u.email AS email, u.username AS username, u.unsub_token AS unsub
                FROM letters l JOIN users u ON u.id = l.user_id
@@ -1863,19 +2024,56 @@ def _check_and_notify():
                     continue
             open_url = f"{BASE_URL}/open/{r['lid']}"
             unsub_url = f"{BASE_URL}/unsubscribe/{r['unsub']}" if r["unsub"] else None
-            subject = "たより — 便りが、届きました"
-            body = (
-                f"{r['username']} さんへ。\n"
-                "過去のあなたが封をしたたよりが、いま届きました。\n"
-                "封の中身は、まだあなたも見ていません。\n"
-                "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
-                f"{open_url}\n\n"
-                "tayori ーたより\n"
-                + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
-            )
+            if r["mode"] == "sky" and (r["poem"] or "").strip():
+                # 帰還（§4.2）：メールそのものが「あの日」の追体験になる。
+                # 本文と、放った日の記録（日付・曜日・天気・気温・時刻）を静かに並べる。
+                subject = "たより — 宙から、あなたのことばが帰ってきました"
+                body = (
+                    f"{r['username']} さんへ。\n"
+                    "あの日、あなたはこう書いていました。\n\n"
+                    f"  ── {r['poem']} ──\n\n"
+                    f"{_sky_return_record(r['sent_date'], r['seal_env'])}"
+                    f"\nもう一度ひらくには:\n{open_url}\n\n"
+                    "tayori ーたより\n"
+                    + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
+                )
+            elif r["mode"] == "sky":
+                # 写真・声だけのことば：本文が無いので、開封のリンクだけをそっと置く
+                subject = "たより — 宙から、ことばが降りてきました"
+                body = (
+                    f"{r['username']} さんへ。\n"
+                    "いつかのあなたが宙へ放ったものが、いま降りてきました。\n"
+                    "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
+                    f"{open_url}\n\n"
+                    "tayori ーたより\n"
+                    + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
+                )
+            else:
+                subject = "たより — 便りが、届きました"
+                body = (
+                    f"{r['username']} さんへ。\n"
+                    "過去のあなたが封をしたたよりが、いま届きました。\n"
+                    "封の中身は、まだあなたも見ていません。\n"
+                    "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
+                    f"{open_url}\n\n"
+                    "tayori ーたより\n"
+                    + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
+                )
             if send_email(r["email"], subject, body, unsubscribe_url=unsub_url):
+                returned = r["returned"] + 1
                 with _WRITE_LOCK:
-                    db.execute("UPDATE letters SET notified=1 WHERE id=?", (r["lid"],))
+                    if r["mode"] == "sky" and returned < SKY_RETURN_MAX:
+                        # ことばはまた宙へ戻り、いつかもう一度ふと帰ってくる（§4.4）。
+                        # 次に降る日時もサーバの乱数だけが知っている。
+                        nxt = _sky_arrive_at()
+                        db.execute(
+                            "UPDATE letters SET returned_count=?, arrive_at=?, arrive_date=?,"
+                            " notify_attempts=0 WHERE id=?",
+                            (returned, nxt.isoformat(timespec="seconds"),
+                             nxt.date().isoformat(), r["lid"]))
+                    else:
+                        db.execute("UPDATE letters SET notified=1, returned_count=? WHERE id=?",
+                                   (returned, r["lid"]))
                     db.commit()
             else:
                 attempts = r["attempts"] + 1
@@ -1886,6 +2084,49 @@ def _check_and_notify():
                     db.commit()
                 if failed:
                     print(f"[通知あきらめ] 便り {r['lid']} は {attempts} 回失敗したため停止しました")
+
+        # ── 宙からの配達（だれかのことば）── letters と同じ流儀・同じ再試行規律。
+        # メールに開封リンクは載せない（配達IDをURLに出さない）——受信の棚で待っている、とだけ。
+        srows = db.execute(
+            """SELECT d.id AS did, d.deliver_at,
+                      COALESCE(d.notify_attempts,0) AS attempts,
+                      u.email AS email, u.username AS username, u.unsub_token AS unsub
+               FROM sky_deliveries d JOIN users u ON u.id = d.recipient
+               WHERE COALESCE(d.notified,0)=0
+                 AND COALESCE(d.notify_failed,0)=0
+                 AND u.email IS NOT NULL AND u.email<>''
+                 AND COALESCE(u.email_verified,0)=1
+                 AND COALESCE(u.notify_enabled,1)=1""").fetchall()
+        for r in srows:
+            try:
+                if datetime.fromisoformat(r["deliver_at"]) > now:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            unsub_url = f"{BASE_URL}/unsubscribe/{r['unsub']}" if r["unsub"] else None
+            subject = "たより — 宙から、だれかのことばが届きました"
+            body = (
+                f"{r['username']} さんへ。\n"
+                "知らないだれかが宙へ放ったことばが、あなたのもとへ降りてきました。\n"
+                "だれの、いつのことばかは、だれにもわかりません。\n"
+                "受信の棚で、封蝋がそっと待っています。\n"
+                f"{BASE_URL}/?app=1\n\n"
+                "tayori ーたより\n"
+                + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
+            )
+            if send_email(r["email"], subject, body, unsubscribe_url=unsub_url):
+                with _WRITE_LOCK:
+                    db.execute("UPDATE sky_deliveries SET notified=1 WHERE id=?", (r["did"],))
+                    db.commit()
+            else:
+                attempts = r["attempts"] + 1
+                failed = 1 if attempts >= MAX_NOTIFY_ATTEMPTS else 0
+                with _WRITE_LOCK:
+                    db.execute("UPDATE sky_deliveries SET notify_attempts=?, notify_failed=? WHERE id=?",
+                               (attempts, failed, r["did"]))
+                    db.commit()
+                if failed:
+                    print(f"[通知あきらめ] 宙の配達 {r['did']} は {attempts} 回失敗したため停止しました")
     except Exception as e:
         print(f"[通知チェックでエラー] {e}")
     finally:
@@ -2264,10 +2505,15 @@ def _mood_index(color):
 
 @app.route("/mood")
 def mood_page():
-    guard = _page_login_guard()
-    if guard:
-        return guard
-    return render_template("mood.html")
+    # 宙は誰でも見られる（ランディング）。「放つ」だけがログインの向こう側にある。
+    logged_in = bool(session.get("uid"))
+    # メールの開封リンクから来た人。未ログインで門へ回されていた場合は控えを拾い直す。
+    open_id = request.args.get("open") or ""
+    if logged_in and not open_id:
+        open_id = session.pop("pending_open", "") or ""
+    if not re.fullmatch(r"[A-Za-z0-9]{1,32}", open_id):
+        open_id = ""
+    return render_template("mood.html", logged_in=logged_in, open_letter_id=open_id)
 
 
 # v7 の語の材料。1〜3語のタグ・8変数のメタデータを手紙単位で返す。
@@ -2509,6 +2755,47 @@ def api_mood_space():
     return jsonify(letters=letters)
 
 
+# ── 宙を漂うことば（公開・匿名）────────────────────────────────
+# 放たれた本文テキストそのものを、未登録の訪問者にも見せる（2026-07-25 宙モードv2で
+# 「宙に放ったことばに限り」本文のサーバ側秘匿を解除。letter モードの秘匿は不変）。
+# 書き手を指す一切（ID・名前・場所・正確な日時・写真・声）は載せない。
+# ケアのシグナルを含むことばは保存時に宙へ入れない上、ここでも読み出し時に再フィルタする（二重防御）。
+_SKY_CACHE_SECONDS = 60
+# 宙の表示密度（§1.2【A】）：一度に漂わせる他者のことばの上限。世界の見え方を
+# 決める変数なので、デプロイ後も環境変数で詰められるようにしておく。
+_SKY_MAX = _env_num("TAYORI_SKY_MAX", 40, 1, 500, cast=int)
+_sky_lock = threading.Lock()
+_sky_cache = {"t": 0.0, "words": []}
+
+
+@app.route("/api/sky")
+def api_sky():
+    now = time.time()
+    with _sky_lock:
+        if now - _sky_cache["t"] < _SKY_CACHE_SECONDS:
+            return jsonify(words=_sky_cache["words"])
+    rows = get_db().execute(
+        "SELECT id, poem, seal_color, vertical FROM letters "
+        "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>''").fetchall()
+    pool = []
+    for r in rows:
+        if _needs_care(r["poem"]):
+            continue
+        pool.append({
+            "id": hashlib.sha256(("sky:" + r["id"]).encode()).hexdigest()[:12],
+            "poem": r["poem"],
+            "color": r["seal_color"],
+            "vertical": bool(r["vertical"]),
+        })
+    if len(pool) > _SKY_MAX:
+        pool = random.sample(pool, _SKY_MAX)
+    random.shuffle(pool)
+    with _sky_lock:
+        _sky_cache["t"] = time.time()
+        _sky_cache["words"] = pool
+    return jsonify(words=pool)
+
+
 # ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
 # Postgres なら MATERIALIZED VIEW + REFRESH だが、たよりは SQLite なので普通のテーブルを
 # 日次で作り直す（maintenance_loop から呼ぶ）。個票・本文・ID・生座標には一切触れない。
@@ -2582,7 +2869,29 @@ def api_letters():
             t = t or (d.get("sent_date") or "")
         return (1 if new else 0, t)
     received.sort(key=_sort_key, reverse=True)
-    return jsonify(received=received, in_transit=in_transit)
+
+    # 宙からの配達（他のだれかのことば）。降る日時が来たものだけを返す——
+    # まだ降っていない配達は存在ごと伏せる（受け手は「いつか届くかもしれない」以上を知れない）。
+    # 本文は開封済みの再訪時のみ同梱（初回の本文配信は開封APIのレスポンス）。
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    arr_rows = get_db().execute(
+        "SELECT d.id AS did, d.deliver_at, d.opened_at, d.liked_at,"
+        "       l.poem, l.seal_color, l.vertical"
+        "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
+        " WHERE d.recipient=? AND d.deliver_at<=? ORDER BY d.deliver_at DESC",
+        (uid(), now_iso)).fetchall()
+    sky_arrivals = []
+    for r in arr_rows:
+        a = {"did": r["did"],
+             "opened": bool(r["opened_at"]),
+             "liked": bool(r["liked_at"]),
+             "char_count": len(r["poem"] or ""),
+             "color": r["seal_color"],
+             "vertical": bool(r["vertical"])}
+        if r["opened_at"]:
+            a["poem"] = r["poem"]
+        sky_arrivals.append(a)
+    return jsonify(received=received, in_transit=in_transit, sky_arrivals=sky_arrivals)
 
 
 @app.route("/api/letters", methods=["POST"])
@@ -2604,16 +2913,21 @@ def api_create_letter():
     if voice and len(voice) > 5_500_000:
         return jsonify(error="音声が長すぎます。短く録り直してください。"), 413
     
-    arrive_at = data.get("arrive_at")
-    try:
-        dt = datetime.fromisoformat(arrive_at)
-        arrive_date = dt.date().isoformat()
-    except (TypeError, ValueError):
-        return jsonify(error="届く日時が正しくありません。"), 400
-
-    weather_event = data.get("weather_event")
-    if not weather_event and dt <= datetime.now() - timedelta(minutes=1):
-        return jsonify(error="届く日時は今より後にしてください。"), 400
+    # 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も受け取らない
+    # （クライアントが arrive_at 等を送ってきても無視する）。降ってくる日時は
+    # サーバの乱数だけが知っている（レスポンスにも返さない）。
+    #
+    # セーフティ分岐（§3）：ケアのシグナルを検知したことばは「宙に流さない」＝
+    # mode を letter に落として本人にだけ置く。しんどい日のことばが後日メールで
+    # 不意に帰ってくるのは危ういので、帰還の対象からも外す（notified=1 で先に閉じる）。
+    # その場で棚に置かれ、いつでも読み返せる（書いて安心する用途に留める）。
+    # 判定フラグは持たない——mode がふつうの手紙と同じ値になるだけで、痕跡は残らない。
+    care = _needs_care(poem)
+    mode = "letter" if care else "sky"
+    dt = datetime.now() if care else _sky_arrive_at()
+    arrive_at = dt.isoformat(timespec="seconds")
+    arrive_date = dt.date().isoformat()
+    weather_event = None
 
     lid = secrets.token_hex(8)
     seal_env = json.dumps(data.get("seal_env")) if data.get("seal_env") else None
@@ -2666,14 +2980,15 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
-             data.get("arrive_label", ""), 1 if data.get("arrive_hidden") else 0,
+             "", 1,
+             1 if care else 0,   # ケアのことばは帰還メールを閉じた状態で置く（§3.4）
              emos_json,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
              seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
-             grid_id, excluded),
+             grid_id, excluded, mode),
         )
         db.commit()
     # 開封のお知らせメールは認証済みアドレスにしか送られない（_check_and_notify の条件と対）。
@@ -2684,7 +2999,13 @@ def api_create_letter():
         notify_reason = "none"
     elif not u["verified"]:
         notify_reason = "pending"
-    return jsonify(id=lid, ok=True, notify_off=bool(notify_reason), notify_reason=notify_reason)
+    # 宙に入ったことば（ケア分岐で letter に落ちたものは除く）は、他のだれか一人へも配る。
+    # 写真・声だけのことばは配らない（他人に渡るのはテキストだけ＝写り込み等の身元漏れを防ぐ）。
+    if mode == "sky" and poem:
+        _assign_sky_delivery(db, lid, uid())
+    # care は相談窓口の一文を本人にだけ添えるための、その場かぎりのフラグ。どこにも保存しない。
+    return jsonify(id=lid, ok=True, notify_off=bool(notify_reason), notify_reason=notify_reason,
+                   care=care)
 
 
 # ── デモ用：開封予定日時の上書き ─────────────────────────────────
@@ -2720,9 +3041,9 @@ def api_demo_arrive(lid):
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  10問アンケート → 未来への手紙（HTMXの並行フロー）
-#  /letter/new → /letter/<id>/answer（hx-swap-oobで手紙プレビューと次の質問を同時差し替え）→ /letter/<id>/seal
-#  既存の投函SPA（letters テーブル）とは独立。survey_letters / questions / answers を使う。
+#  一筆箋（10問アンケート→手紙）フローは全面刷新（2026-07-25）で撤去。
+#  行為は「宙へ放つ」ただ一つ（仕様§0.1・§6）。survey_letters / questions /
+#  answers のテーブルとデータは消さずに残す（DELETEしないのは恒久ルール）。
 # ══════════════════════════════════════════════════════════════════════
 
 def _page_login_guard():
@@ -2731,155 +3052,6 @@ def _page_login_guard():
     if not session.get("uid"):
         return redirect("/")
     return None
-
-
-def _survey_letter(db, lid):
-    """本人の、まだ封をしていない手紙を返す。無ければ None。"""
-    return db.execute(
-        "SELECT * FROM survey_letters WHERE id=? AND user_id=?", (lid, session.get("uid"))
-    ).fetchone()
-
-
-def _survey_questions(db):
-    return db.execute(
-        "SELECT id,ord,prompt,letter_fragment_template,is_required FROM questions ORDER BY ord"
-    ).fetchall()
-
-
-def _survey_answers_map(db, lid):
-    """{question_id: value} を返す（skip は value='' で記録済み＝再出題しないため）。"""
-    rows = db.execute(
-        "SELECT question_id, value FROM answers WHERE letter_id=?", (lid,)
-    ).fetchall()
-    return {r["question_id"]: (r["value"] or "") for r in rows}
-
-
-def _assemble_fragments(db, lid):
-    """回答済み（空でない）設問を ord 順に手紙の一文へ変換して返す。回答→一文の変換はここ（DBのテンプレート）で行う。"""
-    rows = db.execute(
-        """SELECT q.letter_fragment_template AS tpl, a.value AS val
-           FROM answers a JOIN questions q ON q.id = a.question_id
-           WHERE a.letter_id = ? AND a.value IS NOT NULL AND TRIM(a.value) <> ''
-           ORDER BY q.ord""",
-        (lid,),
-    ).fetchall()
-    return [r["tpl"].replace("{answer}", r["val"].strip()) for r in rows]
-
-
-def _next_question(questions, answered_ids):
-    """まだ触れていない（回答も skip もしていない）最初の設問。全て触れ終えたら None。"""
-    for q in questions:
-        if q["id"] not in answered_ids:
-            return q
-    return None
-
-
-def _render_letter_parts(db, lid, oob=False):
-    """#question-area（次の設問 or 封をする案内）と #letter-preview を描画。
-    oob=True のとき preview に hx-swap-oob を付け、POST 応答で両方を同時差し替えする。"""
-    questions = _survey_questions(db)
-    amap = _survey_answers_map(db, lid)
-    nxt = _next_question(questions, set(amap.keys()))
-    fragments = _assemble_fragments(db, lid)
-    answered_count = sum(1 for v in amap.values() if v.strip())
-    question_html = render_template(
-        "_letter_question.html", lid=lid, q=nxt,
-        total=len(questions), answered=answered_count,
-    )
-    preview_html = render_template(
-        "_letter_preview.html", fragments=fragments, oob=oob,
-    )
-    return question_html, preview_html
-
-
-@app.route("/letter/new")
-def letter_new():
-    guard = _page_login_guard()
-    if guard:
-        return guard
-    db = get_db()
-    lid = secrets.token_hex(8)
-    with _WRITE_LOCK:
-        db.execute(
-            "INSERT INTO survey_letters (id,user_id,created,sealed) VALUES (?,?,?,0)",
-            (lid, uid(), datetime.now().isoformat(timespec="seconds")),
-        )
-        db.commit()
-    return redirect(f"/letter/{lid}/answer")
-
-
-@app.route("/letter/<lid>/answer", methods=["GET", "POST"])
-def letter_answer(lid):
-    guard = _page_login_guard()
-    if guard:
-        return guard
-    db = get_db()
-    row = _survey_letter(db, lid)
-    if row is None:
-        return redirect("/")
-    if row["sealed"]:
-        return redirect(f"/letter/{lid}/seal")
-
-    if request.method == "POST":
-        try:
-            qid = int(request.form.get("question_id", ""))
-        except (TypeError, ValueError):
-            qid = None
-        # skip も「触れた」として記録する（value=''）。回答は最大400文字。
-        value = "" if request.form.get("skip") else (request.form.get("value") or "").strip()[:400]
-        if qid is not None:
-            with _WRITE_LOCK:
-                db.execute(
-                    """INSERT INTO answers (letter_id,question_id,value,created)
-                       VALUES (?,?,?,?)
-                       ON CONFLICT(letter_id,question_id)
-                       DO UPDATE SET value=excluded.value, created=excluded.created""",
-                    (lid, qid, value, datetime.now().isoformat(timespec="seconds")),
-                )
-                db.commit()
-        question_html, preview_html = _render_letter_parts(db, lid, oob=True)
-        # 手紙プレビュー（oob）と次の設問を同時に返す
-        return Response(preview_html + "\n" + question_html, mimetype="text/html")
-
-    # GET：フル画面
-    question_html, preview_html = _render_letter_parts(db, lid, oob=False)
-    return render_template(
-        "letter.html", lid=lid,
-        question_area=question_html, preview=preview_html,
-    )
-
-
-@app.route("/letter/<lid>/seal", methods=["GET", "POST"])
-def letter_seal(lid):
-    guard = _page_login_guard()
-    if guard:
-        return guard
-    db = get_db()
-    row = _survey_letter(db, lid)
-    if row is None:
-        return redirect("/")
-
-    show_bookmark = False
-    if not row["sealed"]:
-        with _WRITE_LOCK:
-            db.execute(
-                "UPDATE survey_letters SET sealed=1, sealed_at=? WHERE id=? AND user_id=?",
-                (datetime.now().isoformat(timespec="seconds"), lid, uid()),
-            )
-            # リテンション：初めて封をした人にだけ「ブックマークに」を出す。
-            # クリック判定ではなく“表示した瞬間”にフラグを立てる（＝この封で見せたら二度と出さない）。
-            u = db.execute(
-                "SELECT COALESCE(bookmark_prompt_shown,0) AS shown FROM users WHERE id=?", (uid(),)
-            ).fetchone()
-            if u and not u["shown"]:
-                show_bookmark = True
-                db.execute("UPDATE users SET bookmark_prompt_shown=1 WHERE id=?", (uid(),))
-            db.commit()
-
-    fragments = _assemble_fragments(db, lid)
-    return render_template(
-        "seal.html", lid=lid, fragments=fragments, show_bookmark=show_bookmark,
-    )
 
 
 @app.route("/api/letters/<lid>/trace", methods=["GET"])
@@ -3004,6 +3176,70 @@ def api_set_emos(lid):
         get_db().execute("UPDATE letters SET emos=? WHERE id=? AND user_id=?", (json.dumps(emos, ensure_ascii=False), lid, uid()))
         get_db().commit()
     return jsonify(ok=True)
+
+
+@app.route("/api/letters/<lid>/like", methods=["POST"])
+@login_required
+def api_like_letter(lid):
+    """降ってきたことばへの静かな印（いいね）。受け手側のレコードにだけ残る内的なジェスチャーで、
+    集計もランキングもしない・誰にも通知しない。on=false でそっと外せる。"""
+    row = own_letter(lid)
+    if not row:
+        return jsonify(error="便りが見つかりません。"), 404
+    if not _letter_opened(row):
+        return jsonify(error="まだ封の中です。"), 403
+    on = bool(request.get_json(force=True).get("on", True))
+    liked_at = datetime.now().isoformat(timespec="seconds") if on else None
+    with _WRITE_LOCK:
+        get_db().execute("UPDATE letters SET liked_at=? WHERE id=? AND user_id=?",
+                         (liked_at, lid, uid()))
+        get_db().commit()
+    return jsonify(ok=True, liked=bool(liked_at))
+
+
+@app.route("/api/sky/<did>/open", methods=["POST"])
+@login_required
+def api_open_sky_delivery(did):
+    """宙から降ってきた、だれかのことばの開封。本文テキストだけを初めて配信する
+    （書き手の写真・声・場所・日時は最初から配達に含めない）。冪等。"""
+    row = get_db().execute(
+        "SELECT d.id, d.deliver_at, d.opened_at, d.liked_at, l.poem, l.seal_color, l.vertical"
+        "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
+        " WHERE d.id=? AND d.recipient=?", (did, uid())).fetchone()
+    if not row:
+        return jsonify(error="そのことばは見つかりません。"), 404
+    try:
+        if datetime.fromisoformat(row["deliver_at"]) > datetime.now():
+            return jsonify(error="まだ封の中です。"), 403
+    except (TypeError, ValueError):
+        return jsonify(error="そのことばは見つかりません。"), 404
+    if not row["opened_at"]:
+        with _WRITE_LOCK:
+            get_db().execute("UPDATE sky_deliveries SET opened_at=? WHERE id=? AND recipient=?",
+                             (datetime.now().isoformat(timespec="seconds"), did, uid()))
+            get_db().commit()
+    return jsonify(ok=True, poem=row["poem"], color=row["seal_color"],
+                   vertical=bool(row["vertical"]), liked=bool(row["liked_at"]))
+
+
+@app.route("/api/sky/<did>/like", methods=["POST"])
+@login_required
+def api_like_sky_delivery(did):
+    """だれかのことばへの静かな印。配達行（受け手側）にだけ残り、放った本人の世界には
+    何も起きない——通知も集計も書き戻しもない（§1.5）。"""
+    row = get_db().execute(
+        "SELECT opened_at FROM sky_deliveries WHERE id=? AND recipient=?", (did, uid())).fetchone()
+    if not row:
+        return jsonify(error="そのことばは見つかりません。"), 404
+    if not row["opened_at"]:
+        return jsonify(error="まだ封の中です。"), 403
+    on = bool(request.get_json(force=True).get("on", True))
+    liked_at = datetime.now().isoformat(timespec="seconds") if on else None
+    with _WRITE_LOCK:
+        get_db().execute("UPDATE sky_deliveries SET liked_at=? WHERE id=? AND recipient=?",
+                         (liked_at, did, uid()))
+        get_db().commit()
+    return jsonify(ok=True, liked=bool(liked_at))
 
 @app.route("/api/letters/<lid>/reply", methods=["POST"])
 @login_required

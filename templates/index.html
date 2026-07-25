@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-{% set page_title = 'tayori-たより-｜遅れて届く、自分への手紙' %}
-{% set page_desc = 'tayori-たより- は、いまのあなたが綴った言葉や写真、声を、時をおいて未来のあなたへ届ける、自己対話のためのサービスです。' %}
+{% set page_title = 'tayori-たより-｜意味のない言葉を、宙へ放つ' %}
+{% set page_desc = 'tayori-たより- は、いまの気分の言葉を宙へ放つ場所です。放った言葉は匿名のまま誰かのもとへ漂い、そしてある日、あの日のあなたの言葉が、ふと帰ってきます。' %}
 {% include '_head.html' %}
 <script type="application/ld+json">
 {
@@ -275,6 +275,31 @@
   .time-hint{padding-top:6px}
   .weather-note{margin:-6px 0 16px;text-align:center;display:none}
   .weather-note.show{display:block}
+  /* 相談窓口のしおり（宙へ放った時だけ、本人にそっと出る）。カードではなく挟み込んだ紙片の温度で */
+  .care-note{margin:18px auto 0;max-width:420px;padding:18px 20px;background:var(--paper,#FAF8F3);
+    border:1px solid rgba(42,37,34,0.18);border-left:3px solid var(--seal,#B5543A);
+    font-family:'Shippori Mincho',serif;font-size:13px;line-height:2;color:var(--ink,#2A2522);
+    opacity:0;transform:translateY(6px);transition:opacity .6s ease,transform .6s ease}
+  .care-note.on{opacity:1;transform:none}
+  .care-note p{margin:0 0 10px}
+  .care-note a{color:var(--seal,#B5543A);text-decoration:underline;text-underline-offset:3px}
+  .care-note .care-close{display:block;margin:6px 0 0 auto;border:none;background:none;
+    font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.2em;color:var(--ink-mute,#8a827a);
+    cursor:pointer;padding:4px 2px;border-bottom:1px solid currentColor}
+  /* 降ってきたことばへの静かな印（いいね）。押した本人の中でだけ完結する朱の点 */
+  .like-mark{display:flex;align-items:center;gap:10px;margin:14px auto 0;border:none;background:none;
+    cursor:pointer;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.12em;
+    color:var(--ink-mute,#8a827a);padding:6px 10px}
+  .like-mark .lm-dot{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--seal,#B5543A);
+    display:inline-flex;align-items:center;justify-content:center;color:var(--seal,#B5543A);
+    font-size:11px;line-height:1;transition:background .35s ease,color .35s ease,transform .2s ease}
+  .like-mark .lm-dot::after{content:'印'}
+  .like-mark:active .lm-dot{transform:scale(.92)}
+  .like-mark.on{color:var(--seal,#B5543A)}
+  .like-mark.on .lm-dot{background:var(--seal,#B5543A);color:var(--paper,#FAF8F3)}
+  /* 宙から届いたことばの匿名性のただし書き */
+  .sky-anon-note{margin:16px 0 0;text-align:center;font-family:'Shippori Mincho',serif;
+    font-size:11px;line-height:2;letter-spacing:0.08em;color:var(--ink-mute,#8a827a);opacity:0.85}
 
   /* ---- 封入インク：書いた日の空気（湿度・気温）が、開封の時に紙の上へ再現される ----
        リアルタイムの天気連動はしない。気象は投函の瞬間にスナップショットとして手紙へ封入され、
@@ -810,9 +835,9 @@
 <body>
 <div class="gate" id="gate">
   <div class="gate-card">
-    <h1>たより<span class="vh"> — 遅れて届く、自分への手紙。いまの言葉・写真・声を、時をおいて未来のあなたへ届けます。</span></h1>
+    <h1>たより<span class="vh"> — 意味のない言葉を、宙へ放つ。それはいつか、知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
     <div class="romaji">tayori</div>
-    <div class="gate-tag">遅れて届く、自分への手紙。<br>はじめに、あなたの名前を。</div>
+    <div class="gate-tag">ことばを宙へ放つために。<br>はじめに、あなたの名前を。</div>
     <div class="gate-form">
       <div class="gate-tabs">
         <button class="gate-tab on" data-g="login">ログイン</button>
@@ -935,7 +960,7 @@
     <div class="stamp">JP<br>たより<br>POST</div>
     <h1>たより</h1>
     <div class="romaji">tayori</div>
-    <div class="tagline">投げる。封をする。忘れた頃に、自分から届く。</div>
+    <div class="tagline">宙へ放つ。忘れた頃に、ふと降ってくる。</div>
     <div class="rule"></div>
     <div class="acct" id="acctBar">
       <span class="acct-id">差出人</span><b id="acctName">—</b>
@@ -953,7 +978,8 @@
 
   <!-- 白紙が基本。問いに手を引かれて書きたい日のための、静かな別口（opt-in）。
        以前は投函パネルの一番下で目に入りにくかったため、ヘッダーとタブの間へ（2026-07-20） -->
-  <p class="qmode-link" style="margin:0 0 14px">白紙が続く場合は、<wbr><a href="/letter/new">問いをたどって<wbr>綴る一筆箋</a>から。</p>
+  <!-- 一筆箋（問いをたどって綴る）は全面刷新（2026-07-25）で撤去。行為は「宙へ放つ」ただ一つ -->
+
 
   <div class="tabs">
     <button class="tab on" data-p="compose">投函<span class="sub">compose</span></button>
@@ -979,59 +1005,19 @@
         <span id="voiceStatus"></span>
       </div>
       <div class="env-foot">
-        <div class="field-row">
-          <label>届く頃：</label>
-          <!-- 選択肢は6つまで（ヒックの法則）。1週間後/半年後/3年後は中間刻みとして削除、
-               ランダムは「いつか、突然」と役割が重なるため削除（2026-07-22） -->
-          <div class="chips" id="whenChips">
-            <button class="chip" data-mode="date">日付を選ぶ</button>
-            <button class="chip" data-mode="rel" data-d="30">1ヶ月後</button>
-            <button class="chip on" data-mode="rel" data-d="90">3ヶ月後</button>
-            <button class="chip" data-mode="rel" data-d="365">1年後</button>
-            <button class="chip" data-mode="event">出来事で</button>
-            <button class="chip" data-mode="surprise">いつか、突然</button>
-          </div>
-        </div>
-        <div class="field-row when-extra" id="dateRow" style="display:none">
-          <label>その日：</label><input type="date" id="dateInput" class="date-pick">
-        </div>
-        <div class="field-row" id="timeRow">
-          <label>時刻：</label>
-          <input type="time" id="timeInput" class="date-pick" value="09:00">
-          <span class="time-hint">この時刻に届きます</span>
-        </div>
-        <div class="field-row when-extra" id="eventRow" style="display:none">
-          <label>きっかけ：</label>
-          <div class="chips" id="eventChips">
-            <button class="chip on" data-ev="次の雪の日" data-weather="snow">次の雪の日 ❄</button>
-            <button class="chip" data-ev="次の雨の日" data-weather="rain">次の雨の日 ☂</button>
-            <button class="chip" data-ev="次の暑い日" data-weather="hot">次の暑い日 ☀</button>
-            <button class="chip" data-ev="次の寒い日" data-weather="cold">次の寒い日 ❄</button>
-            <button class="chip" data-ev="次の誕生日">次の誕生日</button>
-            <button class="chip" data-ev="春になったら">春になったら</button>
-            <button class="chip" data-ev="桜が咲く頃">桜が咲く頃</button>
-            <button class="chip" data-ev="年が明けたら">年が明けたら</button>
-          </div>
-        </div>
-        <div class="weather-note" id="weatherEventNote">位置情報をもとに、<wbr>その天気が来た日に、<wbr>ふっと届きます。</div>
-        <div class="field-row when-extra" id="randomRow" style="display:none">
-          <label>範囲：</label>
-          <div class="chips" id="randomRange">
-            <button class="chip on" data-lo="30" data-hi="365">1ヶ月〜1年</button>
-            <button class="chip" data-lo="180" data-hi="1095">半年〜3年</button>
-            <button class="chip" data-lo="7" data-hi="90">1週間〜3ヶ月</button>
-          </div>
-        </div>
-        <div class="when-readout" id="whenReadout"></div>
+        <!-- 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も選ばない
+             （「未来の自分へ」の遅延郵便UIは仕様§6で撤去。帰還はサーバの乱数だけが知っている） -->
+        <div class="weather-note show" id="skyNote">宛先も、日時もありません。<wbr>放ったことばは宙にのぼり、<wbr>忘れた頃に、<wbr>ふとあなたのもとへ<wbr>降りてきます。</div>
         <div class="field-row">
           <label>いまの色：</label>
           <div class="mood-picker" id="sealSwatches"></div>
         </div>
         <div class="color-hint" style="margin:-8px 0 14px">いまの気分に近い色。<wbr>開封の日に、<wbr>もう一度選んで<wbr>見比べます</div>
-        <button class="send" id="sendBtn">封 を す る</button>
+        <button class="send" id="sendBtn">宙 へ 放 つ</button>
       </div>
     </div>
     <p class="note">送った瞬間、<wbr>これは見えなくなります。<br>いいねも、既読も、<wbr>ここにはありません。</p>
+    <div class="map-link-row" style="justify-content:center;margin-top:10px"><a class="map-link" href="/mood">放ったことばの浮かぶ宙へ<span class="sub">sky</span></a></div>
     <!-- 「問いをたどって綴る一筆箋」への導線はヘッダーとタブの間へ移設（2026-07-20） -->
   </section>
 
@@ -1526,75 +1512,8 @@
   function showVoice(){vStatus.innerHTML='<span class="voice-have">声を入れました</span> <span class="voice-clear" id="vClear">消す</span>';
     document.getElementById('vClear').addEventListener('click',()=>{voiceData=null;vStatus.textContent='';});}
 
-  // when
-  let whenMode='rel',whenDays=90,randomLo=30,randomHi=365,pickedDate=null,pickedEvent='次の雪の日';
-  const dateRow=document.getElementById('dateRow'),eventRow=document.getElementById('eventRow'),
-        randomRow=document.getElementById('randomRow'),dateInput=document.getElementById('dateInput'),readout=document.getElementById('whenReadout');
-  let previewArrival=null;
-  function resolveArrival(){
-    if(whenMode==='date'&&pickedDate)previewArrival=new Date(pickedDate);
-    else if(whenMode==='random'){const r=randomLo+Math.floor(Math.random()*(randomHi-randomLo+1));previewArrival=addDays(today,r);}
-    else if(whenMode==='surprise'){const r=60+Math.floor(Math.random()*640);previewArrival=addDays(today,r);}
-    else if(whenMode==='event'){
-      // 天気イベントは「今から待ち伏せ開始」なので今日を基準にする
-      previewArrival=selectedWeatherEvent()?new Date(today):eventToDate(pickedEvent);
-    }
-    else previewArrival=addDays(today,whenDays);
-    return previewArrival;
-  }
-  function eventToDate(ev){const y=today.getFullYear();let d;
-    if(ev==='次の雪の日'){d=new Date(y,(today.getMonth() >= 11||today.getMonth() <= 1)?today.getMonth():11,15);if(d<=today)d=new Date(y+1,0,15);}
-    else if(ev==='次の誕生日'){d=new Date(y+1,today.getMonth(),today.getDate());}
-    else if(ev==='春になったら'){d=new Date(y,2,20);if(d<=today)d=new Date(y+1,2,20);}
-    else if(ev==='桜が咲く頃'){d=new Date(y,3,1);if(d<=today)d=new Date(y+1,3,1);}
-    else if(ev==='年が明けたら'){d=new Date(y+1,0,1);}else d=addDays(today,180);return d;}
-  function updateReadout(){today=new Date();readout.classList.remove('hidden-mode');
-    const wNote=document.getElementById('weatherEventNote');
-    const timeRow=document.getElementById('timeRow');
-    // 天気イベント選択中？
-    const wEv=(whenMode==='event')?(document.querySelector('#eventChips .chip.on')?.dataset.weather||null):null;
-    if(wNote)wNote.classList.toggle('show',!!wEv);
-    if(timeRow)timeRow.style.display=wEv?'none':'flex'; // 天気待ちは時刻指定なし
-    if(wEv){readout.classList.add('hidden-mode');
-      readout.textContent='☁ 次に「'+WEVENT_LABEL[wEv]+'」が来た時、ふっと届きます';return;}
-    if(whenMode==='date'&&!pickedDate){readout.textContent='届けたい日を選んでください';return;}
-    if(whenMode==='surprise'){readout.classList.add('hidden-mode');readout.textContent='いつ届くかは、あなたにも分かりません';return;}
-    const a=resolveArrival(),gap=daysBetween(a,today);
-    if(whenMode==='random')readout.textContent='📮 抽選 → '+jpDate(a)+'（'+humanGapFromSeconds(gap*86400)+'）に届きます';
-    else if(whenMode==='event')readout.textContent='→「'+pickedEvent+'」'+jpDate(a)+' 頃に届きます';
-    else readout.textContent='→ '+jpDate(a)+' に届きます';}
-  document.querySelectorAll('#whenChips .chip').forEach(c=>c.addEventListener('click',()=>{
-    document.querySelectorAll('#whenChips .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');whenMode=c.dataset.mode;
-    dateRow.style.display=whenMode==='date'?'flex':'none';eventRow.style.display=whenMode==='event'?'flex':'none';
-    randomRow.style.display=whenMode==='random'?'flex':'none';if(whenMode==='rel')whenDays=parseInt(c.dataset.d);
-    reflowChipMarkers();   // 出来事/ランダムの行が表示された瞬間に、その群のマーカーを同期で載せ直す
-    updateReadout();}));
-  dateInput.min=isoDate(today); // デモ用：今日も選べる
-  dateInput.addEventListener('change',()=>{pickedDate=dateInput.value?new Date(dateInput.value+'T00:00:00'):null;updateReadout();});
-  document.querySelectorAll('#eventChips .chip').forEach(c=>c.addEventListener('click',()=>{
-    document.querySelectorAll('#eventChips .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');pickedEvent=c.dataset.ev;updateReadout();}));
-  document.querySelectorAll('#randomRange .chip').forEach(c=>c.addEventListener('click',()=>{
-    document.querySelectorAll('#randomRange .chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
-    randomLo=parseInt(c.dataset.lo);randomHi=parseInt(c.dataset.hi);updateReadout();}));
-  wireChipMarker(document.getElementById('whenChips'));
-  wireChipMarker(document.getElementById('eventChips'));
-  wireChipMarker(document.getElementById('randomRange'));
-  updateReadout();
-
-  // time of day
-  const timeInput=document.getElementById('timeInput');
-  // 既定値の 09:00 ではなく「いまの時刻」を初期表示にする（投函した時刻が反映されるように）
-  (function(){
-    const d=new Date();
-    timeInput.value=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  })();
-
-  // 選択中の出来事が「天気イベント」なら、その種類(snow/rain/hot/cold)を返す
-  function selectedWeatherEvent(){
-    if(whenMode!=='event')return null;
-    const on=document.querySelector('#eventChips .chip.on');
-    return on?(on.dataset.weather||null):null;
-  }
+  // ゆくえ・届く頃のUIとロジックは全面刷新（2026-07-25）で撤去。
+  // 行為は「宙へ放つ」ただ一つ。降ってくる日時はサーバの乱数だけが知っている。
 
   // compose actions
   const sealing=document.getElementById('sealing'),sealCap=document.getElementById('sealCap');
@@ -1690,7 +1609,6 @@
     flash:(m,ms)=>flash(m,ms)
   };
   function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-  function isoDateTime(d){return isoDate(d)+'T'+(timeInput.value||'09:00')+':00';}
 
   // 投函ボタン：pointerdownで即 scale(.97)（§1 押した瞬間に反応）、離すとバネで戻る。
   // transformはCSS transition対象外なので押下は瞬時、戻りだけ spring1d が担う（release=小さな勢い→わずかに生きた収束）。
@@ -1710,60 +1628,40 @@
     // 行頭の字下げや空行（意図した余白）は保つ。空かどうかの判定にだけ trim を使う。
     const poemRaw=poemEl.value.replace(/\s+$/,''),poem=poemRaw.trim();
     if(!poem&&!photoData&&!voiceData){flash('写真か言葉、声をひとつ。');return;}
-    if(whenMode==='date'&&!pickedDate){flash('届けたい日を選んでください。');return;}
-
-    const wEvent=selectedWeatherEvent(); // 天気待ち伏せたよりか
-
-    // 天気イベント以外で、今日＋過去時刻になってないかチェック
-    if(!wEvent){
-      const arriveDT=new Date(isoDateTime(resolveArrival()));
-      if(whenMode!=='surprise'&&whenMode!=='random'&&arriveDT.getTime()<=Date.now()){
-        flash('届く時刻は、今より後にしてください。');return;
-      }
-    }
-
-    // 封をするボタンは、押したらそのまま封をする。
+    // 放つボタンは、押したらそのまま放つ。日時の検証はない（降ってくる日時はサーバの乱数だけが知っている）。
     // （AIが本文を読んで問いを返す「問い直しの栞」は2026-07-24に完全削除。書くのを手伝うAIは置かない）
     await doSeal();
   });
 
-  // 実際に封をする処理
+  // 実際に宙へ放つ処理
   async function doSeal(){
     // 行頭の字下げ・空行は意図した余白としてそのまま封入する（落とすのは末尾の余りだけ）
     const poem=poemEl.value.replace(/\s+$/,'');
-    const wEvent=selectedWeatherEvent();
 
-    // 封じる瞬間の天気をAPIで取得（差分演出＋位置記録のため）
+    // 放つ瞬間の天気をAPIで取得（帰還メールの「あの日の記録」＋差分演出のため）
     await detectWeather();
 
-    // 天気イベントは位置情報が要る。取れてなければ知らせる
-    if(wEvent && !currentWeather){
-      flash('天気のたよりには位置情報が必要です。位置の許可をお願いします。');
-    }
+    // 宙へ放つ：日時に関わる欄は一切送らない（arrive_at はサーバの乱数が決める）
+    const timing={mode:'sky'};
 
-    const arrival=resolveArrival();const hidden=(whenMode==='surprise');
-    let label;
-    if(wEvent)            label=WEVENT_LABEL[wEvent]+'に';
-    else if(whenMode==='event') label='「'+pickedEvent+'」'+jpDate(arrival);
-    else if(hidden)       label='いつか、突然';
-    else                  label=jpDate(arrival)+' '+(timeInput.value||'09:00');
-
-    sealCap.textContent='封をしました';sealing.classList.add('on');
+    sealCap.textContent='宙へ放ちました';sealing.classList.add('on');
     // エリア変換が走っていれば少しだけ待つ。間に合わなければ位置なしで確定する
     // （封じる体験の即時性 > 位置データの完全性）。
     if(_areaPromise&&!currentArea){await Promise.race([_areaPromise,new Promise(r=>setTimeout(r,2500))]);}
     const sealRes=await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({
       poem,photo:photoData,voice:voiceData,
       trace: poemTrace.length>1 ? poemTrace : null,
-      arrive_at:isoDateTime(arrival),arrive_label:label,arrive_hidden:hidden,
-      weather_event:wEvent||null,
       seal_env: currentWeather || null,
       seal_color: sealColor,                       // いまの気分の色（開封時の差分の片割れ）
       seal_q: null,                                // 透かし問いは撤去（新規の封入なし）
       vertical: (poem&&composeVertical)?1:0        // 縦書きで書かれた手紙は、縦書きのまま届く
-    },areaPayload()))});
+    },timing,areaPayload()))});
     // 封をしたら投函の画面に留まる。封をした手紙は「受信」の下の「封の中」の棚に並ぶ。
-    setTimeout(()=>{sealing.classList.remove('on');clearCompose();loadMail();flash('封をしました。');
+    setTimeout(()=>{sealing.classList.remove('on');clearCompose();loadMail();
+      flash('宙へ放ちました。いつか、ふと降りてきます。');
+      // 相談窓口の静かな導線：放ったことばにそのシグナルがあった時、本人にだけそっと出す。
+      // 判定はサーバのキーワード照合のみで、結果はどこにも保存されない。
+      if(sealRes&&sealRes.ok&&sealRes.care){setTimeout(showCareNote,1200);}
       // 開封のお知らせメールは認証済みアドレスにしか送られない。届かない状態のまま投函した時は、そのたびに知らせる。
       if(sealRes&&sealRes.ok&&sealRes.notify_off){
         const msg=sealRes.notify_reason==='pending'
@@ -1772,6 +1670,23 @@
         setTimeout(()=>flash(msg,4200),2400);
       }
     },1700);
+  }
+
+  // 相談窓口のしおり。説教にしない——「そっとここに置いておく」だけの温度で、
+  // 閉じればそれきり（表示の記録も取らない）。
+  function showCareNote(){
+    if(document.querySelector('.care-note'))return;
+    const n=document.createElement('div');n.className='care-note';
+    n.innerHTML='<p>ことばは、宙が預かりました。<br>いまは、そっとここに置いておきますね。</p>'+
+      '<p>もし、誰かに話したくなったら——</p>'+
+      '<p class="care-links"><a href="https://www.mhlw.go.jp/mamorouyokokoro/" target="_blank" rel="noopener">まもろうよ こころ（相談窓口のまとめ）</a><br>'+
+      'いのちの電話 <a href="tel:0570-783-556">0570-783-556</a><br>'+
+      'よりそいホットライン <a href="tel:0120-279-338">0120-279-338</a>（24時間・無料）</p>'+
+      '<button type="button" class="care-close">とじる</button>';
+    n.querySelector('.care-close').addEventListener('click',()=>n.remove());
+    const panel=document.getElementById('compose');
+    panel.appendChild(n);
+    requestAnimationFrame(()=>n.classList.add('on'));
   }
 
   // WEVENT_LABEL は受信描画でも使うのでグローバルに置く
@@ -1786,7 +1701,7 @@
 
   // mailbox
   const mailList=document.getElementById('mailList');
-  let received=[],inTransit=[];
+  let received=[],inTransit=[],skyArrivals=[];  // skyArrivals: 宙から降ってきた、だれかのことば
   // ── 読み終えたたよりの棚（library）──
   // 開封済みは背表紙（気分の色）で棚に並び、タップした一通だけを机に広げる。
   // 開封直後は自動でその一通を広げる（openLetterでセット）。再描画をまたいで保持。
@@ -1873,6 +1788,7 @@ async function detectWeather(){
     await detectWeather();
     const [data,nd]=await Promise.all([api('/api/letters'),api('/api/notes')]);
     received=data.received||[];inTransit=data.in_transit||[];
+    skyArrivals=data.sky_arrivals||[];
     notesCache=(nd&&nd.notes)||[];
     renderMail();
     loadWeekly();  // その日の問い（透かし用）は非同期で
@@ -1947,10 +1863,10 @@ async function detectWeather(){
     // 天気が取れない時もバナーの直後＝受信の先頭に出し、地図への道を絶やさない。
     {const mr=document.createElement('div');mr.className='map-link-row';
      mr.innerHTML='<a class="map-link" href="/map">封をした場所<span class="sub">map</span></a>'+
-       '<a class="map-link" href="/mood">気分の宙<span class="sub">mood</span></a>';
+       '<a class="map-link" href="/mood">宙<span class="sub">sky</span></a>';
      mailList.appendChild(mr);}
     renderSealedShelf();  // 封の中の一覧は「受信」の届いたたよりの下へ（あと何日かを受信箱で見られるように）
-    if(!received.length && !inTransit.length){
+    if(!received.length && !inTransit.length && !skyArrivals.length){
       const p=document.createElement('p');p.className='mail-intro';
       p.innerHTML='まだ届いた<wbr>たよりはありません。<br>投函したたよりは、<wbr>届く時が来たら<wbr>ここに。';mailList.appendChild(p);
       return;}
@@ -1966,9 +1882,11 @@ async function detectWeather(){
     received.forEach(L=>{
       if(L.opened)return;
       const el=document.createElement('div');el.className='letter';el.dataset.lid=L.id;
-      el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">過去のあなたから</div>'+
-        '<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
-        '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>'+
+      // 宙から降りてきたことばは「いつ書いたか」を開封まで明かさない（SENT行も伏せる）
+      el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div><div class="from">'+(L.sky?'宙から、いつかのあなたのことば':'過去のあなたから')+'</div>'+
+        (L.sky?'<div class="ago" style="margin-top:4px;color:var(--seal)">いま、降りてきました</div>'
+              :'<div class="ago">SENT '+fmtSent(L.sent_date)+'</div>'+
+               '<div class="ago" style="margin-top:4px;color:var(--seal)">届け先 → '+esc(L.arrive_label||'いつか')+'</div>')+
         (L.weather_event?'<div class="weather-locked-note">'+esc(WEVENT_LABEL[L.weather_event]||'天気')+'に、届きました</div>':'')+
         (L.char_count?'<div class="sc-note">'+L.char_count+'字を、封じています</div>':'')+
         sealedInfoHTML(L,true)+
@@ -1978,6 +1896,10 @@ async function detectWeather(){
       if(L.demo_mode)el.appendChild(demoAdjustRow(L.id,L.demo_arrive_at||L.arrive_at));
       applyWeatherReunion(el,L);   // 天気の再会：封じた日と今日が重なった時だけ、かすかに
       mailList.appendChild(el);});
+
+    // ── 宙から降ってきた、だれかのことば ──
+    // 匿名の一通。開封は同じ蝋封の儀式、できる反応は「印」ひとつだけ（返信も既読も伝わらない）。
+    renderSkyArrivals();
 
     // ── 開封済み：読み終えたたよりは棚に収まる ──
     // 背表紙の色＝封をした日の気分の色。書き出しと投函の月年だけを見せ、
@@ -2032,7 +1954,10 @@ async function detectWeather(){
       const extras=[];if(S.has_photo)extras.push('写真');if(S.has_voice)extras.push('声');
       // 天気待ち伏せたよりは時刻ではなく「天気待ち」を見せる
       let whenHtml;
-      if(S.waiting_weather){
+      if(S.sky){
+        // 宙へ放ったことば：残り時間も予定日もサーバから来ない（放ちっぱなし）
+        whenHtml='<div class="shelf-when">宙にあります</div>';
+      }else if(S.waiting_weather){
         whenHtml='<div class="shelf-when">'+esc(WEVENT_LABEL[S.weather_event]||'天気')+'を待っています</div>';
       }else if(S.arrive_hidden){
         whenHtml='<div class="shelf-when">いつか、突然</div>';
@@ -2041,8 +1966,8 @@ async function detectWeather(){
         const ts=Math.floor(Date.now()/1000)+(S.seconds_left||0);
         whenHtml='<div class="shelf-when countdown" data-arrive-ts="'+ts+'">'+esc(humanGapFromSeconds(S.seconds_left||0))+'</div>';
       }
-      el.innerHTML='<div class="wax mini">緘</div><div class="shelf-body">'+whenHtml+
-        '<div class="shelf-meta">投函 '+fmtSent(S.sent_date)+(S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
+      el.innerHTML='<div class="wax mini">'+(S.sky?'宙':'緘')+'</div><div class="shelf-body">'+whenHtml+
+        '<div class="shelf-meta">'+(S.sky?'放った日 ':'投函 ')+fmtSent(S.sent_date)+(S.sky||S.arrive_hidden||S.waiting_weather?'':' · 届け先 '+esc(S.arrive_label||''))+
         (extras.length?' · '+extras.join('・')+'入り':'')+'</div>'+
         sealedInfoHTML(S,false)+
         '</div>';
@@ -2211,7 +2136,7 @@ async function detectWeather(){
   // Pointer Events でマウス・タッチを共通化。途中で離すと封蝋は元の位置へすっと戻る。
   // apple-design 準拠のジェスチャー：指の速度を受け渡し（フリックでも開く §5-6）、境界は
   // ラバーバンドで抵抗（§9）、途中で離すと現在位置からバネで戻る（§3-4／戻り中に掴み直しても連続）。
-  function wirePeel(track,id){
+  function wirePeel(track,id,onOpen){
     if(!track)return;
     const wax=track.querySelector('.wax.peel'),trail=track.querySelector('.peel-trail');
     if(!wax)return;
@@ -2251,7 +2176,7 @@ async function detectWeather(){
       wax.style.transform='translateX('+(limit()+12)+'px) translateY(-22px) scale(.55) rotate(32deg)';
       wax.style.opacity='0';
       if(trail)trail.style.width='100%';
-      setTimeout(()=>openLetter(id),240);
+      setTimeout(()=>(onOpen||openLetter)(id),240);
     }
     wax.addEventListener('pointerdown',e=>{
       if(done)return;e.preventDefault();
@@ -2369,11 +2294,58 @@ async function detectWeather(){
     return h+'</div>';
   }
 
+  // ── 宙から降ってきた、だれかのことば（sky_deliveries）──
+  // 受け手が知れるのは字数・気分の色・縦横だけ。だれの・いつの・どこのことばかは永遠にわからない。
+  function renderSkyArrivals(){
+    if(!skyArrivals.length)return;
+    const lbl=document.createElement('div');lbl.className='shelf-label';
+    lbl.style.cssText='margin:34px 0 16px;text-align:center';
+    lbl.textContent='― 宙から · だれかのことば ―';
+    mailList.appendChild(lbl);
+    skyArrivals.forEach(A=>{
+      const el=document.createElement('div');el.className='letter';el.dataset.did=A.did;
+      if(!A.opened){
+        el.innerHTML='<div class="unopened-tease"><div class="peel-track" data-peel><div class="peel-trail"></div><div class="wax peel">緘</div></div>'+
+          '<div class="from">知らないだれかが、宙へ放ったことば</div>'+
+          '<div class="ago" style="margin-top:4px;color:var(--seal)">あなたのもとへ、降りてきました</div>'+
+          (A.char_count?'<div class="sc-note">'+A.char_count+'字を、封じています</div>':'')+
+          (A.color?'<div class="sc-meta"><span class="sc-chip" style="background:'+esc(A.color)+'"></span></div>':'')+
+          '</div>';
+        wirePeel(el.querySelector('[data-peel]'),A.did,openSkyArrival);
+      }else{
+        el.innerHTML=renderSkyOpen(A);
+      }
+      mailList.appendChild(el);
+    });
+  }
+  function renderSkyOpen(A){
+    const pv=!!A.vertical;
+    let h='<div class="postmark"><span>宙から · だれかのことば</span><div class="pm-circle">たより<br>sky</div></div>';
+    h+='<div class="letter-body">';
+    if(A.poem)h+='<div class="letter-poem'+(pv?' vertical':'')+'">'+(pv?tcy(esc(A.poem)):esc(A.poem))+'</div>';
+    h+='<button type="button" class="like-mark'+(A.liked?' on':'')+'" data-slike="'+A.did+'" aria-pressed="'+(A.liked?'true':'false')+'">'+
+       '<span class="lm-dot" aria-hidden="true"></span><span class="lm-txt">'+(A.liked?'印を結びました':'このことばに、印を結ぶ')+'</span></button>';
+    h+='<p class="sky-anon-note">だれの、いつのことばかは、<wbr>だれにもわかりません。<br>この印も、放った人には<wbr>伝わりません。</p>';
+    h+='</div>';
+    return h;
+  }
+  async function openSkyArrival(did){
+    const r=await api('/api/sky/'+did+'/open',{method:'POST',body:JSON.stringify({})});
+    if(r&&r.ok){
+      const A=skyArrivals.find(x=>String(x.did)===String(did));
+      if(A){A.opened=true;A.poem=r.poem;A.vertical=r.vertical;A.liked=r.liked;}
+      renderMail();
+    }
+  }
+
   function renderOpenLetter(L,i,sent){
     let h='';
-    h+='<div class="postmark"><span>受信 · 過去のあなた</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
+    h+='<div class="postmark"><span>'+(L.sky?'宙から · いつかのあなた':'受信 · 過去のあなた')+'</span><div class="pm-circle">たより<br>'+MON[sent.getMonth()]+'<br>'+sent.getFullYear()+'</div></div>';
     if(L.photo)h+='<img class="letter-photo" src="'+L.photo+'" alt="この便りに添えられた写真">';
     h+='<div class="letter-body">';
+    // 宙から降りてきたことばの核：「この日の、この時間に、あなたはこれを書いていました」
+    if(L.sky)
+      h+='<div class="thread-label" style="margin-bottom:14px">'+esc(fmtDateTime(L.sent_date)||fmtSent(L.sent_date))+'——<wbr>あなたは、<wbr>このことばを<wbr>書いていました</div>';
     if(L.poem){
       // 縦書きで封入された手紙は縦書きのまま。2〜3桁の数字だけ縦中横(.tcy)で正立させる
       const pv=!!L.vertical;
@@ -2383,9 +2355,14 @@ async function detectWeather(){
     if(L.voice)h+='<div class="letter-voice"><audio controls src="'+L.voice+'"></audio></div>';
     if(L.emos&&L.emos.length)h+='<div class="emo-tags">'+L.emos.map(e=>'<span class="emo-tag">'+esc(e)+'</span>').join('')+'</div>';
 
+    // 降ってきたことばへの静かな印（いいね）。押しても誰にも伝わらず、自分の記録にだけ残る
+    if(L.sky)
+      h+='<button type="button" class="like-mark'+(L.liked?' on':'')+'" data-like="'+L.id+'" aria-pressed="'+(L.liked?'true':'false')+'">'+
+         '<span class="lm-dot" aria-hidden="true"></span><span class="lm-txt">'+(L.liked?'印を結びました':'このことばに、印を結ぶ')+'</span></button>';
+
     // 届いた時の自分の記録（封をした日 → 開けた日の「層」）
     h+='<div class="strata">';
-    h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmtSent(L.sent_date)+'</span><span class="strata-what">封をした</span></div>';
+    h+='<div class="strata-row"><span class="strata-dot seal"></span><span class="strata-when">'+fmtSent(L.sent_date)+'</span><span class="strata-what">'+(L.sky?'宙へ放った':'封をした')+'</span></div>';
     if(L.opened_at)
       h+='<div class="strata-row"><span class="strata-dot open"></span><span class="strata-when">'+fmtDateTime(L.opened_at)+'</span><span class="strata-what">封を開けた</span></div>';
     if(L.reflect_count>0)
@@ -2475,6 +2452,22 @@ async function detectWeather(){
     return h;}
 
   function wireOpenLetters(){
+    // だれかのことばへの印（宙の配達）。配達行にだけ残り、放った人には一切伝わらない。
+    mailList.querySelectorAll('[data-slike]').forEach(b=>b.addEventListener('click',async()=>{
+      const did=b.dataset.slike,A=skyArrivals.find(x=>String(x.did)===String(did));if(!A)return;
+      b.disabled=true;
+      const r=await api('/api/sky/'+did+'/like',{method:'POST',body:JSON.stringify({on:!A.liked})});
+      b.disabled=false;
+      if(r&&r.ok){A.liked=r.liked;renderMail();}
+    }));
+    // 静かな印（いいね）。受け手のレコードにだけ残り、放った側の世界には何も起きない。
+    mailList.querySelectorAll('[data-like]').forEach(b=>b.addEventListener('click',async()=>{
+      const id=b.dataset.like,L=received.find(x=>String(x.id)===String(id));if(!L)return;
+      b.disabled=true;
+      const r=await api('/api/letters/'+id+'/like',{method:'POST',body:JSON.stringify({on:!L.liked})});
+      b.disabled=false;
+      if(r&&r.ok){L.liked=r.liked;renderMail();}
+    }));
     mailList.querySelectorAll('[data-emo][data-li]').forEach(b=>b.addEventListener('click',async()=>{
       const L=received[+b.dataset.li],e=b.dataset.emo;L.emos=L.emos||[];
       if(L.emos.includes(e))L.emos=L.emos.filter(x=>x!==e);else L.emos.push(e);
@@ -2570,19 +2563,19 @@ async function detectWeather(){
   }
   */
 
-  // 任意のテキストを「新しいたより」として未来（数ヶ月後）へ封印する。
+  // 任意のテキストを「新しいことば」として宙へ放つ（全面刷新：日時指定は存在しない。
+  // いつ帰ってくるかはサーバの乱数だけが知っている）。
   // 返信送信時に「未来へ封印」チェックが入っていたら、その返事の本文を渡して呼ぶ。
   async function sealTextToFuture(text){
     const t=(text||'').trim();
-    if(!t){flash('封印する言葉がありません。');return;}
-    const arrival=addDays(today,90+Math.floor(Math.random()*275));
-    sealCap.textContent='未来へ封印しました';sealing.classList.add('on');
+    if(!t){flash('放つ言葉がありません。');return;}
+    sealCap.textContent='宙へ放ちました';sealing.classList.add('on');
     await api('/api/letters',{method:'POST',body:JSON.stringify(Object.assign({poem:t,
-      arrive_at:isoDate(arrival)+'T09:00:00',arrive_label:jpDate(arrival)+'（'+humanGapFromSeconds(daysBetween(arrival,today)*86400)+'）',
+      mode:'sky',
       from_reply:true,
-      seal_env:currentWeather||null   // 封じた瞬間の空気は、このたよりにも必ず記録する（表示と記録は分離）
+      seal_env:currentWeather||null   // 放った瞬間の空気は、このことばにも必ず記録する（表示と記録は分離）
     },areaPayload()))});
-    setTimeout(()=>{sealing.classList.remove('on');flash('今の返事が、未来の自分へ。');goTab('mailbox');},1700);}
+    setTimeout(()=>{sealing.classList.remove('on');flash('今の返事も、宙へ。いつか、ふと帰ってきます。');goTab('mailbox');},1700);}
 
   // timeline
   let tlFilter='all';
@@ -2701,8 +2694,12 @@ async function detectWeather(){
     if(res&&res.ok){
       // admin でログインしたら、通常アプリではなく管理ダッシュボードへ
       if(res.is_admin){window.location.href='/admin.welcometotayori';return;}
-      enterApp(res.username,res.email,res.email_verified,res.onboarded);
       if(res.email_pending)flash('確認メールを送りました。リンクを開くと通知が有効になります。');
+      // ログインのあとに着地するのは宙（2026-07-25）。棚は宙から降りてくる場所になった。
+      // 初回だけ、この道具の哲学を読んでから宙へ送る（conceptGo が /mood へ進める）。
+      if(res.onboarded===false){showConcept();return;}
+      window.location.href='/mood';
+      return;
     }
     else{gErr.textContent=(res&&res.error)||'うまくいきませんでした。もう一度お試しください。';}
   }
@@ -2752,7 +2749,7 @@ async function detectWeather(){
     // 「はじめの10の問い」は廃止：白紙の便箋から始める。
     // 完了印（onboarded）だけ立てて、透かしの問いなど以降の仕組みを動かす。
     await api('/api/onboarding',{method:'POST',body:JSON.stringify({answers:{},done:true})});
-    enterAppBody();
+    window.location.href='/mood';   // 哲学を読み終えたら、そのまま宙へ出る
     // 将来のopt-in用に温存: openOnboarding(true);  // 哲学を読んでから、はじめの問いへ
   });
 
