@@ -44,8 +44,12 @@
      「この宙について／理念／運営者／お問い合わせ」は宙の外の紙に置き、ここから開く。
      閉じている間は一語だけ。開くと縦に罫が一本立ち、行が並ぶ（箱は作らない）。
      押せる語の姿（.ruled）は _sky_tokens.html に置いた共通の作法。 */
-  .shiori{pointer-events:auto;min-height:var(--touch);
-          padding:14px 4px 13px 10px;font-size:12.5px;letter-spacing:0.26em}
+  .shiori{pointer-events:auto;min-height:var(--touch);min-width:var(--touch);
+          display:flex;align-items:center;justify-content:center;
+          background:none;border:none;padding:10px}
+  .shiori line{stroke:var(--ink-2);transition:stroke .22s var(--ease)}
+  .shiori:hover line{stroke:var(--ink-1)}
+  .shiori:active{opacity:.62}
   .shiori-list{position:fixed;top:50px;right:20px;z-index:16;margin:0;padding:6px 0 6px 20px;
                list-style:none;display:flex;flex-direction:column;align-items:flex-end;
                border-right:1px solid var(--rule);
@@ -276,8 +280,12 @@
     .cast.on{background:rgba(8,8,13,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
   }
   /* position:relative ＝ 自前カーソル（.vcaret）とミラー要素の座標の基準 */
+  /* 4列の箱ごと中央に置くと、字は右端の列から書き始まるので、短い言葉は箱の右寄りに
+     浮いて見える（罫は4本立っているが、実際に字が乗る列は右端の1本だけ）。
+     箱を左へ1.5列分ずらし、いちばん使われる右端の列を画面の中央に合わせる。 */
   .cast-inner{position:relative;display:flex;flex-direction:column;align-items:center;
-              gap:var(--s2);padding:var(--s3);max-width:92vw}
+              gap:var(--s2);padding:var(--s3);max-width:92vw;
+              transform:translateX(calc(var(--cw) * -1.5))}
   /* ── 宙の便箋：4本の縦罫（v13.1）────────────────────────────
      列幅＝line-height（--cw）、1列 --cch 字。4列 × 20字 = 80字＝本文の上限とちょうど同じ。
      箱の寸法を固定するのが要点：これまで width:auto だったので、字が増えて列が伸びるたび
@@ -291,11 +299,15 @@
   @media (max-height:740px){ .cast{--cw:32px;--fs:15px} }
   @media (max-height:690px){ .cast{--cw:28px;--fs:13px} }
   @media (max-height:640px){ .cast{--cw:26px;--fs:12px} }
-  .cast textarea{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-        line-break:strict;
+  /* v16：textarea → contenteditable。vertical-rl の <textarea> は Chrome/Safari とも
+     IME変換中の文字（プレビュー・候補）を正しく描けない実装上の穴があり、宙で漢字変換が
+     効かなかった（textareaは専用の内部エディタで、日本語縦書き＋IMEの対応が薄い）。
+     contenteditable は通常の編集エンジンを使うため、変換の見え方が安定する。 */
+  .cast .ctext{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+        line-break:strict;white-space:pre-wrap;outline:none;cursor:text;
         /* +3px は「20字目が1px足りずに次の列へ落ちる」のを防ぐ遊び（字送りの端数のため） */
         width:calc(var(--cw) * 4);height:calc(var(--cch) * (var(--fs) + 0.14em) + 3px);
-        background:none;border:none;outline:none;resize:none;color:var(--chalk);
+        background:none;border:none;color:var(--chalk);
         font-family:inherit;font-size:var(--fs);line-height:var(--cw);letter-spacing:0.14em;
         padding:0;overflow:hidden;
         /* 縦罫は列の境目に一本ずつ。vertical-rl は右から埋まるので 270deg（右→左）で数える */
@@ -304,7 +316,8 @@
               var(--rule-faint) calc(var(--cw) - 1px),var(--rule-faint) var(--cw));
         /* ネイティブカーソルは縦書きだと字面まで縮むので隠し、.vcaret を重ねる */
         caret-color:transparent}
-  .cast textarea::placeholder{color:var(--ink-4)}
+  /* :empty が成立するのは中身が本当に空（<br>も残っていない）時だけ。JS側で保証する */
+  .cast .ctext:empty:before{content:attr(data-placeholder);color:var(--ink-4)}
   /* 自前カーソル：列幅いっぱい（＝横書きの行と同じ背丈）の横棒。
      追従アニメーションは付けない——ここは「置いた場所に、ちゃんと在る」ことが主題で、
      滑らせるとそれ自体が不安定に見える（宙の他のUIは spring で動くが、ここは例外）。 */
@@ -414,8 +427,14 @@
 <body>
   <header>
     <div class="ttl">たより<span class="romaji">tayori</span></div>
-    <button class="shiori ruled" id="shioriBtn" type="button" aria-expanded="false"
-            aria-controls="shioriList" aria-label="栞（tayori-たより-について・理念・お問い合わせ）">栞</button>
+    <button class="shiori" id="shioriBtn" type="button" aria-expanded="false"
+            aria-controls="shioriList" aria-label="栞（tayori-たより-について・理念・お問い合わせ）">
+      <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+        <line x1="0" y1="1" x2="20" y2="1" stroke-width="1.4"/>
+        <line x1="0" y1="7" x2="20" y2="7" stroke-width="1.4"/>
+        <line x1="0" y1="13" x2="20" y2="13" stroke-width="1.4"/>
+      </svg>
+    </button>
   </header>
   <ul class="shiori-list" id="shioriList">
     <li><a href="/about">tayoriについて</a></li>
@@ -473,7 +492,8 @@
   <button class="cast-btn ruled" id="castBtn" type="button">放つ</button>
   <div class="cast" id="castPane" aria-hidden="true">
     <div class="cast-inner">
-      <textarea id="castText" maxlength="80" placeholder="ことばを、tayori-たより- へ。" aria-label="tayori-たより- へ放つことば"></textarea>
+      <div id="castText" class="ctext" contenteditable="true" role="textbox" aria-multiline="false"
+           data-placeholder="ことばを、tayori-たより- へ。" aria-label="tayori-たより- へ放つことば"></div>
       <!-- 縦書き用の自前カーソル（ネイティブは字面まで縮み、位置も定まらないため） -->
       <div class="vcaret" id="castCaret"></div>
       <div class="cast-count"><span id="castCount">0</span> / 80</div>
@@ -964,49 +984,40 @@
       T=Math.max(0,Math.min(1,T+(e.key==='ArrowRight'?0.05:-0.05)));paint();}});
   paint();   // 既定の色を最初から文字とつまみにのせておく
 
-  /* ── 縦書きの筆先（自前カーソル・v13.1）────────────────────────
+  /* ── 縦書きの筆先（自前カーソル・v13.1／v16でcontenteditable化）───────
      縦書きのネイティブカーソルは、行ボックス（列幅）ではなく字面（font-size）に連動して
      縮む。しかも列の中でどこに立つかが定まらないので、書いている位置が揺れて見えていた。
      カーソルの寸法を指定するCSSは存在しない（caret-color は色だけ）ので、ネイティブは
      透明にして、列幅いっぱいの横棒を入力位置に重ねる（便箋＝index.html と同じ作法）。
 
-     位置はミラー要素で測る：textarea のスタイルを写した隠しdivに「ここまでの本文＋全角の
-     マーカー」を入れ、マーカーの offsetTop（列のどこまで書いたか）と列の中心を読む。
-     全角グリフは列の中央に置かれるので、中心基準で測らないと約8pxずれる。 */
-  const MIRROR_PROPS=['boxSizing','paddingTop','paddingRight','paddingBottom','paddingLeft',
-    'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
-    'fontFamily','fontSize','fontWeight','fontStyle','fontVariant','letterSpacing','lineHeight',
-    'textTransform','wordSpacing','writingMode','webkitWritingMode','textOrientation','lineBreak',
-    'fontFeatureSettings','wordBreak','overflowWrap','tabSize','direction'];
-  function caretPoint(el,pos){
-    const cs=getComputedStyle(el),div=document.createElement('div'),s=div.style;
-    s.position='absolute';s.visibility='hidden';s.top='0';s.left='-9999px';
-    s.whiteSpace='pre-wrap';s.overflow='hidden';
-    s.boxSizing='border-box';s.width=el.offsetWidth+'px';s.height=el.offsetHeight+'px';
-    MIRROR_PROPS.forEach(p=>{s[p]=cs[p];});
-    div.textContent=el.value.substring(0,pos);
-    const mark=document.createElement('span');
-    mark.textContent='　';                        // 全角ひとつ。列の中央に置かれる
-    div.appendChild(mark);
-    el.parentNode.appendChild(div);
-    const top=mark.offsetTop, centerX=mark.offsetLeft+mark.offsetWidth/2;
-    // 列がぴったり埋まった時、行末の全角空白は次の列へ送られず、その列の末尾にぶら下がる
-    // （空白の hanging）。放っておくと20字目・40字目…で筆先が「いま書き終えた列の下端」に
-    // 出てしまい、次の字が現れる場所（次の列の頭）とずれる。ぶら下がりを見つけたら呼び側で送る。
-    // 判定は「字送り半分」を遊びに取る（列の最後の字と、ぶら下がりは1字ぶん離れている）。
-    const cb=div.clientHeight-(parseFloat(cs.paddingBottom)||0);
-    const over=(top+mark.offsetHeight)>(cb+mark.offsetHeight/2);
-    el.parentNode.removeChild(div);
-    return {top:top,centerX:centerX,over:over};
+     v16：位置は Selection/Range から直接測る（textarea時代のミラーdiv方式は廃止）。
+     collapsed Range の getClientRects() が空を返す環境向けに、幅ゼロのマーカーを
+     一瞬だけ挿入して測る保険を残す。 */
+  function caretViewportRect(){
+    const sel=window.getSelection();
+    if(!sel||!sel.rangeCount)return null;
+    const range=sel.getRangeAt(0).cloneRange();
+    range.collapse(true);
+    let rect=range.getClientRects()[0];
+    if(rect&&(rect.width||rect.height))return rect;
+    const marker=document.createElement('span');
+    marker.textContent='​';
+    range.insertNode(marker);
+    rect=marker.getBoundingClientRect();
+    const parent=marker.parentNode;
+    parent.removeChild(marker);
+    parent.normalize();
+    sel.removeAllRanges();sel.addRange(range);
+    return rect;
   }
   function drawCaret(){
     if(document.activeElement!==ta){vcaret.style.display='none';return;}
     const cw=parseFloat(getComputedStyle(ta).lineHeight)||36;   // 列幅＝カーソルの長さ
-    const p=caretPoint(ta,ta.selectionStart);
-    const x0=ta.offsetLeft, y0=ta.offsetTop, w=ta.clientWidth, h=ta.clientHeight;
-    // ぶら下がっていたら、本当の入力位置は次の列の頭（縦書きなので左へ一列）
-    const cx=p.over?p.centerX-cw:p.centerX, cy=p.over?0:p.top;
-    let x=x0+cx-cw/2-ta.scrollLeft, y=y0+cy-ta.scrollTop-1;
+    const rect=caretViewportRect();
+    if(!rect){vcaret.style.display='none';return;}
+    const box=ta.getBoundingClientRect(), origin=ta.parentNode.getBoundingClientRect();
+    const x0=box.left-origin.left, y0=box.top-origin.top, w=box.width, h=box.height;
+    let x=rect.left-origin.left, y=rect.top-origin.top-1;
     // 80字＝ちょうど4列。埋まり切ると「次の字の場所」は5列目＝紙の外になるので、
     // 最後の列の終わり（左端の列の下）に置く。筆先が紙から出ていかないための留め。
     if(x<x0){ x=x0; y=y0+h-3; }
@@ -1019,19 +1030,54 @@
     // 打鍵の直後は必ず点いている状態から数え直す（書いている最中に消えていると不安になる）
     vcaret.style.animation='none';void vcaret.offsetHeight;vcaret.style.animation='';
   }
-  ['input','click','keyup','focus','select','scroll','compositionend']
+  ['input','click','keyup','focus','scroll','compositionend']
     .forEach(ev=>ta.addEventListener(ev,drawCaret));
   ta.addEventListener('blur',()=>{vcaret.style.display='none';});
   document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)drawCaret();});
   addEventListener('resize',()=>{if(document.activeElement===ta)drawCaret();});
 
+  /* ── 本文の取り出し・上限・改行の作法（v16：contenteditable）───────
+     Enterは改行にしない（縦書きの4列80字はひと続きの流れなので、段落分けは主題にない）。
+     IME変換中（isComposing）はEnterが変換の確定に使われるので横取りしない。
+     貼り付けは書式を持ち込まずプレーンテキストだけ差し込む。 */
+  let composing=false;
+  ta.addEventListener('compositionstart',()=>{composing=true;});
+  ta.addEventListener('compositionend',()=>{composing=false;enforceLimit();});
+  ta.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.isComposing&&!composing)e.preventDefault();
+  });
+  ta.addEventListener('paste',e=>{
+    e.preventDefault();
+    const text=(e.clipboardData||window.clipboardData).getData('text').replace(/[\r\n]+/g,'');
+    document.execCommand('insertText',false,text);
+  });
+  function normalizeEmpty(){
+    if(ta.textContent==='')ta.innerHTML='';   // <br>だけ残ると :empty が成立しない
+  }
+  function enforceLimit(){
+    if(ta.textContent.length>80){
+      const sel=window.getSelection();
+      const atEnd=sel&&sel.rangeCount&&sel.isCollapsed&&
+        sel.getRangeAt(0).endOffset===sel.getRangeAt(0).endContainer.length &&
+        sel.getRangeAt(0).endContainer===ta.lastChild;
+      ta.textContent=ta.textContent.slice(0,80);
+      if(atEnd){                              // カーソルを本文の末尾に戻す
+        const r=document.createRange();r.selectNodeContents(ta);r.collapse(false);
+        sel.removeAllRanges();sel.addRange(r);
+      }
+      normalizeEmpty();
+    }
+  }
+
   // 打鍵スナップショット（TypeTrace）。書いていた時の迷いごと封じて、再生に使う
   let trace=[],traceT0=0;
   ta.addEventListener('input',()=>{
-    cnt.textContent=ta.value.length;
+    normalizeEmpty();
+    if(!composing)enforceLimit();
+    cnt.textContent=ta.textContent.length;
     const now=performance.now();
     if(!trace.length)traceT0=now;
-    if(trace.length<3000)trace.push({t:Math.round(now-traceT0),v:ta.value});
+    if(trace.length<3000)trace.push({t:Math.round(now-traceT0),v:ta.textContent});
   });
   function open(){release();                          // 受け止めていたことばは、そっと放す
                   pane.classList.add('on');pane.setAttribute('aria-hidden','false');
@@ -1057,7 +1103,7 @@
   }
 
   send.addEventListener('click',async()=>{
-    const poem=ta.value.replace(/\s+$/,'');
+    const poem=ta.textContent.replace(/\s+$/,'');
     if(!poem.trim())return;
     send.disabled=true;
     const color=cssOf(toneColor(H,T));   // 放たれることばには必ず色がのる（v12）
@@ -1071,7 +1117,7 @@
         shut();
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
-        ta.value='';cnt.textContent='0';H=H0;T=T0;trace=[];traceT0=0;paint();drawCaret();
+        ta.textContent='';normalizeEmpty();cnt.textContent='0';H=H0;T=T0;trace=[];traceT0=0;paint();drawCaret();
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
         setTimeout(fetchWords,600);
         if(d.care)setTimeout(showCareNote,1600);
