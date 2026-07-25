@@ -8,24 +8,27 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Courier+Prime&display=swap');
-  /* ══ 気分の宙 v7（2026-07-24）══════════════════════════
+  /* ══ 気分の宙 v8（2026-07-25）══════════════════════════
      星は点ではなく、語そのもの。手紙のタグが宙に浮かぶ。
 
-     【位置｜重み付きMDS（Kamada-Kawai）】
+     【位置｜重み付きバネ層（Kamada-Kawai翻案）】
         D(i,j) = √( Σ w_v · d_v(i,j)² ) / √( Σ w_v )
-        L(i,j) = L_MIN + D · (L_MAX − L_MIN)
-        F(i,j) = k · ( ‖p_i − p_j‖ − L(i,j) )
-        w_tag = 1.0 を主軸に、8変数すべてが座標に参加する。
+        座標に参加するのは タグ1.0・場所0.2・開封日0.15・色相0.05 のみ。
+        季節・時刻・経過・天気は非位置チャネル専任（二重符号化を解く）。
+        同じ手紙から出た語には +0.25 のペナルティ＝手紙ではなくタグが房を作る。
+        重なったペアだけを押し合う位置ベースの緩和で、語を読めるように保つ。
 
      【動き｜時間の変数を運動に割り当てる】
         落ち着き　　＝ 封じてからの経過（古い語ほど止まる）
-        現れる遅さ　＝ 開封日までの距離（遠い語ほどゆっくり滲み出る）
-        呼吸の周期　＝ 開封までの残り時間（脈拍には見えない速さに抑える）
-        入る方向　　＝ 時間帯（朝は上から、夜は下から。昼は右、夕は左）
+        現れる遅さ　＝ 開封日までの距離（1.5秒〜8秒かけて滲み出る）
+        呼吸　　　　＝ 覚醒⇄睡眠。来週開く語は4秒で息をし、3年後の語は
+        　　　　　　　 15秒で深く眠る。位相は土地で緩く揃う（合唱にはしない）
+        入る方向　　＝ 封入時刻。6時=上から時計回りに一周する連続角
+        初回だけ、時刻順に語が流れ込む＝秒針が一周する
 
      【非位置チャネル】
         大きさ＝開封日の近さ／色相＝気分の色／彩度＝季節
-        明度＝時間帯／不透明度＝経過／瞬きとにじみ＝天気
+        明度＝時刻をcosで巻く（朝夕は同じ薄明）／不透明度＝経過／瞬きとにじみ＝天気
 
      数字も凡例も軸も出さない。操作もない。一方通行の宙。
      ════════════════════════════════════════════════ */
@@ -67,44 +70,43 @@
   const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let W=0,H=0,DPR=1,t=0;
 
-  /* ── 重み：語が主軸 ── */
-  const WEIGHT={ tag:1.00, hue:0.25, area:0.20, season:0.15, band:0.15,
-                 until:0.10, since:0.10, weather:0.10 };
+  /* ── 重み（v8）：座標はタグが71%を握る。季節・時刻・経過・天気は座標から降ろした ── */
+  const WEIGHT={ tag:1.00, area:0.20, until:0.15, hue:0.05 };
   let WSUM=0; for(const k in WEIGHT) WSUM+=WEIGHT[k];
   const WNORM=Math.sqrt(WSUM);
+  const SAME_LETTER_PUSH=0.25;  // 1通の中の「花」と「終電」が隣にいる必要はない
 
   /* ── バネ ── */
-  const L_MIN=30, L_MAX=560, K_SPRING=0.0026, K_REPEL=0.055, K_CENTER=0.00018;
+  /* L_MAX: v8は座標変数が4つに減り無関係ペアのDが約1.34倍に上がったため、
+     560のままだと全語が画面端に張り付く。420でv7と同等の実効間隔になる */
+  const L_MIN=30, L_MAX=420, K_SPRING=0.0026, K_CENTER=0.00018;
+  const RELAX_ITER=3, RELAX_PUSH=0.35;  // 重なり解消の位置ベース緩和（毎フレーム数回
+                                        // ＝一発レイアウトの20〜30イテレーション相当）
 
   /* ── 動きの意味（時間の変数）── */
-  const DAMP_NEW=0.940, DAMP_OLD=0.780;         // 落ち着き＝経過
-  const ARRIVE_MIN=90,  ARRIVE_SPAN=420;        // 現れる遅さ＝開封までの距離
-  const BREATH_SLOW=0.0022, BREATH_SPAN=0.0042; // 呼吸＝残り時間（脈に見えない速さ）
-  const ENTRY_DEG={ morning:-90, noon:0, evening:180, night:90 }; // 入る方向＝時間帯
-  const FADE_OUT=90;                            // 開封された手紙の語が消えるまで（frames）
-  const MAX_WORDS=150;                          // 語の上限（step は O(n²)）
+  const DAMP_NEW=0.940, DAMP_OLD=0.780;  // 落ち着き＝経過
+  const OPEN_LOG=Math.log1p(3650);       // 開封までの遠さの対数スケール（10年で1.0）
+  const APPEAR_MIN=90, APPEAR_MAX=480;   // B: 現れる遅さ 1.5s〜8s（60fps換算）
+  const SWEEP_FRAMES=150;                // 初回ロードの時計スイープ 0〜2.5s
+  const DELAY_SPAN=120;                  // 遠い語ほど遅れて始まる 0〜2s
+  const BREATH_MIN=240, BREATH_RANGE=660;      // C: 呼吸周期 4s〜15s（覚醒⇄睡眠）
+  const AMP_WAKE=0.05, AMP_SLEEP=0.025;        // C: 振幅 5%〜2.5%（眠るほど浅く）
+  const FADE_OUT=90;                     // 開封された手紙の語が消えるまで（frames）
+  const MAX_WORDS=150;                   // 語の上限（step は O(n²)）
 
   /* ── 非位置チャネル ── */
   const SIZE_MIN=11, SIZE_MAX=30, HORIZON=400;
   const OP_NEW=0.95, OP_OLD=0.24, FADE_SPAN=730;
-  const SAT_LOW=16, SAT_HIGH=70, LUM_NIGHT=46, LUM_MORNING=88;
+  const SAT_LOW=16, SAT_HIGH=70;
 
   const WEATHER={
     clear:{speed:2.0,depth:0.38,blur:0.35}, cloud:{speed:0.7,depth:0.12,blur:0.9},
     rain:{speed:1.1,depth:0.26,blur:1.9},   snow:{speed:0.42,depth:0.30,blur:1.4}
   };
-  const WDIST={
-    clear:{clear:0,cloud:0.35,rain:0.85,snow:0.75},
-    cloud:{clear:0.35,cloud:0,rain:0.45,snow:0.50},
-    rain:{clear:0.85,cloud:0.45,rain:0,snow:0.40},
-    snow:{clear:0.75,cloud:0.50,rain:0.40,snow:0}
-  };
   const SEASON={spring:0.62,summer:1.0,autumn:0.44,winter:0.0};
-  const SEASON_DEG={spring:90,summer:180,autumn:270,winter:0};
-  const BAND={morning:1.0,noon:0.78,evening:0.42,night:0.0};
-  const BAND_DEG={morning:90,noon:180,evening:270,night:0};
 
   let words=[], letters=[];
+  let firstLoad=true;        // 時計スイープは初回ロード限定。再訪・差分同期では回さない
   const byId=new Map();      // 手紙id(ハッシュ) → L。60秒ごとの差分同期に使う
   const areaPhase={};        // 同じ土地の語は一緒に息をする（場所→位相）
   let wuid=0;                // 語の通し番号＝Dキャッシュの鍵
@@ -133,14 +135,12 @@
   function D(a,b){
     const A=a.L,B=b.L; let s=0;
     s+=WEIGHT.tag*Math.pow(dTag(a,b),2);
-    s+=WEIGHT.hue*Math.pow((A.hue==null||B.hue==null)?0.5:circ(A.hue,B.hue,360),2);
     s+=WEIGHT.area*Math.pow(A.area===B.area?0:1,2);
-    s+=WEIGHT.season*Math.pow(circ(SEASON_DEG[A.season]||0,SEASON_DEG[B.season]||0,360),2);
-    s+=WEIGHT.band*Math.pow(circ(BAND_DEG[A.band]||0,BAND_DEG[B.band]||0,360),2);
     s+=WEIGHT.until*Math.pow(Math.abs(A.until-B.until)/HORIZON,2);
-    s+=WEIGHT.since*Math.pow(Math.abs(A.since-B.since)/FADE_SPAN,2);
-    s+=WEIGHT.weather*Math.pow((WDIST[A.weather]||WDIST.cloud)[B.weather]||0.5,2);
-    return Math.sqrt(s)/WNORM;
+    s+=WEIGHT.hue*Math.pow((A.hue==null||B.hue==null)?0.5:circ(A.hue,B.hue,360),2);
+    let d=Math.sqrt(s)/WNORM;
+    if(A===B) d+=SAME_LETTER_PUSH;  // 同じ手紙から出た語は、意味が違うなら離れていい
+    return d;
   }
   function Dc(a,b){
     const k=a.uid<b.uid?a.uid+':'+b.uid:b.uid+':'+a.uid;
@@ -158,32 +158,41 @@
     const since=Math.min(Math.max(0,d.daysSinceSealed||0),FADE_SPAN);
     const near = 1-until/HORIZON;          // 0=遠い未来 … 1=もうすぐ開く
     const age  = since/FADE_SPAN;          // 0=封じたばかり … 1=古い
+    // 開封までの遠さ 0〜1（対数）。来週=0.2、半年=0.63、3年=0.86
+    const far  = Math.min(1, Math.log1p(Math.max(0,d.daysUntilOpen||0))/OPEN_LOG);
+    const h    = (typeof d.hour==='number') ? ((d.hour%24)+24)%24 : 22;
+
+    // 初回ロード限定の時計スイープ：6時=0として時刻順に流れ込む＝秒針が一周する
+    const sweep = (firstLoad&&!REDUCED) ? ((h-6+24)%24)/24*SWEEP_FRAMES : 0;
+    const delay = REDUCED ? 0 : sweep + far*DELAY_SPAN;
 
     const L={
-      id:d.id, set:new Set(tags), hue:d.hue, area:d.area, season:d.season, band:d.band,
+      id:d.id, set:new Set(tags), hue:d.hue, area:d.area, season:d.season,
       weather:(WEATHER[d.weather]?d.weather:'cloud'), until:until, since:since,
       size: SIZE_MIN+near*(SIZE_MAX-SIZE_MIN),
       op:   OP_NEW+age*(OP_OLD-OP_NEW),
       sat:  SAT_LOW+(SEASON[d.season]??0.5)*(SAT_HIGH-SAT_LOW),
-      lum:  LUM_NIGHT+(BAND[d.band]??0.5)*(LUM_MORNING-LUM_NIGHT),
+      lum:  (0.50-0.18*Math.cos(2*Math.PI*h/24))*100,  // 太陽高度。朝夕は同じ薄明
       wx:   WEATHER[d.weather]||WEATHER.cloud,
-      aph:  areaPhase[d.area], born:t, words:[], dying:0,
+      aph:  areaPhase[d.area], born:t+delay, words:[], dying:0,
       // ── 動きの意味 ──
-      damp:   DAMP_NEW+age*(DAMP_OLD-DAMP_NEW),          // A: 古いほど止まる
-      arrive: REDUCED?90:ARRIVE_MIN+(until/HORIZON)*ARRIVE_SPAN, // B: 遠いほど遅く現れる
-      omega:  BREATH_SLOW+near*BREATH_SPAN               // C: 近いほど短い周期
+      damp:   DAMP_NEW+age*(DAMP_OLD-DAMP_NEW),               // A: 古いほど止まる
+      arrive: REDUCED?90:APPEAR_MIN+far*(APPEAR_MAX-APPEAR_MIN), // B: 遠いほど遅く滲み出る
+      period: BREATH_MIN+far*BREATH_RANGE,                    // C: 4s=覚醒 〜 15s=深い眠り
+      amp:    AMP_WAKE-far*(AMP_WAKE-AMP_SLEEP)               // C: 眠るほど浅い呼吸
     };
 
-    // 入ってくる方向＝時間帯
-    const deg=(ENTRY_DEG[d.band]??0)*Math.PI/180;
-    const jitter=(Math.random()-0.5)*0.5;
-    const R=Math.max(W,H)*0.78;
-    const ex=W/2+Math.cos(deg+jitter)*R, ey=H/2+Math.sin(deg+jitter)*R;
+    // 入ってくる方向＝封入時刻。6時=上を基準に時計回り（θ=π/2で右=12時）
+    const theta=((h-6)/24)*2*Math.PI;
+    const R=1.4*Math.max(W,H)/2;
+    const ex=W/2+R*Math.sin(theta), ey=H/2-R*Math.cos(theta);
 
     tags.forEach(tag=>{
       const w={ tag:tag, L:L, uid:wuid++, ph:Math.random()*Math.PI*2,
         x:ex+(Math.random()-0.5)*40, y:ey+(Math.random()-0.5)*40,
-        vx:0, vy:0, born:t, hw:0 };
+        vx:0, vy:0, born:t, hw:0,
+        // 呼吸の位相＝土地で緩く揃う＋語ごとの±0.8radジッター（合唱＝同期誘導を防ぐ）
+        bph:((L.aph+(wuid*137%1000)/1000*0.8)/(2*Math.PI))%1 };
       // 文字幅を生成時に確定させる（初回フレームの反発抜けを防ぐ）
       ctx.font=`500 ${L.size.toFixed(1)}px 'Shippori Mincho',serif`;
       w.hw=ctx.measureText(tag).width;
@@ -217,8 +226,11 @@
   function step(){
     const n=words.length;
     for(let i=0;i<n;i++){
+      const a=words[i];
+      if(t<a.L.born) continue;             // まだ入場前の語は宙の外で待つ
       for(let j=i+1;j<n;j++){
-        const a=words[i],b=words[j];
+        const b=words[j];
+        if(t<b.L.born) continue;
         const dx=b.x-a.x, dy=b.y-a.y;
         const d=Math.sqrt(dx*dx+dy*dy)||0.01;
         const ux=dx/d, uy=dy/d;
@@ -228,29 +240,64 @@
         const k=(d>Lij)?K_SPRING*(1-Dij*0.75):K_SPRING;
         const f=(d-Lij)*k;
         a.vx+=ux*f; a.vy+=uy*f; b.vx-=ux*f; b.vy-=uy*f;
-        const min=(a.hw+b.hw)*0.55+10;
-        if(d<min){
-          const r=(min-d)*K_REPEL;
-          a.vx-=ux*r; a.vy-=uy*r; b.vx+=ux*r; b.vy+=uy*r;
-        }
       }
     }
     words.forEach(w=>{
+      if(t<w.L.born) return;
       w.vx+=(W/2-w.x)*K_CENTER; w.vy+=(H/2-w.y)*K_CENTER;
       // 落ち着き＝経過。新しい語ほど減衰が弱く、まだ位置が定まらない
       w.vx*=w.L.damp; w.vy*=w.L.damp;
       w.x+=w.vx; w.y+=w.vy;
+    });
+    relax();
+    words.forEach(w=>{
+      if(t<w.L.born) return;
       const m=30;
       w.x=Math.max(m,Math.min(W-m,w.x));
       w.y=Math.max(m,Math.min(H-m,w.y));
     });
   }
 
+  /* 1-3: リラクゼーションパス。最小距離を割っているペアだけを位置で押し合う。
+     バネの大域構造には触れない（局所的な重なり解消のみ）＝語が読めるようにする */
+  function relax(){
+    const n=words.length;
+    for(let it=0;it<RELAX_ITER;it++){
+      for(let i=0;i<n;i++){
+        const a=words[i];
+        if(t<a.L.born) continue;
+        for(let j=i+1;j<n;j++){
+          const b=words[j];
+          if(t<b.L.born) continue;
+          let dx=b.x-a.x, dy=b.y-a.y;
+          let d=Math.sqrt(dx*dx+dy*dy);
+          if(d<1){ // ほぼ同一点：方向が定まらずほどけなくなるので、決定的な向きへ逃がす
+            const ang=a.uid*2.399+b.uid;
+            dx=Math.cos(ang); dy=Math.sin(ang); d=1;
+          }
+          const rmin=(a.hw+b.hw)*0.55+10;
+          if(d>=rmin) continue;
+          const push=(rmin-d)*RELAX_PUSH*0.5/d;
+          a.x-=dx*push; a.y-=dy*push;
+          b.x+=dx*push; b.y+=dy*push;
+        }
+      }
+    }
+  }
+
   function fadeOf(L){
-    let f=Math.min(1,(t-L.born)/L.arrive);
+    let f=Math.max(0,Math.min(1,(t-L.born)/L.arrive));  // born は未来のこともある（スイープ待ち）
     f=f*f*(3-2*f);                                   // smoothstep
     if(L.dying) f*=Math.max(0,1-(t-L.dying)/FADE_OUT);
     return f;
+  }
+
+  /* 4-5: 呼吸の波形。吸気1.5s→呼気2.0s→休止0.5s の非対称＋休止。
+     対称sinは機械の脈動に見える。休止があることで「次の吸気」が待たれる */
+  function breathWave(p){
+    if(p<0.375) return Math.sin((p/0.375)*Math.PI/2);          // 吸気
+    if(p<0.875) return Math.cos(((p-0.375)/0.5)*Math.PI/2);    // 呼気（ゆっくり）
+    return 0;                                                  // 休止
   }
 
   function draw(){
@@ -280,10 +327,11 @@
       if(ease<=0) return;
       // 瞬き＝天気。位相は語ごと（全語が同時に瞬かないように）
       const tw=REDUCED?1:1-L.wx.depth*(0.5+0.5*Math.sin(t*0.018*L.wx.speed+w.ph));
-      // 呼吸＝残り時間。位相は場所で揃う
-      const breath=REDUCED?1:0.86+0.14*Math.sin(t*L.omega+L.aph);
-      const op=L.op*tw*breath*ease;
-      const size=L.size*(0.82+0.18*ease);
+      // 呼吸＝大きさの伸縮。周期は覚醒⇄睡眠（4s〜15s）、位相は土地で緩く揃う
+      const p=(t/L.period+w.bph)%1;
+      const s=REDUCED?1:1+L.amp*breathWave(p);
+      const op=L.op*tw*ease;
+      const size=L.size*(0.82+0.18*ease)*s;
       const col=(l,o)=> L.hue==null
         ? `hsla(228,7%,${l}%,${o})`
         : `hsla(${L.hue},${L.sat}%,${l}%,${o})`;
@@ -319,6 +367,7 @@
       });
     byId.forEach((L,id)=>{ if(!keep.has(id)) unseal(L); });
     keep.forEach(id=>{ if(!byId.has(id)) seal(incoming.get(id)); });
+    firstLoad=false;   // 時計スイープはここで閉じる。以後の差分同期は B の遅延のみ
     updateWordList();
   }
 

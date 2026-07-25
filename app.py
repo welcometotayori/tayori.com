@@ -2279,7 +2279,9 @@ _OTHERS_MAX = 120          # 宙に混ぜる他者の手紙の上限。超えた
 _others_lock = threading.Lock()
 _others_cache = {"t": 0.0, "letters": []}   # letters: (user_id, letter_dict)
 
-_MOOD_BAND = {"morning": "morning", "day": "noon", "evening": "evening", "night": "night"}
+# v8: time_bucket（4値enum）の参照は停止。列は既存データ互換のため残すが、
+# 宙へは sent_date から出す連続時刻(0.0–24.0)だけを渡す。読めない行の逃げ道にのみ使う。
+_MOOD_HOUR_FALLBACK = {"morning": 8.0, "day": 13.0, "evening": 17.5, "night": 22.0}
 
 
 def _mood_season(sent_date):
@@ -2296,21 +2298,14 @@ def _mood_season(sent_date):
     return "winter"
 
 
-def _mood_band(row):
-    b = _MOOD_BAND.get(row["time_bucket"] if "time_bucket" in row.keys() else None)
-    if b:
-        return b
+def _mood_hour(row):
+    """封入時刻を 0.0–24.0 の連続値で返す（v8）。sent_date の時・分から算出。
+    sent_date が読めない行だけ time_bucket の中央値へ逃がす（それも無ければ夜=22時）。"""
     try:
-        h = int(row["sent_date"][11:13])
+        return int(row["sent_date"][11:13]) + int(row["sent_date"][14:16]) / 60.0
     except (TypeError, ValueError, IndexError):
-        return "night"
-    if 5 <= h < 11:
-        return "morning"
-    if 11 <= h < 16:
-        return "noon"
-    if 16 <= h < 19:
-        return "evening"
-    return "night"
+        tb = row["time_bucket"] if "time_bucket" in row.keys() else None
+        return _MOOD_HOUR_FALLBACK.get(tb, 22.0)
 
 
 def _mood_weather(row):
@@ -2412,8 +2407,8 @@ def _mood_name_block_for_user(db, user_id):
 
 
 def _mood_letter(r, now, blur=False, allow_body=False, extra_block=None):
-    """letters行 → v7の手紙dict。対象外（開封済み・到着済み・語なし）は None。
-    blur=True は他人の手紙：色相を7色量子化後の値に、日数を7日単位に丸める。
+    """letters行 → v8の手紙dict。対象外（開封済み・到着済み・語なし）は None。
+    blur=True は他人の手紙：色相を7色量子化後の値に、日数を7日単位・時刻を1時間に丸める。
     allow_body=True（本人のみ）は emos が無い時、本文から語を抽出する（C案・本文秘匿の例外）。
     人の名前・あだ名は emos タグ・抽出語の両方から除く（extra_block は本人の登録名など）。"""
     try:
@@ -2439,9 +2434,11 @@ def _mood_letter(r, now, blur=False, allow_body=False, extra_block=None):
     except (TypeError, ValueError):
         return None
     hue = _mood_hue(_quantize_to_swatch(r["seal_color"]) if blur else r["seal_color"])
+    hour = _mood_hour(r)
     if blur:
         until = (until // 7) * 7
         since = (since // 7) * 7
+        hour = float(int(hour))   # 他人の封入時刻は分を出さない（1時間に丸める）
     # エリアは平文を出さずハッシュだけ。クライアントは同一判定にしか使わない。
     # 位置なしの手紙は手紙ごとに別の値＝どこの語とも「同じ土地」にならない。
     area_src = r["area_name"] or ("letter:" + r["id"])
@@ -2450,7 +2447,7 @@ def _mood_letter(r, now, blur=False, allow_body=False, extra_block=None):
         "tags": tags,
         "hue": hue,
         "season": _mood_season(r["sent_date"]),
-        "band": _mood_band(r),
+        "hour": hour,
         "weather": _mood_weather(r),
         "area": hashlib.sha256(area_src.encode()).hexdigest()[:6],
         "daysUntilOpen": until,
