@@ -1,4 +1,4 @@
-{# 宙の外の紙（/about・/philosophy・/operator・/contact）と手元の棚で共通の見た目。
+{# 宙の外の紙（/about・/contact・/terms・/privacy）と、自分のページ（/me）で共通の見た目。
    素材と寸法は _sky_tokens.html。ここは「紙の組み方」だけを持つ。
    宙とトーンを揃える：闇・明朝・大きな余白・罫だけ。カードも錠剤も影も作らない
    （v3.10 の物質メタファー＝汎用コンポーネント原型を持ち込まない）。 #}
@@ -19,7 +19,14 @@
   h1 .romaji{display:block;margin-top:var(--s2);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
              font-size:9px;letter-spacing:0.42em;color:var(--thread);text-transform:uppercase}
   h2{margin:var(--s5) 0 var(--s3);font-size:var(--t-body);font-weight:500;letter-spacing:0.24em;
-     line-height:1.9;color:var(--ink-1)}
+     line-height:1.9;color:var(--ink-1);scroll-margin-top:var(--s4)}
+  /* 章の副題（旧・独立ページの romaji を、章の高さに合わせて置き直したもの） */
+  h2 .sub{display:block;margin-top:6px;
+          font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+          font-size:9px;letter-spacing:0.42em;color:var(--thread);text-transform:uppercase}
+  /* 章の中の小見出し。h2 より一段だけ弱く（大きさではなく色と字間で差を作る） */
+  h3{margin:var(--s4) 0 var(--s2);font-size:13px;font-weight:500;letter-spacing:0.18em;
+     line-height:2;color:var(--ink-2)}
   p{margin:0 0 var(--s4);font-size:13.5px;line-height:2.5;letter-spacing:var(--tr-body);
     word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .quiet{color:var(--ink-3);font-size:12.5px;line-height:2.3}
@@ -39,6 +46,11 @@
   .foot-links a:active{opacity:.62}
   .foot-mail{text-align:center;font-size:11.5px;letter-spacing:0.1em;color:var(--ink-4)}
   .foot-mail a{color:var(--thread)}
+  /* 約束ごとの一行。読む必要のある人には見えて、そうでない人の目には入らない濃さ */
+  .foot-fine{text-align:center;margin:var(--s3) 0 0;font-size:11px;letter-spacing:0.14em}
+  .foot-fine a{color:var(--ink-4);text-decoration:none;
+               display:inline-block;min-height:36px;padding:10px 6px}
+  .foot-fine a:hover{color:var(--ink-2)}
   /* 紙は、開いた時に立ち上がる（不透明度だけでなく縮尺も動かす／Apple §12）。
      読み物なので控えめに、一度だけ。 */
   @media (prefers-reduced-motion: no-preference){

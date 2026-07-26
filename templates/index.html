@@ -946,7 +946,7 @@
 <body>
 <div class="gate" id="gate">
   <div class="gate-card">
-    <h1>たより<span class="vh"> — 意味のない言葉を、放つ。それはいつか、知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
+    <h1>たより<span class="vh"> — あなたの何気ない言葉が、いつか知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
     <div class="romaji">tayori</div>
     <div class="gate-tag">ことばを tayori-たより- へ放つために。<br>はじめに、あなたの名前を。</div>
     <div class="gate-form">
@@ -1185,7 +1185,7 @@
     遅 れ て 届 く 自 分 へ の 手 紙<br>
     <nav aria-label="フッター" style="margin-top:16px; font-family:'Shippori Mincho', serif; letter-spacing:0.05em;">
       <a href="/about" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">tayori-たより-について</a>
-      <a href="/philosophy" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">理念</a>
+      <a href="/about#philosophy" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">理念</a>
       <a href="/contact" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">お問い合わせ</a>
       <a href="/terms" target="_blank" style="color:var(--ink-mute); text-decoration:none; margin-right:16px;">利用規約</a>
       <a href="/privacy" target="_blank" style="color:var(--ink-mute); text-decoration:none;">プライバシーポリシー</a>
@@ -2461,7 +2461,7 @@ async function detectWeather(){
     h+='<div class="letter-body">';
     if(A.poem)h+='<div class="letter-poem'+(pv?' vertical':'')+'">'+(pv?tcy(esc(A.poem)):esc(A.poem))+'</div>';
     h+='<button type="button" class="like-mark'+(A.liked?' on':'')+'" data-slike="'+A.did+'" aria-pressed="'+(A.liked?'true':'false')+'">'+
-       '<span class="lm-dot" aria-hidden="true"></span><span class="lm-txt">'+(A.liked?'印を結びました':'このことばに、印を結ぶ')+'</span></button>';
+       '<span class="lm-dot" aria-hidden="true"></span><span class="lm-txt">'+(A.liked?'しるしを、つけました':'そっと、しるしをつける')+'</span></button>';
     h+='<p class="sky-anon-note">だれの、いつのことばかは、<wbr>だれにもわかりません。<br>この印も、放った人には<wbr>伝わりません。</p>';
     h+='</div>';
     return h;
@@ -2495,7 +2495,7 @@ async function detectWeather(){
     // 降ってきたことばへの静かな印（いいね）。押しても誰にも伝わらず、自分の記録にだけ残る
     if(L.sky)
       h+='<button type="button" class="like-mark'+(L.liked?' on':'')+'" data-like="'+L.id+'" aria-pressed="'+(L.liked?'true':'false')+'">'+
-         '<span class="lm-dot" aria-hidden="true"></span><span class="lm-txt">'+(L.liked?'印を結びました':'このことばに、印を結ぶ')+'</span></button>';
+         '<span class="lm-dot" aria-hidden="true"></span><span class="lm-txt">'+(L.liked?'しるしを、つけました':'そっと、しるしをつける')+'</span></button>';
 
     // 届いた時の自分の記録（封をした日 → 開けた日の「層」）
     h+='<div class="strata">';

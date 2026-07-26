@@ -213,8 +213,9 @@ app.config.update(
 SITE_URL = os.environ.get("SITE_URL", "https://www.tayori-letter.com").rstrip("/")
 # sitemap/robots に載せてよい「公開ページ」だけを集約（増えたらここに足す）。
 # 手紙(/open)・API・管理・認証系は絶対に載せない。
-PUBLIC_PATHS = ["/", "/about", "/philosophy", "/operator", "/contact",
-                "/terms", "/privacy"]
+# sitemap に載せるのは「そのURLが本文を持つ」ページだけ。/philosophy・/operator は
+# 2026-07-26 に /about の章へ畳んで 301 になったので、ここからは外す（301先を出さない）。
+PUBLIC_PATHS = ["/", "/about", "/contact", "/terms", "/privacy"]
 
 
 @app.context_processor
@@ -775,6 +776,11 @@ def init_db():
             # 約束の下で記録されたので、公開経路には決して載せない。宙に流してよいのは、
             # 「打った過程がそのまま宙に流れます」を書く前に見た人のことば＝この列だけ。
             "ALTER TABLE letters ADD COLUMN trace_z BLOB",
+            # 部屋の席順（2026-07-26）。トップの円配置で、12時から時計回りに座る番号。
+            # 0 が真上。作った順に空いている最小の番号を取り、部屋が消えても**繰り上げない**
+            # ＝穴は穴のまま残す（「自分の部屋はあの位置」という空間の記憶を壊さないため）。
+            # 座標そのものは持たない。番号→座標は画面側の純関数（roomSeat）が決める。
+            "ALTER TABLE rooms ADD COLUMN position_index INTEGER",
         ):
             try:
                 db.execute(stmt)
@@ -991,13 +997,15 @@ def init_db():
                 archived   INTEGER NOT NULL DEFAULT 0,
                 locked_at  TEXT,
                 created_at TEXT NOT NULL,
-                deleted_at TEXT
+                deleted_at TEXT,
+                position_index INTEGER
             )""")
         # 生きている部屋の中でだけ名前が一意（消した部屋の名前は再び使える）。
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS rooms_name_norm_uniq"
                    " ON rooms (name_norm) WHERE deleted_at IS NULL")
         db.execute("CREATE INDEX IF NOT EXISTS idx_letters_room ON letters (room_id)")
         _seed_rooms(db)
+        _seat_rooms(db)
         _moved = _backfill_rooms(db)
         if _moved:
             print("[たより] 部屋へ移送: "
@@ -1445,9 +1453,11 @@ def open_letter_page(lid):
         return redirect("/?start=1")
     return redirect("/mood?open=" + safe if safe else "/mood")
 
-# ── 宙の外側にある、静かな数ページ（2026-07-25 v13）────────────────
+# ── 宙の外側にある、静かな数ページ（2026-07-25 v13 → 2026-07-26 整理）──
 # 宙そのものは説明の場所ではない（数字も凡例も出さない）。だから「何が起きる場所か」
-# 「なぜ作ったか」「だれが運んでいるか」は宙の外に紙として置き、右上の栞から開く。
+# 「なぜ作ったか」「だれが運んでいるか」は宙の外に紙として置き、左上のしるしから開く。
+# 2026-07-26：理念・運営者は独立ページをやめ、/about の章に畳んだ（同じ重さの項目が
+# 並ぶほど、どれも読まれなくなる）。旧URLは 301 で章のアンカーへ送る。
 # どれも静的（DBも判定も持たない）＝ /terms・/privacy と同じ作り。
 @app.route("/about")
 def about_page():
@@ -1456,12 +1466,12 @@ def about_page():
 
 @app.route("/philosophy")
 def philosophy_page():
-    return render_template("philosophy.html")
+    return redirect("/about#philosophy", 301)
 
 
 @app.route("/operator")
 def operator_page():
-    return render_template("operator.html")
+    return redirect("/about#operator", 301)
 
 
 @app.route("/contact")
@@ -1501,12 +1511,14 @@ def robots_txt():
         "User-agent: *\n"
         "Allow: /$\n"
         "Allow: /about\n"
+        # /philosophy・/operator は /about の章へ 301（クロールはされるが、載るのは /about）
         "Allow: /philosophy\n"
         "Allow: /operator\n"
         "Allow: /contact\n"
         "Allow: /terms\n"
         "Allow: /privacy\n"
         "Disallow: /open/\n"
+        "Disallow: /me\n"
         "Disallow: /shelf\n"
         "Disallow: /mine\n"
         "Disallow: /map\n"
@@ -3825,11 +3837,68 @@ def _room_of_letter(db, letter_id):
     return r["room_id"] if r else None
 
 
-def _rooms_created_today(db, user_id):
-    """その人が「宙の一日」（JST朝4時区切り）のあいだに作った部屋の数。"""
+def _free_seat(db):
+    """空いている最小の席番号（2026-07-26）。消した部屋の席は空いたままにするので、
+    次に作られた部屋がその穴に座る。繰り上げはしない＝他の部屋は動かない。
+    deleted_at の付いた部屋の席は解放する（消えた部屋の位置を永久に予約はしない）。"""
+    taken = {r["position_index"] for r in db.execute(
+        "SELECT position_index FROM rooms"
+        " WHERE deleted_at IS NULL AND position_index IS NOT NULL")}
+    n = 0
+    while n in taken:
+        n += 1
+    return n
+
+
+def _seat_rooms(db):
+    """席番号の後追い付与。冪等——既に番号を持つ部屋には触れない。
+    初回は created_at 昇順（同時刻は id 順）で 0 から詰めて配る＝いま在る部屋の
+    並びが、そのまま円の12時から時計回りの順になる。"""
+    rows = db.execute(
+        "SELECT id FROM rooms WHERE deleted_at IS NULL AND position_index IS NULL"
+        " ORDER BY created_at, id").fetchall()
+    if not rows:
+        return 0
+    taken = {r["position_index"] for r in db.execute(
+        "SELECT position_index FROM rooms"
+        " WHERE deleted_at IS NULL AND position_index IS NOT NULL")}
+    n = 0
+    for r in rows:
+        while n in taken:
+            n += 1
+        db.execute("UPDATE rooms SET position_index=? WHERE id=?", (n, r["id"]))
+        taken.add(n)
+    db.commit()
+    return len(rows)
+
+
+def _rooms_created_ever(db, user_id):
+    """その人がいま持っている部屋の数（2026-07-26：一日にひとつ → 一人ひとつ）。
+    消した部屋は数えない。消せるのは「まだ誰の声も入っていない空の部屋」だけなので
+    （_room_lock_if_needed・api_rooms_delete）、作り直しは実質「名前の付け直し」に等しい。
+    ここを『作った総数』にすると、名前を打ち間違えた人が二度と部屋を持てなくなる。"""
     return db.execute(
-        "SELECT COUNT(*) c FROM rooms WHERE created_by=? AND created_at>=?",
-        (user_id, _sky_day_start().isoformat(timespec="seconds"))).fetchone()["c"]
+        "SELECT COUNT(*) c FROM rooms WHERE created_by=? AND deleted_at IS NULL",
+        (user_id,)).fetchone()["c"]
+
+
+def _room_lights(db, limit=3):
+    """部屋ごとの灯の色（2026-07-26）。その部屋にいま漂っていることばの封の色を、
+    新しいものから最大3つ。件数は返さない——3つに満たない部屋は満たないまま返すが、
+    それは「静かな部屋」以上のことは語らない（3つ以上あるかどうかも分からない）。
+    本文も題も id も返さない。灯は色だけ。"""
+    out = {}
+    for e in sorted(_sky_pool(), key=lambda x: x[8]):   # x[8]=経過日数。新しい順
+        rid = e[6]
+        if rid is None:
+            continue
+        c = e[0].get("color")
+        if not c:
+            continue
+        lights = out.setdefault(rid, [])
+        if len(lights) < limit:
+            lights.append(c)
+    return out
 
 
 def _room_lock_if_needed(db, room_id, author_id):
@@ -3847,30 +3916,37 @@ def _room_lock_if_needed(db, room_id, author_id):
 
 @app.route("/api/rooms")
 def api_rooms():
-    """漂っている部屋の一覧。件数は返さない（原則2）。
-    座標も順序も持たせない——並びは毎回シャッフルして返し、位置は画面側が毎回ランダムに
-    決める。活動量順・新着順のような視覚的序列を作らないため。"""
+    """部屋の一覧。件数は返さない（原則2）。
+    並びは固定（2026-07-26 Kosei確定）。それまでは毎回シャッフルしていたが、部屋が
+    漂うのをやめて整列させたので、見るたびに面子が入れ替わると落ち着かない
+    ——「あの部屋はここ」と覚えられることを採った。順は「元からある14室 → 作られた順」＝
+    活動量とも新しさの評価とも無関係な、ただの生まれた順。
+    lights は部屋ごとの灯の色（最大3・新しい順）。数も中身も語らない。"""
     db = get_db()
     rows = db.execute(
-        "SELECT id, name, is_default, archived, created_by, locked_at"
-        "  FROM rooms WHERE deleted_at IS NULL").fetchall()
+        "SELECT id, name, is_default, archived, created_by, locked_at, position_index"
+        "  FROM rooms WHERE deleted_at IS NULL"
+        "  ORDER BY COALESCE(position_index, 1000000), id").fetchall()
     me = session.get("uid")
+    lights = _room_lights(db)
     rooms = [{"id": r["id"], "name": r["name"],
               "is_default": bool(r["is_default"]), "archived": bool(r["archived"]),
+              # 席番号（円配置）。NULL のまま来た部屋は画面側が末尾へ座らせる
+              "seat": r["position_index"],
               # mine は「消せるかもしれない部屋」を本人の画面にだけ示すためのもの。
               # 誰が作ったかは他人には決して返さない（部屋にも作者を出さない）。
-              "mine": bool(me and r["created_by"] == me and not r["locked_at"])}
+              "mine": bool(me and r["created_by"] == me and not r["locked_at"]),
+              "lights": lights.get(r["id"], [])}
              for r in rows]
-    random.shuffle(rooms)
     return jsonify(rooms=rooms,
-                   can_create=bool(me) and _rooms_created_today(db, me) == 0,
+                   can_create=bool(me) and _rooms_created_ever(db, me) == 0,
                    name_max=ROOM_NAME_MAX)
 
 
 @app.route("/api/rooms", methods=["POST"])
 @login_required
 def api_rooms_create():
-    """誰でも部屋を作れる。ただし1人1日1部屋（宙の一日＝JST朝4時区切り）。
+    """誰でも部屋を作れる。ただし一人ひとつだけ（2026-07-26：一日にひとつ から変更）。
     同じ名前の部屋が既にあるときはエラーにせず、その部屋へ案内する。"""
     data = request.get_json(force=True, silent=True) or {}
     name = str(data.get("name") or "").strip()
@@ -3884,14 +3960,16 @@ def api_rooms_create():
     if exist:
         return jsonify(ok=True, existed=True, id=exist["id"], name=exist["name"],
                        message="その部屋は、もうあります。")
-    if _rooms_created_today(db, uid()) >= 1:
-        return jsonify(error="部屋を作れるのは、一日にひとつだけです。"), 429
+    if _rooms_created_ever(db, uid()) >= 1:
+        return jsonify(error="部屋を作れるのは、一人ひとつだけです。"), 429
     now = datetime.now().isoformat(timespec="seconds")
     try:
         with _WRITE_LOCK:
+            seat = _free_seat(db)
             cur = db.execute(
-                "INSERT INTO rooms (name, name_norm, created_by, is_default, archived, created_at)"
-                " VALUES (?,?,?,0,0,?)", (name, norm, uid(), now))
+                "INSERT INTO rooms (name, name_norm, created_by, is_default, archived,"
+                " created_at, position_index) VALUES (?,?,?,0,0,?,?)",
+                (name, norm, uid(), now, seat))
             db.commit()
             rid = cur.lastrowid
     except sqlite3.IntegrityError:
@@ -3999,42 +4077,11 @@ def api_sky():
     return jsonify(words=words)
 
 
-@app.route("/api/sky/field")
-def api_sky_field():
-    """天灯の野（v2追補 §3）。宙にあることば全部の「位置の材料」だけを返す：
-    公開id・色・経過日数・縦書き・部屋・flare。本文は載せない（触れた時に word/<h> で引く）。
-    読み手ごとの除外（自分の・今日見た・棚の）はここには持ち込まない——野は「降ってくる偶然」
-    ではなく、消えずに在り続けるものの眺めなので、自分のことばもそこに灯っている。
-    ?room=<id> でその部屋だけに絞る。無指定は宙の全部（部屋の外から遠くを見る眺め）。"""
-    pool = _sky_pool()
-    raw = request.args.get("room")
-    if raw is not None and str(raw).strip() != "":
-        try:
-            pool = _in_room(pool, int(raw))
-        except (TypeError, ValueError):
-            pool = []
-    words = []
-    for e in pool:
-        fl = e[7]
-        words.append([
-            e[0]["id"],                     # 公開id
-            e[0]["color"],                  # 封の色
-            round(e[8], 1),                 # 経過日数（Z軸。0.1日=2.4h より細かくは出さない）
-            1 if e[0]["vertical"] else 0,
-            e[6],                           # 部屋id（クライアント側の絞り込みに使う）
-            [fl[0], fl[1], fl[2]] if fl else 0,   # flare: [倍率, 開始からの秒, 継続秒]
-        ])
-    return jsonify(words=words)
-
-
-@app.route("/api/sky/word/<h>")
-def api_sky_word(h):
-    """天灯ひとつの中身。野で触れられた時にだけ引く（本文を一覧では配らない）。"""
-    hit = _sky_index().get(h)
-    if not hit:
-        return jsonify(error="そのことばは、もう宙にありません。"), 404
-    lid, poem, color, vertical, title = hit
-    return jsonify(poem=poem, color=color, vertical=bool(vertical))
+# 天灯の野（v2追補 §3）の /api/sky/field と、野で触れた一灯の中身を返す
+# /api/sky/word/<h> は 2026-07-26 に撤去した。眺めを消したので、本文を一件ずつ
+# 引ける口も閉じておく（漂いに出ることばは /api/sky が本文ごと配る）。
+# pool のエントリはいまも経過日数（e[8]）と flare（e[7]）を持っている——flare は
+# air_distance を縮める形（§5）で辿りに効き続けるので、そのまま残してある。
 
 
 @app.route("/api/sky/word/<h>/trace")
@@ -4896,23 +4943,32 @@ def _shelf_source(db, src, ref):
     return None
 
 
-@app.route("/shelf")
-def shelf_page():
-    # 棚は本人だけの場所。未ログインなら宙の門へ（APIと違いページなので素直に送る）。
+@app.route("/me")
+def me_page():
+    """自分のページ（2026-07-26 ナビ整理）。棚と書架を、ひとつの面のタブにまとめた。
+    それまでは /shelf と /mine が別々の紙で、栞に9項目が同じ重さで並んでいた。
+    どちらも「本人にしか見えない、自分のもの」なので、面をひとつにして中で切り替える。"""
     if not session.get("uid"):
         return redirect("/?start=1")
-    return render_template("shelf.html")
+    tab = request.args.get("tab")
+    return render_template("me.html", start_tab="archive" if tab == "archive" else "shelf")
+
+
+# 旧URL。栞から消したが、ブックマーク・メール・外からのリンクは生きている（301）。
+@app.route("/shelf")
+def shelf_page():
+    return redirect("/me?tab=shelf", 301)
+
+
+@app.route("/mine")
+def mine_page_legacy():
+    return redirect("/me?tab=archive", 301)
 
 
 # ══ 自分の書架（v2 §11）═══════════════════════════════════════════
-# 自分が放ったことばの全部が並ぶ、本人だけの場所。
+# 自分が放ったことばの全部が並ぶ、本人だけの場所。/me の「書架」タブが入口。
 # 並べるのは時間順ではなく「季節と気分の色」。件数・文字数・連続日数は一切出さない。
 # 3年書いたら、眺めただけで「自分は冬に多く書く」「去年の夏は青ばかりだった」が分かる状態へ。
-@app.route("/mine")
-def mine_page():
-    if not session.get("uid"):
-        return redirect("/?start=1")
-    return render_template("mine.html")
 
 
 # ══ 設定（v2.2 §4）═══════════════════════════════════════════════

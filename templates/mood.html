@@ -35,7 +35,7 @@
      数字も凡例も軸も出さない。一覧も検索もない。一方通行の宙。
 
      ── v14 でやったこと ──────────────────────────────
-     ① 漂うことばに触れられるようになった（受け止める → 印を結ぶ／手元に残す）。
+     ① 漂うことばに触れられるようになった（受け止める → しるしをつける／棚にとっておく）。
      ② 素材と寸法を _sky_tokens.html の一枚へ畳んだ（宙・棚・紙で共通）。
         以前は rgba(250,248,243, .34/.4/.42/.45/.5/.52/.55/.58/.6/.62/.7/.72/.74/.76/.8/.85/.86/.88/.9/.92/.93/.95)
         と透明度が20種類以上あり、これが「機械が並べた画面」に見える最大の原因だった。
@@ -63,9 +63,12 @@
   .shiori{pointer-events:auto;min-height:var(--touch);min-width:var(--touch);
           display:flex;align-items:center;justify-content:center;
           background:none;border:none;padding:10px}
-  .shiori line{stroke:var(--ink-2);transition:stroke .22s var(--ease)}
-  .shiori:hover line{stroke:var(--ink-1)}
+  /* しるし。塗りだけで描く（線画にしない＝灯は輪郭を持たない） */
+  .shiori .mark{fill:var(--ink-2);transition:fill .3s var(--ease),opacity .3s var(--ease);opacity:.9}
+  .shiori:hover .mark{fill:var(--ink-1);opacity:1}
   .shiori:active{opacity:.62}
+  /* 開いている間は、しるし自体がすこし灯る（開閉の状態を、別の記号を足さずに示す） */
+  .shiori[aria-expanded="true"] .mark{fill:var(--paper,#efe9dc);opacity:1}
   .shiori-list{position:fixed;top:calc(50px + var(--safe-t));right:calc(20px + var(--safe-r));
                z-index:16;margin:0;padding:6px 0 6px 20px;
                list-style:none;display:flex;flex-direction:column;align-items:flex-end;
@@ -93,8 +96,20 @@
                  letter-spacing:0.18em;text-align:right;transition:color .22s var(--ease)}
   .shiori-list a:hover{color:var(--ink-1)}
   .shiori-list a:active{opacity:.62}
-  .shiori-list .thin a{font-size:11.5px;letter-spacing:0.14em;color:var(--ink-4);
-                       min-height:38px;padding:11px 8px 10px 0}
+  /* 細線のしるしは「自分のページ」「設定」だけに。全部に付けると、印は印でなくなる。
+     字の右に置く（行は右揃えなので、字と罫のあいだに割り込ませない） */
+  .shiori-list .ico{width:13px;height:13px;margin-right:9px;vertical-align:-1px;
+                    fill:none;stroke:var(--ink-4);stroke-width:1;
+                    stroke-linecap:round;stroke-linejoin:round;
+                    transition:stroke .22s var(--ease)}
+  .shiori-list a:hover .ico{stroke:var(--thread)}
+  /* 約束ごとは行に数えない。四つの下に罫を一本はさんで、一行の細い字で置く
+     （＝紙の足元と同じ扱い。宙には足元が無いので、栞の裾がその役をする） */
+  .shiori-list .fine{margin-top:6px;padding-top:8px;border-top:1px solid var(--rule-faint);
+                     display:flex;justify-content:flex-end;gap:12px}
+  .shiori-list .fine a{display:inline-block;min-height:36px;padding:11px 0 10px;
+                       font-size:11px;letter-spacing:0.12em;color:var(--ink-4)}
+  .shiori-list .fine a:hover{color:var(--ink-2)}
   @media (prefers-reduced-motion: reduce){ .shiori-list{transition:opacity .3s ease;transform:none} }
   @media (prefers-reduced-transparency: reduce){
     .shiori-list::before{backdrop-filter:none;-webkit-backdrop-filter:none;
@@ -253,8 +268,6 @@
           transition:border-color .22s var(--ease),background .22s var(--ease),opacity .22s var(--ease)}
   .lp-cta:hover{border-color:var(--thread);background:rgba(8,8,13,.62)}
   .lp-cta:active{opacity:.72}
-  .lp-cta .sub{display:block;margin-top:5px;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-               font-size:9px;letter-spacing:0.4em;color:var(--thread);text-transform:uppercase}
 
   /* この宙について（v12）：初めて来た人が「何が起きる場所か」を掴めないままだったので、
      宙の上のほうに二行だけ置く。全文は同じ画面の中で、そっと開く。 */
@@ -317,8 +330,6 @@
   /* アーカイブの部屋（旧いことばの置き場）には、もう新しいことばを放てない */
   body.in-room-archived .cast-btn{display:none}
   body.in-room .lp,body.in-room .about{display:none}
-  body.in-room #traceNowLink{display:block}
-  body:not(.in-room) #traceNowLink{display:none}
 
   /* 宙の中で書く：モーダルではなく、宙が少し暗くなり書く柱が立つ。
      v14：書いている間は宙をもう一段うしろへ下げる（暗くする＋薄くぼかす）。
@@ -414,6 +425,13 @@
      v14：帯の見た目は11pxのまま、指の的だけ上下パディングで44pxに広げた
      （background-clip:content-box なので、色は細い帯にしか乗らない）。 */
   .picker{display:flex;flex-direction:column;gap:2px;align-items:center}
+  /* 何をするところかを一行。命令ではなく、置いてあるだけの声で */
+  .picker-lead{margin:var(--s2) 0 0;font-size:11.5px;letter-spacing:var(--tr-body);
+               color:var(--ink-3);text-align:center}
+  /* いま選んでいる色の名。触るたびに変わる＝二本の帯の役目が、触れば分かる */
+  .picker-now{margin:2px 0 0;min-height:1.6em;font-size:11px;letter-spacing:0.22em;
+              color:var(--ink-4);text-align:center;
+              transition:color .3s var(--ease)}
   /* box-sizing:content-box が要点：global の border-box では height:11px に padding が
      食われて帯そのものが消える（＝色が見えなくなる）。ここだけ content-box に戻す。 */
   .colorbar{position:relative;box-sizing:content-box;width:min(70vw,300px);height:11px;
@@ -575,53 +593,68 @@
   @keyframes inkNijimi{0%,100%{filter:blur(0)}50%{filter:blur(.7px) brightness(1.12)}}
   @media (prefers-reduced-motion: reduce){ .nijimi{animation:none} }
 
-  /* ── 天灯の野（v2追補 §3・§4）───────────────────────────
-     漂いの層（z-index:4）の下・部屋の名前（z-index:6）の下。
-     いま（ズーム1）では奥の気配としてかすかに透け、遠ざかるほど野が主役になる。
-     ズームアウト中だけ触れられる（掴んで動かす・天灯に触れる） */
-  .sky-field{position:fixed;inset:0;z-index:3;pointer-events:none}
-  .sky-field.active{pointer-events:auto;cursor:grab;touch-action:none}
-  .sky-field.drag{cursor:grabbing}
-  /* 相談窓口（右端の縦の列）の左隣の列に。重ねない：あれは宙で一番消えてはいけない導線 */
-  .far-btn{position:fixed;right:calc(96px + var(--safe-r,0px));bottom:calc(22px + var(--safe-b));
-           z-index:11;min-height:var(--touch);color:var(--ink-3,var(--ink-2));font-size:12.5px;
-           letter-spacing:0.34em;padding:10px 12px 10px 16px;opacity:.75}
-  .far-btn:hover{opacity:1}
-  /* 遠くを見ているあいだ、漂い・部屋の名前・放つは静かに退く（消えるのではなく、今から離れる） */
-  body.far-view .drift-layer,body.far-view .room-layer,
-  body.far-view .cast-btn,body.far-view .arrivals{opacity:0;pointer-events:none;
-    transition:opacity .9s var(--ease,ease)}
+  /* 天灯の野（v2追補 §3・§4）は 2026-07-26 に撤去した。
+     過去のことばを「野」として一望し、拡大縮小で時間を行き来する眺めは、
+     宙のイメージと合わなかった（Kosei判断）。宙にあるのは、いま漂っていることばと、
+     部屋の名前だけ。過去のことばへは「辿る」（trace）から会いにいく。 */
   .drift-layer,.room-layer,.cast-btn,.arrivals{transition:opacity .9s var(--ease,ease)}
 
-  /* ══ 部屋（2026-07-26 B-7）══════════════════════════════════
-     トップに漂うのは、ことばではなく部屋の名前。
-     ・座標はDBに持たない。読み込みのたびに散らし、速度も向きも毎回ちがう
-     ・並び順に意味を持たせない（活動量順・新着順・デフォルト優先はどれも作らない）
-     ・部屋が増えても字は小さくしない。画面を通り過ぎる部屋が増える形で吸収する
-     ・件数は出さない。出すのは灯（誰かが居た気配）の有無だけ */
-  .room-layer{position:fixed;inset:0;z-index:6;pointer-events:none;overflow:hidden}
+  /* ══ 部屋（2026-07-26 B-7／同日 整列と灯へ）══════════════════
+     トップに出るのは、ことばではなく部屋の名前。
+     ・漂わせるのはやめた。1.5〜4px/秒まで落としても「自然に漂う」には見えず、
+       読もうとした名前がわずかに逃げるだけだった（2026-07-26 Kosei）。
+       整列させて、画面の中央に寄せて置く。
+     ・並びは固定（サーバが 元からある室 → 生まれた順 で返す）。位置が変わらないので
+       「あの部屋はここ」と体が覚えられ、灯の移ろいも同じ場所で追える。
+     ・灯は名前のまわりに散る。色はその部屋にいまあることばの封の色（最大3つ）。
+       件数は語らない——3つ未満はそのまま少なく灯るが、それ以上は数えられない。
+     ・誰かがその部屋のことばに触れている間だけ、灯が明るくなって呼吸する。 */
+  .room-layer{position:fixed;inset:0;z-index:6;pointer-events:auto;
+              overflow-y:auto;overscroll-behavior:contain;
+              display:flex;flex-direction:column;justify-content:center;align-items:center;
+              gap:34px;
+              padding:calc(104px + var(--safe-t)) calc(var(--s3) + var(--safe-r))
+                      calc(176px + var(--safe-b)) calc(var(--s3) + var(--safe-l))}
   .room-layer.off{display:none}
-  .room{position:absolute;left:0;top:0;pointer-events:auto;
+  /* 一段ごとに数を違える（3・4・3・4…）。同じ数で積むと表になり、
+     行の切れ目が縦の筋になって見える——互い違いにすると、並んでいるのに格子に見えない。 */
+  .room-row{display:flex;justify-content:center;align-items:baseline;gap:34px}
+  .room{position:relative;pointer-events:auto;
         font-size:19px;letter-spacing:0.16em;line-height:1.4;
         color:var(--ink-2);background:none;border:0;padding:14px 18px;
         min-height:var(--touch);cursor:pointer;white-space:nowrap;
-        text-shadow:0 0 20px rgba(8,8,13,.95),0 0 40px rgba(8,8,13,.7);
+        /* 字の影は字の輪郭ぶんだけ。漂っていた頃は 20px＋40px の闇を背負わせて
+           何の上へ来ても読めるようにしていたが、その闇が灯を覆って濁らせる
+           （灯は字のうしろに居る＝影のほうが手前に乗る）。 */
+        text-shadow:0 0 9px rgba(8,8,13,.92),0 0 3px rgba(8,8,13,.8);
         opacity:0;transition:opacity 1.6s var(--ease,ease),color .4s ease}
   .room.on{opacity:.82}
   .room:hover,.room:focus-visible{color:var(--paper,#efe9dc);opacity:1}
-  /* 離すのを待たない（Apple §1）。漂う名前は指で追う的なので、当たったことが
-     その瞬間に分からないと「押せなかったのか、外したのか」が判別できない。 */
   .room:active{opacity:1;color:var(--chalk)}
   /* 罫を一本だけ引く（カードやピルにしない＝物質のメタファーを保つ） */
   .room::after{content:'';display:block;height:1px;margin-top:9px;
                background:var(--rule);opacity:.5}
   .room.archived{color:var(--ink-4);font-style:italic}
-  /* 部屋の灯。ことばの灯と同じ言語で、名前の肩に小さく灯る */
-  .room .lit{display:inline-block;width:5px;height:5px;border-radius:50%;
-             margin-left:9px;vertical-align:2px;background:var(--thread,#c9b98a);
-             opacity:0;box-shadow:0 0 12px 3px rgba(222,205,160,.4);
-             transition:opacity 2.2s var(--ease,ease)}
-  .room .lit.on{opacity:.75}
+  /* 部屋の灯。名前のうしろ（z-index:-1）で、ぼんやりと。位置は部屋ごとに決まっていて
+     動かない＝毎回おなじ形に灯る。opacity で立つ .room が積み重なりの文脈を作るので、
+     -1 は文字の背後までしか沈まない（画面の闇まで抜けない）。 */
+  /* 芯は白に寄せ、外へ向かって色になって消える（炎の見え方。単色の玉だと染みに見える）。
+     .room が opacity で立つので、灯の濃さはそれに乗算される——ここは強めに置いてよい。 */
+  .room .fire{position:absolute;z-index:-1;width:36px;height:36px;border-radius:50%;
+              left:var(--fx);top:var(--fy);transform:translate(-50%,-50%);
+              background:radial-gradient(circle at 50% 50%,
+                         color-mix(in srgb,var(--c) 62%,#fffdf6) 0%,
+                         var(--c) 34%,
+                         color-mix(in srgb,var(--c) 40%,transparent) 58%,
+                         transparent 76%);
+              filter:blur(6px);opacity:.60;pointer-events:none;
+              transition:opacity 2.2s var(--ease,ease),filter 2.2s var(--ease,ease)}
+  /* いま誰かが、この部屋のことばに触れている */
+  .room.lit .fire{opacity:.95;filter:blur(7px);
+                  animation:fireBreath 6.5s var(--ease,ease-in-out) infinite}
+  @keyframes fireBreath{0%,100%{transform:translate(-50%,-50%) scale(1)}
+                        50%{transform:translate(-50%,-50%) scale(1.16)}}
+  @media (prefers-reduced-motion: reduce){ .room.lit .fire{animation:none} }
 
   /* 部屋の中にいる時、いま何処にいるかを一行だけ。戻る道と、部屋の始末はここに置く。
      ——「この部屋を消す」は v3 まで右上（right:20px;top:52px）に独立して据えていたが、
@@ -653,11 +686,14 @@
                   transition:color .22s var(--ease),opacity .22s var(--ease)}
   .room-new .open:hover{color:var(--ink-2)}
   .room-new .open:active{opacity:.62}
-  /* 一日ひとつ。作れない日は押せないので、押せない姿をそのまま見せる
+  /* 一人ひとつ。もう作れない人には押せない姿をそのまま見せる
      （押しても何も起きないボタンは、壊れて見える／Apple §16 feedback） */
   .room-new .open:disabled{opacity:.45;cursor:default;border-bottom-color:var(--rule-faint)}
-  .room-new form{display:none;align-items:center;gap:var(--s1)}
+  /* 名前を書く欄が上、行いはその下に横並び。一行に詰めると、狭い画面で
+     「つくる」が右端に押し出されて名前が読めなくなる（＆やめるが隠れる）。 */
+  .room-new form{display:none;flex-direction:column;align-items:center;gap:var(--s1)}
   .room-new.open form{display:flex}
+  .room-new .acts{display:flex;align-items:center;justify-content:center;gap:var(--s4)}
   .room-new.open .open{display:none}
   .room-new input{background:none;border:0;border-bottom:1px solid var(--rule);
                   color:var(--ink-1);font:inherit;font-size:16px;letter-spacing:0.14em;
@@ -669,6 +705,13 @@
                         transition:color .22s var(--ease),opacity .22s var(--ease)}
   .room-new button.make:hover{color:var(--ink-1)}
   .room-new button.make:active{opacity:.62}
+  /* やめる。作るより一段ひいた声で（並べても、押し間違いが「作る」側に転ばないように） */
+  .room-new button.quit{font-size:11px;letter-spacing:0.14em;color:var(--ink-4);
+                        background:none;border:0;border-bottom:1px solid var(--rule-faint);
+                        padding:12px 4px;min-height:var(--touch);cursor:pointer;
+                        transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .room-new button.quit:hover{color:var(--ink-2)}
+  .room-new button.quit:active{opacity:.62}
   .room-new .note{font-size:11px;letter-spacing:0.1em;color:var(--ink-4);
                   min-height:1.4em;text-align:center;max-width:22em;line-height:1.9}
   /* この部屋を消す（作った本人の、まだ誰も来ていない部屋にだけ出る）。
@@ -685,21 +728,15 @@
 
   @media (max-width:520px){
     .room{font-size:17px;padding:12px 14px}
+    .room-layer{gap:18px}
+    .room-row{gap:18px}
     .room-bar{top:48px}
     .room-new{bottom:88px}
   }
-  /* 減モーション：漂わせない。散らさず、静かな一覧として置く（B-7 の代替表示）。
-     position:static にしていたので、html,body{overflow:hidden} の中で流れ込み、
-     画面より下に来た部屋には**どうやっても届かなかった**（漂わないので待っても来ない）。
-     面のまま固定して、その中だけを送れるようにする——動かさないことと、
-     行けなくすることは別（Apple §14：減モーションは体験を削ることではない）。 */
+  /* 減モーション向けの別レイアウトは要らなくなった（整列がそのまま両方の姿）。
+     入ってくる時のフェードだけ、静かに畳む。 */
   @media (prefers-reduced-motion: reduce){
-    .room-layer{position:fixed;inset:0;overflow-y:auto;overscroll-behavior:contain;
-                padding:120px calc(var(--s3) + var(--safe-r)) calc(180px + var(--safe-b))
-                        calc(var(--s3) + var(--safe-l));
-                display:flex;flex-wrap:wrap;gap:var(--s2);justify-content:center;
-                align-content:flex-start;pointer-events:auto}
-    .room{position:static;opacity:.82;transition:none}
+    .room{transition:opacity .3s ease,color .4s ease}
   }
 
   /* 相談窓口の常時導線（宙v1 §12）。宙の右下に、闇より一段だけ明るく置く */
@@ -811,27 +848,38 @@
 <body>
   <header>
     <div class="ttl">たより<span class="romaji">tayori</span></div>
+    {# 2026-07-26：三本線をやめ、しるし（三つの灯）に。三本線はどの製品にも付いている
+       汎用の記号で、宙の中で唯一「借り物」だった（v3.10 の物質メタファーの続き）。
+       小・中・大の三つが左から立ち上がる形は、宙に灯がふえていく姿と同じ。 #}
     <button class="shiori" id="shioriBtn" type="button" aria-expanded="false"
-            aria-controls="shioriList" aria-label="栞（tayori-たより-について・理念・お問い合わせ）">
-      <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
-        <line x1="0" y1="1" x2="20" y2="1" stroke-width="1.4"/>
-        <line x1="0" y1="7" x2="20" y2="7" stroke-width="1.4"/>
-        <line x1="0" y1="13" x2="20" y2="13" stroke-width="1.4"/>
+            aria-controls="shioriList"
+            aria-label="しるし（自分のページ・設定・tayori-たより-について・お問い合わせ）">
+      <svg class="mark" width="27" height="23" viewBox="0 0 128 107" aria-hidden="true">
+        <path d="M20.5 51.5C26 55 29.2 64 28.6 74 28 84 22 97 15 103.2
+                 11.2 106.5 5.2 101 2.4 90 -0.3 79 2 66 8 58 12 52.6 17.4 49.6 20.5 51.5Z"/>
+        <path d="M53.5 32C62 34 70 44 74.5 56 78 65.4 78.2 69.4 74 74.6
+                 68 82.6 58 95.4 50 101 43.6 105.4 35.6 98 31.4 86.4 27.4 74.6 28.6 58 35 45.2
+                 40.2 34.8 48 30.7 53.5 32Z"/>
+        <path d="M105.5 0.6C114 4 121.2 17 124.5 33 128 49.4 127.4 71 122 86.2
+                 117.2 99.4 108 105.4 101 102.6 93.4 99.6 85.4 90 80.5 76.2
+                 77 65.4 76.6 59.4 78.5 55.6 85 43 95 17.4 101 6 103.2 1.8 104 0 105.5 0.6Z"/>
       </svg>
     </button>
   </header>
+  {# 2026-07-26：9項目を4つへ。同じ重さの行が並ぶほど壁に見えて、どれも読まれなくなる。
+     ・棚／自分の書架 → 自分のページ（/me）の中のタブ
+     ・理念／運営者   → tayori について（/about）の章
+     ・相談窓口       → お問い合わせの中へ。ただし宙の右下の常時導線は残す（1タップを崩さない）
+     ・利用規約／プライバシー → 行から外し、下に一行の細い字で
+     細線のしるしを添えるのは「自分のページ」と「設定」だけ。全部に付けると、印は印でなくなる。 #}
   <ul class="shiori-list" id="shioriList">
-    <li><a href="#" id="traceNowLink">いまの空気に、近いことば</a></li>
+    {% if logged_in %}<li><a href="/me"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 13.2c0-2.3 2.2-3.6 5-3.6s5 1.3 5 3.6"/><circle cx="8" cy="5.4" r="2.6"/></svg>自分のページ</a></li>
+    <li><a href="/settings"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="2.4"/><path d="M8 1.4v2M8 12.6v2M1.4 8h2M12.6 8h2M3.3 3.3l1.4 1.4M11.3 11.3l1.4 1.4M12.7 3.3l-1.4 1.4M4.7 11.3l-1.4 1.4"/></svg>設定</a></li>{% endif %}
     <li><a href="/about">tayori-たより-について</a></li>
-    <li><a href="/philosophy">理念</a></li>
-    {% if logged_in %}<li><a href="/shelf">棚</a></li>
-    <li><a href="/mine">自分の書架</a></li>
-    <li><a href="/settings">設定</a></li>{% endif %}
-    <li><a href="/operator">運営者</a></li>
-    <li><a href="https://www.mhlw.go.jp/mamorouyokokoro/" target="_blank" rel="noopener">相談窓口</a></li>
     <li><a href="/contact">お問い合わせ</a></li>
-    <li class="thin"><a href="/terms">利用規約</a></li>
-    <li class="thin"><a href="/privacy">プライバシー</a></li>
+    <li class="fine"><a href="/terms">利用規約</a><a href="/privacy">プライバシー</a></li>
   </ul>
   <!-- 漂うことば。v14 で触れられるようになったので、読み上げ用の別リスト（.sr-words）は畳んだ
        （ことばそのものが辿れる要素になったので、同じ内容を二度読ませない） -->
@@ -844,13 +892,18 @@
     <button class="back" id="roomBack" type="button">ほかの部屋へ</button>
     <button class="room-drop off" id="roomDrop" type="button">この部屋を消す</button>
   </div>
-  <!-- 部屋を作る（1日ひとつ） -->
+  <!-- 部屋を作る（一人ひとつ） -->
   <div class="room-new off" id="roomNew">
     <button class="open" id="roomNewOpen" type="button">部屋をつくる</button>
     <form id="roomNewForm" autocomplete="off">
       <input id="roomNewName" type="text" maxlength="12" placeholder="部屋の名前"
              aria-label="部屋の名前（12字まで）">
-      <button class="make" id="roomNewSend" type="submit">つくる</button>
+      <div class="acts">
+        <button class="make" id="roomNewSend" type="submit">つくる</button>
+        <!-- 開いたら閉じられる。一人ひとつしか作れない面なので、
+             「入ってしまったら出られない」形にはしない（Apple §2 agency） -->
+        <button class="quit" id="roomNewQuit" type="button">やめる</button>
+      </div>
     </form>
     <p class="note" id="roomNewNote" aria-live="polite"></p>
   </div>
@@ -865,10 +918,6 @@
       </div>
     </div>
   </div>
-  <!-- 天灯の野（v2追補 §3）：手紙は消えない。小さく・淡く・奥へ遠ざかるだけ。
-       漂いの層（drift-layer）の後ろに、放たれたことば全部が灯として在り続ける。
-       ズームアウト＝過去を見る／ズームイン＝今を見る。参照イメージは九份の天灯 -->
-  <canvas class="sky-field" id="skyField" aria-hidden="true"></canvas>
   <div class="drift-layer" id="driftLayer" aria-label="漂っていることば"></div>
   <!-- 受け止めたことばに添う、二つの行い。中身は JS が入れる -->
   <div class="hold" id="hold" role="group" aria-label="このことばに、する" hidden></div>
@@ -876,27 +925,28 @@
   <p class="whisper" id="whisper" aria-live="polite"></p>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
   <div class="lantern" id="lantern" aria-hidden="true"></div>
-  <!-- 天灯の野への出入り口。ホイール・ピンチでも行き来できるが、入口は目に見える形でも置く -->
-  <button class="far-btn ruled" id="farBtn" type="button" aria-pressed="false"
-          aria-label="遠くの宙を見る（過去のことばの野へ）">とおくへ</button>
   <!-- 相談窓口の常時導線（宙v1 §12）：宙のすみに、いつでもある -->
   <a class="care-link" href="https://www.mhlw.go.jp/mamorouyokokoro/"
      target="_blank" rel="noopener">相談窓口</a>
 
   {% if not logged_in %}
-  <!-- 宙の上のほう：何が起きる場所なのかを、二行だけ。全文はその場で開く -->
+  {# 2026-07-27：上の二行を落とした。下の一句とほぼ同じことを、より多い字数で
+     二度言っていた——初めて来た人が最初に読むものが二つあると、どちらも読まれない
+     （Apple §16.6：まず common path、詳しいことは一段深く）。
+     残すのは入口だけ。中身は押した人にだけ開く。 #}
   <div class="about">
-    <p>ここは、<wbr>行き先を<wbr>決めずに<wbr>ことばを<wbr>放つ<wbr>場所です。<br>
-       だれかが<wbr>偶然<wbr>ひらくかもしれないし、<wbr>だれにも<wbr>読まれないまま<wbr>漂うかもしれない。</p>
     <button class="about-more ruled" id="aboutMore" type="button">tayori-たより-について</button>
   </div>
   <!-- ランディング＝宙。眺めるのに登録は要らない。放つ時だけ、はじめる画面へ -->
   <div class="lp">
-    <p class="lp-copy">意味のない<wbr>言葉を、<wbr>tayori-たより- へ<wbr>放つ。<br>それは<wbr>いつか、<wbr>知らない<wbr>誰かの<wbr>意味に<wbr>なる。</p>
+    {# 2026-07-26：「意味のない言葉」をやめた。書く前の人に自分のことばを
+       「意味がない」と言わせない——価値を決めるのは受け取る側だ、というのが元々の主旨で、
+       それは「何気ない」で足りる。以後、この言い回しで通す。 #}
+    <p class="lp-copy">あなたの<wbr>何気ない<wbr>言葉が、<br>いつか<wbr>知らない<wbr>誰かの<wbr>意味に<wbr>なる。</p>
     <p class="lp-copy lp-copy-sub">そして<wbr>ある日、<wbr>あの日の<wbr>あなたの<wbr>言葉が、<br>ふっと<wbr>帰ってくる。</p>
     {# new=1 ＝「はじめる」から来た、という意図を門へ伝える札。門は、この端末で
        前に通った札を覚えていればそちらを開き、覚えていなければこの意図に従う。 #}
-    <a class="lp-cta" href="/?start=1&amp;new=1">ことばを放つ<span class="sub">はじめる</span></a>
+    <a class="lp-cta" href="/?start=1&amp;new=1">はじめる</a>
   </div>
   <div class="about-full" id="aboutFull" role="dialog" aria-modal="true"
        aria-label="tayori-たより-について" aria-hidden="true">
@@ -914,7 +964,7 @@
       <p>いいねは<wbr>できても、<wbr>返事は<wbr>できません。<br>
          だれが<wbr>書いたかも、<wbr>分かりません。</p>
       <p>ここは<wbr>共有（シェア）の<wbr>場所ではなく、<br>
-         意味のない<wbr>言葉が、<wbr>だれかの<wbr>意味に<wbr>なるための <wbr>tayori-たより- です。</p>
+         何気ない<wbr>言葉が、<wbr>だれかの<wbr>意味に<wbr>なるための <wbr>tayori-たより- です。</p>
       <p class="contact">お問い合わせ　<a href="mailto:tayoriletter@gmail.com">tayoriletter@gmail.com</a></p>
       <button class="about-close ruled" id="aboutClose" type="button">とじる</button>
     </div>
@@ -934,11 +984,18 @@
       <input id="castTitle" type="text" maxlength="10" autocomplete="off"
              placeholder="題をつける（10字まで・なくても）"
              aria-label="このことばの題（10字まで・任意）">
+      {# 2026-07-27：帯が二本、無言で並んでいた。何のための色かも、上下の違いも
+         画面に出ていない＝初見では触る理由が無い（Apple §16 mapping／§16 feedback:status）。
+         ・上に一行、何をするところかを置く
+         ・下に、いま選んでいる色の名を出す。静的なラベル（色相／彩度）ではなく
+           **結果**を返す：触るたびに「淡い　あお」が変わるので、二本の役目も自ずと分かる #}
+      <p class="picker-lead">このことばに、色をつけてください。</p>
       <div class="picker">
-        <div class="colorbar huebar" id="hueBar" role="slider" aria-label="いまの気分の色（色相）"
+        <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
              aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
         <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
              aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
+        <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
       </div>
       <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
            付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
@@ -951,8 +1008,8 @@
       <p class="cast-own">ここに置けるのは、あなたのことばだけです。</p>
       <!-- 打った過程が流れることは、書き始める前に必ず目に入る場所で言う（v2追補 §1）。
            書き終わってからの告知は不可＝送信ボタンの脇や確認画面には置かない -->
-      <p class="cast-note">放ったことばは、匿名のまま漂い、<br>いつか、知らない誰かのもとへ降ります。<br>あなた自身にも、忘れた頃に。<br>
-        打った過程も、そのまま宙に流れます。<br>消した文字も、ためらいの間も、いっしょに。</p>
+      <p class="cast-note">匿名のまま漂い、いつか知らない誰かのもとへ。<br>
+        打った過程も——消した文字も、ためらいの間も——そのまま流れます。</p>
     </div>
   </div>
   <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
@@ -960,12 +1017,12 @@
       <div class="read-body" id="readBody" tabindex="-1"></div>
       <p class="read-note" id="readNote"></p>
       <button class="like-mark" id="readLike" type="button" aria-pressed="false" hidden>
-        <span class="dot" aria-hidden="true"></span><span class="txt">このことばに、印を結ぶ</span>
+        <span class="dot" aria-hidden="true"></span><span class="txt">そっと、しるしをつける</span>
       </button>
       <!-- 印とは別の行為（v13 §9）。印＝その場のしるし／棚＝手元に残すこと。
            残せるのは、いまこの柱で開いたことばだけ（降ってきた他人のも、帰ってきた自分のも） -->
       <button class="like-mark keep-mark" id="readKeep" type="button" aria-pressed="false" hidden>
-        <span class="dot" aria-hidden="true"></span><span class="txt">手元に、残す</span>
+        <span class="dot" aria-hidden="true"></span><span class="txt">自分の棚に、とっておく</span>
       </button>
       <!-- 残した、その場で貼る付箋（v2.2 §3）。中身は JS が入れる -->
       <div id="readFusen"></div>
@@ -1004,7 +1061,8 @@
 
   /* ══ 部屋（B-7・B-8）══════════════════════════════════════════
      宙はひとつの広場ではなく、いくつもの小さな閉じた宙。
-     トップでは部屋の名前が漂い、部屋に入るとその中でことばが漂う。
+     トップでは部屋の名前が並び、部屋に入るとその中でことばが漂う。
+     ——漂うのはことばだけ。部屋は動かない（2026-07-26）。
      ROOM が null のあいだは、ことばを取りにいかない・放てない。 */
   const START_ROOM={{ start_room or 'null' }};
   let ROOM=null;                     // {id,name,archived,mine}
@@ -1014,22 +1072,50 @@
   const roomNow=document.getElementById('roomNow');
   const roomNew=document.getElementById('roomNew');
   const roomDrop=document.getElementById('roomDrop');
-  const MAX_ROOMS_ON_SCREEN=18;      // 一度に画面へ置く数の上限。増えても字は小さくしない
 
   function inRoom(){ return !!ROOM; }
 
-  /* ── 部屋の漂い ──
-     座標はサーバに持たせない。読み込みのたびに散らし、速度も向きも毎回ちがう。
-     並び順から何も推測させないため、置く順番も速度も、活動量や新しさとは一切関係を持たせない。 */
+  /* ══ pure:room-seat ══════════════════════════════════════════════
+     席番号 → 座標。ここだけは純関数で書く（DOM も時計も乱数も見ない）。
+     scripts/test_room_seat.py がこの区画を **そのまま切り出して** jsc で動かすので、
+     マーカーの内側に副作用のあるものを入れないこと。
+
+     ・12時から時計回り。x=sin(t), y=-cos(t) の組でその向きになる
+       （x=cos, y=sin にすると3時始まりの反時計回りになる＝必ずテストで向きを見る）
+     ・リングは 6・12・18・24… と**無限に**増える（slots(ring)=6*(ring+1)）。
+       上限を作ると、そこを超えた部屋が既存の席に重なって座る。数の上限は設けず、
+       画面に入らないぶんはズームで解く（部屋数は制限しない）。
+     ・半径は 105 + 70*ring。奇数リングは半コマずらす——真っ直ぐ放射状に揃うと
+       格子に見えて、円である意味が消える。
+     ・±8px の揺らぎは room_id のハッシュから引く。Math.random は使わない：
+       リロードのたびに位置が変わると、覚えた「自分の部屋の場所」が壊れる。 */
+  function fnv(s){let h=2166136261;s=String(s);
+    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+    return h>>>0;}
+  const SEAT_R0=105, SEAT_DR=70, SEAT_SLOTS0=6, SEAT_JITTER=8;
+  function seatSlots(ring){ return SEAT_SLOTS0*(ring+1); }     // 6,12,18,24…
+  function seatRadius(ring){ return SEAT_R0+SEAT_DR*ring; }    // 105,175,245,315…
+  /* seed（部屋id）から ±SEAT_JITTER px。seed 無しなら席番号で引く */
+  function seatJitter(seed){ return ((fnv('seat:'+seed)%2001)/2000)*2*SEAT_JITTER-SEAT_JITTER; }
+  function roomSeat(index,seed){
+    let n=Math.max(0,Math.floor(index)||0), ring=0;
+    while(n>=seatSlots(ring)){ n-=seatSlots(ring); ring++; }
+    const slots=seatSlots(ring);
+    const offset=(ring%2)?Math.PI/slots:0;                     // 奇数リングは半コマずらす
+    const t=offset+n*(2*Math.PI/slots);
+    const r=seatRadius(ring)+seatJitter(seed==null?index:seed);
+    return {x:Math.sin(t)*r, y:-Math.cos(t)*r, ring:ring, slot:n, angle:t, radius:r};
+  }
+  /* ══ /pure:room-seat ═════════════════════════════════════════════ */
 
   /* 画面の寸法。innerWidth は文脈によって 0 を返すことがあり、そのまま ||360 に
-     落ちると「360pxの端末」として格子を組んでしまう（あふれた部屋を画面外のつもりで
-     置いた座標が、実際の広い画面では真ん中に出て重なる）。documentElement を先に見る。 */
+     落ちると「360pxの端末」として面を組んでしまう（画面外のつもりで置いた座標が、
+     実際の広い画面では真ん中に出て重なる）。documentElement を先に見る。 */
   function viewW(){ return document.documentElement.clientWidth||innerWidth||360; }
   function viewH(){ return document.documentElement.clientHeight||innerHeight||640; }
 
   /* ══ 漂うものの物理（v4）═══════════════════════════════════════
-     部屋の名前も、放たれたことばも、同じ一つの約束で漂う：
+     漂うのは、放たれたことばだけ（部屋の名前は 2026-07-26 に整列へ移した）：
        ・重なりそうになったら **ぶつかって、互いに弾き返す**
        ・画面の縁でも弾き返す（v3 までは wrap ＝ 反対側から出てきていた）
      以前は「重ならないように置く」だけで、置いたあとは互いを知らずに擦り抜けていた。
@@ -1056,7 +1142,7 @@
      （壁にすると、狭い隙間に挟まったものが毎フレーム押し合って震える）。
      v3 の pickSpot は「置く瞬間だけ」これを避けていた。いまは在るあいだ避け続ける。 */
   const TOP_CHROME='header,.room-bar,.about,.arrivals';
-  const LOW_CHROME='.lp,.room-new,.cast-btn,.care-link,.far-btn';
+  const LOW_CHROME='.lp,.room-new,.cast-btn,.care-link';
   function chromeBand(){
     const H=viewH();
     let top=EDGE,low=H-EDGE;
@@ -1167,94 +1253,105 @@
     if((a[vax]-b[vax])*n>0){ const t=a[vax]; a[vax]=b[vax]; b[vax]=t; }
   }
 
+  /* 灯の置き場所。名前の箱を基準にした三つの席で、どれも字の縁から少しはみ出す
+     （字の真上に置くと読めなくなり、離しすぎると隣の部屋の灯と混ざる）。
+     席ごとの微差は部屋idのハッシュで決める＝同じ部屋なら、いつ来ても同じ形に灯る。 */
+  const FIRE_SEATS=[{x:4,y:26},{x:96,y:56},{x:52,y:88}];
+  function fireSeat(roomId,k){
+    const h=fnv('fire:'+roomId+':'+k), s=FIRE_SEATS[k%FIRE_SEATS.length];
+    return {x:s.x+(h%13)-6, y:s.y+((h>>5)%13)-6};
+  }
+
+  /* その部屋の灯を掛け直す。色は必ず 0 から明ける——ことばが入れ替わった部屋の灯が
+     ぱっと差し替わると、点滅として目に付く（灯は移ろうもので、切り替わるものではない）。 */
+  function addFires(el,r){
+    const cols=(r.lights||[]).slice(0,3);
+    el._lights=cols.join('|');
+    cols.forEach((c,k)=>{
+      const t=tintOf(c);
+      if(!t)return;
+      const seat=fireSeat(r.id,k);
+      const f=document.createElement('i');
+      f.className='fire';
+      f.style.setProperty('--c',t.solid);   // 芯は濁らせない（薄めるのは gradient と opacity の側で）
+      f.style.setProperty('--fx',seat.x+'%');
+      f.style.setProperty('--fy',seat.y+'%');
+      f.style.opacity='0';
+      el.appendChild(f);
+      // 明けるきっかけは時計で取る。rAF は画面が伏せられている間・裏に居る間は来ないので、
+      // 「灯が点く」ことをフレームに賭けると、戻ってきた時に消えたままの灯が残る。
+      setTimeout(()=>{f.style.opacity='';},20);
+    });
+  }
+
+  /* 段の組み方（2026-07-26 Kosei）：上から 3・4・3・4… と数を違えて積む。
+     狭い画面では 2・3 に落とす——4つ並べると字を詰めることになり、部屋の名前は
+     小さくしない（B-7）という約束を破る。最後の段だけは、余った数のまま短く終わる。 */
+  function rowPlan(n){
+    const pat=viewW()<520?[2,3]:[3,4];
+    const rows=[];
+    for(let i=0,k=0;i<n;k++){ const t=Math.min(pat[k%pat.length],n-i); rows.push([i,i+t]); i+=t; }
+    return rows;
+  }
+  let roomPat=null;                       // いま組んである段の型（画面幅が変わった時だけ組み直す）
+
   function placeRooms(list){
-    [...roomLayer.children].forEach(dropFloater);
     roomLayer.innerHTML='';
-    const W=viewW(),H=viewH();
-    const els=[];
-    list.forEach(r=>{
-      const el=document.createElement('button');
-      el.type='button';
-      el.className='room'+(r.archived?' archived':'');
-      el.textContent=r.name;
-      const lit=document.createElement('span');
-      lit.className='lit';el.appendChild(lit);
-      el.setAttribute('aria-label',r.name+' の部屋へ入る');
-      el._room=r;el._lit=lit;
-      el.addEventListener('click',()=>enterRoom(r,true));
-      roomLayer.appendChild(el);
-      els.push(el);
-    });
-    if(REDUCED){ els.forEach(el=>el.classList.add('on')); return; }  // 減モーション：静かな一覧のまま置く
-    // 重なり回避は「揺らぎを入れた格子」で行う。乱数を投げて空きを探す方式は、
-    // 画面が小さいと必ず取りこぼす（実測で15室中8組が重なった）。格子なら、
-    // 入る数までは重ならないことが保証できる——タップ判定が潰れないことが最優先。
-    const gaps=cellGrid(els,W,H);
-    els.forEach((el,i)=>{
-      const w=el.offsetWidth||120,h=el.offsetHeight||44;
-      // 格子に入りきらない部屋も、画面の中に置く。v3 までは画面の外へ出し、wrap で
-      // 通り過ぎるのを待たせていたが、縁で弾き返すようになると外のものは戻ってこない
-      // ——縁の壁がそのまま押し返して、右端に積むだけになる。
-      // 収まらないぶんは、いったん中へ入れて衝突に押し合わせる（数分待たずに触れる）。
-      const spot=gaps[i]||{x:EDGE+Math.random()*Math.max(1,W-w-EDGE*2),
-                           y:76+Math.random()*Math.max(1,H-h-150)};
-      // 1.5〜4px/秒。画面を横切るのに3〜9分かかる速さで、見ているあいだは
-      // 「止まっているようで、目を離すと位置が変わっている」くらいに留める
-      // （6〜16px/秒では動きが目についた＝2026-07-26 Kosei）。
-      // 部屋が漂うのはトップにいる時だけ（部屋の中では room-layer ごと畳まれている）。
-      addFloater(el,spot.x,spot.y,1.5+Math.random()*2.5,()=>!inRoom());
-      setTimeout(()=>el.classList.add('on'),120+i*70);
+    roomPat=viewW()<520?'narrow':'wide';
+    let i=0;
+    rowPlan(list.length).forEach(([a,b])=>{
+      const row=document.createElement('div');
+      row.className='room-row';
+      list.slice(a,b).forEach(r=>{
+        const el=document.createElement('button');
+        el.type='button';
+        el.className='room'+(r.archived?' archived':'');
+        el.textContent=r.name;                      // 灯より先に。textContent は子を総取っ替えする
+        addFires(el,r);
+        // 灯は色だけの気配なので、読み上げには出さない（aria-label に混ぜない）
+        el.setAttribute('aria-label',r.name+' の部屋へ入る');
+        el._room=r;
+        el.addEventListener('click',()=>enterRoom(r,true));
+        row.appendChild(el);
+        // 順に灯していく。並びは固定だが、点き方には順番がある（面がいちどに出ない）
+        setTimeout(()=>el.classList.add('on'),120+(i++)*70);
+      });
+      roomLayer.appendChild(row);
     });
   }
+  // 画面の幅が段の型をまたいだ時だけ組み直す（それ以外の resize では触らない）
+  addEventListener('resize',()=>{
+    if(inRoom()||!ROOMS.length)return;
+    if(roomPat!==(viewW()<520?'narrow':'wide')) placeRooms(ROOMS);
+  });
 
-  /* 揺らぎを入れた格子。セルの並びはシャッフルするので、格子であることは見えない
-     （＝並び順に意味が生まれない）。返すのは各部屋の初期座標で、以後は自由に漂う。 */
-  function cellGrid(els,W,H){
-    const pad=12;
-    let cw=0,ch=0;
-    els.forEach(el=>{cw=Math.max(cw,el.offsetWidth||120);ch=Math.max(ch,el.offsetHeight||44);});
-    cw+=pad;ch+=pad;
-    const top=76, bottom=150;                       // 上の栞と下の導線は空けておく
-    const usable=Math.max(ch,H-top-bottom);
-    const cols=Math.max(1,Math.floor(W/cw)), rows=Math.max(1,Math.floor(usable/ch));
-    // 説明・導線の上には置かない。文字が読めることが最優先で、部屋の名前が
-    // 説明文に重なると両方読めなくなる（漂うことばの pickSpot と同じ考え方）。
-    const keep=[...document.querySelectorAll('header,.lp,.about,.room-new,.care-link')]
-      .map(e=>e.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
-    const free=[];
-    for(let i=0;i<cols*rows;i++){
-      const cx=(i%cols)*cw, cy=top+Math.floor(i/cols)*ch;
-      const box={left:cx,top:cy,right:cx+cw,bottom:cy+ch};
-      if(!keep.some(k=>k.right>box.left&&k.left<box.right&&k.bottom>box.top&&k.top<box.bottom))
-        free.push(i);
-    }
-    // 全部ふさがっていたら（画面が小さい等）、読めないより漂わせる方を採る
-    const cells=free.length?free:Array.from({length:cols*rows},(_,i)=>i);
-    for(let i=cells.length-1;i>0;i--){              // Fisher–Yates
-      const j=Math.floor(Math.random()*(i+1));[cells[i],cells[j]]=[cells[j],cells[i]];
-    }
-    const cap=Math.min(MAX_ROOMS_ON_SCREEN,cells.length);
-    const out=[];
-    for(let i=0;i<Math.min(els.length,cap);i++){
-      const c=cells[i], cx=(c%cols)*cw, cy=Math.floor(c/cols)*ch;
-      const w=els[i].offsetWidth||120,h=els[i].offsetHeight||44;
-      out.push({x:cx+Math.random()*Math.max(0,cw-w-pad),
-                y:top+cy+Math.random()*Math.max(0,ch-h-pad)});
-    }
-    return out;
+  /* 並びが同じなら、置き直さずに灯だけ掛け替える。置き直すと名前のフェードが
+     最初からやり直しになり、ただ見ているだけの画面が数秒ごとに明滅する。 */
+  function roomEls(){ return roomLayer.querySelectorAll('.room'); }
+  function sameRooms(list){
+    return [...roomEls()].map(el=>el._room&&el._room.id).join(',')
+        === list.map(r=>r.id).join(',');
   }
-
-  /* 部屋の漂いは stepPhysics が担う（v4 で部屋とことばを一つの物理へ寄せた）。
-     以前ここにあった stepRooms は wrap（画面外へ出たら反対側へ）だったので廃した。 */
+  function relight(list){
+    const byId=new Map(list.map(r=>[r.id,r]));
+    for(const el of roomEls()){
+      const r=el._room&&byId.get(el._room.id);
+      if(!r)continue;
+      el._room=r;
+      if(el._lights===(r.lights||[]).slice(0,3).join('|'))continue;   // 変わっていない
+      el.querySelectorAll('.fire').forEach(f=>f.remove());
+      addFires(el,r);
+    }
+  }
 
   function fetchRooms(){
     return fetch('/api/rooms').then(r=>r.ok?r.json():null).then(d=>{
       if(!d||!d.rooms) throw new Error('rooms');
       ROOMS=d.rooms;
-      if(!inRoom()) placeRooms(ROOMS);
+      if(!inRoom()){ if(sameRooms(ROOMS)) relight(ROOMS); else placeRooms(ROOMS); }
       roomNew.classList.toggle('off',inRoom()||!LOGGED_IN);
       if(!d.can_create&&LOGGED_IN&&!inRoom()){
-        document.getElementById('roomNewNote').textContent='部屋を作れるのは、一日にひとつだけです。';
+        document.getElementById('roomNewNote').textContent='部屋を作れるのは、一人ひとつだけです。';
         document.getElementById('roomNewOpen').disabled=true;
       }
       return d;
@@ -1308,8 +1405,18 @@
     const wrap=roomNew,open=document.getElementById('roomNewOpen'),
           form=document.getElementById('roomNewForm'),
           name=document.getElementById('roomNewName'),
+          quit=document.getElementById('roomNewQuit'),
           note=document.getElementById('roomNewNote');
     open.addEventListener('click',()=>{wrap.classList.add('open');name.focus();});
+    /* やめる：書きかけの名前ごと畳んで、「部屋をつくる」へ戻す。
+       Escape でも同じところへ帰れる（開いた面には必ず出口を置く）。 */
+    function shutNew(){
+      name.value='';note.textContent='';
+      wrap.classList.remove('open');
+      open.focus();
+    }
+    quit.addEventListener('click',shutNew);
+    name.addEventListener('keydown',e=>{ if(e.key==='Escape'){e.preventDefault();shutNew();} });
     form.addEventListener('submit',async e=>{
       e.preventDefault();
       const v=name.value.trim();
@@ -1533,7 +1640,10 @@
                : 'この部屋は、<wbr>まだ<wbr>静かです。'));
         }else if(!liveEls.size){ whisper(''); }
         // ことばが揃った瞬間から書きはじめる（暗闇のまま数秒待たせない）
-        if(!seeded&&pool.length){seeded=true;[0,1100,2500,4200,6200].forEach(ms=>setTimeout(driftOne,ms));}
+        if(!seeded&&pool.length){
+          seeded=true;[0,1100,2500,4200,6200].forEach(ms=>setTimeout(driftOne,ms));
+          hintTouch();
+        }
       })
       .catch(()=>{
         if(!pool.length) whisper('tayori-たより- が<wbr>遠いようです。<br>すこし<wbr>待ってから、<wbr>もう一度。',9000);
@@ -1597,7 +1707,7 @@
     // 触れられることを、要素そのものに持たせる（読み上げも辿れる）
     el.setAttribute('role','button');
     el.setAttribute('tabindex','0');
-    el.setAttribute('aria-label','tayori-たより- のことば：'+poem+'。ひらくと、印を結ぶ・手元に残すができます。');
+    el.setAttribute('aria-label','tayori-たより- のことば：'+poem+'。ひらくと、しるしをつける・自分の棚にとっておく ができます。');
     el._poem=poem; el._sid=id||null; el._color=color||null;
     el._life=life; el._born=performance.now();
     el.addEventListener('click',()=>catchWord(el));
@@ -1623,7 +1733,7 @@
     // 消えぎわと片づけ。受け止めている間は止めるので、時計は付け外しできる形で持つ
     el._fadeAt=Math.max(6000,life-5600);
     armDrift(el);
-    return el;   // 天灯の野から引き寄せた時に、そのまま受け止めるため
+    return el;   // 呼んだ側が、そのまま受け止められるように
   }
   /* 消える時計を掛ける／外す。受け止めた間はことばを消さない（手の中にある紙は勝手に飛ばない） */
   function armDrift(el){
@@ -1644,8 +1754,6 @@
     if(held===el) release();
   }
   function driftOne(){
-    // 遠くを見ているあいだは、新しい一筆を漂わせない（見えない紙を増やさない）
-    if(document.body.classList.contains('far-view')) return;
     // 定員は「いま実際に浮かんでいる枚数」で見る（自分で放った一筆も数に入る）
     if(!pool.length||liveEls.size>=liveCap()) return;
     // 画面に浮かんでいる一筆は選ばない。未出のものを優先し、出尽くしたら再演を許す
@@ -1660,7 +1768,7 @@
     spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,null);
   }
   // 反映の待ち時間を削る（v11.1）：取得は20秒ごと、流れ込みは4.5〜10秒ごと
-  // 立ち上がり（B-7）：まずは部屋を漂わせる。?room= で来た人はその部屋へ直接降りる。
+  // 立ち上がり（B-7）：まずは部屋を並べる。?room= で来た人はその部屋へ直接降りる。
   fetchRooms().then(()=>{
     if(START_ROOM){
       const r=ROOMS.find(x=>x.id===START_ROOM);
@@ -1668,6 +1776,8 @@
     }
   });
   setInterval(fetchWords,20000);
+  // トップに居るあいだ、部屋の灯だけをゆっくり掛け替える（並びは変わらない）
+  setInterval(()=>{ if(!inRoom()&&!document.hidden) fetchRooms(); },90000);
   (function tick(){
     setTimeout(()=>{driftOne();tick();},4500+Math.random()*5500);
   })();
@@ -1699,9 +1809,6 @@
        1〜3通しか無い部屋でも hash%4 はどれかの tick に必ず当たる
      再生の材料（打鍵イベント）は必要になった時にだけ取りにいき、手元に控える。
      持っていないことば（明示の前に放たれた分）は合成打鍵で代替する。 */
-  function fnv(s){let h=2166136261;s=String(s);
-    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
-    return h>>>0;}
   const traceCache=new Map();   // 公開id → {fmt:'ev1',ev} または null（無い＝合成で代替）
   function getTrace(id){
     if(traceCache.has(id))return Promise.resolve(traceCache.get(id));
@@ -1731,230 +1838,12 @@
     }
   },8000);
 
-  /* ══ 天灯の野（v2追補 §3・§4）════════════════════════════════
-     手紙は消滅しない。経過時間に応じて小さく・淡く・奥へ移動するだけ。
-     ・Z軸＝時間。新しいことばは手前（中心）に大きく明るく、古いことばは奥（外）に
-       小さく淡く。中心からの距離は実時間の対数（Kosei確定：対数）＝最近が濃く、
-       過去は圧縮されて奥に詰まる。
-     ・ズームアウト＝過去を見る／ズームイン＝今を見る。下限は全件が見えるところまで
-       （Kosei確定：霧は掛けない。最古の一通も、光の粒として必ず視界に入る）。
-     ・flare（§4）：およそ100日に一度、数時間だけ、古いことばが浮上する。判定は
-       サーバの決定論的疑似乱数＝全ユーザーが同じ浮上を見る。立ち上がりは約30分、
-       引きはやや早く（非対称）。サイズだけのポップアップにしない。
-     ・野の天灯に触れると、そのことばは「いま」へ引き寄せられ、漂いの一枚として
-       手のうちに降りる（ズームイン＝今を見る、の身体化）。
-     ・描画：ビューポート外は描かない。遠く小さい層は「光の粒」に落とす（LOD）。
-       母数は単調増加する前提（削除されない）。数万通になったら空間インデックスを
-       入れる場所はここ（いまは全走査でも 1frame に収まる規模）。 */
-  const fieldCv=document.getElementById('skyField');
-  const fieldCtx=fieldCv.getContext('2d');
-  const FIELD_DPR=Math.min(2,window.devicePixelRatio||1);
-  const LSIZE=8;                         // いま放たれたことばの芯の大きさ（px・z=1）
-  let fieldW=0,fieldH=0,fieldWords=[],fieldAt=0;
-  let cam={z:1,x:0,y:0},camTgt={z:1,x:0,y:0},zmin=0.08,fieldDirty=true,fieldRaf=0;
-  function fieldResize(){
-    fieldW=viewW();fieldH=viewH();
-    fieldCv.width=Math.round(fieldW*FIELD_DPR);fieldCv.height=Math.round(fieldH*FIELD_DPR);
-    fieldCtx.setTransform(FIELD_DPR,0,0,FIELD_DPR,0,0);
-    fieldDirty=true;fieldWake();
-  }
-  function fetchField(){
-    fetch('/api/sky/field').then(r=>r.ok?r.json():null).then(d=>{
-      if(!(d&&d.words))return;
-      fieldAt=performance.now();
-      fieldWords=d.words.map(w=>{
-        const id=w[0],h1=fnv('lay:'+id),h2=fnv('jit:'+id);
-        return {id:id,color:w[1],age:+w[2]||0,room:w[4],fl:w[5]||null,
-                th:(h1%4096)/4096*Math.PI*2,        // 置き場所は決定論（座標はDBに持たない）
-                jr:0.82+(h2%1000)/1000*0.36};       // 同じ日のことばが同心円に並ばないゆらぎ
-      });
-      fitZ();fieldDirty=true;fieldWake();
-    }).catch(()=>{});
-  }
-  function fieldVis(){
-    const rid=inRoom()?ROOM.id:null;
-    return rid==null?fieldWords:fieldWords.filter(w=>w.room===rid);
-  }
-  // 対数マッピング（§7-2）：1週間と1年の差は大きく、5年と6年の差は小さく見える
-  const FIELD_R0=90,FIELD_RK=250;
-  function fieldRadius(w){return (FIELD_R0+FIELD_RK*Math.log1p(w.age/40))*w.jr;}
-  function fieldBase(w){return Math.max(0.12,1/(1+w.age/365));}   // §3 調和減衰＋floor
-  /* flare の包絡：約30分かけてゆっくり最大まで → 滞留 → やや早く沈む */
-  function fieldFlare(w,now){
-    if(!w.fl)return 1;
-    const m=w.fl[0],el=w.fl[1]+(now-fieldAt)/1000,dur=w.fl[2];
-    if(el<0||el>=dur)return 1;
-    const t=Math.min(Math.min(1,el/1800),Math.min(1,(dur-el)/1200));
-    const env=t*t*(3-2*t);                              // smoothstep（呼吸と同じ、角のない波）
-    return 1+(m-1)*env;
-  }
-  function fitZ(){
-    let mx=300;
-    for(const w of fieldVis()){const r=fieldRadius(w);if(r>mx)mx=r;}
-    zmin=Math.max(0.02,Math.min(0.6,(Math.min(fieldW,fieldH)/2-40)/(mx+60)));
-    if(camTgt.z<zmin)camTgt.z=zmin;
-  }
-  /* 色ごとの天灯スプライト（毎フレーム radialGradient を作らないための控え） */
-  const fieldSprites=new Map();
-  function fieldSprite(color){
-    let s=fieldSprites.get(color);
-    if(s)return s;
-    const t=tintOf(color)||{solid:'#d8cfc0'};
-    const c=document.createElement('canvas');c.width=c.height=64;
-    const g=c.getContext('2d');
-    const grad=g.createRadialGradient(32,32,0,32,32,32);
-    grad.addColorStop(0,'rgba(255,251,242,.9)');       // 芯は炎のあかり
-    grad.addColorStop(0.3,t.solid);                     // 紙の色＝封の色
-    grad.addColorStop(1,'rgba(0,0,0,0)');               // 加算合成なので黒は消える
-    g.fillStyle=grad;g.fillRect(0,0,64,64);
-    if(fieldSprites.size>240)fieldSprites.clear();
-    fieldSprites.set(color,s=c);
-    return s;
-  }
-  function fieldRender(now){
-    fieldCtx.clearRect(0,0,fieldW,fieldH);
-    const vis=fieldVis();
-    if(!vis.length){fieldDirty=false;return;}
-    // いま（z=1）はかすかな奥の気配。遠ざかるほど野が主役になる
-    const depth=Math.max(0,Math.min(1,(1-cam.z)/Math.max(0.001,1-zmin)));
-    const fieldA=0.30+0.70*depth;
-    fieldCtx.globalCompositeOperation='lighter';
-    const cx=fieldW/2,cy=fieldH/2;
-    let mx=300;
-    for(const w of vis){
-      const r=fieldRadius(w);if(r>mx)mx=r;
-      if(live.has(w.id))continue;                      // いま漂いに出ている一筆は野に重ねない
-      const sx=cx+(Math.cos(w.th)*r-cam.x)*cam.z;
-      const sy=cy+(Math.sin(w.th)*r-cam.y)*cam.z;
-      if(sx<-48||sx>fieldW+48||sy<-48||sy>fieldH+48)continue;   // ビューポート外（§6）
-      const fm=fieldFlare(w,now);
-      let s=LSIZE*fieldBase(w)*fm*Math.pow(cam.z,0.55);
-      if(!REDUCED&&fnv(w.id)%4===tick){
-        // ローテーションの鼓動（§2）：この周期の一群は、野でもかすかに息づく
-        const ph=Math.max(0,Math.min(1,(now-tickAt)/8000));
-        s*=1+0.20*Math.sin(Math.PI*ph);
-      }
-      let a=fieldA*(0.28+0.72*fieldBase(w));
-      if(fm>1)a=Math.min(1,a*(1+0.8*(fm-1)));          // 浮上中は明るさも戻る
-      if(s<1.1){                                       // 遠い層は光の粒（LOD）
-        const t=tintOf(w.color);
-        fieldCtx.globalAlpha=a*0.8;
-        fieldCtx.fillStyle=t?t.solid:'#cfc4b0';
-        fieldCtx.fillRect(sx,sy,1.2,1.2);
-        continue;
-      }
-      fieldCtx.globalAlpha=Math.min(1,a);
-      const d=s*5;                                     // グロー込みの敷き幅
-      fieldCtx.drawImage(fieldSprite(w.color),sx-d/2,sy-d/2,d,d);
-    }
-    fieldCtx.globalAlpha=1;fieldCtx.globalCompositeOperation='source-over';
-    zmin=Math.max(0.02,Math.min(0.6,(Math.min(fieldW,fieldH)/2-40)/(mx+60)));
-    fieldDirty=false;
-  }
-  function fieldStep(now){
-    const k=REDUCED?1:0.10;                            // 減モーションは即着（揺らさない）
-    cam.z+=(camTgt.z-cam.z)*k;cam.x+=(camTgt.x-cam.x)*k;cam.y+=(camTgt.y-cam.y)*k;
-    if(Math.abs(cam.z-camTgt.z)<0.0006)cam.z=camTgt.z;
-    if(Math.abs(cam.x-camTgt.x)<0.4)cam.x=camTgt.x;
-    if(Math.abs(cam.y-camTgt.y)<0.4)cam.y=camTgt.y;
-    document.body.classList.toggle('far-view',cam.z<0.92);
-    fieldCv.classList.toggle('active',cam.z<0.985||camTgt.z<1);
-    fieldRender(now);
-  }
-  function fieldLoop(now){
-    fieldRaf=0;
-    if(document.hidden)return;
-    fieldStep(now);
-    const settled=cam.z===camTgt.z&&cam.x===camTgt.x&&cam.y===camTgt.y;
-    // 減モーションでは、動きが済んだら止まる。通常は野が呼吸し続ける（flare・鼓動）
-    if(!REDUCED||!settled||fieldDirty)fieldRaf=requestAnimationFrame(fieldLoop);
-  }
-  function fieldWake(){if(!fieldRaf)fieldRaf=requestAnimationFrame(fieldLoop);}
-  /* ── 出入り：ズーム＝時間の移動 ── */
-  function setFieldZ(z){camTgt.z=Math.max(zmin,Math.min(1,z));syncFarBtn();fieldWake();}
-  function uiBusy(t){
-    return document.querySelector('.cast.on,.read.on,.trace.on,.ask.on,.shiori-list.on')
-      ||(t&&t.closest&&t.closest('.cast,.read,.trace,.ask,.about,.lp,.shiori,.shiori-list,.hold,button,a,input,[contenteditable]'));
-  }
-  addEventListener('wheel',e=>{
-    if(uiBusy(e.target))return;
-    e.preventDefault();
-    setFieldZ(camTgt.z*Math.pow(1.0016,-e.deltaY));
-  },{passive:false});
-  // 触れる指二本＝時間をつまむ。柱が立っている間は奪わない
-  let fieldPinch=null;
-  function tdist(e){const a=e.touches[0],b=e.touches[1];
-    return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1;}
-  document.addEventListener('touchstart',e=>{
-    if(e.touches.length===2&&!uiBusy(e.target))fieldPinch={d:tdist(e),z:camTgt.z};
-  },{passive:true});
-  document.addEventListener('touchmove',e=>{
-    if(fieldPinch&&e.touches.length===2){e.preventDefault();setFieldZ(fieldPinch.z*tdist(e)/fieldPinch.d);}
-  },{passive:false});
-  document.addEventListener('touchend',()=>{fieldPinch=null;});
-  /* 掴んで過去を巡る（ズームアウト中だけ canvas が触れられる）。指の動きが小さければ「触れた」 */
-  let fieldDrag=null,fieldMoved=0;
-  fieldCv.addEventListener('pointerdown',e=>{
-    if(fieldDrag){fieldDrag=null;return;}              // 二本目の指＝ピンチに譲る
-    fieldDrag={x:e.clientX,y:e.clientY,cx:camTgt.x,cy:camTgt.y};fieldMoved=0;
-    fieldCv.classList.add('drag');
-    try{fieldCv.setPointerCapture(e.pointerId);}catch(_){}
-  });
-  fieldCv.addEventListener('pointermove',e=>{
-    if(!fieldDrag||fieldPinch)return;
-    const dx=e.clientX-fieldDrag.x,dy=e.clientY-fieldDrag.y;
-    fieldMoved=Math.max(fieldMoved,Math.abs(dx)+Math.abs(dy));
-    camTgt.x=fieldDrag.cx-dx/cam.z;camTgt.y=fieldDrag.cy-dy/cam.z;fieldWake();
-  });
-  fieldCv.addEventListener('pointerup',e=>{
-    fieldCv.classList.remove('drag');
-    const tap=fieldDrag&&fieldMoved<8;fieldDrag=null;
-    if(tap&&!fieldPinch){const w=fieldPick(e.clientX,e.clientY);if(w)fieldPluck(w);}
-  });
-  fieldCv.addEventListener('pointercancel',()=>{fieldDrag=null;fieldCv.classList.remove('drag');});
-  function fieldPick(mx,my){
-    const cx=fieldW/2,cy=fieldH/2;
-    let best=null,bd=1e9;
-    for(const w of fieldVis()){
-      if(live.has(w.id))continue;
-      const r=fieldRadius(w);
-      const sx=cx+(Math.cos(w.th)*r-cam.x)*cam.z;
-      const sy=cy+(Math.sin(w.th)*r-cam.y)*cam.z;
-      const dx=mx-sx,dy=my-sy,d2=dx*dx+dy*dy;
-      if(d2<bd){bd=d2;best=w;}
-    }
-    return (best&&bd<=26*26)?best:null;                // 指の腹ひとつぶん
-  }
-  async function fieldPluck(w){
-    let d=null;
-    try{d=await fetch('/api/sky/word/'+encodeURIComponent(w.id)).then(r=>r.ok?r.json():null);}catch(_){}
-    if(!d||!d.poem){whisper('そのことばは、<wbr>いまは<wbr>遠いようです。',5000);return;}
-    // 引き寄せる＝いまへ帰る。天灯は漂いの一枚として、そのまま手のうちに降りる
-    camTgt.z=1;camTgt.x=0;camTgt.y=0;syncFarBtn();
-    noteSeen(w.id);
-    const tr=await getTrace(w.id);
-    const el=spawnDrift(d.poem,d.color,d.vertical,w.id,tr);
-    if(el)catchWord(el);
-    fieldWake();
-  }
-  const farBtn=document.getElementById('farBtn');
-  function syncFarBtn(){
-    const far=camTgt.z<1;
-    farBtn.textContent=far?'いまへ':'とおくへ';
-    farBtn.setAttribute('aria-pressed',far?'true':'false');
-    farBtn.setAttribute('aria-label',far?'いまの宙へ戻る':'遠くの宙を見る（過去のことばの野へ）');
-  }
-  farBtn.addEventListener('click',()=>{
-    if(camTgt.z<1){camTgt.z=1;camTgt.x=0;camTgt.y=0;}
-    else{fitZ();camTgt.z=zmin;}                        // 全件が見えるところまで（霧は掛けない）
-    syncFarBtn();fieldWake();
-  });
-  fieldResize();
-  addEventListener('resize',fieldResize);
-  fetchField();
-  setInterval(fetchField,60000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){fieldWake();}});
-  fieldWake();
+  /* 天灯の野（v2追補 §3・§4）は 2026-07-26 に撤去した（Kosei判断）。
+     「拡大縮小で時間を行き来する」眺めは宙のイメージと合わなかった。canvas も
+     /api/sky/field も消してある。過去のことばへは「辿る」（trace）から会いにいく。
+     ——同時に、野だけが持っていた二つも消えた：flare（§4）の見た目の浮上と、
+     天灯に触れて過去の一筆を「いま」へ引き寄せる手つき。flare 自体はサーバに残り、
+     air_distance を縮める形（§5）で、いまも辿りの候補として静かに効いている。 */
   addEventListener('pagehide',flushSeen);
 
   /* ── 触れた気配を灯へ（宙v1 §4.2）── どのことばかは送らない・残らない */
@@ -1979,8 +1868,8 @@
       }
       if(!inRoom()&&d.rooms){
         const on=new Set(d.rooms);
-        for(const el of roomLayer.children){
-          if(el._lit) el._lit.classList.toggle('on',on.has(el._room.id));
+        for(const el of roomEls()){
+          if(el._room) el.classList.toggle('lit',on.has(el._room.id));
         }
       }
     }).catch(()=>{});
@@ -1990,7 +1879,9 @@
 
   /* ══ ことばを受け止める（v14）════════════════════════════════
      漂っていることばに触れると、そのことばだけが漂うのをやめて手のうちに残る。
-     隣に二つの行いが立ち上がる：印を結ぶ／手元に残す。
+     隣に二つの行いが立ち上がる：しるしをつける／自分の棚にとっておく。
+     ——2026-07-27に「印を結ぶ／手元に、残す」から改名した。何が起きるのかが
+     初見で分からず、押す前に意味を推測させていた（Apple §16.6 concise & clear）。
      ・止め方は「いまの見えている位置から」（Apple §3：目標値ではなく現在値から始める）。
        matrix を読んで transition を切り、その値で固定する＝掴んだ瞬間に飛ばない。
      ・放すと、残りの寿命でまた漂いはじめる（中断できて、戻せる）。
@@ -1998,7 +1889,7 @@
      ・未登録の人にも受け止めさせる。印と棚は要るが、それは静かに知らせるだけ。 */
   const holdBox=document.getElementById('hold');
   let held=null;                       // いま受け止めていることば
-  // marks=印を結んだ公開id / kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
+  // marks=しるしをつけた公開id / kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
   const marks=new Set(), kept=new Set();
 
   /* v4：止め方は「その一歩を進めない」だけ（hold）。位置は毎フレーム rAF が書いているので、
@@ -2006,10 +1897,30 @@
      v3 までは transition を切って computed transform を読み直して固定していたが、
      transform を物理が持つようになったので、その細工はもう要らない。
      止まっているあいだも壁としては残るので、他のことばはぶつかって逸れていく。 */
+  /* 一度だけの手引き（2026-07-27）。
+     ことばに触れられることは、字で説明せず「触れた瞬間の手応え」で分かるのが正しい。
+     ただし、触れられると思わなければ誰も触らない——だから常設の説明文の代わりに、
+     **まだ一度も触れたことがない人にだけ、一度だけ**、短い一行を置く。
+     一度でも触れたら二度と出ない（覚えたことを繰り返し教えられるのは失礼にあたる）。 */
+  const TOUCH_KEY='tayori.touched';
+  function everTouched(){
+    try{ return localStorage.getItem(TOUCH_KEY)==='1'; }catch(_){ return true; }
+  }
+  function hintTouch(){
+    if(everTouched()||held)return;
+    setTimeout(()=>{
+      if(everTouched()||held||!liveEls.size)return;   // その間に触れていたら、もう出さない
+      whisper('ことばに、<wbr>触れてみてください。',7000);
+    },2600);   // 一つ目が書き上がるころに、そっと
+  }
+  function markTouched(){ try{ localStorage.setItem(TOUCH_KEY,'1'); }catch(_){} }
+
   function catchWord(el){
     if(held===el){ release(); return; }
     if(held) release();
     held=el;
+    markTouched();        // これ以後、手引きは出さない
+    whisper('');          // 手引きが出ていたら、触れた時点で引く
     noteTouch();          // 受け止めた＝触れた。灯にだけ気配が走る（宙v1 §4.2）
     disarmDrift(el);
     el.classList.remove('out');
@@ -2052,8 +1963,8 @@
   function renderHold(){
     if(!held) return;
     if(!LOGGED_IN){
-      holdBox.innerHTML='<p class="hold-note">このことばに<wbr>印を<wbr>結んだり、<wbr>'+
-        '手元に<wbr>残したり<wbr>できます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
+      holdBox.innerHTML='<p class="hold-note">このことばに<wbr>しるしを<wbr>つけたり、<wbr>'+
+        '自分の<wbr>棚に<wbr>とっておいたり<wbr>できます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
       holdExtras();   // 辿るだけは、はじめる前のひとにも開いておく
       return;
     }
@@ -2065,10 +1976,10 @@
         ? '<p class="hold-lit">このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。</p>'
         : '<button type="button" class="hold-act mark'+(m?' on':'')+'" aria-pressed="'+(m?'true':'false')+'">'+
             '<span class="dot" aria-hidden="true"></span><span class="txt">'+
-            (m?'印を結びました':'このことばに、印を結ぶ')+'</span></button>')+
+            (m?'しるしを、つけました':'そっと、しるしをつける')+'</span></button>')+
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
         '<span class="dot" aria-hidden="true"></span><span class="txt">'+
-        (s?'棚に、残しました':'手元に、残す')+'</span></button>';
+        (s?'棚に、とっておきました':'自分の棚に、とっておく')+'</span></button>';
     const mb=holdBox.querySelector('.mark');
     if(mb)mb.addEventListener('click',()=>markWord(held));
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
@@ -2099,14 +2010,14 @@
   async function markWord(el){
     if(!el||!el._sid||marks.has(el._sid)) return;
     marks.add(el._sid);justMarked.add(el._sid);
-    paintAct('.mark',true,'印を結びました','このことばに、印を結ぶ');
+    paintAct('.mark',true,'しるしを、つけました','そっと、しるしをつける');
     try{
       const r=await fetch('/api/sky/word/'+el._sid+'/mark',{method:'POST',
         headers:{'Content-Type':'application/json'},body:'{}'});
       if(!r.ok)throw new Error('mark');
     }catch(e){
       marks.delete(el._sid);justMarked.delete(el._sid);
-      paintAct('.mark',false,'印を結びました','このことばに、印を結ぶ');
+      paintAct('.mark',false,'しるしを、つけました','そっと、しるしをつける');
       whisper('いま、<wbr>tayori-たより- に<wbr>手が<wbr>届きませんでした。',6000);
     }
   }
@@ -2114,7 +2025,7 @@
     if(!el||!el._sid) return;
     const key='drift:'+el._sid, on=!kept.has(key);
     if(on)kept.add(key); else kept.delete(key);
-    paintAct('.keep',on,'棚に、残しました','手元に、残す');
+    paintAct('.keep',on,'棚に、とっておきました','自分の棚に、とっておく');
     if(!on)dropPad(holdBox);
     try{
       const r=await fetch('/api/shelf',{method:'POST',
@@ -2127,7 +2038,7 @@
     }catch(e){
       dropPad(holdBox);
       if(on)kept.delete(key); else kept.add(key);
-      paintAct('.keep',!on,'棚に、残しました','手元に、残す');
+      paintAct('.keep',!on,'棚に、とっておきました','自分の棚に、とっておく');
       whisper('いま、<wbr>棚に<wbr>届きませんでした。',6000);
     }
   }
@@ -2163,7 +2074,7 @@
     };
     sb.addEventListener('click',e=>{e.stopPropagation();setOpen(!sl.classList.contains('on'));});
     document.addEventListener('click',e=>{
-      if(sl.classList.contains('on')&&!sl.contains(e.target)&&e.target!==sb)setOpen(false);});
+      if(sl.classList.contains('on')&&!sl.contains(e.target)&&!sb.contains(e.target))setOpen(false);});
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape'&&sl.classList.contains('on')){setOpen(false);sb.focus();}});
   })();
@@ -2317,18 +2228,18 @@
     }else{
       const mb=document.createElement('button');
       mb.type='button';mb.className='hold-act mark';
-      mb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt">このことばに、印を結ぶ</span>';
+      mb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt">そっと、しるしをつける</span>';
       mb.addEventListener('click',async()=>{
         if(marks.has(w.id))return;
         marks.add(w.id);
-        mb.classList.add('on');mb.querySelector('.txt').textContent='印を結びました';
+        mb.classList.add('on');mb.querySelector('.txt').textContent='しるしを、つけました';
         try{
           const r=await fetch('/api/sky/word/'+w.id+'/mark',{method:'POST',
             headers:{'Content-Type':'application/json'},body:'{}'});
           if(!r.ok)throw new Error('mark');
         }catch(e){
           marks.delete(w.id);
-          mb.classList.remove('on');mb.querySelector('.txt').textContent='このことばに、印を結ぶ';
+          mb.classList.remove('on');mb.querySelector('.txt').textContent='そっと、しるしをつける';
         }
       });
       tActs.appendChild(mb);
@@ -2338,7 +2249,7 @@
     const paintKeep=on=>{
       kb.classList.toggle('on',on);
       kb.setAttribute('aria-pressed',on?'true':'false');
-      kb.querySelector('.txt').textContent=on?'棚に、残しました':'手元に、残す';
+      kb.querySelector('.txt').textContent=on?'棚に、とっておきました':'自分の棚に、とっておく';
     };
     kb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt"></span>';
     paintKeep(kept.has('drift:'+w.id));
@@ -2403,14 +2314,9 @@
   tPane.addEventListener('click',e=>{if(e.target===tPane)shutTrace();});
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&tPane.classList.contains('on'))shutTrace();});
-  /* 入口①（§4.3）：いまの空気に近いことば。栞から、宙の外へ出ずに開く */
-  const tnl=document.getElementById('traceNowLink');
-  if(tnl)tnl.addEventListener('click',e=>{
-    e.preventDefault();
-    document.getElementById('shioriList').classList.remove('on');
-    if(!inRoom())return;   // 辿れるのは部屋の中だけ（CSSでも隠しているが、経路そのものを閉じる）
-    openTrace('now',null,'いまの空気に、近いことば');
-  });
+  /* 栞にあった入口①（「いまの空気に、近いことば」）は 2026-07-26 に廃止した。
+     辿るへは、ことばに触れた時の「この空気に、近いことば」から入る——
+     栞は「行ける場所」だけを並べる面にしたので、行い（機能）はここに置かない。 */
 
   if(!LOGGED_IN) return;
 
@@ -2421,6 +2327,7 @@
         send=document.getElementById('castSend'),close=document.getElementById('castClose'),
         hueBar=document.getElementById('hueBar'),hueKnob=document.getElementById('hueKnob'),
         toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob'),
+        pickerNow=document.getElementById('pickerNow'),
         vcaret=document.getElementById('castCaret');
 
   /* ── 気分の色（v12）──
@@ -2436,7 +2343,8 @@
     return {h:h,s:Math.round(s),l:Math.round(l)};
   }
   const cssOf=c=>'hsl('+c.h+', '+c.s+'%, '+c.l+'%)';
-  /* 色の名。読み上げのためのもので、画面には出さない（宙に凡例は置かない）。
+  /* 色の名。読み上げのためと、いま選んでいる色を返すため（2026-07-27）。
+     凡例（色相／彩度…）ではなく結果の名前なので、宙に説明を置かない約束は破らない。
      境目は色相環をそのまま日本語の色名に割ったもので、厳密な色彩学ではなく耳で分かる粗さ。 */
   function hueName(h){
     const t=[[15,'赤'],[45,'橙'],[70,'黄'],[95,'黄緑'],[155,'緑'],[190,'青緑'],
@@ -2460,6 +2368,8 @@
        （見えない人にとって、この帯は「0〜360の数字」ではなく色そのものなので）。 */
     hueBar.setAttribute('aria-valuetext',hueName(H));
     toneBar.setAttribute('aria-valuetext',toneName(T)+'　'+hueName(H));
+    // 見えている人にも同じことばで返す（帯に触れた手応えが、名前として残る）
+    if(pickerNow){ pickerNow.textContent=toneName(T)+'　'+hueName(H); pickerNow.style.color=col; }
     // 選んだ色は、書いている文字にそのままのる（宙に放たれた後と同じ見え方に）
     ta.style.color=col;
     ta.style.textShadow='0 0 22px hsla('+c.h+','+c.s+'%,'+c.l+'%,.45)';
@@ -2744,7 +2654,6 @@
         castTitle.value='';
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
         setTimeout(fetchWords,600);
-        setTimeout(fetchField,900);   // 天灯の野にも、いま生まれた一灯を足す
         if(d.care)setTimeout(showCareNote,1600);
       }else{
         /* 届かなかったことは、必ず言う。v2 まではここが無音で、押しても柱が閉じないまま
@@ -2787,8 +2696,8 @@
     rl.classList.toggle('on',!!on);
     rl.setAttribute('aria-pressed',on?'true':'false');
     rl.querySelector('.txt').textContent=
-      on?(old?'いつかのあなたが、もう灯をともしています':'印を結びました')
-        :'このことばに、印を結ぶ';
+      on?(old?'いつかのあなたが、もう灯をともしています':'しるしを、つけました')
+        :'そっと、しるしをつける';
   }
   rl.addEventListener('click',async()=>{
     if(!readDid||rl.classList.contains('on'))return;
@@ -2810,7 +2719,7 @@
   function setKeep(on){
     rk.classList.toggle('on',!!on);
     rk.setAttribute('aria-pressed',on?'true':'false');
-    rk.querySelector('.txt').textContent=on?'棚に、残しました':'手元に、残す';
+    rk.querySelector('.txt').textContent=on?'棚に、とっておきました':'自分の棚に、とっておく';
   }
   const readFusen=document.getElementById('readFusen');
   rk.addEventListener('click',async()=>{
