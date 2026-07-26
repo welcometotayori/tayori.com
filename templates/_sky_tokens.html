@@ -35,6 +35,14 @@
     --edge:2px;                       /* 紙の縁。丸い錠剤も12pxのカードも作らない */
     --ease:cubic-bezier(.2,.8,.2,1);  /* 出る時。消える時は少し速く */
     --touch:44px;                     /* 触れるものの最小 */
+    /* ── 端末の縁 ──
+       宙は viewport-fit=cover で画面の隅まで使う。その代償として、下辺に置いた操作は
+       ホームバーの下に潜り、横に置いた操作はノッチの陰に入る。画面の縁に何かを据える時は
+       必ずこの四つを足す（env() は :root で解けるので、ここで名前を付けておく）。 */
+    --safe-t:env(safe-area-inset-top,0px);
+    --safe-r:env(safe-area-inset-right,0px);
+    --safe-b:env(safe-area-inset-bottom,0px);
+    --safe-l:env(safe-area-inset-left,0px);
   }
   *{box-sizing:border-box}
   body{background:var(--space);color:var(--ink-1);

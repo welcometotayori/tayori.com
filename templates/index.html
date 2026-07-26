@@ -707,6 +707,11 @@
   .gate-submit{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:15px;letter-spacing:0.2em;padding:14px;border-radius:1px;transition:background .25s;margin-top:4px}
   .gate-submit:hover{background:var(--seal)}
+  /* 送っている間は押せない。押せない姿を見せないと、返事が来るまでの数秒が
+     「押せていないのか、待っているのか」分からない（Apple §16 status feedback）。
+     色は上書きしない：宙の色（body .gate-submit …）と競って闇の上に白い板が出るので、
+     pointer-events:none で :hover そのものを不成立にする。 */
+  .gate-submit:disabled{opacity:0.5;cursor:default;pointer-events:none}
   .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   /* 門の足元（v14）：44pxの帯として押せるように。行の見た目は変えない */
   .gate-hint{display:flex;flex-wrap:wrap;justify-content:center;gap:0 18px;margin-top:10px}
@@ -967,7 +972,9 @@
         <div class="gate-note">※確認・通知メールが<wbr><b style="white-space:nowrap">迷惑メール（スパム）フォルダ</b>に<wbr>振り分けられることが<wbr>あります。<wbr>届かない場合は<wbr>そちらをご確認のうえ、<wbr>「迷惑メールではない」に<wbr>設定してください。</div>
       </div>
       <button class="gate-submit" id="gSubmit">ログイン</button>
-      <div class="gate-err" id="gErr"></div>
+      {# 入れ違いは、読み上げにも必ず届くようにする（見えている人にだけ出る文にしない）。
+         role=alert は中身が変わった時だけ読まれるので、空のまま置いておける。 #}
+      <div class="gate-err" id="gErr" role="alert" aria-live="assertive"></div>
       <!-- 門の足元。18pxしかなく指で押せなかったので、余白だけを広げて44pxにした（v14） -->
       <nav class="gate-hint" aria-label="門の足元">
         <a href="/terms" target="_blank">利用規約</a><a href="/privacy" target="_blank">プライバシーポリシー</a>
@@ -2822,6 +2829,10 @@ async function detectWeather(){
     const res=await api(url,{method:'POST',body:JSON.stringify(payload)});
     gSubmit.disabled=false;gSubmit.textContent=orig;
     if(res&&res.ok){
+      // 一度でも通れたなら、次からは必ず「ログイン」の札から開く。
+      // 登録した人も、次に来る時にはもう名前を持っている（register を覚えると、
+      // 二度目に「その名前は使われています」から始まることになる）。
+      gateRemember('login');
       // admin でログインしたら、通常アプリではなく管理ダッシュボードへ
       if(res.is_admin){window.location.href='/admin.welcometotayori';return;}
       if(res.email_pending)flash('確認メールを送りました。リンクを開くと通知が有効になります。');
@@ -2836,6 +2847,26 @@ async function detectWeather(){
   gSubmit.addEventListener('click',doAuth);
   gPass.addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
   gUser.addEventListener('keydown',e=>{if(e.key==='Enter')gPass.focus();});
+  // 登録の時はメールが最後の欄。ここで Enter が効かないと、指を離してボタンを探すことになる
+  // （同じ形のものは同じに振る舞う／Apple §16 familiarity）
+  if(gEmail)gEmail.addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
+
+  /* ── どちらの札から開くか（v4）────────────────────────────────
+     v3 までは必ず「ログイン」が開いていた。宙の《ことばを放つ／はじめる》を押して来た
+     初めての人は、そこで手が止まる——文言は「はじめに、あなたの名前を。」なのに、
+     開いているのは既に名前を持っている人の札だった（コピーと選択の不一致）。
+     ① この端末で前に通った札を覚えていれば、それを開く（帰ってきた人はログイン）
+     ② 覚えていなければ、来た道の意図に従う（?new=1 ＝ 宙の「はじめる」から来た）
+     localStorage が使えない設定でも壊れないよう、読み書きはどちらも包む。 */
+  const GATE_KEY='tayori.gate';
+  function gateRemember(mode){ try{ localStorage.setItem(GATE_KEY,mode); }catch(e){} }
+  (function pickGate(){
+    let last=null;
+    try{ last=localStorage.getItem(GATE_KEY); }catch(e){}
+    const wantsNew=new URLSearchParams(location.search).get('new')==='1';
+    const mode=(last==='login'||last==='register')?last:(wantsNew?'register':'login');
+    if(mode==='register')document.querySelector('.gate-tab[data-g="register"]').click();
+  })();
 
   function enterApp(username,email,verified,onboarded){
     gate.classList.add('hidden');appEl.classList.remove('app-hidden');
