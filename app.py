@@ -5227,7 +5227,63 @@ def api_shelf_save():
     _lantern_touch(_room_of_letter(db, letter_id))
     # 控えのidを返す：残したその場で付箋を貼れるようにするため（クライアント側の続き）。
     # このidは本人の棚の中だけの識別子で、手紙や書き手には結びつかない。
-    return jsonify(ok=True, saved=True, id=saved["id"])
+    #
+    # どの棚へ入ったか・ほかにどんな棚があるかも一緒に返す（2026-07-27）。
+    # 保存の「あと」に置き場所を変えられるようにするため——保存の「前」に選ばせない
+    # （書く前に部屋を選ばせていた時と同じ轍を、棚で踏まないこと）。
+    # 名前だけの軽い一覧なので、棚の中身は載せない。
+    into = sid or _default_shelf(db, uid())
+    shelves = [{"id": r["id"], "name": r["name"]} for r in db.execute(
+        "SELECT id, name FROM shelves WHERE owner_id=? ORDER BY created_at, id", (uid(),))]
+    return jsonify(ok=True, saved=True, id=saved["id"],
+                   shelf=into, shelves=shelves)
+
+
+@app.route("/api/shelf/<wid>/move", methods=["POST"])
+@login_required
+def api_shelf_move(wid):
+    """控えを別の棚へ移す（2026-07-27）。保存の「あと」に置き場所を変えるための口。
+    移すだけで、ことばそのものは何も動かない（書き手にも何も起きない）。
+    新しい棚をその場で編むこともできる（name を渡す）——上限は棚の作成と同じ。"""
+    db = get_db()
+    row = db.execute("SELECT id FROM saved_words WHERE id=? AND user_id=?",
+                     (wid, uid())).fetchone()
+    if not row:
+        return jsonify(error="その控えは見つかりません。"), 404
+    data = request.get_json(force=True) or {}
+    sid = str(data.get("shelf") or "") or None
+    # 名前の正規化は棚づくり（api_shelves_create）と同じ規則に揃える
+    name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:24]
+    if not sid and name:
+        have = db.execute("SELECT COUNT(*) AS c FROM shelves WHERE owner_id=?",
+                          (uid(),)).fetchone()["c"]
+        if have >= _SHELVES_MAX:
+            return jsonify(error="棚は10までです。ひとつ手放してからにしてください。"), 409
+        dup = db.execute("SELECT id FROM shelves WHERE owner_id=? AND name=?",
+                         (uid(), name)).fetchone()
+        if dup:
+            sid = dup["id"]          # 同じ名前があれば、それをそのまま置き場所にする
+        else:
+            sid = secrets.token_hex(8)
+            with _WRITE_LOCK:
+                db.execute("INSERT INTO shelves (id, owner_id, name, created_at) VALUES (?,?,?,?)",
+                           (sid, uid(), name, datetime.now().isoformat(timespec="seconds")))
+                db.commit()
+    if not sid or not _own_shelf(db, sid):
+        return jsonify(error="その棚は見つかりません。"), 404
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with _WRITE_LOCK:
+        # 「移す」なので、いまいる棚からは降ろす（複数の棚に同じことばを置くのは
+        # 棚の画面での操作。ここは置き場所をひとつ選び直すための道）。
+        db.execute(
+            "DELETE FROM shelf_items WHERE saved_id=? AND shelf_id IN"
+            " (SELECT id FROM shelves WHERE owner_id=?)", (wid, uid()))
+        db.execute("INSERT OR IGNORE INTO shelf_items (shelf_id, saved_id, saved_at)"
+                   " VALUES (?,?,?)", (sid, wid, now_iso))
+        db.commit()
+    shelves = [{"id": r["id"], "name": r["name"]} for r in db.execute(
+        "SELECT id, name FROM shelves WHERE owner_id=? ORDER BY created_at, id", (uid(),))]
+    return jsonify(ok=True, shelf=sid, shelves=shelves)
 
 
 @app.route("/api/shelf/<wid>/tags", methods=["POST"])

@@ -963,6 +963,31 @@
      これは「そのままでもいい」続きなので、罫一本ぶんだけ静かに開く（Apple §16 簡潔さ）。 */
   /* 置かれる先（読む柱・受け止めた所・辿る）はどれも中身なりの幅なので、
      紙片の幅はここで決める（親に合わせると罫が数文字ぶんに縮む） */
+  /* ── 保存したあとの、置き場所（2026-07-27）──────────────────────────
+     保存は済んでいる＝ここは報せと、変えたい人のための細い道。だから主張しない。
+     カードも錠剤も作らず、この世界の作法どおり「罫を一本ひいた語」だけで押せることを示す。 */
+  .where-saved{width:min(280px,72vw);margin-top:10px;
+               display:flex;flex-wrap:wrap;align-items:baseline;gap:0 12px}
+  .where-lead{font-size:11.5px;letter-spacing:0.1em;color:var(--ink-3)}
+  .where-change{background:none;border:none;border-bottom:1px solid var(--rule-act);
+                font-family:inherit;font-size:11.5px;letter-spacing:0.1em;color:var(--ink-2);
+                padding:9px 2px;min-height:var(--touch);
+                transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .where-change:hover{color:var(--ink-1)}
+  .where-change:active{opacity:.62}
+  .where-pick{flex:1 0 100%;display:flex;flex-wrap:wrap;gap:0 14px;padding-top:2px}
+  .where-pick[hidden]{display:none}
+  .where-opt{background:none;border:none;border-bottom:1px solid transparent;
+             font-family:inherit;font-size:12px;letter-spacing:0.12em;color:var(--ink-3);
+             padding:10px 2px;min-height:var(--touch);
+             transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .where-opt:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
+  .where-opt:active{opacity:.62}
+  input.where-new{flex:1 0 100%;background:none;border:none;border-bottom:1px solid var(--rule);
+                  font-family:inherit;font-size:12px;letter-spacing:0.1em;color:var(--ink-2);
+                  padding:10px 2px;min-height:var(--touch);outline:none}
+  input.where-new::placeholder{color:var(--ink-4)}
+  input.where-new:focus{border-bottom-color:var(--ink-4)}
   .fusen-pad{width:min(280px,72vw);margin-top:10px}
   #readFusen{width:min(280px,72vw)}
   .fusen-pad .fusen-row{margin-bottom:8px}
@@ -2329,7 +2354,10 @@
   /* 棚の絵は、宙・読む柱・辿りの三か所で同じものを使う。
      ここを唯一の出どころにする（三度書くと、直すとき一つ書き漏らす）。 */
   const IC_SHELF='<span class="ic ic-shelf" aria-hidden="true"><span class="b"></span><span class="p"></span></span>';
-  const T_KEEP_OFF='棚に、とっておく', T_KEEP_ON='棚から、出す';
+  /* 2026-07-27：動詞は平易に「保存する」、置き場所の名は「棚」のまま。
+     Pinterest の Save/Board と同じ分け方——行いの名は誰にでも分かる語で、
+     場所の名はこの世界の語で。規約・プライバシー・通知メールの「棚」は触らずに済む。 */
+  const T_KEEP_OFF='保存する', T_KEEP_ON='保存をやめる';
 
   /* v4：止め方は「その一歩を進めない」だけ（hold）。位置は毎フレーム rAF が書いているので、
      掴んだ瞬間の値がそのまま現在値＝どこにも飛ばない（Apple §3）。
@@ -2453,7 +2481,7 @@
       if(!r.ok)throw new Error('keep');
       const d=await r.json().catch(()=>null);
       // 残した、その場に付箋の紙片が開く（貼らずに閉じてよい・v2.2 §3）
-      if(on&&d&&d.id&&held===el)fusenPad(holdBox,d.id,[]);
+      if(on&&d&&d.id&&held===el){fusenPad(holdBox,d.id,[]);wherePad(holdBox,d.id,d.shelf,d.shelves);}
     }catch(e){
       dropPad(holdBox);
       if(on)kept.delete(key); else kept.add(key);
@@ -2527,10 +2555,81 @@
      「そのままでもいい」続き（空のまま閉じてよく、あとから棚でも貼れる）。
      書き手には何も返らない。サジェストは自分がこれまで貼った付箋だけから拾う
      ——他人の付箋は見えないので、寄せられるのは自分の表記ゆれだけ。 */
+  /* 保存にまつわる続き（付箋・保存先）は、「近いことば」を分ける罫より **前** に置く。
+     後ろに足すと、別の場所へ行く行いを挟んで離れてしまう（2026-07-27 に一度そうなった）。 */
+  function padSlot(box){ return box?box.querySelector(':scope > .hold-sep'):null; }
+  function putPad(box,el){
+    const before=padSlot(box);
+    if(before)box.insertBefore(el,before); else box.appendChild(el);
+  }
   function dropPad(box){
     const p=box&&box.querySelector(':scope > .fusen-pad');
     if(p)p.remove();
+    const w=box&&box.querySelector(':scope > .where-saved');
+    if(w)w.remove();
   }
+  /* ── 保存したあとの、置き場所（2026-07-27）────────────────────────────
+     保存の「前」に棚を選ばせない。一押しで既定の棚へ入り、そのあとに
+     「○○に保存しました ▸」だけを置いて、変えたい人だけが変える。
+     （書く前に14部屋から選ばせて「何を書くか選ぶところから判断しなきゃ」と
+     言われたのと同じ轍を、棚で踏まないため。）
+     棚が一つしか無い人には、変える先が無いので出さない——ただし
+     「新しい棚へ」だけは出す＝棚を増やす道は塞がない。 */
+  function wherePad(box,savedId,shelfId,shelves){
+    if(!box||!savedId)return;
+    const list=(shelves||[]);
+    const now=list.find(s=>String(s.id)===String(shelfId));
+    const pad=document.createElement('div');pad.className='where-saved';
+    const lead=document.createElement('span');lead.className='where-lead';
+    lead.textContent=(now?now.name:'棚')+'に保存しました';
+    const btn=document.createElement('button');
+    btn.type='button';btn.className='where-change';btn.textContent='ほかの棚へ';
+    const pick=document.createElement('div');pick.className='where-pick';pick.hidden=true;
+    btn.addEventListener('click',()=>{
+      pick.hidden=!pick.hidden;
+      btn.setAttribute('aria-expanded',pick.hidden?'false':'true');
+    });
+    btn.setAttribute('aria-expanded','false');
+    async function moveTo(payload,label){
+      try{
+        const r=await fetch('/api/shelf/'+savedId+'/move',{method:'POST',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const d=await r.json().catch(()=>null);
+        if(!(r.ok&&d&&d.ok))throw new Error('move');
+        lead.textContent=label+'に保存しました';
+        pick.hidden=true;btn.setAttribute('aria-expanded','false');
+        // 棚が増えていることがあるので、選び直しの一覧も作り直す
+        buildPick(d.shelves||list,d.shelf);
+      }catch(e){ whisper('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。',6000); }
+    }
+    function buildPick(all,curId){
+      pick.innerHTML='';
+      all.filter(s=>String(s.id)!==String(curId)).forEach(s=>{
+        const b=document.createElement('button');
+        b.type='button';b.className='where-opt';b.textContent=s.name;
+        b.addEventListener('click',()=>moveTo({shelf:s.id},s.name));
+        pick.appendChild(b);
+      });
+      /* 新しい棚は、その場で名前を書いて作る（付箋の入力と同じ作法）。
+         確認の面を立てない——ここは戻せる行いなので、問いを挟むほどではない。 */
+      const nin=document.createElement('input');
+      nin.type='text';nin.className='where-new';nin.maxLength=24;nin.autocomplete='off';
+      nin.placeholder='新しい棚の名前';
+      nin.setAttribute('aria-label','新しい棚の名前');
+      nin.addEventListener('keydown',e=>{
+        if(e.key!=='Enter'||e.isComposing)return;
+        e.preventDefault();
+        const v=nin.value.trim();
+        if(v)moveTo({name:v},v);
+      });
+      pick.appendChild(nin);
+    }
+    buildPick(list,shelfId);
+    pad.appendChild(lead);pad.appendChild(btn);pad.appendChild(pick);
+    putPad(box,pad);
+  }
+  /* 注意：先頭で dropPad するので、保存先（.where-saved）を置くのは **このあと**。
+     順を逆にすると、置いたそばから消える（2026-07-27 に一度踏んだ）。 */
   function fusenPad(box,savedId,initial){
     dropPad(box);
     if(!box||!savedId)return;
@@ -2596,7 +2695,7 @@
     });
     inp.addEventListener('blur',()=>setTimeout(()=>{sug.hidden=true;},150));
     pad.appendChild(row);pad.appendChild(inp);pad.appendChild(sug);
-    box.appendChild(pad);
+    putPad(box,pad);
     paint();
   }
   function traceURL(){
@@ -2660,7 +2759,7 @@
           body:JSON.stringify({src:'drift',ref:w.id,on:on})});
         if(!r.ok)throw new Error('keep');
         const d=await r.json().catch(()=>null);
-        if(on&&d&&d.id)fusenPad(tActs,d.id,[]);   // 残した、その場で貼れる
+        if(on&&d&&d.id){fusenPad(tActs,d.id,[]);wherePad(tActs,d.id,d.shelf,d.shelves);}   // 残した、その場で
       }catch(e){
         if(on)kept.delete(key);else kept.add(key);
         paintKeep(!on);dropPad(tActs);
@@ -3194,7 +3293,7 @@
       const d=await r.json().catch(()=>null);
       if(r.ok&&d&&d.ok){
         if(on)kept.add(keptKey(readRef)); else kept.delete(keptKey(readRef));
-        if(on&&d.id)fusenPad(readFusen,d.id,[]);   // 残した、その場で貼れる
+        if(on&&d.id){fusenPad(readFusen,d.id,[]);wherePad(readFusen,d.id,d.shelf,d.shelves);}
       }
       else setKeep(!on);
     }catch(e){ setKeep(!on);dropPad(readFusen); }
