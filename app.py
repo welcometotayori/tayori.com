@@ -3805,22 +3805,22 @@ def _room_name_error(name):
     """部屋名として受け付けられない理由を返す（問題なければ None）。"""
     raw = str(name or "").strip()
     if not raw:
-        return "部屋の名前を入れてください。"
+        return "名前を入れてください。"
     if len(raw) > 200:
-        return f"部屋の名前は{ROOM_NAME_MAX}字までです。"
+        return f"名前は{ROOM_NAME_MAX}字までです。"
     # 判定は素の文字列と正規化後の両方に当てる。「ｅｖｉｌ．ｃｏｍ」のように全角で書けば
     # すり抜ける、という穴を塞ぐため（重複判定と同じ土俵で中身も見る）。
     norm = _normalize_room_name(raw)
     # 中身の判定を字数より先に置く。URLは12字を超えることが多く、字数で先に弾くと
     # 「12字までです」という的外れな理由が返る（何が駄目なのか本人に伝わらない）。
     if _ROOM_CONTACT_RE.search(raw) or _ROOM_CONTACT_RE.search(norm):
-        return "部屋の名前に、URLや連絡先は入れられません。"
+        return "名前に、URLや連絡先は入れられません。"
     if _ROOM_NG_RE.search(raw) or _ROOM_NG_RE.search(norm):
-        return "その名前では部屋を作れません。"
+        return "その名前は、つけられません。"
     if len(raw) > ROOM_NAME_MAX:
-        return f"部屋の名前は{ROOM_NAME_MAX}字までです。"
+        return f"名前は{ROOM_NAME_MAX}字までです。"
     if not norm or not _ROOM_HAS_LETTER_RE.search(norm):
-        return "その名前では、部屋の名前になりません。"
+        return "その名前は、つけられません。"
     return None
 
 
@@ -3959,9 +3959,9 @@ def api_rooms_create():
         "SELECT id, name FROM rooms WHERE name_norm=? AND deleted_at IS NULL", (norm,)).fetchone()
     if exist:
         return jsonify(ok=True, existed=True, id=exist["id"], name=exist["name"],
-                       message="その部屋は、もうあります。")
+                       message="その名前は、もうあります。")
     if _rooms_created_ever(db, uid()) >= 1:
-        return jsonify(error="部屋を作れるのは、一人ひとつだけです。"), 429
+        return jsonify(error="名前をつけられるのは、一人ひとつだけです。"), 429
     now = datetime.now().isoformat(timespec="seconds")
     try:
         with _WRITE_LOCK:
@@ -3978,8 +3978,8 @@ def api_rooms_create():
             "SELECT id, name FROM rooms WHERE name_norm=? AND deleted_at IS NULL", (norm,)).fetchone()
         if row:
             return jsonify(ok=True, existed=True, id=row["id"], name=row["name"],
-                           message="その部屋は、もうあります。")
-        return jsonify(error="いま部屋を作れませんでした。少しおいて、もう一度お試しください。"), 503
+                           message="その名前は、もうあります。")
+        return jsonify(error="いま、つけられませんでした。少しおいて、もう一度お試しください。"), 503
     except sqlite3.OperationalError as e:
         print(f"[たより] 部屋の作成 書き込み失敗（再試行可）: {e}", flush=True)
         return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
@@ -3993,16 +3993,16 @@ def api_rooms_delete(room_id):
     db = get_db()
     r = _room_row(db, room_id)
     if not r:
-        return jsonify(error="その部屋は見つかりません。"), 404
+        return jsonify(error="それは見つかりません。"), 404
     if r["is_default"] or not r["created_by"] or r["created_by"] != uid():
-        return jsonify(error="この部屋は、あなたのものではありません。"), 403
+        return jsonify(error="これは、あなたがつけた名前ではありません。"), 403
     if r["locked_at"]:
-        return jsonify(error="一度だれかの声が入った部屋は、もう誰のものでもありません。"), 409
+        return jsonify(error="一度だれかの声が入ったら、もう誰のものでもありません。"), 409
     # ことばが残っている部屋は消さない。放たれたことばは書いた人のものではなく、
     # 部屋ごと畳むと、既に読んだ人の手元だけに残って行き場を失う。
     n = db.execute("SELECT COUNT(*) c FROM letters WHERE room_id=?", (room_id,)).fetchone()["c"]
     if n:
-        return jsonify(error="この部屋には、もうことばがあります。空になるまで消せません。"), 409
+        return jsonify(error="ここには、もうことばがあります。空になるまで消せません。"), 409
     try:
         with _WRITE_LOCK:
             db.execute("UPDATE rooms SET deleted_at=? WHERE id=?",
@@ -4020,13 +4020,13 @@ def _room_scope():
     決まらないまま漂わせる経路は作らない。"""
     raw = request.args.get("room")
     if raw is None or str(raw).strip() == "":
-        return None, (jsonify(error="部屋がえらばれていません。", room_required=True), 400)
+        return None, (jsonify(error="どこへ放つか、えらばれていません。", room_required=True), 400)
     try:
         rid = int(raw)
     except (TypeError, ValueError):
-        return None, (jsonify(error="その部屋は見つかりません。"), 404)
+        return None, (jsonify(error="それは見つかりません。"), 404)
     if not _room_row(get_db(), rid):
-        return None, (jsonify(error="その部屋は見つかりません。"), 404)
+        return None, (jsonify(error="それは見つかりません。"), 404)
     return rid, None
 
 
@@ -4499,12 +4499,12 @@ def api_create_letter():
     try:
         room_id = int(data.get("room"))
     except (TypeError, ValueError):
-        return jsonify(error="どの部屋に放つか、えらんでください。", room_required=True), 400
+        return jsonify(error="どこへ放つか、えらんでください。", room_required=True), 400
     room = _room_row(get_db(), room_id)
     if not room:
-        return jsonify(error="その部屋は見つかりません。"), 404
+        return jsonify(error="それは見つかりません。"), 404
     if room["archived"]:
-        return jsonify(error="この部屋には、もう新しいことばを放てません。"), 403
+        return jsonify(error="ここへは、もう新しいことばを放てません。"), 403
 
     # 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も受け取らない
     # （クライアントが arrive_at 等を送ってきても無視する）。降ってくる日時は
@@ -6802,7 +6802,7 @@ def api_admin_room_rename(room_id):
         return jsonify(error=err), 400
     db = get_db()
     if not _room_row(db, room_id):
-        return jsonify(error="その部屋は見つかりません。"), 404
+        return jsonify(error="それは見つかりません。"), 404
     norm = _normalize_room_name(name)
     dup = db.execute(
         "SELECT id FROM rooms WHERE name_norm=? AND deleted_at IS NULL AND id<>?",
@@ -6829,7 +6829,7 @@ def api_admin_room_delete(room_id):
     data = request.get_json(silent=True) or {}
     db = get_db()
     if not _room_row(db, room_id):
-        return jsonify(error="その部屋は見つかりません。"), 404
+        return jsonify(error="それは見つかりません。"), 404
     n = db.execute("SELECT COUNT(*) c FROM letters WHERE room_id=?", (room_id,)).fetchone()["c"]
     move_to = data.get("move_to")
     if n:

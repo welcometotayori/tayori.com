@@ -599,27 +599,28 @@
      部屋の名前だけ。過去のことばへは「辿る」（trace）から会いにいく。 */
   .drift-layer,.room-layer,.cast-btn,.arrivals{transition:opacity .9s var(--ease,ease)}
 
-  /* ══ 部屋（2026-07-26 B-7／同日 整列と灯へ）══════════════════
+  /* ══ 部屋（2026-07-26 B-7／2026-07-27 円配置とズーム）════════════
      トップに出るのは、ことばではなく部屋の名前。
      ・漂わせるのはやめた。1.5〜4px/秒まで落としても「自然に漂う」には見えず、
        読もうとした名前がわずかに逃げるだけだった（2026-07-26 Kosei）。
-       整列させて、画面の中央に寄せて置く。
-     ・並びは固定（サーバが 元からある室 → 生まれた順 で返す）。位置が変わらないので
-       「あの部屋はここ」と体が覚えられ、灯の移ろいも同じ場所で追える。
+     ・席は 12時から時計回りに、同心円で外へ（roomSeat・純関数）。位置は席番号で
+       決まっていて動かない＝「あの部屋はここ」と体が覚えられ、灯の移ろいも同じ場所で追える。
+     ・部屋が増えても字は小さくしない・数の上限も設けない。画面に入らなくなったぶんは
+       **ズームで解く**（＝camera）。座標を触るのは canvas ひとつの transform だけで、
+       部屋そのものの座標は一度置いたら二度と書き換えない。
      ・灯は名前のまわりに散る。色はその部屋にいまあることばの封の色（最大3つ）。
        件数は語らない——3つ未満はそのまま少なく灯るが、それ以上は数えられない。
      ・誰かがその部屋のことばに触れている間だけ、灯が明るくなって呼吸する。 */
   .room-layer{position:fixed;inset:0;z-index:6;pointer-events:auto;
-              overflow-y:auto;overscroll-behavior:contain;
-              display:flex;flex-direction:column;justify-content:center;align-items:center;
-              gap:34px;
-              padding:calc(104px + var(--safe-t)) calc(var(--s3) + var(--safe-r))
-                      calc(176px + var(--safe-b)) calc(var(--s3) + var(--safe-l))}
+              overflow:hidden;
+              /* 掴んで動かす面なので、ブラウザ既定のスクロール・ピンチには渡さない */
+              touch-action:none;cursor:grab}
   .room-layer.off{display:none}
-  /* 一段ごとに数を違える（3・4・3・4…）。同じ数で積むと表になり、
-     行の切れ目が縦の筋になって見える——互い違いにすると、並んでいるのに格子に見えない。 */
-  .room-row{display:flex;justify-content:center;align-items:baseline;gap:34px}
-  .room{position:relative;pointer-events:auto;
+  .room-layer.grabbing{cursor:grabbing}
+  /* 動かすのはこの一枚だけ。原点は画面の中央（top/left 50%）で、そこが円の中心。 */
+  .room-canvas{position:absolute;left:50%;top:50%;width:0;height:0;
+               transform-origin:0 0}
+  .room{position:absolute;left:0;top:0;pointer-events:auto;
         font-size:19px;letter-spacing:0.16em;line-height:1.4;
         color:var(--ink-2);background:none;border:0;padding:14px 18px;
         min-height:var(--touch);cursor:pointer;white-space:nowrap;
@@ -627,14 +628,35 @@
            何の上へ来ても読めるようにしていたが、その闇が灯を覆って濁らせる
            （灯は字のうしろに居る＝影のほうが手前に乗る）。 */
         text-shadow:0 0 9px rgba(8,8,13,.92),0 0 3px rgba(8,8,13,.8);
+        /* 席の座標は --sx/--sy。-50% で名前の中心を席の点に合わせる */
+        transform:translate(calc(-50% + var(--sx,0px)),calc(-50% + var(--sy,0px)));
         opacity:0;transition:opacity 1.6s var(--ease,ease),color .4s ease}
   .room.on{opacity:.82}
-  .room:hover,.room:focus-visible{color:var(--paper,#efe9dc);opacity:1}
+  .room:hover{color:var(--paper,#efe9dc);opacity:1}
+  /* キーボードで巡る人にも、いまどこに居るかが見えること（円は Tab の順が見えにくい） */
+  .room:focus-visible{color:var(--paper,#efe9dc);opacity:1;
+                      outline:1px solid var(--rule-act);outline-offset:6px}
   .room:active{opacity:1;color:var(--chalk)}
   /* 罫を一本だけ引く（カードやピルにしない＝物質のメタファーを保つ） */
   .room::after{content:'';display:block;height:1px;margin-top:9px;
                background:var(--rule);opacity:.5}
   .room.archived{color:var(--ink-4);font-style:italic}
+  /* 円の中心。部屋ではないので罫を引かない（同じ姿にすると「部屋」に見える） */
+  .room-hub{position:absolute;left:0;top:0;
+            transform:translate(-50%,-50%);
+            display:inline-flex;align-items:center;gap:8px;
+            min-height:var(--touch);padding:12px 14px;
+            color:var(--ink-4);text-decoration:none;
+            font-size:12px;letter-spacing:0.2em;white-space:nowrap;
+            text-shadow:0 0 9px rgba(8,8,13,.92);
+            opacity:0;transition:opacity 1.6s var(--ease,ease),color .3s var(--ease)}
+  .room-hub.on{opacity:.7}
+  .room-hub:hover{color:var(--ink-2);opacity:1}
+  .room-hub:active{opacity:.62}
+  .room-hub:focus-visible{color:var(--ink-2);opacity:1;
+                          outline:1px solid var(--rule-act);outline-offset:6px}
+  .room-hub .ico{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1;
+                 stroke-linecap:round;stroke-linejoin:round}
   /* 部屋の灯。名前のうしろ（z-index:-1）で、ぼんやりと。位置は部屋ごとに決まっていて
      動かない＝毎回おなじ形に灯る。opacity で立つ .room が積み重なりの文脈を作るので、
      -1 は文字の背後までしか沈まない（画面の闇まで抜けない）。 */
@@ -675,10 +697,30 @@
   .room-bar .back:hover{color:var(--ink-2)}
   .room-bar .back:active{opacity:.62}
 
-  /* 部屋を作る。トップの下のすみに、小さく開く */
+  /* 部屋を作る。トップの下のすみに、小さく開く。
+     ——寄ると部屋の名前がこの下をくぐる（動く面の上に、据え置きの文字が浮いている）。
+     どちらも読めなくなるので、文字の後ろに霞をひと刷け敷いて、通る側を沈める
+     （Apple §12：浮いている操作面は「材質」として置く／栞の ::before と同じ作法）。 */
   .room-new{position:fixed;left:50%;transform:translateX(-50%);
             bottom:calc(96px + var(--safe-b));z-index:8;
             display:flex;flex-direction:column;align-items:center;gap:var(--s1)}
+  .room-new::before,.care-link::before,.ttl::before,.shiori::before,.arrivals::before{
+            content:'';position:absolute;z-index:-1;
+            inset:-14px -30px;pointer-events:none;
+            background:radial-gradient(62% 60% at 50% 50%,
+                       rgba(8,8,13,.94) 0%,var(--veil) 56%,rgba(8,8,13,0) 92%);
+            backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+            -webkit-mask-image:radial-gradient(60% 58% at 50% 50%,#000 0%,#000 58%,transparent 94%);
+                    mask-image:radial-gradient(60% 58% at 50% 50%,#000 0%,#000 58%,transparent 94%)}
+  @media (prefers-reduced-transparency: reduce){
+    .room-new::before,.care-link::before,.ttl::before,.shiori::before,.arrivals::before{
+            backdrop-filter:none;-webkit-backdrop-filter:none;
+            background:radial-gradient(66% 62% at 50% 50%,
+                       rgba(8,8,13,.99) 0%,rgba(8,8,13,.97) 60%,rgba(8,8,13,0) 95%)}
+  }
+  /* 題字と栞は position を持っていない（header の flex の子）ので、霞を敷く土台を作る。
+     .arrivals / .care-link / .room-new は既に fixed なので触らない（上書きすると位置が壊れる）。 */
+  .ttl,.shiori{position:relative}
   .room-new.off{display:none}
   .room-new .open{font-size:11.5px;letter-spacing:0.18em;color:var(--ink-4);
                   background:none;border:0;border-bottom:1px solid var(--rule);
@@ -728,8 +770,6 @@
 
   @media (max-width:520px){
     .room{font-size:17px;padding:12px 14px}
-    .room-layer{gap:18px}
-    .room-row{gap:18px}
     .room-bar{top:48px}
     .room-new{bottom:88px}
   }
@@ -884,20 +924,24 @@
   <!-- 漂うことば。v14 で触れられるようになったので、読み上げ用の別リスト（.sr-words）は畳んだ
        （ことばそのものが辿れる要素になったので、同じ内容を二度読ませない） -->
   <!-- トップ：漂っているのは部屋の名前（B-7）。中身も件数も見せない -->
-  <div class="room-layer" id="roomLayer" aria-label="漂っている部屋"></div>
+  {# 部屋の面。掴んで動かし、つまんで寄れる（座標を持つのは中の canvas ひとつだけ）。
+     ズームの倍率は画面に出さない——数字を出した瞬間に、宙は「操作するもの」になる。 #}
+  <div class="room-layer" id="roomLayer" aria-label="ことばの集まり">
+    <div class="room-canvas" id="roomCanvas"></div>
+  </div>
   <!-- 部屋の中にいる時だけ出る、いまいる場所と戻る道（B-8）。
        部屋の始末（消す）も、その部屋の名前の隣に置く：操作は、効く対象のそばに。 -->
   <div class="room-bar off" id="roomBar">
     <span class="now" id="roomNow"></span>
-    <button class="back" id="roomBack" type="button">ほかの部屋へ</button>
-    <button class="room-drop off" id="roomDrop" type="button">この部屋を消す</button>
+    <button class="back" id="roomBack" type="button">ほかへ</button>
+    <button class="room-drop off" id="roomDrop" type="button">この名前を消す</button>
   </div>
   <!-- 部屋を作る（一人ひとつ） -->
   <div class="room-new off" id="roomNew">
-    <button class="open" id="roomNewOpen" type="button">部屋をつくる</button>
+    <button class="open" id="roomNewOpen" type="button">あたらしい名前をつける</button>
     <form id="roomNewForm" autocomplete="off">
-      <input id="roomNewName" type="text" maxlength="12" placeholder="部屋の名前"
-             aria-label="部屋の名前（12字まで）">
+      <input id="roomNewName" type="text" maxlength="12" placeholder="名前"
+             aria-label="あたらしい名前（12字まで）">
       <div class="acts">
         <button class="make" id="roomNewSend" type="submit">つくる</button>
         <!-- 開いたら閉じられる。一人ひとつしか作れない面なので、
@@ -1068,6 +1112,7 @@
   let ROOM=null;                     // {id,name,archived,mine}
   let ROOMS=[];                      // 一覧（漂わせている全部屋）
   const roomLayer=document.getElementById('roomLayer');
+  const roomCanvas=document.getElementById('roomCanvas');
   const roomBar=document.getElementById('roomBar');
   const roomNow=document.getElementById('roomNow');
   const roomNew=document.getElementById('roomNew');
@@ -1284,50 +1329,48 @@
     });
   }
 
-  /* 段の組み方（2026-07-26 Kosei）：上から 3・4・3・4… と数を違えて積む。
-     狭い画面では 2・3 に落とす——4つ並べると字を詰めることになり、部屋の名前は
-     小さくしない（B-7）という約束を破る。最後の段だけは、余った数のまま短く終わる。 */
-  function rowPlan(n){
-    const pat=viewW()<520?[2,3]:[3,4];
-    const rows=[];
-    for(let i=0,k=0;i<n;k++){ const t=Math.min(pat[k%pat.length],n-i); rows.push([i,i+t]); i+=t; }
-    return rows;
-  }
-  let roomPat=null;                       // いま組んである段の型（画面幅が変わった時だけ組み直す）
-
+  /* 部屋を席に置く。座標は roomSeat（純関数）だけが決め、置いたあとは二度と書き換えない
+     ——画面に収めるのは camera の仕事で、部屋の側は自分がどこに映っているかを知らない。 */
   function placeRooms(list){
-    roomLayer.innerHTML='';
-    roomPat=viewW()<520?'narrow':'wide';
-    let i=0;
-    rowPlan(list.length).forEach(([a,b])=>{
-      const row=document.createElement('div');
-      row.className='room-row';
-      list.slice(a,b).forEach(r=>{
-        const el=document.createElement('button');
-        el.type='button';
-        el.className='room'+(r.archived?' archived':'');
-        el.textContent=r.name;                      // 灯より先に。textContent は子を総取っ替えする
-        addFires(el,r);
-        // 灯は色だけの気配なので、読み上げには出さない（aria-label に混ぜない）
-        el.setAttribute('aria-label',r.name+' の部屋へ入る');
-        el._room=r;
-        el.addEventListener('click',()=>enterRoom(r,true));
-        row.appendChild(el);
-        // 順に灯していく。並びは固定だが、点き方には順番がある（面がいちどに出ない）
-        setTimeout(()=>el.classList.add('on'),120+(i++)*70);
-      });
-      roomLayer.appendChild(row);
+    roomCanvas.innerHTML='';
+    if(LOGGED_IN){
+      // 円の中心。部屋ではないので、部屋と同じ姿にはしない
+      const hub=document.createElement('a');
+      hub.className='room-hub';hub.href='/me';
+      hub.innerHTML='<svg class="ico" viewBox="0 0 16 16" aria-hidden="true">'
+        +'<path d="M3 13.2c0-2.3 2.2-3.6 5-3.6s5 1.3 5 3.6"/><circle cx="8" cy="5.4" r="2.6"/></svg>'
+        +'<span>自分のページ</span>';
+      roomCanvas.appendChild(hub);
+      setTimeout(()=>hub.classList.add('on'),90);
+    }
+    list.forEach((r,i)=>{
+      const el=document.createElement('button');
+      el.type='button';
+      el.className='room'+(r.archived?' archived':'');
+      el.textContent=r.name;                      // 灯より先に。textContent は子を総取っ替えする
+      addFires(el,r);
+      // 灯は色だけの気配なので、読み上げには出さない（aria-label に混ぜない）
+      el.setAttribute('aria-label',r.name+' へ入る');
+      el._room=r;
+      // 席番号はサーバが持つ。まだ持っていない部屋（古いDB）は、末尾の空いた席に座らせる
+      const seat=roomSeat(r.seat==null?i:r.seat, r.id);
+      el._seat=seat;
+      el.style.setProperty('--sx',seat.x.toFixed(1)+'px');
+      el.style.setProperty('--sy',seat.y.toFixed(1)+'px');
+      el.addEventListener('click',()=>{ if(!camDragged) enterRoom(r,true); });
+      // Tab で回ってきた部屋は、画面の中へ連れてくる（円は transform で動くので、
+      // ブラウザ既定のスクロール追従が効かない＝ここを欠くとキーボードでは辿り着けない）
+      el.addEventListener('focus',()=>camReveal(el));
+      roomCanvas.appendChild(el);
+      // 順に灯していく。席は固定だが、点き方には順番がある（面がいちどに出ない）
+      setTimeout(()=>el.classList.add('on'),120+i*70);
     });
+    camFit(false);
   }
-  // 画面の幅が段の型をまたいだ時だけ組み直す（それ以外の resize では触らない）
-  addEventListener('resize',()=>{
-    if(inRoom()||!ROOMS.length)return;
-    if(roomPat!==(viewW()<520?'narrow':'wide')) placeRooms(ROOMS);
-  });
 
   /* 並びが同じなら、置き直さずに灯だけ掛け替える。置き直すと名前のフェードが
      最初からやり直しになり、ただ見ているだけの画面が数秒ごとに明滅する。 */
-  function roomEls(){ return roomLayer.querySelectorAll('.room'); }
+  function roomEls(){ return roomCanvas.querySelectorAll('.room'); }
   function sameRooms(list){
     return [...roomEls()].map(el=>el._room&&el._room.id).join(',')
         === list.map(r=>r.id).join(',');
@@ -1344,19 +1387,265 @@
     }
   }
 
+  /* ══ camera（2026-07-27）════════════════════════════════════════
+     部屋は増え続けるので、いつか必ず画面に入らなくなる。数に上限を設けるのではなく、
+     見る側が寄ったり引いたりして解く。動かすのは canvas 一枚の transform だけで、
+     部屋の座標（席）は一度置いたら二度と書き換えない。
+
+     ・倍率は 0.4〜2.0 でクランプ。数字もスライダーも出さない
+     ・初期表示は自動フィット：**実際に使われている**いちばん外側まで、余白24pxで収める
+       ＝部屋が3つなら第1リングにぴたりと寄る／外側のリングに届いた瞬間、次に見た時は
+       少し引いた絵で始まる
+     ・掴んだら1:1で追う。離したら指の速さのまま滑って、縁で静かに止まる
+       （跳ね返しは付けない——ゴムの手触りは、この宙の静けさに合わない）
+     ・寄る中心はいつも指／カーソルの位置。画面中央に寄せると、狙った所からズレていく
+     ・走っているアニメは、いつでも掴んで止められる（現在値から始める・Apple §3）
+     ・減モーションでは滑走と補間を切る。ズームそのものは残す（移動手段なので） */
+  const CAM_MIN=0.4, CAM_MAX=2.0, CAM_PAD=24;
+  const cam={x:0,y:0,s:1};
+  let camRaf=0, camAnim=0, camGlideRaf=0, camSafety=0;
+  let camFrom=null, camTo=null, camT0=0, camDur=400;
+  let camDrag=null, camDragged=false, camPinch=null, camTouchedByUser=false;
+  let camVel={x:0,y:0}, camLast=0;
+
+  /* 円の中心を、据え置きのUI（題字・部屋をつくる・相談窓口）の間の真ん中に置く。
+     画面の中央に固定すると、下の導線のぶんだけ絵が下に沈んで見える。 */
+  function camBase(){
+    const b=chromeBand();
+    return (b.top+b.low)/2-viewH()/2;
+  }
+  function camHalf(){
+    const b=chromeBand();
+    return {w:viewW()/2, h:Math.max(60,(b.low-b.top)/2)};
+  }
+  /* いま置いてある部屋が要る広さ（canvas座標・等倍）。空のリングは数に入らない
+     ——実際に置かれた席だけを見るので、外側が空いていれば勝手に寄る。 */
+  function camExtent(){
+    let mx=60,my=40;
+    for(const el of roomEls()){
+      const s=el._seat; if(!s)continue;
+      const w=el.offsetWidth||120, h=el.offsetHeight||44;
+      mx=Math.max(mx,Math.abs(s.x)+w/2);
+      my=Math.max(my,Math.abs(s.y)+h/2);
+    }
+    return {x:mx,y:my};
+  }
+  function camWrite(){
+    camRaf=0;
+    roomCanvas.style.transform='translate('+cam.x.toFixed(2)+'px,'
+      +(cam.y+camBase()).toFixed(2)+'px) scale('+cam.s.toFixed(4)+')';
+  }
+  function camPaint(){ if(!camRaf) camRaf=requestAnimationFrame(camWrite); }
+  /* 見えない所へは行かせない。縁は「そこで止まる」だけ（バウンスなし）。
+     中身が画面より小さい軸は、そもそも動かさない＝何も無い空間へ迷い込ませない。 */
+  function camClamp(){
+    const e=camExtent(), h=camHalf();
+    const ox=Math.max(0,e.x*cam.s-(h.w-CAM_PAD));
+    const oy=Math.max(0,e.y*cam.s-(h.h-CAM_PAD));
+    cam.x=Math.max(-ox,Math.min(ox,cam.x));
+    cam.y=Math.max(-oy,Math.min(oy,cam.y));
+  }
+  function camFitScale(){
+    const e=camExtent(), h=camHalf();
+    return Math.max(CAM_MIN,Math.min(CAM_MAX,
+      Math.min((h.w-CAM_PAD)/e.x,(h.h-CAM_PAD)/e.y)));
+  }
+  function camStop(){
+    if(camAnim)cancelAnimationFrame(camAnim); camAnim=0; camTo=null;
+    if(camGlideRaf)cancelAnimationFrame(camGlideRaf); camGlideRaf=0;
+    clearTimeout(camSafety);
+  }
+  function camSet(to){ cam.x=to.x;cam.y=to.y;cam.s=to.s; camClamp(); camWrite(); }
+  function camTween(to,dur){
+    camStop();
+    if(REDUCED){ camSet(to); return; }
+    camFrom={x:cam.x,y:cam.y,s:cam.s}; camTo=to; camT0=performance.now(); camDur=dur||420;
+    camAnim=requestAnimationFrame(camStep);
+    // フレームが来ない環境（伏せた画面・裏のタブ）でも、着く所には必ず着かせる
+    camSafety=setTimeout(()=>{ if(camTo){const t=camTo;camStop();camSet(t);} },camDur+400);
+  }
+  function camStep(now){
+    camAnim=0;
+    if(!camTo)return;
+    const p=Math.min(1,(now-camT0)/camDur);
+    const k=1-Math.pow(1-p,3);         // 減速だけ。行き過ぎて戻る動きは付けない
+    cam.x=camFrom.x+(camTo.x-camFrom.x)*k;
+    cam.y=camFrom.y+(camTo.y-camFrom.y)*k;
+    cam.s=camFrom.s+(camTo.s-camFrom.s)*k;
+    camClamp(); camWrite();
+    if(p<1) camAnim=requestAnimationFrame(camStep);
+    else { camTo=null; clearTimeout(camSafety); }
+  }
+  /* 全体が収まる所へ。立ち上がりは動かさない（開いた瞬間から正しい絵で始める） */
+  function camFit(animate){
+    const to={x:0,y:0,s:camFitScale()};
+    if(animate) camTween(to); else { camStop(); camSet(to); }
+    camTouchedByUser=false;
+  }
+  /* 画面のある一点を掴んだまま、倍率だけを変える（寄る中心＝指の位置） */
+  function camZoomAt(px,py,factor){
+    const s0=cam.s, s1=Math.max(CAM_MIN,Math.min(CAM_MAX,s0*factor));
+    if(Math.abs(s1-s0)<1e-6)return;
+    const cx=viewW()/2, cy=viewH()/2+camBase();
+    const gx=(px-cx-cam.x)/s0, gy=(py-cy-cam.y)/s0;
+    cam.s=s1; cam.x=px-cx-gx*s1; cam.y=py-cy-gy*s1;
+    camTouchedByUser=true;
+    camClamp(); camPaint();
+  }
+  /* その部屋を画面の中へ。キーボードで巡る人の足になる（transform で動く面は、
+     ブラウザ既定の「フォーカスへスクロール」が効かない）。 */
+  function camReveal(el){
+    const s=el._seat; if(!s)return;
+    const h=camHalf(), m=CAM_PAD+30;
+    const w2=(el.offsetWidth||120)/2, h2=(el.offsetHeight||44)/2;
+    let x=cam.x, y=cam.y;
+    const sx=s.x*cam.s+cam.x, sy=s.y*cam.s+cam.y;         // 中心から見た画面上の位置
+    const limX=h.w-m-w2*cam.s, limY=h.h-m-h2*cam.s;
+    if(sx> limX) x-= (sx-limX);
+    if(sx<-limX) x+= (-limX-sx);
+    if(sy> limY) y-= (sy-limY);
+    if(sy<-limY) y+= (-limY-sy);
+    if(x!==cam.x||y!==cam.y) camTween({x:x,y:y,s:cam.s},320);
+  }
+
+  /* ── 掴んで動かす ── */
+  roomLayer.addEventListener('pointerdown',e=>{
+    if(inRoom()||camPinch)return;
+    if(e.button)return;                       // 右クリック等は取らない
+    camStop();                                // 走っている動きは、掴んだ所で止まる
+    camDrag={x:e.clientX,y:e.clientY,ox:cam.x,oy:cam.y,id:e.pointerId};
+    camDragged=false; camVel={x:0,y:0}; camLast=e.timeStamp;
+    roomCanvas.style.willChange='transform';  // 触っている間だけ（付けっぱなしは端末の負担）
+  });
+  roomLayer.addEventListener('pointermove',e=>{
+    if(!camDrag||camPinch)return;
+    const dx=e.clientX-camDrag.x, dy=e.clientY-camDrag.y;
+    // 10px のヒステリシス。指が少し揺れただけでは「押した」を取り消さない（Apple §10）
+    if(!camDragged){
+      if(Math.abs(dx)+Math.abs(dy)<10)return;
+      camDragged=true; camTouchedByUser=true;
+      roomLayer.classList.add('grabbing');
+      /* 掴みが確定してから捕まえる。押した瞬間から捕まえると、click の宛先が
+         この面に化けて **部屋を押しても入れなくなる**（ブラウザによる）。
+         10px 動くまでは何も捕まえないので、ただの一押しは部屋にそのまま届く。 */
+      try{roomLayer.setPointerCapture(e.pointerId);}catch(_){}
+    }
+    const dt=Math.max(1,e.timeStamp-camLast); camLast=e.timeStamp;
+    const nx=camDrag.ox+dx, ny=camDrag.oy+dy;
+    camVel.x=(nx-cam.x)/dt*1000; camVel.y=(ny-cam.y)/dt*1000;
+    cam.x=nx; cam.y=ny; camClamp(); camPaint();
+  });
+  function camEndDrag(){
+    if(!camDrag)return;
+    camDrag=null;
+    roomLayer.classList.remove('grabbing');
+    roomCanvas.style.willChange='';
+    // 指の速さのまま滑る。縁に着いたらその軸だけ静かに止める（返さない）
+    if(!REDUCED&&Math.hypot(camVel.x,camVel.y)>80) camGlide();
+  }
+  roomLayer.addEventListener('pointerup',camEndDrag);
+  roomLayer.addEventListener('pointercancel',camEndDrag);
+  function camGlide(){
+    let last=performance.now();
+    const step=now=>{
+      camGlideRaf=0;
+      const dt=Math.min(50,now-last); last=now;
+      cam.x+=camVel.x*dt/1000; cam.y+=camVel.y*dt/1000;
+      const k=Math.pow(0.995,dt);                  // 指数減衰（スクロールの止まり方と同じ）
+      camVel.x*=k; camVel.y*=k;
+      const bx=cam.x, by=cam.y;
+      camClamp();
+      if(cam.x!==bx)camVel.x=0;                    // 縁：跳ね返さず、そこで消える
+      if(cam.y!==by)camVel.y=0;
+      camWrite();
+      if(!camDrag&&Math.hypot(camVel.x,camVel.y)>20) camGlideRaf=requestAnimationFrame(step);
+    };
+    camGlideRaf=requestAnimationFrame(step);
+  }
+
+  /* ── 寄る・引く ── */
+  roomLayer.addEventListener('wheel',e=>{
+    if(inRoom())return;
+    e.preventDefault();
+    camStop();
+    camZoomAt(e.clientX,e.clientY,Math.pow(1.0016,-e.deltaY));
+  },{passive:false});
+  function tdist(e){const a=e.touches[0],b=e.touches[1];
+    return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1;}
+  function tmid(e){const a=e.touches[0],b=e.touches[1];
+    return {x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
+  roomLayer.addEventListener('touchstart',e=>{
+    if(inRoom()||e.touches.length!==2)return;
+    camStop(); camEndDrag();
+    camPinch={d:tdist(e),s:cam.s};
+  },{passive:true});
+  roomLayer.addEventListener('touchmove',e=>{
+    if(!camPinch||e.touches.length!==2)return;
+    e.preventDefault();
+    const m=tmid(e), want=camPinch.s*tdist(e)/camPinch.d;
+    camZoomAt(m.x,m.y,want/cam.s);
+  },{passive:false});
+  roomLayer.addEventListener('touchend',e=>{ if(camPinch&&e.touches.length<2)camPinch=null; });
+  roomLayer.addEventListener('touchcancel',()=>{camPinch=null;});
+
+  /* 二度叩いたら、はじめの絵に戻る（迷子になっても必ず帰れる／Apple §16 wayfinding） */
+  roomLayer.addEventListener('dblclick',e=>{ if(!inRoom()){e.preventDefault();camFit(true);} });
+  let camTapAt=0;
+  roomLayer.addEventListener('pointerup',e=>{
+    if(inRoom()||e.pointerType==='mouse'||camDragged)return;
+    const t=e.timeStamp;
+    if(t-camTapAt<320){ camTapAt=0; camFit(true); } else camTapAt=t;
+  });
+
+  /* ── 鍵盤 ── 矢印で動かし、＋−で寄り引き、0 で戻る。倍率は画面に出さない */
+  document.addEventListener('keydown',e=>{
+    if(inRoom()||!ROOMS.length)return;
+    if(e.metaKey||e.ctrlKey||e.altKey)return;
+    const t=e.target;
+    if(t&&t.closest&&t.closest('input,textarea,[contenteditable],.cast,.read,.trace,.ask,.shiori-list'))return;
+    const step=Math.round(Math.min(viewW(),viewH())*0.18);
+    let hit=true;
+    switch(e.key){
+      case 'ArrowLeft':  cam.x+=step; break;
+      case 'ArrowRight': cam.x-=step; break;
+      case 'ArrowUp':    cam.y+=step; break;
+      case 'ArrowDown':  cam.y-=step; break;
+      case '+': case ';': case '=': camZoomAt(viewW()/2,viewH()/2+camBase(),1.18); return e.preventDefault();
+      case '-': case '_': camZoomAt(viewW()/2,viewH()/2+camBase(),1/1.18); return e.preventDefault();
+      case '0': camFit(true); return e.preventDefault();
+      default: hit=false;
+    }
+    if(!hit)return;
+    e.preventDefault(); camStop(); camTouchedByUser=true; camClamp(); camWrite();
+  });
+
+  /* 画面の寸法が変わったら：まだ触っていない人には組み直した絵を、
+     自分で動かした人にはその位置のまま（勝手に戻さない＝手を奪わない／Apple §16.2） */
+  function camSettle(){
+    if(!ROOMS.length)return;
+    if(camTouchedByUser){ camClamp(); camWrite(); } else camFit(false);
+  }
+  addEventListener('resize',()=>{ if(!inRoom()) camSettle(); });
+  /* 書体が届くと字幅が変わる＝要る広さも変わる。まだ触っていない人にだけ組み直す。 */
+  if(document.fonts&&document.fonts.ready){
+    document.fonts.ready.then(()=>{ if(!inRoom()&&ROOMS.length&&!camTouchedByUser)camFit(false); });
+  }
+
   function fetchRooms(){
     return fetch('/api/rooms').then(r=>r.ok?r.json():null).then(d=>{
       if(!d||!d.rooms) throw new Error('rooms');
       ROOMS=d.rooms;
-      if(!inRoom()){ if(sameRooms(ROOMS)) relight(ROOMS); else placeRooms(ROOMS); }
+      // 据え置きのUIの出し入れを先に済ませる。あとに回すと、camera が「部屋をつくる」の
+      // 無い画面を測って組んでしまい、読み込みのたびに円の中心が上下にずれる。
       roomNew.classList.toggle('off',inRoom()||!LOGGED_IN);
+      if(!inRoom()){ if(sameRooms(ROOMS)) relight(ROOMS); else placeRooms(ROOMS); }
       if(!d.can_create&&LOGGED_IN&&!inRoom()){
-        document.getElementById('roomNewNote').textContent='部屋を作れるのは、一人ひとつだけです。';
+        document.getElementById('roomNewNote').textContent='名前をつけられるのは、一人ひとつだけです。';
         document.getElementById('roomNewOpen').disabled=true;
       }
       return d;
     }).catch(()=>{
-      if(!inRoom()) whisper('部屋が<wbr>遠いようです。<br>すこし<wbr>待ってから、<wbr>もう一度。',9000);
+      if(!inRoom()) whisper('いま、<wbr>遠いようです。<br>すこし<wbr>待ってから、<wbr>もう一度。',9000);
     });
   }
 
@@ -1371,7 +1660,7 @@
     // アーカイブの部屋は読むだけ（放つ導線ごと畳む）。理由はその場に一行だけ置く。
     document.body.classList.toggle('in-room-archived',!!r.archived);
     whisper(r.archived
-      ? 'ここは、<wbr>部屋が<wbr>できる<wbr>前に<wbr>放たれた<wbr>ことばの<wbr>場所です。<br>新しく<wbr>放つことは<wbr>できません。'
+      ? 'ここは、<wbr>名前が<wbr>つく<wbr>前に<wbr>放たれた<wbr>ことばです。<br>新しく<wbr>放つことは<wbr>できません。'
       : '');
     // 部屋が変わったら、前の部屋のことばは持ち越さない
     pool=[];shown.clear();live.clear();liveText.clear();seeded=false;
@@ -1390,6 +1679,9 @@
     pool=[];shown.clear();live.clear();liveText.clear();seeded=false;
     [...liveEls].forEach(el=>{el.remove();liveEls.delete(el);});
     if(push) history.pushState({},'','/mood');
+    // 部屋の中に居るあいだの画面の変化（回転・窓の大きさ）は camera に届いていない
+    // ——面が畳まれている間は測っても無意味なので、戻ってきた今、組み直す。
+    camSettle();
     fetchRooms();
   }
 
@@ -1428,7 +1720,7 @@
         const d=await res.json().catch(()=>null);
         if(!res.ok||!d||!d.ok){ note.textContent=(d&&d.error)||'いま作れませんでした。'; return; }
         name.value='';wrap.classList.remove('open');
-        if(d.existed) note.textContent=d.message||'その部屋は、もうあります。';
+        if(d.existed) note.textContent=d.message||'その名前は、もうあります。';
         const r={id:d.id,name:d.name,archived:false,mine:!d.existed};
         await fetchRooms();
         enterRoom(ROOMS.find(x=>x.id===d.id)||r,true);
@@ -1470,7 +1762,7 @@
     if(!ROOM)return;
     const name=ROOM.name, id=ROOM.id;
     const ok=await ask('「'+esc(name)+'」を<wbr>消しますか。'+
-      '<span class="ask-sub">一度<wbr>だれかの<wbr>声が<wbr>入った<wbr>部屋は、<wbr>もう<wbr>消せません。</span>','消す');
+      '<span class="ask-sub">一度<wbr>だれかの<wbr>声が<wbr>入ったら、<wbr>もう<wbr>消せません。</span>','消す');
     if(!ok)return;
     if(!ROOM||ROOM.id!==id)return;         // 問うているあいだに部屋を出ていた
     try{
@@ -1478,7 +1770,7 @@
         headers:{'Content-Type':'application/json'},body:'{}'});
       const d=await res.json().catch(()=>null);
       if(!res.ok||!d||!d.ok){
-        whisper((d&&d.error)?esc(d.error):'いま、<wbr>この部屋は<wbr>消せませんでした。',7000);
+        whisper((d&&d.error)?esc(d.error):'いま、<wbr>消せませんでした。',7000);
         return;
       }
       leaveRoom(true);
@@ -1634,10 +1926,10 @@
           // 静かな部屋は、静かなまま見せる（B-6）。空でもエラーにしない・他の部屋から借りない。
           // 放てない部屋（アーカイブ）で「放ってみてください」とは言わない。
           whisper(ROOM.archived
-            ? 'ここは、<wbr>部屋が<wbr>できる<wbr>前に<wbr>放たれた<wbr>ことばの<wbr>場所です。<br>いまは、<wbr>静かです。'
+            ? 'ここは、<wbr>名前が<wbr>つく<wbr>前に<wbr>放たれた<wbr>ことばです。<br>いまは、<wbr>静かです。'
             : (LOGGED_IN
-               ? 'この部屋は、<wbr>まだ<wbr>静かです。<br>最初の<wbr>ひとことを、<wbr>放って<wbr>みてください。'
-               : 'この部屋は、<wbr>まだ<wbr>静かです。'));
+               ? 'ここは、<wbr>まだ<wbr>静かです。<br>最初の<wbr>ひとことを、<wbr>放って<wbr>みてください。'
+               : 'ここは、<wbr>まだ<wbr>静かです。'));
         }else if(!liveEls.size){ whisper(''); }
         // ことばが揃った瞬間から書きはじめる（暗闇のまま数秒待たせない）
         if(!seeded&&pool.length){

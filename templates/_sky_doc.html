@@ -18,15 +18,18 @@
      line-height:1.6;text-align:center;color:var(--ink-2)}
   h1 .romaji{display:block;margin-top:var(--s2);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
              font-size:9px;letter-spacing:0.42em;color:var(--thread);text-transform:uppercase}
+  /* 見出し・題・副題はすべて中央。本文だけが左から始まる（2026-07-27 Kosei）
+     ——中央揃えの本文は行頭が毎行ずれて読みにくく、左揃えの見出しは面の中心を失う。
+     「読むもの＝左」「掲げるもの＝中央」で、役割が姿で分かる。 */
   h2{margin:var(--s5) 0 var(--s3);font-size:var(--t-body);font-weight:500;letter-spacing:0.24em;
-     line-height:1.9;color:var(--ink-1);scroll-margin-top:var(--s4)}
+     line-height:1.9;color:var(--ink-1);text-align:center;scroll-margin-top:var(--s4)}
   /* 章の副題（旧・独立ページの romaji を、章の高さに合わせて置き直したもの） */
   h2 .sub{display:block;margin-top:6px;
           font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
           font-size:9px;letter-spacing:0.42em;color:var(--thread);text-transform:uppercase}
   /* 章の中の小見出し。h2 より一段だけ弱く（大きさではなく色と字間で差を作る） */
   h3{margin:var(--s4) 0 var(--s2);font-size:13px;font-weight:500;letter-spacing:0.18em;
-     line-height:2;color:var(--ink-2)}
+     line-height:2;color:var(--ink-2);text-align:center}
   p{margin:0 0 var(--s4);font-size:13.5px;line-height:2.5;letter-spacing:var(--tr-body);
     word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .quiet{color:var(--ink-3);font-size:12.5px;line-height:2.3}
