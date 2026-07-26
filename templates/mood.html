@@ -1433,43 +1433,94 @@
       T=Math.max(0,Math.min(1,T+(e.key==='ArrowRight'?0.05:-0.05)));paint();}});
   paint();   // 既定の色を最初から文字とつまみにのせておく
 
-  /* ── 縦書きの筆先（自前カーソル・v13.1／v16でcontenteditable化）───────
+  /* ── 縦書きの筆先（自前カーソル・v13.1／v16でcontenteditable化／v17で測り方を入れ替え）──
      縦書きのネイティブカーソルは、行ボックス（列幅）ではなく字面（font-size）に連動して
      縮む。しかも列の中でどこに立つかが定まらないので、書いている位置が揺れて見えていた。
      カーソルの寸法を指定するCSSは存在しない（caret-color は色だけ）ので、ネイティブは
      透明にして、列幅いっぱいの横棒を入力位置に重ねる（便箋＝index.html と同じ作法）。
 
-     v16：位置は Selection/Range から直接測る（textarea時代のミラーdiv方式は廃止）。
-     collapsed Range の getClientRects() が空を返す環境向けに、幅ゼロのマーカーを
-     一瞬だけ挿入して測る保険を残す。 */
-  function caretViewportRect(){
+     v17：**測るために本文を触らない**。これがIME中に字が重なる不具合の原因だった。
+     v16は「collapsed な Range が矩形を返さない環境」の保険として幅ゼロのマーカーを一瞬だけ
+     挿していたが、実際には collapsed Range は *要素境界*（＝紙が空のとき・本文の末尾にいるとき
+     ＝書いている間ずっと）で必ず空を返すので、保険が常用経路になっていた。しかも最後に
+     選択を入れ直す＝selectionchange が飛ぶ→drawCaret→また挿す、の自走ループで、
+     何もしていなくても毎秒約100往復ぶん本文のテキストノードを割って繋ぎ直していた。
+     IMEは変換中「どのノードの何字目か」を握っているので、その割り直しで参照が古くなり、
+     変換中の字が元の位置に描き直される＝**字が重なって残る**。
+
+     代わりに、隣り合う一字を囲んだ **collapsedでない Range** で測る。これはどの環境でも
+     素直に矩形を返し、DOMには一切触らない。字の矩形は字面ぶんしかない（列幅より狭い）ので、
+     中心から「右から何列目か」を割り出して列の左端に吸い付かせる。 */
+
+  // キャレットが本文の何字目にあるか。要素境界でもテキストノードでも同じ数に落ちる
+  function caretIndex(){
     const sel=window.getSelection();
     if(!sel||!sel.rangeCount)return null;
-    const range=sel.getRangeAt(0).cloneRange();
-    range.collapse(true);
-    let rect=range.getClientRects()[0];
-    if(rect&&(rect.width||rect.height))return rect;
-    const marker=document.createElement('span');
-    marker.textContent='​';
-    range.insertNode(marker);
-    rect=marker.getBoundingClientRect();
-    const parent=marker.parentNode;
-    parent.removeChild(marker);
-    parent.normalize();
-    sel.removeAllRanges();sel.addRange(range);
-    return rect;
+    const r=sel.getRangeAt(0);
+    if(!ta.contains(r.endContainer))return null;
+    const pre=document.createRange();
+    pre.selectNodeContents(ta);
+    try{ pre.setEnd(r.endContainer,r.endOffset); }catch(e){ return null; }
+    return pre.toString().length;
   }
+  // 本文の pos 字目 → [テキストノード, その中の位置]（変換中はノードが分かれていることがある）
+  function pointAt(pos){
+    const w=document.createTreeWalker(ta,NodeFilter.SHOW_TEXT);
+    let n,acc=0,last=null;
+    while(n=w.nextNode()){
+      const len=n.nodeValue.length;
+      if(pos<=acc+len)return [n,pos-acc];
+      acc+=len;last=n;
+    }
+    return last?[last,last.nodeValue.length]:null;
+  }
+  // k字目の一字を囲んだ矩形。一字ぶんの幅があるので getClientRects() は空を返さない
+  function charRect(k){
+    const a=pointAt(k),b=pointAt(k+1);
+    if(!a||!b)return null;
+    const r=document.createRange();
+    try{ r.setStart(a[0],a[1]);r.setEnd(b[0],b[1]); }catch(e){ return null; }
+    const rects=r.getClientRects();
+    return rects.length?rects[0]:null;
+  }
+  /* 描くのは同期で。v17の途中で「一打鍵につき input と selectionchange が両方飛ぶから」と
+     rAFで1フレームに束ねたが、フレームが来ない状態（裏タブ・非表示）だと予約が消化されず
+     筆先が止まったままになるのを検証で踏んだ。測るだけで本文も選択も触らないので、
+     二度描いても副作用はない＝素直に毎回描くほうが安全。 */
   function drawCaret(){
     if(document.activeElement!==ta){vcaret.style.display='none';return;}
-    const cw=parseFloat(getComputedStyle(ta).lineHeight)||36;   // 列幅＝カーソルの長さ
-    const rect=caretViewportRect();
-    if(!rect){vcaret.style.display='none';return;}
+    const cs=getComputedStyle(ta);
+    const cw=parseFloat(cs.lineHeight)||36;                     // 列幅＝カーソルの長さ
     const box=ta.getBoundingClientRect(), origin=ta.parentNode.getBoundingClientRect();
     const x0=box.left-origin.left, y0=box.top-origin.top, w=box.width, h=box.height;
-    let x=rect.left-origin.left, y=rect.top-origin.top-1;
+    const n=ta.textContent.length;
+    let i=caretIndex();
+    if(i===null){vcaret.style.display='none';return;}
+    i=Math.max(0,Math.min(i,n));
+    // 字の矩形の中心から「右から何列目か」を数え、その列の左端へ。vertical-rl は右から埋まる
+    const colLeft=r=>{
+      const c=Math.floor((box.right-(r.left+r.width/2))/cw);
+      return box.right-(c+1)*cw-origin.left;
+    };
+    let x,y;
+    if(n===0){                       // 空の便箋：右端の列の頭に置く（罫は4本立っている）
+      x=x0+w-cw; y=y0;
+    }else if(i<n){                   // 途中：これから書かれる字の頭
+      const r=charRect(i);
+      if(!r){vcaret.style.display='none';return;}
+      x=colLeft(r); y=r.top-origin.top;
+    }else{                           // 末尾：最後の字のすぐ下。列が尽きていれば次の列の頭へ
+      const r=charRect(n-1);
+      if(!r){vcaret.style.display='none';return;}
+      x=colLeft(r); y=r.bottom-origin.top;
+      // 遊びは字送りの半分。列がぴったり埋まった時だけ送る（禁則で20字に満たない列もある）
+      const adv=r.height||parseFloat(cs.fontSize)||17;
+      if(r.bottom+adv/2>box.bottom){ x-=cw; y=y0; }
+    }
+    y-=1;                            // 2px の横棒を字と字の境の上に重ねる
     // 80字＝ちょうど4列。埋まり切ると「次の字の場所」は5列目＝紙の外になるので、
     // 最後の列の終わり（左端の列の下）に置く。筆先が紙から出ていかないための留め。
-    if(x<x0){ x=x0; y=y0+h-3; }
+    if(x<x0-0.5){ x=x0; y=y0+h-3; }
     x=Math.min(Math.max(x,x0),x0+w-cw);
     y=Math.min(Math.max(y,y0),y0+h-3);
     vcaret.style.width=cw+'px';
@@ -1479,7 +1530,9 @@
     // 打鍵の直後は必ず点いている状態から数え直す（書いている最中に消えていると不安になる）
     vcaret.style.animation='none';void vcaret.offsetHeight;vcaret.style.animation='';
   }
-  ['input','click','keyup','focus','scroll','compositionend']
+  // 変換中も measure は読むだけなので、筆先は変換の字を追ってよい
+  ['input','click','keyup','focus','scroll',
+   'compositionstart','compositionupdate','compositionend']
     .forEach(ev=>ta.addEventListener(ev,drawCaret));
   ta.addEventListener('blur',()=>{vcaret.style.display='none';});
   document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)drawCaret();});
@@ -1501,21 +1554,24 @@
     document.execCommand('insertText',false,text);
   });
   function normalizeEmpty(){
+    // 変換中は触らない：IMEが握っているノードを消すと、変換そのものが壊れる（v17）
+    if(composing)return;
     if(ta.textContent==='')ta.innerHTML='';   // <br>だけ残ると :empty が成立しない
   }
   function enforceLimit(){
-    if(ta.textContent.length>80){
-      const sel=window.getSelection();
-      const atEnd=sel&&sel.rangeCount&&sel.isCollapsed&&
-        sel.getRangeAt(0).endOffset===sel.getRangeAt(0).endContainer.length &&
-        sel.getRangeAt(0).endContainer===ta.lastChild;
-      ta.textContent=ta.textContent.slice(0,80);
-      if(atEnd){                              // カーソルを本文の末尾に戻す
-        const r=document.createRange();r.selectNodeContents(ta);r.collapse(false);
-        sel.removeAllRanges();sel.addRange(r);
-      }
-      normalizeEmpty();
+    const t=ta.textContent;
+    if(t.length<=80)return;
+    // textContent を入れ替えると選択は必ず失われるので、字数で覚えて字数で戻す。
+    // v16は「末尾にいるか」をノード比較で見ていたが、キャレットが要素境界にいる時
+    // （＝末尾で書いている時そのもの）は必ず外れ、カーソルが先頭へ飛んでいた。
+    const i=caretIndex();
+    ta.textContent=t.slice(0,80);
+    const p=pointAt(Math.min(i===null?80:i,80));
+    if(p){
+      const r=document.createRange();r.setStart(p[0],p[1]);r.collapse(true);
+      const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
     }
+    normalizeEmpty();
   }
 
   // 打鍵スナップショット（TypeTrace）。書いていた時の迷いごと封じて、再生に使う
