@@ -1435,11 +1435,15 @@ def index():
     u = current_user()
     if u and _row_flag(u, "is_admin"):
         return redirect("/admin.welcometotayori")
-    # ホーム＝宙（2026-07-25 全面刷新）。登録の有無にかかわらず、開くとまず宙が広がる。
+    # ログイン済みの人は今まで通り、開くとまず宙が広がる。
     # ?start=1 は宙の「はじめる」から来た人（ログイン/登録画面）、?app=1 は宙から
     # 「棚」へ降りてきた人（帰還したことばを開く・設定などの機能画面）。
-    if not (request.args.get("start") or request.args.get("app")):
+    if u and not (request.args.get("start") or request.args.get("app")):
         return redirect("/mood")
+    # 未ログイン（＝検索クローラーもここに入る）には、索引できる「顔」＝門(index.html)を返す。
+    # 宙そのもの(/mood)は noindex で中身を検索に出さない方針なので、指名検索（たより/tayori）
+    # の受け皿になる索引可能なトップが別に要る。かつては未ログインも /mood へ 302 していたが、
+    # 302 先が noindex のため「顔」が一枚も索引されず、トップが検索に出なかった（2026-07-27）。
     return render_template("index.html", open_letter_id="")
 
 @app.route("/open/<lid>")
@@ -1501,6 +1505,21 @@ def favicon():
     resp = Response(_FAVICON_SVG, mimetype="image/svg+xml")
     # ロゴ調整中は短めに（Cloudflare/ブラウザに旧版が長く残らないよう）。
     resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+# Google Search Console の所有権確認（2026-07-27）。
+# 「HTMLファイルをルートに置く」方式だが、ここは静的サイトではないのでルートで返す
+# （static/ に置くと /google….html では出ず、デプロイのたび消える事故も起きる）。
+# 確認が通ったあとも消さないこと——消すと所有権が外れ、Search Console が見えなくなる。
+_GSC_TOKEN = "google5f0df16a46922b08"
+
+
+@app.route(f"/{_GSC_TOKEN}.html")
+def google_site_verification():
+    resp = Response(f"google-site-verification: {_GSC_TOKEN}.html\n",
+                    mimetype="text/html")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
 
 

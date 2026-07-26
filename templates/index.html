@@ -976,8 +976,10 @@
          role=alert は中身が変わった時だけ読まれるので、空のまま置いておける。 #}
       <div class="gate-err" id="gErr" role="alert" aria-live="assertive"></div>
       <!-- 門の足元。18pxしかなく指で押せなかったので、余白だけを広げて44pxにした（v14） -->
+      {# 宙は誰でも見られる（門の向こうにあるのは「放つ」だけ）。未ログインで / に来た人が
+         行き止まらないよう、宙への道をここに開けておく。/ → /mood の内部リンクでもある。 #}
       <nav class="gate-hint" aria-label="門の足元">
-        <a href="/terms" target="_blank">利用規約</a><a href="/privacy" target="_blank">プライバシーポリシー</a>
+        <a href="/mood">宙をのぞく</a><a href="/about">たよりについて</a><a href="/terms" target="_blank">利用規約</a><a href="/privacy" target="_blank">プライバシーポリシー</a>
       </nav>
     </div>
   </div>
