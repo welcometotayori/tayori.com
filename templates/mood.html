@@ -3331,15 +3331,18 @@
   let arrivals=[];
   function renderArrivals(){
     arrBox.innerHTML='';
-    // 未開封を先に。多すぎても宙が掲示板にならないよう4つまで
-    const list=arrivals.slice().sort((a,b)=>(a.opened?1:0)-(b.opened?1:0)).slice(0,4);
-    list.forEach(A=>{
+    /* 出すのは、まだ開いていないことばだけ（2026-07-27）。
+       以前は開封済みが「もう一度、開く」として残り続け、新しいことばが無い間ずっと
+       宙のすみに居座っていた＝受信箱になっていた。読んで、手元に置きたければ
+       「保存する」がある。開いたことばは、そこで宙のすみからは退く。
+       多すぎても掲示板にならないよう、出すのは4つまで。 */
+    arrivals.filter(A=>!A.opened).slice(0,4).forEach(A=>{
       const b=document.createElement('button');
-      b.type='button';b.className='arrival'+(A.opened?' done':'');
+      b.type='button';b.className='arrival';
       b.innerHTML='<span class="seal" aria-hidden="true"></span><span>'+
-        (A.opened?'もう一度、開く':'ことばが、降りてきました')+'</span>';
+        'ことばが、降りてきました</span>';
       const c=tintOf(A.color);
-      if(c&&!A.opened)b.querySelector('.seal').style.background=c.solid;
+      if(c)b.querySelector('.seal').style.background=c.solid;
       b.addEventListener('click',()=>openArrival(A));
       arrBox.appendChild(b);
     });
@@ -3351,11 +3354,7 @@
   }
   const ANON_NOTE='だれの、いつのことばかは、だれにもわかりません。';
   async function openArrival(A){
-    if(A.opened){
-      showRead({poem:A.poem,vertical:A.vertical,color:A.color,note:ANON_NOTE,
-                did:A.did,liked:A.liked,steps:A.steps||null});
-      return;
-    }
+    if(A.opened)return;   // 開いたものは、もう宙のすみに出ていない
     try{
       const res=await fetch('/api/sky/'+A.did+'/open',
         {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});

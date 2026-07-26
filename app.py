@@ -4870,21 +4870,22 @@ def api_like_letter(lid):
 @login_required
 def api_sky_arrivals():
     """宙で受け取る「だれかのことば」（2026-07-25 v11.1：棚を畳んだので宙側へ移設）。
-    降る時刻が来た配達だけを返す——まだ降っていない配達は存在ごと伏せる。
-    本文は開封済みの再訪時だけ同梱し、初回の本文配信は開封API（§1.5）のレスポンスに限る。"""
+    降る時刻が来て、**まだ開いていない**配達だけを返す。
+    まだ降っていない配達は存在ごと伏せる。
+
+    2026-07-27：開封済みは返さなくなった。以前は「もう一度、開く」として宙のすみに
+    残り続け、新しいことばが無い間ずっと居座っていた——宙が受信箱になる。
+    読んだことばを手元に置きたいなら「保存する」がある。それが唯一の残す道でよい。
+    ついでに、もう出さない本文をレスポンスに載せ続けるのもやめた。"""
     rows = get_db().execute(
-        "SELECT d.id AS did, d.opened_at, d.liked_at, l.poem, l.seal_color, l.vertical"
+        "SELECT d.id AS did, l.poem, l.seal_color, l.vertical"
         "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
-        " WHERE d.recipient=? AND d.deliver_at<=? ORDER BY d.deliver_at DESC",
+        " WHERE d.recipient=? AND d.deliver_at<=? AND d.opened_at IS NULL"
+        " ORDER BY d.deliver_at DESC",
         (uid(), datetime.now().isoformat(timespec="seconds"))).fetchall()
-    out = []
-    for r in rows:
-        a = {"did": r["did"], "opened": bool(r["opened_at"]), "liked": bool(r["liked_at"]),
-             "char_count": len(r["poem"] or ""), "color": r["seal_color"],
-             "vertical": bool(r["vertical"])}
-        if r["opened_at"]:
-            a["poem"] = r["poem"]
-        out.append(a)
+    out = [{"did": r["did"], "opened": False,
+            "char_count": len(r["poem"] or ""), "color": r["seal_color"],
+            "vertical": bool(r["vertical"])} for r in rows]
     return jsonify(arrivals=out)
 
 
