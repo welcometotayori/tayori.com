@@ -432,8 +432,13 @@ def _migrate_colors_to_hsl(db):
 DEFAULT_ROOMS = ("恋愛", "家族", "友達", "学校", "仕事", "お金", "生活",
                  "人生", "心", "世界", "音楽", "アート", "趣味", "いじめ")
 
-# 旧データ専用のアーカイブ部屋。新規投稿は受け付けない（archived=1）。
-ARCHIVE_ROOM = "宙"
+# 決め手が無かったことばの寄せ先。宙に「宙」という部屋があるのは入れ子で分かりにくく、
+# 旧データ専用の物置が漂い続けるのも据わりが悪いので廃した（2026-07-26 Kosei）。
+# 既に「宙」に入っていた分は _dissolve_archive_room が一度だけ配り直す。
+FALLBACK_ROOM = "心"
+
+# 廃止したアーカイブ部屋の名前。解体の対象を見つけるためだけに残す。
+_ARCHIVE_ROOM_LEGACY = "宙"
 
 
 def _normalize_room_name(name):
@@ -499,41 +504,67 @@ def _classify_room(text):
 
 
 def _seed_rooms(db):
-    """デフォルト部屋とアーカイブ部屋を用意する（冪等）。
+    """デフォルト部屋を用意する（冪等）。
     デフォルト部屋は created_by が NULL＝誰のものでもなく、消せない・改名できない。"""
     now = datetime.now().isoformat(timespec="seconds")
     # INSERT OR IGNORE は使わない：AUTOINCREMENT は衝突して無視された行でも採番を進めるので、
-    # 起動のたびに部屋の id が15ずつ飛ぶ（機能は壊れないが、id が無意味に大きくなる）。
-    for name, archived in [(n, 0) for n in DEFAULT_ROOMS] + [(ARCHIVE_ROOM, 1)]:
+    # 起動のたびに部屋の id が飛ぶ（機能は壊れないが、id が無意味に大きくなる）。
+    for name in DEFAULT_ROOMS:
         # 存在判定に deleted_at を入れない：運営が意図して畳んだ既定部屋を、
         # 次のデプロイが黙って生き返らせないため（畳んだものは畳んだまま）。
         db.execute(
             "INSERT INTO rooms (name, name_norm, created_by, is_default, archived, created_at)"
-            " SELECT ?,?,NULL,1,?,? WHERE NOT EXISTS"
+            " SELECT ?,?,NULL,1,0,? WHERE NOT EXISTS"
             " (SELECT 1 FROM rooms WHERE name_norm=?)",
-            (name, _normalize_room_name(name), archived, now, _normalize_room_name(name)))
+            (name, _normalize_room_name(name), now, _normalize_room_name(name)))
+
+
+def _room_for(db_ids, poem, title):
+    """ことばの移送先を決める（決定的・LLMは使わない）。決め手が無ければ FALLBACK_ROOM。"""
+    room = _classify_room((title or "") + "\n" + (poem or ""))
+    return db_ids.get(room) or db_ids.get(FALLBACK_ROOM)
+
+
+def _dissolve_archive_room(db):
+    """廃止した「宙」の部屋を解体し、中のことばを配り直す（冪等・一度きり）。
+
+    以前は「決め手が無かったことば」と旧『未来の自分へ』の置き場にしていたが、
+    宙の中に「宙」があるのは分かりにくく、物置が漂い続けるのも据わりが悪い。
+    今度は決め手が無くても寄せる（FALLBACK_ROOM）。本文はLLMへ渡さないし、
+    運営も読まない——照合するのは決定的なキーワード辞書だけ。"""
+    row = db.execute(
+        "SELECT id FROM rooms WHERE name_norm=? AND is_default=1 AND deleted_at IS NULL",
+        (_normalize_room_name(_ARCHIVE_ROOM_LEGACY),)).fetchone()
+    if not row:
+        return {}
+    ids = {r["name"]: r["id"] for r in db.execute(
+        "SELECT id, name FROM rooms WHERE is_default=1 AND deleted_at IS NULL")}
+    if not ids.get(FALLBACK_ROOM):
+        return {}                      # 寄せ先が無い間は触らない（次の起動でやり直す）
+    moved = Counter()
+    for r in db.execute(
+            "SELECT id, poem, title FROM letters WHERE room_id=?", (row["id"],)).fetchall():
+        rid = _room_for(ids, r["poem"], r["title"])
+        db.execute("UPDATE letters SET room_id=? WHERE id=?", (rid, r["id"]))
+        moved[next(k for k, v in ids.items() if v == rid)] += 1
+    db.execute("UPDATE rooms SET deleted_at=? WHERE id=?",
+               (datetime.now().isoformat(timespec="seconds"), row["id"]))
+    return moved
 
 
 def _backfill_rooms(db):
-    """部屋を持たない既存の手紙を移す（冪等：room_id IS NULL の行だけ触る）。
-
-    mode='letter'（旧「未来の自分へ」）は内容によらず全件アーカイブへ。公開される前提で
-    書かれていないので、他人の目に触れる部屋には決して混ぜない。
-    mode='sky' だけキーワードで振り分け、決め手が無ければアーカイブへ落とす。"""
+    """部屋を持たない手紙を移す（冪等：room_id IS NULL の行だけ触る）。
+    決め手が無ければ FALLBACK_ROOM へ寄せる。"""
     ids = {r["name"]: r["id"] for r in db.execute(
         "SELECT id, name FROM rooms WHERE is_default=1 AND deleted_at IS NULL")}
-    archive = ids.get(ARCHIVE_ROOM)
-    if not archive:
+    if not ids.get(FALLBACK_ROOM):
         return {}
     moved = Counter()
     for r in db.execute(
-            "SELECT id, poem, title, mode FROM letters WHERE room_id IS NULL").fetchall():
-        room = None
-        if (r["mode"] or "letter") == "sky":
-            room = _classify_room((r["title"] or "") + "\n" + (r["poem"] or ""))
-        rid = ids.get(room) or archive
+            "SELECT id, poem, title FROM letters WHERE room_id IS NULL").fetchall():
+        rid = _room_for(ids, r["poem"], r["title"])
         db.execute("UPDATE letters SET room_id=? WHERE id=?", (rid, r["id"]))
-        moved[room or ARCHIVE_ROOM] += 1
+        moved[next(k for k, v in ids.items() if v == rid)] += 1
     return moved
 
 
@@ -965,6 +996,11 @@ def init_db():
         if _moved:
             print("[たより] 部屋へ移送: "
                   + " / ".join(f"{k} {v}" for k, v in _moved.most_common()), flush=True)
+        # 廃止した「宙」の部屋を解体して配り直す（一度きり・以後は空振り）
+        _redist = _dissolve_archive_room(db)
+        if _redist:
+            print("[たより] 「宙」の部屋を解体・配り直し: "
+                  + " / ".join(f"{k} {v}" for k, v in _redist.most_common()), flush=True)
 
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、

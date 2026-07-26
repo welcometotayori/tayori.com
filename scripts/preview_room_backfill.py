@@ -45,7 +45,7 @@ def main():
     os.close(fd)
     os.environ["TAYORI_DB_PATH"] = tmp
     try:
-        from app import _classify_room, ARCHIVE_ROOM, DEFAULT_ROOMS
+        from app import _classify_room, FALLBACK_ROOM, DEFAULT_ROOMS
     finally:
         try:
             os.remove(tmp)
@@ -56,12 +56,10 @@ def main():
     db.row_factory = sqlite3.Row
 
     moved, total = Counter(), 0
-    for r in db.execute("SELECT poem, title, mode FROM letters"):
+    for r in db.execute("SELECT poem, title FROM letters"):
         total += 1
-        room = None
-        if (r["mode"] or "letter") == "sky":
-            room = _classify_room((r["title"] or "") + "\n" + (r["poem"] or ""))
-        moved[room or ARCHIVE_ROOM] += 1
+        room = _classify_room((r["title"] or "") + "\n" + (r["poem"] or ""))
+        moved[room or FALLBACK_ROOM] += 1
     db.close()
 
     print(f"対象: {path}")
@@ -71,12 +69,12 @@ def main():
     def disp(s):   # 全角は2幅として数える（等幅端末で列を揃えるため）
         return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in s)
 
-    names = list(DEFAULT_ROOMS) + [ARCHIVE_ROOM]
+    names = list(DEFAULT_ROOMS)
     width = max(disp(n) for n in names)
     for name in names:
         n = moved.get(name, 0)
         bar = "▍" * min(40, n)
-        note = "  ← 決め手が無かった分と旧「未来の自分へ」" if name == ARCHIVE_ROOM else ""
+        note = "  ← 決め手が無かった分の寄せ先" if name == FALLBACK_ROOM else ""
         print(f"  {name}{' ' * (width - disp(name))}  {n:>5}  {bar}{note}")
     return 0
 
