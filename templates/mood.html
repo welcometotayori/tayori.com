@@ -38,7 +38,7 @@
      数字も凡例も軸も出さない。一覧も検索もない。一方通行の宙。
 
      ── v14 でやったこと ──────────────────────────────
-     ① 漂うことばに触れられるようになった（受け止める → しるしをつける／棚にとっておく）。
+     ① 漂うことばに触れられるようになった（受け止める → 棚にとっておく）。
      ② 素材と寸法を _sky_tokens.html の一枚へ畳んだ（宙・棚・紙で共通）。
         以前は rgba(250,248,243, .34/.4/.42/.45/.5/.52/.55/.58/.6/.62/.7/.72/.74/.76/.8/.85/.86/.88/.9/.92/.93/.95)
         と透明度が20種類以上あり、これが「機械が並べた画面」に見える最大の原因だった。
@@ -171,12 +171,11 @@
         backdrop-filter:blur(9px) saturate(80%);-webkit-backdrop-filter:blur(9px) saturate(80%);
         -webkit-mask-image:radial-gradient(66% 64% at 50% 50%,#000 0%,#000 56%,transparent 92%);
                 mask-image:radial-gradient(66% 64% at 50% 50%,#000 0%,#000 56%,transparent 92%)}
-  /* ── 印と棚は、別々の絵にする（2026-07-27）────────────────────────────
-     v14までは「同じ形の兄弟」で、違いは7pxの点が丸か角かだけだった。その大きさでは
-     円と角丸四角は見分けられず、「灯をともす（一度きり・外せない・部屋が明るくなる）」と
-     「棚にとっておく（いつでも外せる・自分だけのもの）」という、まるで重さの違う行いが
-     同じ軽さで並んでいた——実際に「印と棚の違いが分からない」と言われた。
-     灯＝外へにじむ光／棚＝紙片が棚板へ降りて収まる。押した時の変化の向きも逆にする。 */
+  /* ── ことばへの行いは「棚にとっておく」ひとつだけ（2026-07-27）──────────
+     もとは反応（いいな＝灯）と棚が並んでいて、違いは7pxの点が丸か角かだけだった。
+     絵を別モチーフに分け、文言も変え、押した後の姿まで変えたが、それでも
+     「どちらが何なのか分からない」は消えなかった——二つあること自体が原因だった。
+     反応を畳んで一つにした。迷う相手がいなければ、取り違えようがない。 */
   .hold-act{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
             background:none;border:none;padding:11px 2px;font-family:inherit;
             font-size:var(--t-meta);letter-spacing:0.16em;color:var(--ink-2);
@@ -184,47 +183,27 @@
   .hold-act:hover{color:var(--ink-1)}
   .hold-act:active{opacity:.62}
   .hold-act.on{color:var(--ink-1)}
-  /* 「近いことば」は別の場所へ行く行い。この語への二つの行いとは罫で分ける */
+  /* 「近いことば」は別の場所へ行く行い。この語への行いとは罫で分ける */
   .hold-sep{height:1px;background:var(--rule-faint);margin:6px 0 2px}
   .hold-act.sub{color:var(--ink-3)}
 
-  /* ── 灯と棚の絵。宙でも読む柱でも辿りでも同じ姿（Apple §16 familiarity）──
-     16px枠なのは、7pxでは形の違いが目に入らないため。
-     灯り／収まりの合図は **その行自身の .on** だけを見る。この世界では .on を
+  /* ── 棚の絵。宙でも読む柱でも辿りでも同じ姿（Apple §16 familiarity）──
+     紙片が棚板へ降りて収まる。16px枠なのは、7pxでは形が目に入らないため。
+     収まりの合図は **その行自身の .on** だけを見る。この世界では .on を
      「面がひらいている」意味でも使う（.read.on / .trace.on / .hold.on）ので、
-     子孫セレクタ（.on .ic-…）にすると、柱をひらいただけで両方灯って見える。 */
+     子孫セレクタ（.on .ic-…）にすると、柱をひらいただけで収まって見える。 */
   .ic{position:relative;width:16px;height:16px;flex:0 0 16px}
-  .ic-lamp .c{position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;
-              border:1px solid var(--thread);border-radius:50%;background:transparent;
-              transition:background .42s var(--ease),box-shadow .42s var(--ease)}
-  .ic-lamp .g{position:absolute;inset:-2px;border-radius:50%;pointer-events:none;
-              background:radial-gradient(50% 50% at 50% 50%,rgba(179,143,111,.62),rgba(179,143,111,0) 72%);
-              opacity:0;transform:scale(.45);
-              transition:opacity .5s var(--ease),transform .5s var(--ease)}
-  :is(.hold-act,.like-mark,.lit-now).on .ic-lamp .c{
-              background:var(--thread);box-shadow:0 0 6px rgba(179,143,111,.7)}
-  :is(.hold-act,.like-mark,.lit-now).on .ic-lamp .g{opacity:1;transform:scale(1)}
   .ic-shelf .b{position:absolute;left:1px;right:1px;bottom:3px;height:1px;background:var(--rule-act)}
   .ic-shelf .p{position:absolute;left:4.5px;bottom:7.5px;width:7px;height:8px;
                border:1px solid var(--thread);background:transparent;
                transition:bottom .38s var(--ease),background .38s var(--ease)}
-  :is(.hold-act,.like-mark,.lit-now).on .ic-shelf .p{bottom:4px;background:var(--thread)}
-  /* 灯ったあとはボタンをやめ、「灯った証」の一行になる。
-     二度は押せないことを、注意書きではなく姿で言う（宙v1 §4.1 印は外せない） */
-  .lit-now{display:flex;align-items:center;gap:10px;min-height:var(--touch);
-           padding:11px 2px;font-size:var(--t-meta);letter-spacing:0.16em;color:var(--ink-2)}
-  /* 再会の一行は文になるので、折り返して読ませる（文節で切る＝日本語の作法） */
-  .lit-old{align-items:flex-start;max-width:17em;line-height:2;color:var(--ink-3);
-           word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
-  .lit-old .ic{margin-top:5px}
+  :is(.hold-act,.like-mark).on .ic-shelf .p{bottom:4px;background:var(--thread)}
   .hold-note{margin:0;padding:4px 2px 0;max-width:17em;font-size:11.5px;line-height:2;
              letter-spacing:0.1em;color:var(--ink-3);
              word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .hold-note a{display:inline-block;min-height:36px;padding:9px 2px 0}
   .hold-note a{color:var(--thread);text-decoration:underline;text-underline-offset:3px}
   @media (prefers-reduced-motion: reduce){
-    .ic-lamp .g{transition:opacity .2s ease;transform:none}
-    :is(.hold-act,.like-mark,.lit-now).on .ic-lamp .g{transform:none}
     .ic-shelf .p{transition:background .2s ease}
     .hold{transition:opacity .2s ease;scale:1}
     .drift{transition:opacity 1.4s ease;filter:none;scale:1}
@@ -600,9 +579,6 @@
   .like-mark:hover{color:var(--ink-1)}
   .like-mark:active{opacity:.62}
   .like-mark.on{color:var(--ink-1)}
-  /* 灯は一度きり。灯ったあとは押せる姿をやめる（宙v1 §4.1・2026-07-27） */
-  .like-mark:disabled{cursor:default;opacity:1}
-  .like-mark:disabled:hover{color:var(--ink-2)}
   /* display指定があると[hidden]のUA既定を上書きしてしまうので明示する
      （印は他人のことばにだけ。自分の帰ってきたことばには出さない） */
   .like-mark[hidden]{display:none}
@@ -904,7 +880,6 @@
   .care-link:active{opacity:.62}
 
   /* 灯がすでにともっていることば（宙v1 §4.1）。ボタンではなく、状態の一文 */
-  .hold-lit{margin:0;font-size:12px;line-height:2.1;letter-spacing:0.06em;color:var(--ink-3)}
 
   /* ══ 辿る（v2 §4）＝似た空気を追う面 ══════════════════════════
      一覧だが、数は出さない・ページ番号も出さない。「もっと」だけ。
@@ -1130,7 +1105,7 @@
       <p>そして<wbr>ある日、<wbr>あの日の<wbr>あなたの<wbr>手紙が、<br>
          ふっと<wbr>メールで<wbr>帰ってきます。<br>
          ——何月何日、<wbr>その日の<wbr>天気と、<wbr>気温と、<wbr>時刻を<wbr>添えて。</p>
-      <p>いいねは<wbr>できても、<wbr>返事は<wbr>できません。<br>
+      <p>返事は<wbr>できません。<br>
          だれが<wbr>書いたかも、<wbr>分かりません。</p>
       <p>ここは<wbr>共有（シェア）の<wbr>場所ではなく、<br>
          何気ない<wbr>言葉が、<wbr>だれかの<wbr>意味に<wbr>なるための <wbr>tayori-たより- です。</p>
@@ -1200,10 +1175,6 @@
     <div class="read-inner">
       <div class="read-body" id="readBody" tabindex="-1"></div>
       <p class="read-note" id="readNote"></p>
-      <button class="like-mark" id="readLike" type="button" aria-pressed="false" hidden>
-        <span class="ic ic-lamp" aria-hidden="true"><span class="g"></span><span class="c"></span></span
-        ><span class="txt">灯を、ともす</span>
-      </button>
       <!-- 印とは別の行為（v13 §9）。印＝その場に灯を残すこと／棚＝手元に持ち帰ること。
            残せるのは、いまこの柱で開いたことばだけ（降ってきた他人のも、帰ってきた自分のも） -->
       <button class="like-mark keep-mark" id="readKeep" type="button" aria-pressed="false" hidden>
@@ -2341,11 +2312,11 @@
 
   /* ══ ことばを受け止める（v14）════════════════════════════════
      漂っていることばに触れると、そのことばだけが漂うのをやめて手のうちに残る。
-     隣に二つの行いが立ち上がる：灯をともす／棚にとっておく。
-     ——2026-07-27に「印を結ぶ／手元に、残す」→「しるしをつける／棚にとっておく」→
-     「灯を、ともす／棚に、とっておく」と直した。文言だけ変えても区別はつかず、
-     決め手は姿のほうだった：灯（外へにじむ光・一度きり）と棚（紙片が棚板へ降りる・外せる）
-     という別々の絵にし、灯は押した瞬間にボタンをやめて証の一行になる。
+     隣に立ち上がる行いは「棚にとっておく」ひとつだけ。
+     ——2026-07-27：もとは反応（いいな＝灯）が並んでいた。「印を結ぶ／手元に、残す」→
+     「しるしをつける／棚にとっておく」→「灯を、ともす／棚に、とっておく」と三度直し、
+     絵まで別モチーフに分けたが、「どちらが何なのか分からない」は消えなかった。
+     二つあること自体が原因だったので、反応のほうを畳んだ（規約・プライバシーも改訂）。
      ・止め方は「いまの見えている位置から」（Apple §3：目標値ではなく現在値から始める）。
        matrix を読んで transition を切り、その値で固定する＝掴んだ瞬間に飛ばない。
      ・放すと、残りの寿命でまた漂いはじめる（中断できて、戻せる）。
@@ -2353,22 +2324,12 @@
      ・未登録の人にも受け止めさせる。印と棚は要るが、それは静かに知らせるだけ。 */
   const holdBox=document.getElementById('hold');
   let held=null;                       // いま受け止めていることば
-  // marks=灯をともした公開id / kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
-  const marks=new Set(), kept=new Set();
-  /* 灯と棚の絵は、宙・読む柱・辿りの三か所で同じものを使う。
+  // kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
+  const kept=new Set();
+  /* 棚の絵は、宙・読む柱・辿りの三か所で同じものを使う。
      ここを唯一の出どころにする（三度書くと、直すとき一つ書き漏らす）。 */
-  const IC_LAMP='<span class="ic ic-lamp" aria-hidden="true"><span class="g"></span><span class="c"></span></span>',
-        IC_SHELF='<span class="ic ic-shelf" aria-hidden="true"><span class="b"></span><span class="p"></span></span>';
-  const T_LAMP_OFF='灯を、ともす', T_LAMP_ON='灯が、ともりました',
-        T_KEEP_OFF='棚に、とっておく', T_KEEP_ON='棚から、出す';
-  /* 灯ったあとの「証」。ボタンではないので、押せる姿を持たない。
-     渡すのは自前の文言だけ（利用者の本文は通さない）＝文節の <wbr> を活かすため innerHTML。 */
-  function litRow(html){
-    const p=document.createElement('p');
-    p.className='hold-lit lit-now on';
-    p.innerHTML=IC_LAMP+'<span class="txt">'+html+'</span>';
-    return p;
-  }
+  const IC_SHELF='<span class="ic ic-shelf" aria-hidden="true"><span class="b"></span><span class="p"></span></span>';
+  const T_KEEP_OFF='棚に、とっておく', T_KEEP_ON='棚から、出す';
 
   /* v4：止め方は「その一歩を進めない」だけ（hold）。位置は毎フレーム rAF が書いているので、
      掴んだ瞬間の値がそのまま現在値＝どこにも飛ばない（Apple §3）。
@@ -2442,31 +2403,18 @@
   function renderHold(){
     if(!held) return;
     if(!LOGGED_IN){
-      holdBox.innerHTML='<p class="hold-note">このことばに<wbr>灯を<wbr>ともしたり、<wbr>'+
-        '自分の<wbr>棚に<wbr>とっておいたり<wbr>できます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
+      holdBox.innerHTML='<p class="hold-note">このことばを、<wbr>'+
+        '自分の<wbr>棚に<wbr>とっておけます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
       holdExtras();   // 辿るだけは、はじめる前のひとにも開いておく
       return;
     }
-    const m=marks.has(held._sid), s=kept.has('drift:'+held._sid),
-          old=m&&!justMarked.has(held._sid);   // いま灯したのではなく、いつか灯していた
-    /* 宙v1 §4.1: 灯は外せない。だから灯ったあとはボタンを置かず、証の一行だけを置く
-       （押せる姿のまま残すと「もう一度押せる」に見え、外せると誤解させる）。 */
+    /* ことばへの行いは「棚にとっておく」ひとつだけ（2026-07-27）。
+       反応（いいな＝灯）は撤去した——二つ並べた結果「どちらが何なのか分からない」
+       と言われ、絵を分けても文言を変えても解けなかった。行いが一つなら、迷いようがない。 */
+    const s=kept.has('drift:'+held._sid);
     holdBox.innerHTML=
-      (m ? '' :
-        '<button type="button" class="hold-act mark" aria-pressed="false">'+
-          IC_LAMP+'<span class="txt">'+T_LAMP_OFF+'</span></button>')+
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
         IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>';
-    if(m){
-      /* 数ヶ月後の偶然の再会では、いつ灯したかではなく「もう灯っている」ことだけを伝える */
-      const lit=old
-        ? litRow('このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。')
-        : litRow(T_LAMP_ON);
-      if(old)lit.classList.add('lit-old');
-      holdBox.insertBefore(lit,holdBox.firstChild);
-    }
-    const mb=holdBox.querySelector('.mark');
-    if(mb)mb.addEventListener('click',()=>markWord(held));
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
     holdExtras();
   }
@@ -2491,27 +2439,6 @@
     b.classList.toggle('on',on);
     b.setAttribute('aria-pressed',on?'true':'false');
     b.querySelector('.txt').textContent=on?onTxt:offTxt;
-  }
-  /* 印＝灯は一度きり・永久（宙v1 §4.1）。外す経路は作らない。
-     いま結んだもの（justMarked）だけ「結びました」と応え、以後の再会では
-     「もう灯をともしています」の状態で描く。 */
-  const justMarked=new Set();
-  async function markWord(el){
-    if(!el||!el._sid||marks.has(el._sid)) return;
-    marks.add(el._sid);justMarked.add(el._sid);
-    /* 押した瞬間にボタンを証へ入れ替える（灯は外せない＝もう押せないことを姿で言う）。
-       付箋が開いていることがあるので holdBox ごと描き直さず、この一行だけを差し替える。 */
-    const mb=holdBox.querySelector('.mark'), lit=litRow(T_LAMP_ON);
-    if(mb)mb.replaceWith(lit);
-    try{
-      const r=await fetch('/api/sky/word/'+el._sid+'/mark',{method:'POST',
-        headers:{'Content-Type':'application/json'},body:'{}'});
-      if(!r.ok)throw new Error('mark');
-    }catch(e){
-      marks.delete(el._sid);justMarked.delete(el._sid);
-      if(mb&&lit.isConnected)lit.replaceWith(mb);   // 届かなかったら、押せる姿へ戻す
-      whisper('いま、<wbr>tayori-たより- に<wbr>手が<wbr>届きませんでした。',6000);
-    }
   }
   async function toggleKeep(el){
     if(!el||!el._sid) return;
@@ -2545,7 +2472,6 @@
     if(!LOGGED_IN) return;
     fetch('/api/sky/mine').then(r=>r.ok?r.json():null).then(d=>{
       if(!d) return;
-      marks.clear();(d.marks||[]).forEach(h=>marks.add(h));
       kept.clear();(d.kept||[]).forEach(k=>kept.add(k.src+':'+k.ref));
       if(held)renderHold();
       // 読む柱を開いたまま棚が変わることもある（同じ集合を見ているので、札だけ塗り直す）
@@ -2713,31 +2639,7 @@
     tHereTitle.hidden=!w.title;
     tActs.innerHTML='';
     if(!LOGGED_IN||w.mine)return;
-    if(marks.has(w.id)){
-      const p=litRow('このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。');
-      p.classList.add('lit-old');
-      tActs.appendChild(p);
-    }else{
-      const mb=document.createElement('button');
-      mb.type='button';mb.className='hold-act mark';
-      mb.innerHTML=IC_LAMP+'<span class="txt">'+T_LAMP_OFF+'</span>';
-      mb.addEventListener('click',async()=>{
-        if(marks.has(w.id))return;
-        marks.add(w.id);
-        // 灯は外せない。押した瞬間にボタンをやめ、証の一行へ入れ替える
-        const lit=litRow(T_LAMP_ON);
-        mb.replaceWith(lit);
-        try{
-          const r=await fetch('/api/sky/word/'+w.id+'/mark',{method:'POST',
-            headers:{'Content-Type':'application/json'},body:'{}'});
-          if(!r.ok)throw new Error('mark');
-        }catch(e){
-          marks.delete(w.id);
-          if(lit.isConnected)lit.replaceWith(mb);
-        }
-      });
-      tActs.appendChild(mb);
-    }
+    // 辿りの現在地でできることも「棚にとっておく」ひとつだけ（2026-07-27 反応を撤去）
     const kb=document.createElement('button');
     kb.type='button';kb.className='hold-act keep';
     const paintKeep=on=>{
@@ -3252,7 +3154,7 @@
      帰ってきたその時しか読めない——だから「あの日の、あなたのことば」と名指す。 */
   const rp=document.getElementById('readPane'),rb=document.getElementById('readBody'),
         rn=document.getElementById('readNote'),rc=document.getElementById('readClose'),
-        rl=document.getElementById('readLike'),rk=document.getElementById('readKeep');
+        rk=document.getElementById('readKeep');
   let readDid=null,readBack=null;
   function shutRead(){
     rp.classList.remove('on');rp.setAttribute('aria-hidden','true');
@@ -3268,28 +3170,6 @@
   rp.addEventListener('click',e=>{if(e.target===rp)shutRead();});
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&rp.classList.contains('on'))shutRead();});
-  /* 印＝灯は一度きり・永久（宙v1 §4.1）。結んだあとは外せない。
-     再訪時（すでに結んであった時）は「もう灯をともしています」の状態で描く。 */
-  function setLike(on,old){
-    rl.classList.toggle('on',!!on);
-    rl.setAttribute('aria-pressed',on?'true':'false');
-    // 灯ったら押せる姿をやめる（外せないものが押せそうに見えていてはいけない）
-    rl.disabled=!!on;
-    rl.querySelector('.txt').textContent=
-      on?(old?'いつかのあなたが、もう灯をともしています':T_LAMP_ON)
-        :T_LAMP_OFF;
-  }
-  rl.addEventListener('click',async()=>{
-    if(!readDid||rl.classList.contains('on'))return;
-    setLike(true);
-    try{
-      const r=await fetch('/api/sky/'+readDid+'/like',{method:'POST',
-        headers:{'Content-Type':'application/json'},body:'{}'});
-      const d=await r.json().catch(()=>null);
-      if(!(r.ok&&d&&d.ok))setLike(false);
-      else{const A=arrivals.find(x=>String(x.did)===String(readDid));if(A)A.liked=true;}
-    }catch(e){setLike(false);}
-  });
   /* ── 手元の棚（v13 §9）──
      残せるのは、いまこの柱で開いたことばだけ。宙を漂っていることばには手を伸ばせない
      （宙のidは逆引きできないハッシュのまま＝棚のために匿名性へ穴を開けない）。 */
@@ -3328,14 +3208,11 @@
     rb.classList.toggle('h',!o.vertical);
     rb.textContent='';
     rn.textContent=o.note||'';
-    // 印は他人のことばにだけ（did がある＝降ってきたことば）
-    rl.hidden=!o.did;
     // 棚は、他人のことばにも自分の帰ってきたことばにも結べる
     readRef=o.did?{src:'sky',ref:o.did}:(o.lid?{src:'mine',ref:o.lid}:null);
     rk.hidden=!readRef;
     if(readRef)setKeep(kept.has(keptKey(readRef)));
     rp.setAttribute('aria-label',o.mine?'あの日の、あなたのことば':'降りてきたことば');
-    if(o.did)setLike(!!o.liked,true);   // 開いた時点で結んであった印は「いつかの灯」
     const c=tintOf(o.color);
     rb.style.color=c?c.text:'';
     rp.classList.add('on');rp.setAttribute('aria-hidden','false');
@@ -3343,7 +3220,7 @@
     playType(rb,o.poem||'',o.steps);
   }
   function showReadError(msg){
-    readDid=null;readRef=null;rl.hidden=true;rk.hidden=true;
+    readDid=null;readRef=null;rk.hidden=true;
     rb.classList.add('h');rb.style.color='';rb._run=(rb._run||0)+1;
     rb.textContent=msg;rn.textContent='';
     rp.classList.add('on');rp.setAttribute('aria-hidden','false');rb.focus();

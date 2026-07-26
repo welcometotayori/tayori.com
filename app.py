@@ -4918,36 +4918,11 @@ def api_open_sky_delivery(did):
                    trace_ev=ev)
 
 
+# 反応（いいな＝灯）は 2026-07-27 に撤去。降ってきたことばへの経路も同じく閉じる。
 @app.route("/api/sky/<did>/like", methods=["POST"])
 @login_required
 def api_like_sky_delivery(did):
-    """降ってきたことばへの、いいな＝灯（宙v1 §4.1）。1回だけ・永久・外せない。
-    書き手には数も誰からも伝えない（sky_reaction に残るだけ）。すでにともっていても
-    エラーにせず already を返す。"""
-    row = get_db().execute(
-        "SELECT letter_id, opened_at FROM sky_deliveries WHERE id=? AND recipient=?",
-        (did, uid())).fetchone()
-    if not row:
-        return jsonify(error="そのことばは見つかりません。"), 404
-    if not row["opened_at"]:
-        return jsonify(error="まだ封の中です。"), 403
-    db = get_db()
-    already = bool(db.execute(
-        "SELECT 1 FROM sky_reaction WHERE reader_id=? AND letter_id=?",
-        (uid(), row["letter_id"])).fetchone())
-    if not already:
-        now_iso = datetime.now().isoformat(timespec="seconds")
-        with _WRITE_LOCK:
-            db.execute(
-                "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at) VALUES (?,?,?)",
-                (uid(), row["letter_id"], now_iso))
-            # 配達行の liked_at は受信一覧の表示用の控えとして一度だけ書く（外す経路は無い）
-            db.execute(
-                "UPDATE sky_deliveries SET liked_at=COALESCE(liked_at,?) WHERE id=? AND recipient=?",
-                (now_iso, did, uid()))
-            db.commit()
-    _lantern_touch()
-    return jsonify(ok=True, liked=True, already=already)
+    return jsonify(error="この行いは、いまはありません。"), 410
 
 # ══ 手元の棚（2026-07-25 v13 §9）══════════════════════════════════
 # 宙で出会って、手元に残したいと思ったことばだけを並べる、本人しか見られない棚。
@@ -5293,32 +5268,13 @@ def api_shelf_tags(wid):
 # クライアントが握っているのは最後まで公開id（一方向ハッシュ）だけ。手紙のidも書き手も
 # 出さない——引き当てはサーバ側の index（_sky_index）の中だけで起きる。
 # 数えない：印の総数を返す経路は作らない（作った瞬間に人気ランキングが生まれる）。
+# 反応（いいな＝灯）は 2026-07-27 に撤去した。ことばへの行いは「棚にとっておく」だけ。
+# 経路は閉じるが、sky_reaction のデータは消さない（過去に押された事実まで無かったことに
+# しない・戻したくなった時の手がかりを残す）。古いクライアントが叩いても静かに断る。
 @app.route("/api/sky/word/<h>/mark", methods=["POST"])
 @login_required
 def api_sky_word_mark(h):
-    """いいな＝灯をともす（宙v1 §4.1）。1人につき1つのことばへ1回だけ・永久。
-    外す経路は無い。すでにともっていてもエラーにしない——「すでに反応済み」は
-    制御であって記憶ではない。代わりに already を返し、クライアントは
-    「いつかのあなたが、もう灯をともしています」の状態で描く。"""
-    if not re.fullmatch(r"[0-9a-f]{12}", h or ""):
-        return jsonify(error="そのことばは見つかりません。"), 400
-    got = _sky_index().get(h)
-    if not got:
-        # 宙から降ろされた・キャッシュが入れ替わった。静かに「もう無い」と伝える
-        return jsonify(error="そのことばは、もう tayori-たより- にありません。"), 404
-    letter_id = got[0]
-    db = get_db()
-    already = bool(db.execute(
-        "SELECT 1 FROM sky_reaction WHERE reader_id=? AND letter_id=?",
-        (uid(), letter_id)).fetchone())
-    if not already:
-        with _WRITE_LOCK:
-            db.execute(
-                "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at) VALUES (?,?,?)",
-                (uid(), letter_id, datetime.now().isoformat(timespec="seconds")))
-            db.commit()
-    _lantern_touch(_room_of_letter(db, letter_id))
-    return jsonify(ok=True, marked=True, already=already)
+    return jsonify(error="この行いは、いまはありません。"), 410
 
 
 @app.route("/api/export")
@@ -5382,16 +5338,13 @@ def api_export():
 @app.route("/api/sky/mine")
 @login_required
 def api_sky_mine():
-    """いま宙にあることばのうち、自分が印を結んだ／棚に載せたものだけを公開idで返す。
-    自分の記録しか出ないので、他人については何も分からない。"""
+    """いま宙にあることばのうち、自分が棚に載せたものだけを公開idで返す。
+    自分の記録しか出ないので、他人については何も分からない。
+    2026-07-27：反応（いいな）を撤去したので marks は返さない。"""
     db = get_db()
-    idx = _sky_index()
-    mine = {row["letter_id"] for row in db.execute(
-        "SELECT letter_id FROM sky_reaction WHERE reader_id=?", (uid(),))}
-    marks = [h for h, v in idx.items() if v[0] in mine]
     kept = [{"src": r["src"], "ref": r["ref_id"]} for r in db.execute(
         "SELECT src, ref_id FROM saved_words WHERE user_id=?", (uid(),))]
-    return jsonify(marks=marks, kept=kept)
+    return jsonify(kept=kept)
 
 
 @app.route("/api/letters/<lid>/reply", methods=["POST"])
