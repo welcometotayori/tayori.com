@@ -139,6 +139,7 @@
             .btn-state:active { transform: none; }
         }
         .state-cell { white-space: nowrap; }
+        .room-gone { opacity: .45; }
 
         /* ── 封の色の分布 ─────────────────────────────── */
         .hue-strip {
@@ -756,6 +757,44 @@
         </div>
         {% endif %}
 
+        <div class="section-title">部屋（{{ metrics.rooms | length }}）</div>
+        <div class="trend-note">
+            部屋ごとの活動量は<strong>この画面だけのもの</strong>です。ユーザー側には件数を一切出しません（出した瞬間に、部屋の選び方が人気投票になります）。<br>
+            鍵は「他人のことばが初めて入った印」で、以後は作成者でも消せません。部屋を畳むと中のことばは移送先へ移ります。
+        </div>
+        <div class="table-scroll">
+        <table>
+            <thead><tr><th>部屋</th><th>作成者</th><th>状態</th><th class="num">ことば</th><th class="num">30日</th><th>作成日</th><th>操作</th></tr></thead>
+            <tbody>
+                {% for r in metrics.rooms %}
+                <tr{% if r.deleted_at %} class="room-gone"{% endif %}>
+                    <td><span class="username">{{ r.name }}</span></td>
+                    <td>{% if r.is_default %}<span class="email-none">既定の部屋</span>
+                        {% elif r.creator %}{{ r.creator }}
+                        {% else %}<span class="email-none">—</span>{% endif %}</td>
+                    <td class="state-cell">
+                        {% if r.deleted_at %}<span class="pill off">畳んだ</span>
+                        {% else %}
+                            {% if r.archived %}<span class="pill off">保管のみ</span>{% endif %}
+                            {% if r.locked_at %}<span class="pill ok">鍵</span>
+                            {% else %}<span class="pill off">鍵なし</span>{% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="num">{{ r.letters }}</td>
+                    <td class="num">{{ r.recent }}</td>
+                    <td><span class="date">{{ r.created_at[:10] }}</span></td>
+                    <td>
+                        {% if not r.deleted_at %}
+                        <button class="btn-state" onclick="renameRoom({{ r.id }}, '{{ r.name }}')">改名</button>
+                        <button class="btn-delete" onclick="dropRoom({{ r.id }}, '{{ r.name }}', {{ r.letters }})">畳む</button>
+                        {% else %}<span class="protected">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+
         <div class="section-title">tayori-たより- の承認キュー（{{ pending_sky | length }}）</div>
         <div class="queue-note">
             門番（キーワード照合）がグレーと見たことばだけが、ここで待っています。<strong>掲載</strong>を押した瞬間に tayori-たより- へ出て、だれか一人への配達も始まります。<strong>却下</strong>すると tayori-たより- には出ませんが、本文は本人の手元に残り、帰還メールもそのまま生きています。<br>
@@ -928,6 +967,42 @@
         document.querySelectorAll('.dist-fill[data-h]').forEach(function(el){
             el.style.width = el.getAttribute('data-h') + '%';
         });
+
+        // 部屋の改名。判定はユーザーの作成経路と同じルールをサーバ側で通す。
+        function renameRoom(id, current){
+            const name = prompt(`「${current}」の新しい名前（12字まで）`, current);
+            if (name === null) return;
+            fetch(`/api/admin/rooms/${id}/rename`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({name: name})
+            })
+            .then(res => res.json().then(d => {
+                if (!res.ok || !d.ok) throw new Error(d.error || '改名できませんでした。');
+                window.location.reload();
+            }))
+            .catch(err => alert('エラー: ' + err.message));
+        }
+
+        // 部屋を畳む。中にことばがあるときは移送先を必ず決めさせる
+        //（移送しないと、そのことばはどの部屋にも属さないまま宙から消える）。
+        function dropRoom(id, name, letters){
+            let move = null;
+            if (letters > 0) {
+                move = prompt(`「${name}」には ${letters} 通あります。\n移送先の部屋IDを入れてください（上の表のいちばん左の行の順です）。\n空のままなら中止します。`);
+                if (!move) return;
+            } else if (!confirm(`「${name}」を畳みますか？\n\n※ことばは入っていません。`)) {
+                return;
+            }
+            fetch(`/api/admin/rooms/${id}/delete`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({move_to: move})
+            })
+            .then(res => res.json().then(d => {
+                if (!res.ok || !d.ok) throw new Error(d.error || '畳めませんでした。');
+                window.location.reload();
+            }))
+            .catch(err => alert('エラー: ' + err.message));
+        }
 
         // 停止／復帰。データには触らないので、削除ほど強い確認は出さない。
         function setUserState(uid, username, verb){

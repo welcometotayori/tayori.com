@@ -422,6 +422,121 @@ def _migrate_colors_to_hsl(db):
                 db.execute(f"UPDATE {table} SET {col}=? WHERE id=?", (hsl, r["id"]))
 
 
+# ── 部屋（2026-07-26）─────────────────────────────────────────────
+# 宙はひとつの広場ではなく、いくつもの小さな閉じた宙になる。手紙は必ずどこかの部屋に
+# 属し、探索も季節の返却もその部屋の中だけで起きる（母数が足りなくても他の部屋から
+# 借りてこない＝静かな部屋は静かなまま見せる）。
+#
+# デフォルトは14部屋。元案の20を統合して密度を保ちつつ、「いじめ」だけは統合せず
+# 独立させた——名前が見えていること自体が逃げ場になる、という判断（Kosei 確定）。
+DEFAULT_ROOMS = ("恋愛", "家族", "友達", "学校", "仕事", "お金", "生活",
+                 "人生", "心", "世界", "音楽", "アート", "趣味", "いじめ")
+
+# 旧データ専用のアーカイブ部屋。新規投稿は受け付けない（archived=1）。
+ARCHIVE_ROOM = "宙"
+
+
+def _normalize_room_name(name):
+    """部屋名の正規化。前後空白除去 → 内部空白除去 → NFKC → 小文字化。
+    全角/半角・大文字小文字・空白の入れ方だけが違う部屋が乱立するのを防ぐ。
+    表示に使うのは元の name で、これは重複判定のための鍵にすぎない。"""
+    s = unicodedata.normalize("NFKC", str(name or "")).strip()
+    return re.sub(r"\s+", "", s).lower()
+
+
+# 既存の手紙を部屋へ移すための語彙。LLM は使わない（本文を渡さないのが原則）。
+# 決定的なキーワード照合だけで振り分け、決め手が無ければアーカイブ部屋へ落とす。
+# これは一度きりの移行専用で、投函時の分類には使わない（放つ人が自分で部屋を選ぶ）。
+_ROOM_KEYWORDS = {
+    "恋愛": ("恋", "好きな人", "彼氏", "彼女", "告白", "片想い", "片思い", "失恋",
+             "デート", "付き合", "別れ", "結婚", "旦那", "妻", "夫", "恋人"),
+    "家族": ("家族", "母", "父", "親", "兄", "姉", "弟", "妹", "祖母", "祖父",
+             "おばあ", "おじい", "息子", "娘", "実家", "家庭"),
+    "友達": ("友達", "友人", "親友", "仲間", "同級生", "クラスメイト"),
+    "学校": ("学校", "先生", "授業", "教室", "部活", "受験", "試験", "宿題",
+             "大学", "高校", "中学", "小学", "卒業", "入学", "留年", "進路"),
+    "仕事": ("仕事", "会社", "職場", "上司", "同僚", "部下", "転職", "残業",
+             "退職", "就職", "面接", "働", "バイト", "アルバイト", "出社"),
+    "お金": ("お金", "金", "貯金", "借金", "給料", "家賃", "生活費", "節約",
+             "収入", "支払", "税金", "貧乏"),
+    "生活": ("食事", "料理", "掃除", "洗濯", "引っ越", "部屋", "眠", "睡眠",
+             "朝ごはん", "夜ごはん", "散歩", "買い物", "日常"),
+    "人生": ("人生", "生き", "死", "未来", "夢", "老い", "年齢", "これから",
+             "選択", "後悔", "運命"),
+    "心": ("不安", "悩", "苦し", "つら", "泣", "寂し", "孤独", "怖", "鬱",
+           "うつ", "疲れ", "心", "気持ち", "落ち込", "焦"),
+    "世界": ("社会", "世界", "政治", "戦争", "ニュース", "事件", "災害",
+             "environment", "地球", "差別"),
+    "音楽": ("音楽", "歌", "曲", "ギター", "ピアノ", "ライブ", "バンド",
+             "アルバム", "演奏"),
+    "アート": ("絵", "小説", "本", "詩", "文学", "映画", "写真", "デザイン",
+               "美術", "作品", "描"),
+    "趣味": ("趣味", "ゲーム", "スポーツ", "野球", "サッカー", "走", "筋トレ",
+             "服", "ファッション", "旅行", "カメラ", "料理教室"),
+    "いじめ": ("いじめ", "無視され", "仲間はずれ", "陰口", "嫌がらせ"),
+}
+
+
+def _classify_room(text):
+    """本文から移送先の部屋名を決める（移行専用・決定的）。
+    決め手が無い／同点で並ぶときは None を返し、呼び出し側がアーカイブへ落とす。
+    精度を上げようとしないこと——曖昧なものはアーカイブに置くのが正解で、
+    間違った部屋に入れると、その手紙は書かれた文脈と違う場所で他人に読まれる。"""
+    t = str(text or "")
+    if not t.strip():
+        return None
+    scores = {}
+    for room, words in _ROOM_KEYWORDS.items():
+        n = sum(1 for w in words if w in t)
+        if n:
+            scores[room] = n
+    if not scores:
+        return None
+    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        return None       # 同点は決め手なしとみなす
+    return ranked[0][0]
+
+
+def _seed_rooms(db):
+    """デフォルト部屋とアーカイブ部屋を用意する（冪等）。
+    デフォルト部屋は created_by が NULL＝誰のものでもなく、消せない・改名できない。"""
+    now = datetime.now().isoformat(timespec="seconds")
+    # INSERT OR IGNORE は使わない：AUTOINCREMENT は衝突して無視された行でも採番を進めるので、
+    # 起動のたびに部屋の id が15ずつ飛ぶ（機能は壊れないが、id が無意味に大きくなる）。
+    for name, archived in [(n, 0) for n in DEFAULT_ROOMS] + [(ARCHIVE_ROOM, 1)]:
+        # 存在判定に deleted_at を入れない：運営が意図して畳んだ既定部屋を、
+        # 次のデプロイが黙って生き返らせないため（畳んだものは畳んだまま）。
+        db.execute(
+            "INSERT INTO rooms (name, name_norm, created_by, is_default, archived, created_at)"
+            " SELECT ?,?,NULL,1,?,? WHERE NOT EXISTS"
+            " (SELECT 1 FROM rooms WHERE name_norm=?)",
+            (name, _normalize_room_name(name), archived, now, _normalize_room_name(name)))
+
+
+def _backfill_rooms(db):
+    """部屋を持たない既存の手紙を移す（冪等：room_id IS NULL の行だけ触る）。
+
+    mode='letter'（旧「未来の自分へ」）は内容によらず全件アーカイブへ。公開される前提で
+    書かれていないので、他人の目に触れる部屋には決して混ぜない。
+    mode='sky' だけキーワードで振り分け、決め手が無ければアーカイブへ落とす。"""
+    ids = {r["name"]: r["id"] for r in db.execute(
+        "SELECT id, name FROM rooms WHERE is_default=1 AND deleted_at IS NULL")}
+    archive = ids.get(ARCHIVE_ROOM)
+    if not archive:
+        return {}
+    moved = Counter()
+    for r in db.execute(
+            "SELECT id, poem, title, mode FROM letters WHERE room_id IS NULL").fetchall():
+        room = None
+        if (r["mode"] or "letter") == "sky":
+            room = _classify_room((r["title"] or "") + "\n" + (r["poem"] or ""))
+        rid = ids.get(room) or archive
+        db.execute("UPDATE letters SET room_id=? WHERE id=?", (rid, r["id"]))
+        moved[room or ARCHIVE_ROOM] += 1
+    return moved
+
+
 def init_db():
     global _init_db_done
     if _init_db_done:
@@ -620,6 +735,9 @@ def init_db():
             # 停止（凍結）。NULL=有効 / ISO日時=その時から停止。削除とは別物で、
             # データには一切触れない＝復帰すればそのまま戻る。
             "ALTER TABLE users ADD COLUMN suspended_at TEXT",
+            # 部屋（2026-07-26）。どの小さな宙に属することばか。NOT NULL 制約は付けない
+            # （SQLite は後付けで NOT NULL にできない）＝投函経路の側で必須にする。
+            "ALTER TABLE letters ADD COLUMN room_id INTEGER",
         ):
             try:
                 db.execute(stmt)
@@ -816,6 +934,37 @@ def init_db():
                 at        TEXT NOT NULL
             )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_audit_at ON admin_audit_log (at)")
+
+        # ── 部屋（2026-07-26）─────────────────────────────────────
+        # 部屋は「小さな閉じた宙」。位置（座標）は持たない＝トップの漂いは毎回ランダムに
+        # 散らす（並び順に意味を持たせないため、DBに順序の手がかりを残さない）。
+        #   is_default … 元からある14部屋。作成者を持たず、消せない・改名できない。
+        #   archived   … 新規投稿を受け付けない部屋（旧データ専用のアーカイブ）。
+        #   locked_at  … 他人のことばが初めて入った瞬間。以後、作成者でも消せない。
+        #   deleted_at … soft delete。部屋は物理削除しない（中のことばが宙に浮くため）。
+        # created_by は users.id と同じ TEXT。SQLite は既定で外部キーを検査しないので、
+        # ユーザー削除時に NULL へ落とすのはアプリ側の責任（api_admin_delete_user 参照）。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS rooms (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL,
+                name_norm  TEXT NOT NULL,
+                created_by TEXT,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                archived   INTEGER NOT NULL DEFAULT 0,
+                locked_at  TEXT,
+                created_at TEXT NOT NULL,
+                deleted_at TEXT
+            )""")
+        # 生きている部屋の中でだけ名前が一意（消した部屋の名前は再び使える）。
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS rooms_name_norm_uniq"
+                   " ON rooms (name_norm) WHERE deleted_at IS NULL")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_letters_room ON letters (room_id)")
+        _seed_rooms(db)
+        _moved = _backfill_rooms(db)
+        if _moved:
+            print("[たより] 部屋へ移送: "
+                  + " / ".join(f"{k} {v}" for k, v in _moved.most_common()), flush=True)
 
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
@@ -2668,6 +2817,7 @@ def start_notifier(interval=None):
         last_dissolve = 0.0
         last_mood_grid = 0.0    # 気分の地図の集計。0.0 起点で起動直後に一度作る
         last_seen_gc = 0.0      # sky_seen の掃除（宙v1 §2.1）。起動直後に一度、以後は日次
+        last_room_gc = 0.0      # 誰も入らなかった空き部屋の掃除（B-5）。日次
         time.sleep(grace + 8)   # persist は notifier より少し後ろにずらす
         while True:
             try:
@@ -2705,6 +2855,31 @@ def start_notifier(interval=None):
                         _db.close()
             except Exception as e:
                 print(f"[たより] sky_seen掃除でエラー（継続）: {e}", flush=True)
+            try:
+                # 空部屋の掃除（B-5）: 作られてから30日、誰の声も入らず（locked_at IS NULL）、
+                # ことばが1通も無い部屋を静かに畳む。作成者には知らせない——「誰も来なかった」
+                # と通知することに意味は無く、知らせないほうが優しい。
+                # デフォルト部屋は created_by を持たないので条件から自然に外れる。
+                if time.time() - last_room_gc >= 86400:
+                    last_room_gc = time.time()
+                    _db = _connect()
+                    try:
+                        cutoff = (datetime.now() - timedelta(days=30)).isoformat(timespec="seconds")
+                        now_s = datetime.now().isoformat(timespec="seconds")
+                        with _WRITE_LOCK:
+                            cur = _db.execute(
+                                "UPDATE rooms SET deleted_at=? WHERE deleted_at IS NULL"
+                                " AND is_default=0 AND locked_at IS NULL AND created_at < ?"
+                                " AND id NOT IN (SELECT DISTINCT room_id FROM letters"
+                                "                 WHERE room_id IS NOT NULL)",
+                                (now_s, cutoff))
+                            _db.commit()
+                        if cur.rowcount:
+                            print(f"[たより] 誰も来なかった部屋: {cur.rowcount}室を畳みました", flush=True)
+                    finally:
+                        _db.close()
+            except Exception as e:
+                print(f"[たより] 空部屋の掃除でエラー（継続）: {e}", flush=True)
             try:
                 # 気分の地図: 集計テーブルを日次で作り直す（即時反映しないのが設計）
                 if time.time() - last_mood_grid >= 86400:
@@ -3020,7 +3195,13 @@ def mood_page():
         open_id = session.pop("pending_open", "") or ""
     if not re.fullmatch(r"[A-Za-z0-9]{1,32}", open_id):
         open_id = ""
-    return render_template("mood.html", logged_in=logged_in, open_letter_id=open_id)
+    # ?room=<id> で部屋の中に直接降りられる（リンクを踏んで戻ってこられるように）。
+    # 存在しない部屋を指されたら黙ってトップ（部屋が漂う画面）に落とす。
+    room = request.args.get("room") or ""
+    if not (room.isdigit() and _room_row(get_db(), int(room))):
+        room = ""
+    return render_template("mood.html", logged_in=logged_in, open_letter_id=open_id,
+                           start_room=room)
 
 
 # v8: time_bucket（4値enum）の参照は停止。列は既存データ互換のため残すが、
@@ -3445,7 +3626,7 @@ def _sky_index():
 def _sky_rebuild():
     db = get_db()
     rows = db.execute(
-        "SELECT id, user_id, poem, title, seal_color, vertical, sent_date, time_bucket, seal_env, weather_event, area_name "
+        "SELECT id, user_id, poem, title, seal_color, vertical, sent_date, time_bucket, seal_env, weather_event, area_name, room_id "
         "FROM letters "
         "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>'' "
         # 掲載の門番（§8）。承認待ち・掲載しないことばは宙に出さない。
@@ -3478,6 +3659,7 @@ def _sky_rebuild():
             _sky_decay(r["sent_date"]),   # 沈降（§3.3）。キャッシュは15秒なので鮮度は問題にならない
             r["user_id"],                 # 「自分のことば」判定（辿る §4.1）にだけ使う。クライアントへは出さない
             r["title"],                   # 題（§2.2）。辿るの一覧でだけ足す（漂いには出さない）
+            r["room_id"],                 # どの部屋のことばか（B-6）。絞り込みにだけ使う
         ))
         index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["title"])
     with _sky_lock:
@@ -3495,9 +3677,205 @@ def _sky_score(entry, now_air, reso):
     return max(1e-6, 1.0 - air) * entry[3] * random.uniform(0.7, 1.3)
 
 
+# ── 部屋の出入り（2026-07-26 B-4・B-5）─────────────────────────────
+ROOM_NAME_MAX = 12
+# 部屋名は「他人の目に触れる唯一のユーザー入力テキスト」なので、本文より強く弾く。
+# 本文は文脈で救えるが（「わたしはバカだ」は宙にいちばん多い声）、部屋名には文脈が無い。
+# だから本文では gray どまりの語も、部屋名では即拒否にする。
+# 本文用の語彙に、部屋名でだけ効かせる伏せ字・かな書きを足す。本文では「しね」が
+# 「〜しねばならない」等で普通に現れるので入れられないが、12字の部屋名なら誤爆しない。
+_ROOM_NG_EXTRA = r"しね|シネ|氏ね|市ね|4ね|ころす|コロス|ころせ|しにたい"
+_ROOM_NG_RE = re.compile(
+    _ABUSE_HARD_RE.pattern + "|" + _ABUSE_SOFT_RE.pattern + "|" + _ROOM_NG_EXTRA)
+# 連絡先は本文用の _CONTACT_RE では足りない。あちらは https:// や www. の付いた形しか
+# 見ないが、部屋名は12字しか無いぶん "bit.ly/x" のような裸のドメインがそのまま宣伝になる。
+# 本文側の判定は変えたくないので（既存の門番の挙動が動く）、部屋名専用に足す。
+_ROOM_CONTACT_RE = re.compile(
+    _CONTACT_RE.pattern
+    + r"|[A-Za-z0-9-]+\.(?:com|net|org|jp|io|ly|me|co|tv|app|info|biz|xyz|link|gg|to|cc|shop|site)\b"
+    + r"|[@＠][A-Za-z0-9_.]{2,}"
+    + r"|(?:line|LINE|Line)\s*[:：]",
+    re.IGNORECASE)
+# 名前として成立していること（記号だけの部屋を作らせない）。NFKC 済みの文字列に当てるので、
+# 全角英数や半角カナは正規化後の形（abc / アイウ）で判定される。
+_ROOM_HAS_LETTER_RE = re.compile(r"[0-9A-Za-z぀-ヿ㐀-鿿]")
+
+
+def _room_name_error(name):
+    """部屋名として受け付けられない理由を返す（問題なければ None）。"""
+    raw = str(name or "").strip()
+    if not raw:
+        return "部屋の名前を入れてください。"
+    if len(raw) > 200:
+        return f"部屋の名前は{ROOM_NAME_MAX}字までです。"
+    # 判定は素の文字列と正規化後の両方に当てる。「ｅｖｉｌ．ｃｏｍ」のように全角で書けば
+    # すり抜ける、という穴を塞ぐため（重複判定と同じ土俵で中身も見る）。
+    norm = _normalize_room_name(raw)
+    # 中身の判定を字数より先に置く。URLは12字を超えることが多く、字数で先に弾くと
+    # 「12字までです」という的外れな理由が返る（何が駄目なのか本人に伝わらない）。
+    if _ROOM_CONTACT_RE.search(raw) or _ROOM_CONTACT_RE.search(norm):
+        return "部屋の名前に、URLや連絡先は入れられません。"
+    if _ROOM_NG_RE.search(raw) or _ROOM_NG_RE.search(norm):
+        return "その名前では部屋を作れません。"
+    if len(raw) > ROOM_NAME_MAX:
+        return f"部屋の名前は{ROOM_NAME_MAX}字までです。"
+    if not norm or not _ROOM_HAS_LETTER_RE.search(norm):
+        return "その名前では、部屋の名前になりません。"
+    return None
+
+
+def _room_row(db, room_id):
+    return db.execute(
+        "SELECT * FROM rooms WHERE id=? AND deleted_at IS NULL", (room_id,)).fetchone()
+
+
+def _room_of_letter(db, letter_id):
+    """そのことばが属する部屋の id（無ければ None）。灯を部屋へ結び直すためだけに使う。"""
+    if not letter_id:
+        return None
+    r = db.execute("SELECT room_id FROM letters WHERE id=?", (letter_id,)).fetchone()
+    return r["room_id"] if r else None
+
+
+def _rooms_created_today(db, user_id):
+    """その人が「宙の一日」（JST朝4時区切り）のあいだに作った部屋の数。"""
+    return db.execute(
+        "SELECT COUNT(*) c FROM rooms WHERE created_by=? AND created_at>=?",
+        (user_id, _sky_day_start().isoformat(timespec="seconds"))).fetchone()["c"]
+
+
+def _room_lock_if_needed(db, room_id, author_id):
+    """他人のことばが初めてその部屋に入った瞬間に鍵をかける。以後は作成者でも消せない。
+    48時間の削除窓でそのことばが消えても鍵は外さない（自作自演で部屋を消す抜け道を潰す）。
+    デフォルト部屋は作成者を持たないので、そもそも消せない＝ここでは何もしない。"""
+    r = db.execute(
+        "SELECT created_by, locked_at, is_default FROM rooms WHERE id=?", (room_id,)).fetchone()
+    if not r or r["is_default"] or r["locked_at"]:
+        return
+    if r["created_by"] and r["created_by"] != author_id:
+        db.execute("UPDATE rooms SET locked_at=? WHERE id=? AND locked_at IS NULL",
+                   (datetime.now().isoformat(timespec="seconds"), room_id))
+
+
+@app.route("/api/rooms")
+def api_rooms():
+    """漂っている部屋の一覧。件数は返さない（原則2）。
+    座標も順序も持たせない——並びは毎回シャッフルして返し、位置は画面側が毎回ランダムに
+    決める。活動量順・新着順のような視覚的序列を作らないため。"""
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name, is_default, archived, created_by, locked_at"
+        "  FROM rooms WHERE deleted_at IS NULL").fetchall()
+    me = session.get("uid")
+    rooms = [{"id": r["id"], "name": r["name"],
+              "is_default": bool(r["is_default"]), "archived": bool(r["archived"]),
+              # mine は「消せるかもしれない部屋」を本人の画面にだけ示すためのもの。
+              # 誰が作ったかは他人には決して返さない（部屋にも作者を出さない）。
+              "mine": bool(me and r["created_by"] == me and not r["locked_at"])}
+             for r in rows]
+    random.shuffle(rooms)
+    return jsonify(rooms=rooms,
+                   can_create=bool(me) and _rooms_created_today(db, me) == 0,
+                   name_max=ROOM_NAME_MAX)
+
+
+@app.route("/api/rooms", methods=["POST"])
+@login_required
+def api_rooms_create():
+    """誰でも部屋を作れる。ただし1人1日1部屋（宙の一日＝JST朝4時区切り）。
+    同じ名前の部屋が既にあるときはエラーにせず、その部屋へ案内する。"""
+    data = request.get_json(force=True, silent=True) or {}
+    name = str(data.get("name") or "").strip()
+    err = _room_name_error(name)
+    if err:
+        return jsonify(error=err), 400
+    db = get_db()
+    norm = _normalize_room_name(name)
+    exist = db.execute(
+        "SELECT id, name FROM rooms WHERE name_norm=? AND deleted_at IS NULL", (norm,)).fetchone()
+    if exist:
+        return jsonify(ok=True, existed=True, id=exist["id"], name=exist["name"],
+                       message="その部屋は、もうあります。")
+    if _rooms_created_today(db, uid()) >= 1:
+        return jsonify(error="部屋を作れるのは、一日にひとつだけです。"), 429
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _WRITE_LOCK:
+            cur = db.execute(
+                "INSERT INTO rooms (name, name_norm, created_by, is_default, archived, created_at)"
+                " VALUES (?,?,?,0,0,?)", (name, norm, uid(), now))
+            db.commit()
+            rid = cur.lastrowid
+    except sqlite3.IntegrityError:
+        # 同じ名前が同時に作られた（部分ユニーク索引が勝った）。既にある方へ案内する。
+        row = db.execute(
+            "SELECT id, name FROM rooms WHERE name_norm=? AND deleted_at IS NULL", (norm,)).fetchone()
+        if row:
+            return jsonify(ok=True, existed=True, id=row["id"], name=row["name"],
+                           message="その部屋は、もうあります。")
+        return jsonify(error="いま部屋を作れませんでした。少しおいて、もう一度お試しください。"), 503
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 部屋の作成 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    return jsonify(ok=True, existed=False, id=rid, name=name)
+
+
+@app.route("/api/rooms/<int:room_id>/delete", methods=["POST"])
+@login_required
+def api_rooms_delete(room_id):
+    """作った部屋を消す。消せるのは、まだ誰の声も入っていない空の部屋だけ。"""
+    db = get_db()
+    r = _room_row(db, room_id)
+    if not r:
+        return jsonify(error="その部屋は見つかりません。"), 404
+    if r["is_default"] or not r["created_by"] or r["created_by"] != uid():
+        return jsonify(error="この部屋は、あなたのものではありません。"), 403
+    if r["locked_at"]:
+        return jsonify(error="一度だれかの声が入った部屋は、もう誰のものでもありません。"), 409
+    # ことばが残っている部屋は消さない。放たれたことばは書いた人のものではなく、
+    # 部屋ごと畳むと、既に読んだ人の手元だけに残って行き場を失う。
+    n = db.execute("SELECT COUNT(*) c FROM letters WHERE room_id=?", (room_id,)).fetchone()["c"]
+    if n:
+        return jsonify(error="この部屋には、もうことばがあります。空になるまで消せません。"), 409
+    try:
+        with _WRITE_LOCK:
+            db.execute("UPDATE rooms SET deleted_at=? WHERE id=?",
+                       (datetime.now().isoformat(timespec="seconds"), room_id))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 部屋の削除 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    return jsonify(ok=True)
+
+
+def _room_scope():
+    """?room=<id> を読む。部屋は必須で、無ければ (None, エラー応答)。
+    宙はもう一つの広場ではなく、いくつもの小さな閉じた宙——どの部屋を見ているかが
+    決まらないまま漂わせる経路は作らない。"""
+    raw = request.args.get("room")
+    if raw is None or str(raw).strip() == "":
+        return None, (jsonify(error="部屋がえらばれていません。", room_required=True), 400)
+    try:
+        rid = int(raw)
+    except (TypeError, ValueError):
+        return None, (jsonify(error="その部屋は見つかりません。"), 404)
+    if not _room_row(get_db(), rid):
+        return None, (jsonify(error="その部屋は見つかりません。"), 404)
+    return rid, None
+
+
+def _in_room(pool, room_id):
+    """その部屋のことばだけに絞る。母数が足りなくても他の部屋からは借りてこない（B-6）
+    ——静かな部屋は、静かなまま見せる。"""
+    return [e for e in pool if e[6] == room_id]
+
+
 @app.route("/api/sky")
 def api_sky():
-    pool = _sky_pool()
+    room_id, err = _room_scope()
+    if err:
+        return err
+    pool = _in_room(_sky_pool(), room_id)
     # 読み手ごとの除外（宙v1 §3.2）。共有キャッシュには手を入れず、リクエスト時に間引く。
     #   ・自分が書いた手紙 …… 永久
     #   ・棚に入れた手紙 ……… 永久（棚から外せばまた浮かびうる＝現在の棚で判定）
@@ -3577,7 +3955,7 @@ def api_sky_seen():
 # 自分が触れた灯は自分に見せない：自分の反射だと気づいた瞬間、灯は一生嘘になる。
 _LANTERN_WINDOW = 30.0     # 粒度30秒。「いま誰かいる」が伝われば成立する
 _lantern_lock = threading.Lock()
-_lantern_touches = deque()  # (time.time(), 触れた人の鍵)
+_lantern_touches = deque()  # (time.time(), 触れた人の鍵, 部屋id or None)
 
 
 def _lantern_key():
@@ -3586,7 +3964,7 @@ def _lantern_key():
     return "a:" + hashlib.sha256(("lt:" + _client_ip()).encode()).hexdigest()[:12]
 
 
-def _lantern_touch():
+def _lantern_touch(room_id=None):
     now = time.time()
     try:
         key = _lantern_key()
@@ -3595,27 +3973,45 @@ def _lantern_touch():
     with _lantern_lock:
         while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
             _lantern_touches.popleft()
-        _lantern_touches.append((now, key))
+        _lantern_touches.append((now, key, room_id))
         while len(_lantern_touches) > 400:
             _lantern_touches.popleft()
 
 
+def _lantern_rooms(me):
+    """いま気配のある部屋の id 集合（自分の反射は除く）。数は返さない——
+    「何人いるか」を出した瞬間に、静かな部屋が『人気のない部屋』になる。"""
+    now = time.time()
+    with _lantern_lock:
+        while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
+            _lantern_touches.popleft()
+        return {r for _, k, r in _lantern_touches if k != me and r is not None}
+
+
 @app.route("/api/sky/touch", methods=["POST"])
 def api_sky_touch():
-    """ことばに触れた（開いた・読んだ）気配。どのことばかは受け取らない・残さない。"""
-    _lantern_touch()
+    """ことばに触れた（開いた・読んだ）気配。どのことばかは受け取らない・残さない。
+    どの部屋かだけは受け取る（部屋ごとの灯に使う）。保存はしない——メモリのリングだけ。"""
+    try:
+        room_id = int((request.get_json(silent=True) or {}).get("room"))
+    except (TypeError, ValueError):
+        room_id = None
+    _lantern_touch(room_id)
     return jsonify(ok=True)
 
 
 @app.route("/api/sky/lantern")
 def api_sky_lantern():
-    """直近30秒に、自分以外の誰かが宙のことばに触れたか。boolean をひとつだけ返す。"""
+    """直近30秒に、自分以外の誰かが宙のことばに触れたか。boolean をひとつだけ返す。
+    ?rooms=1 なら、気配のある部屋の id も返す（トップの部屋ごとの灯・B-7）。"""
     me = _lantern_key()
     now = time.time()
     with _lantern_lock:
         while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
             _lantern_touches.popleft()
-        lit = any(k != me for _, k in _lantern_touches)
+        lit = any(k != me for _, k, _r in _lantern_touches)
+    if request.args.get("rooms"):
+        return jsonify(lit=lit, rooms=sorted(_lantern_rooms(me)))
     return jsonify(lit=lit)
 
 
@@ -3694,11 +4090,12 @@ def _trace_params():
 
 @app.route("/api/sky/near/<pub_id>")
 def api_sky_near(pub_id):
-    """この空気に、近いことば（§4.2）。基準は開いたことば自身の空気。"""
-    pool = _sky_pool()
-    base = next((e for e in pool if e[0]["id"] == pub_id), None)
+    """この空気に、近いことば（§4.2）。基準は開いたことば自身の空気。
+    辿れるのは、そのことばと同じ部屋の中だけ（B-6）。"""
+    base = next((e for e in _sky_pool() if e[0]["id"] == pub_id), None)
     if base is None:
         return jsonify(error="そのことばは、いま宙にありません。"), 404
+    pool = _in_room(_sky_pool(), base[6])
     limit, offset = _trace_params()
     rest = [e for e in pool if e[0]["id"] != pub_id]
     items, more = _trace_page(rest, lambda e: air_distance(base[1], e[1]), limit, offset)
@@ -3708,7 +4105,10 @@ def api_sky_near(pub_id):
 @app.route("/api/sky/near_now")
 def api_sky_near_now():
     """いまの空気に近いことば（§4.3）。基準は閲覧者のいまの季節・時刻・天気。"""
-    pool = _sky_pool()
+    room_id, err = _room_scope()
+    if err:
+        return err
+    pool = _in_room(_sky_pool(), room_id)
     now_air = _viewer_air()
     limit, offset = _trace_params()
     items, more = _trace_page(pool, lambda e: air_distance(now_air, e[1]), limit, offset)
@@ -3856,6 +4256,18 @@ def api_create_letter():
     if voice and len(voice) > 5_500_000:
         return jsonify(error="音声が長すぎます。短く録り直してください。"), 413
 
+    # 部屋（B-8）。放つときは必ずどこかの部屋を選ぶ——部屋の外から放つ経路は無い。
+    # アーカイブ部屋（archived=1）は旧データを置くだけの場所なので、新しいことばは入らない。
+    try:
+        room_id = int(data.get("room"))
+    except (TypeError, ValueError):
+        return jsonify(error="どの部屋に放つか、えらんでください。", room_required=True), 400
+    room = _room_row(get_db(), room_id)
+    if not room:
+        return jsonify(error="その部屋は見つかりません。"), 404
+    if room["archived"]:
+        return jsonify(error="この部屋には、もう新しいことばを放てません。"), 403
+
     # 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も受け取らない
     # （クライアントが arrive_at 等を送ってきても無視する）。降ってくる日時は
     # サーバの乱数だけが知っている（レスポンスにも返さない）。
@@ -3936,16 +4348,19 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status,room_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
              1 if care else 0,   # ケアのことばは帰還メールを閉じた状態で置く（§3.4）
              emos_json,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
              seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
-             grid_id, excluded, mode, sky_status),
+             grid_id, excluded, mode, sky_status, room_id),
         )
+        # 他人のことばが初めて入った瞬間に、その部屋へ鍵をかける（B-5）。
+        # ケア分岐で letter に落ちたことばも「その部屋に置かれた」ことに変わりはない。
+        _room_lock_if_needed(db, room_id, uid())
         db.commit()
     # 開封のお知らせメールは認証済みアドレスにしか送られない（_check_and_notify の条件と対）。
     # 未設定／確認待ちのまま投函した時は、そのたびに知らせられるよう状態を返す。
@@ -4526,7 +4941,7 @@ def api_shelf_save():
                 "UPDATE letters SET shelved_at=? WHERE id=? AND shelved_at IS NULL AND user_id<>?",
                 (now_iso, letter_id, uid()))
         db.commit()
-    _lantern_touch()
+    _lantern_touch(_room_of_letter(db, letter_id))
     # 控えのidを返す：残したその場で付箋を貼れるようにするため（クライアント側の続き）。
     # このidは本人の棚の中だけの識別子で、手紙や書き手には結びつかない。
     return jsonify(ok=True, saved=True, id=saved["id"])
@@ -4594,7 +5009,7 @@ def api_sky_word_mark(h):
                 "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at) VALUES (?,?,?)",
                 (uid(), letter_id, datetime.now().isoformat(timespec="seconds")))
             db.commit()
-    _lantern_touch()
+    _lantern_touch(_room_of_letter(db, letter_id))
     return jsonify(ok=True, marked=True, already=already)
 
 
@@ -5924,6 +6339,21 @@ def _admin_metrics(db):
     m["areas_total"] = len(areas)
     m["dist_max"] = max([s["n"] for s in m["seasons"]] + [b["n"] for b in m["bands"]] +
                         [w["n"] for w in m["weathers"]] + [1])
+
+    # ── 部屋（A-2）───────────────────────────────────────────
+    # ※ここで作る「部屋ごとの活動量」は管理画面の中だけのもの。
+    #   ユーザー側の画面には決して回さないこと（件数を見せた瞬間に、静かな部屋が
+    #   「人気のない部屋」になり、部屋の選び方が人気投票に変わる）。
+    m["rooms"] = [dict(r) for r in db.execute(
+        """SELECT rm.id, rm.name, rm.is_default, rm.archived, rm.locked_at,
+                  rm.created_at, rm.deleted_at, u.username AS creator,
+                  (SELECT COUNT(*) FROM letters l WHERE l.room_id=rm.id) AS letters,
+                  (SELECT COUNT(*) FROM letters l WHERE l.room_id=rm.id
+                     AND l.sent_date >= ?) AS recent
+             FROM rooms rm LEFT JOIN users u ON u.id = rm.created_by
+            ORDER BY rm.deleted_at IS NOT NULL, rm.is_default DESC, rm.id""",
+        ((date.today() - timedelta(days=30)).isoformat(),))]
+    m["rooms_max"] = max([r["letters"] for r in m["rooms"]] + [1])
     return m
 
 
@@ -6101,6 +6531,72 @@ def admin_page():
     )
 
 
+@app.route("/api/admin/rooms/<int:room_id>/rename", methods=["POST"])
+@admin_required
+def api_admin_room_rename(room_id):
+    """部屋の改名。運営はデフォルト部屋も直せる（名前は他人の目に触れる唯一の入力なので、
+    通報を受けて直す経路が要る）。判定はユーザーと同じ _room_name_error を通す。"""
+    name = str((request.get_json(silent=True) or {}).get("name") or "").strip()
+    err = _room_name_error(name)
+    if err:
+        return jsonify(error=err), 400
+    db = get_db()
+    if not _room_row(db, room_id):
+        return jsonify(error="その部屋は見つかりません。"), 404
+    norm = _normalize_room_name(name)
+    dup = db.execute(
+        "SELECT id FROM rooms WHERE name_norm=? AND deleted_at IS NULL AND id<>?",
+        (norm, room_id)).fetchone()
+    if dup:
+        return jsonify(error="その名前の部屋は、もうあります。"), 409
+    try:
+        with _WRITE_LOCK:
+            db.execute("UPDATE rooms SET name=?, name_norm=? WHERE id=?", (name, norm, room_id))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 部屋の改名 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    _admin_log("room_rename", str(room_id), name)
+    return jsonify(ok=True, name=name)
+
+
+@app.route("/api/admin/rooms/<int:room_id>/delete", methods=["POST"])
+@admin_required
+def api_admin_room_delete(room_id):
+    """部屋を畳む（soft delete）。運営は鍵のかかった部屋も畳める。
+    中のことばは消さない——部屋から出られなくなるだけなので、移送先を必ず指定させる。
+    移送しないまま畳むと、そのことばはどの部屋にも属さず宙から消えたままになる。"""
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    if not _room_row(db, room_id):
+        return jsonify(error="その部屋は見つかりません。"), 404
+    n = db.execute("SELECT COUNT(*) c FROM letters WHERE room_id=?", (room_id,)).fetchone()["c"]
+    move_to = data.get("move_to")
+    if n:
+        if move_to is None:
+            return jsonify(error=f"この部屋には {n} 通あります。移送先の部屋を指定してください。",
+                           letters=n, need_move=True), 409
+        try:
+            move_to = int(move_to)
+        except (TypeError, ValueError):
+            return jsonify(error="移送先が正しくありません。"), 400
+        if move_to == room_id or not _room_row(db, move_to):
+            return jsonify(error="移送先の部屋が見つかりません。"), 404
+    try:
+        with _WRITE_LOCK:
+            if n:
+                db.execute("UPDATE letters SET room_id=? WHERE room_id=?", (move_to, room_id))
+            db.execute("UPDATE rooms SET deleted_at=? WHERE id=?",
+                       (datetime.now().isoformat(timespec="seconds"), room_id))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 部屋の削除 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    _sky_cache_bust()
+    _admin_log("room_delete", str(room_id), (f"→{move_to}" if n else None))
+    return jsonify(ok=True, moved=n)
+
+
 @app.route("/api/admin/users/<uid_>/suspend", methods=["POST"], defaults={"verb": "suspend"})
 @app.route("/api/admin/users/<uid_>/restore", methods=["POST"], defaults={"verb": "restore"})
 @admin_required
@@ -6205,6 +6701,9 @@ def api_admin_delete_user(uid_):
             db.execute("DELETE FROM unemptyable_trash WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM woven_scraps      WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM notes             WHERE user_id=?", (uid_,))
+            # 作った部屋は消さない（他人のことばが既に入っている＝もう誰のものでもない）。
+            # 作者の手がかりだけを外す。SQLite は既定で外部キーを見ないのでアプリ側で行う。
+            db.execute("UPDATE rooms SET created_by=NULL WHERE created_by=?", (uid_,))
             db.execute("DELETE FROM letters WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM drafts  WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM users   WHERE id=?",      (uid_,))
