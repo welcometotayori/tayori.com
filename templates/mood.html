@@ -7,7 +7,10 @@
 <meta name="description" content="tayori-たより- は、いまの気分の言葉を放つ場所です。放った言葉は匿名のまま誰かのもとへ漂い、そしていつか、あの日のあなたの言葉が、帰ってきます。">
 <link rel="canonical" href="{{ canonical_url }}">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=4">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png?v=4">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png?v=4">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png?v=4">
 <meta name="theme-color" content="#08080D">
 
 <meta property="og:site_name" content="tayori-たより-">
@@ -168,24 +171,61 @@
         backdrop-filter:blur(9px) saturate(80%);-webkit-backdrop-filter:blur(9px) saturate(80%);
         -webkit-mask-image:radial-gradient(66% 64% at 50% 50%,#000 0%,#000 56%,transparent 92%);
                 mask-image:radial-gradient(66% 64% at 50% 50%,#000 0%,#000 56%,transparent 92%)}
-  /* 印と棚は同じ形の兄弟。丸い点＝印、角のある紙片＝棚（v13の作法を引き継ぐ） */
+  /* ── 印と棚は、別々の絵にする（2026-07-27）────────────────────────────
+     v14までは「同じ形の兄弟」で、違いは7pxの点が丸か角かだけだった。その大きさでは
+     円と角丸四角は見分けられず、「灯をともす（一度きり・外せない・部屋が明るくなる）」と
+     「棚にとっておく（いつでも外せる・自分だけのもの）」という、まるで重さの違う行いが
+     同じ軽さで並んでいた——実際に「印と棚の違いが分からない」と言われた。
+     灯＝外へにじむ光／棚＝紙片が棚板へ降りて収まる。押した時の変化の向きも逆にする。 */
   .hold-act{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
             background:none;border:none;padding:11px 2px;font-family:inherit;
             font-size:var(--t-meta);letter-spacing:0.16em;color:var(--ink-2);
             white-space:nowrap;transition:color .22s var(--ease),opacity .22s var(--ease)}
   .hold-act:hover{color:var(--ink-1)}
   .hold-act:active{opacity:.62}
-  .hold-act .dot{width:7px;height:7px;border:1px solid var(--thread);background:transparent;
-                 border-radius:50%;transition:background .32s var(--ease)}
-  .hold-act.keep .dot{border-radius:1px}
   .hold-act.on{color:var(--ink-1)}
-  .hold-act.on .dot{background:var(--thread)}
+  /* 「近いことば」は別の場所へ行く行い。この語への二つの行いとは罫で分ける */
+  .hold-sep{height:1px;background:var(--rule-faint);margin:6px 0 2px}
+  .hold-act.sub{color:var(--ink-3)}
+
+  /* ── 灯と棚の絵。宙でも読む柱でも辿りでも同じ姿（Apple §16 familiarity）──
+     16px枠なのは、7pxでは形の違いが目に入らないため。
+     灯り／収まりの合図は **その行自身の .on** だけを見る。この世界では .on を
+     「面がひらいている」意味でも使う（.read.on / .trace.on / .hold.on）ので、
+     子孫セレクタ（.on .ic-…）にすると、柱をひらいただけで両方灯って見える。 */
+  .ic{position:relative;width:16px;height:16px;flex:0 0 16px}
+  .ic-lamp .c{position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;
+              border:1px solid var(--thread);border-radius:50%;background:transparent;
+              transition:background .42s var(--ease),box-shadow .42s var(--ease)}
+  .ic-lamp .g{position:absolute;inset:-2px;border-radius:50%;pointer-events:none;
+              background:radial-gradient(50% 50% at 50% 50%,rgba(179,143,111,.62),rgba(179,143,111,0) 72%);
+              opacity:0;transform:scale(.45);
+              transition:opacity .5s var(--ease),transform .5s var(--ease)}
+  :is(.hold-act,.like-mark,.lit-now).on .ic-lamp .c{
+              background:var(--thread);box-shadow:0 0 6px rgba(179,143,111,.7)}
+  :is(.hold-act,.like-mark,.lit-now).on .ic-lamp .g{opacity:1;transform:scale(1)}
+  .ic-shelf .b{position:absolute;left:1px;right:1px;bottom:3px;height:1px;background:var(--rule-act)}
+  .ic-shelf .p{position:absolute;left:4.5px;bottom:7.5px;width:7px;height:8px;
+               border:1px solid var(--thread);background:transparent;
+               transition:bottom .38s var(--ease),background .38s var(--ease)}
+  :is(.hold-act,.like-mark,.lit-now).on .ic-shelf .p{bottom:4px;background:var(--thread)}
+  /* 灯ったあとはボタンをやめ、「灯った証」の一行になる。
+     二度は押せないことを、注意書きではなく姿で言う（宙v1 §4.1 印は外せない） */
+  .lit-now{display:flex;align-items:center;gap:10px;min-height:var(--touch);
+           padding:11px 2px;font-size:var(--t-meta);letter-spacing:0.16em;color:var(--ink-2)}
+  /* 再会の一行は文になるので、折り返して読ませる（文節で切る＝日本語の作法） */
+  .lit-old{align-items:flex-start;max-width:17em;line-height:2;color:var(--ink-3);
+           word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .lit-old .ic{margin-top:5px}
   .hold-note{margin:0;padding:4px 2px 0;max-width:17em;font-size:11.5px;line-height:2;
              letter-spacing:0.1em;color:var(--ink-3);
              word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .hold-note a{display:inline-block;min-height:36px;padding:9px 2px 0}
   .hold-note a{color:var(--thread);text-decoration:underline;text-underline-offset:3px}
   @media (prefers-reduced-motion: reduce){
+    .ic-lamp .g{transition:opacity .2s ease;transform:none}
+    :is(.hold-act,.like-mark,.lit-now).on .ic-lamp .g{transform:none}
+    .ic-shelf .p{transition:background .2s ease}
     .hold{transition:opacity .2s ease;scale:1}
     .drift{transition:opacity 1.4s ease;filter:none;scale:1}
     .drift.held{scale:1}
@@ -212,6 +252,27 @@
            word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .whisper.on{opacity:1}
   .whisper.top{z-index:62}
+  /* ── 透かし（2026-07-27）────────────────────────────────────────
+     v14まで、この宙の文字はぜんぶ .whisper 一本で出していた——「触れてみてください」
+     という手引きも、「まだ静かです」という場の様子も、「届きませんでした」という
+     知らせも、同じ中央・同じ濃さで。結果、手引きが漂うことばの上に同じ重さで載って
+     読み合ってしまう（利用者から「説明書きが他のと被る」と言われた）。
+     手引きと場の様子は“紙に漉き込まれた透かし”にして、ことばの後ろへ沈める。
+     ・ことば(.drift)より後ろ（z-index を下げる）＝上に載らない
+     ・薄く・大きく・字間を広く＝読もうとすれば読めるが、視線を奪わない
+     ・影を持たない（影は「前に在るもの」の合図。透かしは紙の中にある） */
+  .wmark{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+         z-index:2;max-width:min(80vw,24em);text-align:center;
+         font-size:calc(var(--t-body) + 3px);line-height:2.6;letter-spacing:.42em;
+         text-indent:.42em;                 /* 字間の分だけ右に寄るのを戻す */
+         /* 濃さは四段の下限（--ink-4）を割らない。透かしに見えるのは、薄さではなく
+            「後ろに在る・影を持たない・字間が広い」から——ここを .16 などに落とすと
+            読めない手引きになり、宙で唯一「触れられる」ことを伝える一行が消える。 */
+         color:var(--ink-4);text-shadow:none;
+         opacity:0;transition:opacity 1.6s var(--ease);pointer-events:none;
+         word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .wmark.on{opacity:1}
+  @media (prefers-reduced-motion: reduce){ .wmark{transition:opacity .3s ease} }
   /* 書いている最中の筆先。縦書きの時は横棒に倒す（棚のtrace-caretと同じ作法） */
   .tcaret{display:inline-block;width:2px;height:1.05em;background:currentColor;margin-left:1px;
           vertical-align:-0.16em;opacity:.75;animation:tblink .9s steps(1) infinite}
@@ -324,11 +385,23 @@
   /* 書く柱が立っている間は、下の「放つ」は退く。
      柱の背景が半透明なので、放つ／宙 へ 放 つ が二つ並んで見えていた（v12.1） */
   .cast-btn.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
-  /* 部屋の外（トップ）からは放てない。放つのは必ず部屋に入ってから（B-8）。
-     ランディングの説明も、部屋を選んでいるあいだは引っこめる。 */
-  body:not(.in-room) .cast-btn{display:none}
+  /* 2026-07-27：部屋の外からも放てるようにした（B-8 の「必ず部屋に入ってから」を解く）。
+     理由は順序の矛盾——説明は「行き先を決めずにことばを放つ場所」と言うのに、実装は
+     書く前に14部屋から行き先を決めさせていた。「なんのことを書くか選ぶところから
+     判断しなきゃいけない」と言われたのはこれ。**書いてから、置き場所をえらぶ**へ直した。
+     ことばが必ずどこかの部屋に属することは変わらない（選ぶのが後になっただけ）。 */
   /* アーカイブの部屋（旧いことばの置き場）には、もう新しいことばを放てない */
   body.in-room-archived .cast-btn{display:none}
+  /* 置き場所の札。部屋の名前は「分類」ではなく置き場所なので、選択肢の列ではなく
+     名前が並んでいるだけの姿にする（丸い錠剤やセグメントは作らない・v3.10の作法）。 */
+  .where{display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:center;max-width:22em}
+  .where button{background:none;border:none;padding:9px 2px;min-height:var(--touch);
+                font-family:inherit;font-size:var(--t-meta);letter-spacing:0.14em;
+                color:var(--ink-4);border-bottom:1px solid transparent;
+                transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .where button:hover{color:var(--ink-2)}
+  .where button:active{opacity:.62}
+  .where button.on{color:var(--ink-1);border-bottom-color:var(--thread)}
   body.in-room .lp,body.in-room .about{display:none}
 
   /* 宙の中で書く：モーダルではなく、宙が少し暗くなり書く柱が立つ。
@@ -392,6 +465,18 @@
               var(--rule-faint) calc(var(--cw) - 1px),var(--rule-faint) var(--cw));
         /* ネイティブカーソルは縦書きだと字面まで縮むので隠し、.vcaret を重ねる */
         caret-color:transparent}
+  /* 横書きで書く（2026-07-27）。縦書きだと、スマホのIME変換候補（必ず横に出る）と
+     字の流れが直交して打ちにくい——向きは書く人が決める。罫は横罫に倒し、
+     自前カーソルも縦棒に戻す（ネイティブのカーソルは横書きなら素直に出る）。 */
+  .cast .ctext.h{writing-mode:horizontal-tb;-webkit-writing-mode:horizontal-tb;
+        width:calc(var(--cw) * 4 + 6em);height:auto;min-height:calc(var(--cw) * 4);
+        line-height:2.2;caret-color:var(--thread);
+        background-image:repeating-linear-gradient(180deg,
+              transparent,transparent calc(2.2em - 1px),
+              var(--rule-faint) calc(2.2em - 1px),var(--rule-faint) 2.2em)}
+  .cast-dir{align-self:center;padding:8px 4px;min-height:var(--touch);font-size:var(--t-mono);
+            letter-spacing:var(--tr-mono);color:var(--ink-4);border-bottom-color:var(--rule-faint)}
+  .cast-dir:hover{color:var(--ink-2)}
   /* :empty が成立するのは中身が本当に空（<br>も残っていない）時だけ。JS側で保証する */
   .cast .ctext:empty:before{content:attr(data-placeholder);color:var(--ink-4)}
   /* 自前カーソル：列幅いっぱい（＝横書きの行と同じ背丈）の横棒。
@@ -446,7 +531,14 @@
             transform:translate(-50%,-50%);border:1.5px solid var(--chalk);
             background:transparent;pointer-events:none;
             box-shadow:0 0 10px rgba(0,0,0,.6);transition:background .18s var(--ease)}
-  .cast-row{display:flex;gap:var(--s4);align-items:center}
+  /* 出口は sticky（v4 の作法：スクロールする面の出口は、必ず指の届くところに残す）。
+     2026-07-27 に「置き場所をえらぶ」と「向きの切り替え」が加わって柱が伸び、
+     背の低い画面では「放つ」が折り返しの下へ落ちた（812pxの端末で実測 964px＝画面外）。
+     柱を縮めるのではなく、放つ／閉じるだけを面の底へ貼り付けて always reachable にする。 */
+  .cast-row{position:sticky;bottom:0;z-index:1;
+            display:flex;gap:var(--s4);align-items:center;
+            padding:var(--s2) var(--s3);margin:0 calc(var(--s3) * -1);
+            background:linear-gradient(180deg,rgba(8,8,13,0),rgba(8,8,13,.86) 38%,rgba(8,8,13,.94))}
   .cast-send{border-bottom-color:var(--rule-act);color:var(--ink-1);
              font-size:14.5px;letter-spacing:0.4em;min-height:var(--touch);
              padding:12px 10px 13px 14px}
@@ -483,15 +575,13 @@
              transition:color .22s var(--ease),opacity .22s var(--ease)}
   .like-mark:hover{color:var(--ink-1)}
   .like-mark:active{opacity:.62}
-  .like-mark .dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--thread);
-                  background:transparent;transition:background .32s var(--ease)}
   .like-mark.on{color:var(--ink-1)}
-  .like-mark.on .dot{background:var(--thread)}
+  /* 灯は一度きり。灯ったあとは押せる姿をやめる（宙v1 §4.1・2026-07-27） */
+  .like-mark:disabled{cursor:default;opacity:1}
+  .like-mark:disabled:hover{color:var(--ink-2)}
   /* display指定があると[hidden]のUA既定を上書きしてしまうので明示する
      （印は他人のことばにだけ。自分の帰ってきたことばには出さない） */
   .like-mark[hidden]{display:none}
-  /* 棚のしるしは丸くしない：紙片（付箋）を挟む行為なので、角のある小さな四角（v13） */
-  .keep-mark .dot{border-radius:1px}
 
   /* ── 宙のすみで待っている、だれかのことば（棚を畳んだので宙側へ・v11.1）──
      数も、だれのものかも言わない。ただ「降りてきた」ことだけが灯る。 */
@@ -967,6 +1057,9 @@
   <div class="hold" id="hold" role="group" aria-label="このことばに、する" hidden></div>
   <!-- 宙が空っぽの時・遠い時のひとこと -->
   <p class="whisper" id="whisper" aria-live="polite"></p>
+  {# 透かし＝手引きと場の様子。知らせ（.whisper）とは層も濃さも別にする。
+     読み上げには出す（薄いのは目に対してだけで、聞く人には同じ一行） #}
+  <p class="wmark" id="wmark" aria-live="polite"></p>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
   <div class="lantern" id="lantern" aria-hidden="true"></div>
   <!-- 相談窓口の常時導線（宙v1 §12）：宙のすみに、いつでもある -->
@@ -1019,8 +1112,14 @@
   <div class="cast" id="castPane" role="dialog" aria-modal="true"
        aria-label="tayori-たより- へ、ことばを放つ" aria-hidden="true">
     <div class="cast-inner">
+      {# 2026-07-27：プレースホルダから「詩」を外した。理念は「何気ない言葉が、だれかの
+         意味になる」なのに、書き出しの一行目で詩を先に挙げていた＝装置の側が
+         「詩を書け」と言っていた（利用者から「みんな文豪みたいになっている」と言われた）。 #}
       <div id="castText" class="ctext" contenteditable="true" role="textbox" aria-multiline="false"
-           data-placeholder="言葉を置く。詩でも、断片的なことでも。" aria-label="tayori-たより- へ放つことば"></div>
+           data-placeholder="いま思っていることを、ひとこと。" aria-label="tayori-たより- へ放つことば"></div>
+      {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
+         向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。 #}
+      <button class="cast-dir ruled" id="castDir" type="button" aria-pressed="false">横書きにする</button>
       <!-- 縦書き用の自前カーソル（ネイティブは字面まで縮み、位置も定まらないため） -->
       <div class="vcaret" id="castCaret"></div>
       <div class="cast-count" id="castCountBox"><span id="castCount">0</span> / 80</div>
@@ -1041,12 +1140,13 @@
              aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
         <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
       </div>
+      {# 置き場所（2026-07-27）：書いたあとに選ぶ。書く前に決めさせない——
+         「何を書くか」を分類から逆算させると、書きたかったことが痩せる。
+         部屋の中から開いた時はそこが選ばれた状態で立つので、今までの手つきは変わらない。 #}
+      <p class="picker-lead" id="whereLead">どこに置きますか。</p>
+      <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
       <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
            付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
-      <div class="cast-row">
-        <button class="cast-send ruled" id="castSend" type="button">放つ</button>
-        <button class="cast-close ruled" id="castClose" type="button">閉じる</button>
-      </div>
       <!-- 著作権はUIに書く（v2 §13）：規約ではなく、書く手の目に入る場所に、常時一行。
            歌詞は一行でもアウト。ここは引用を集める場所ではない -->
       <p class="cast-own">ここに置けるのは、あなたのことばだけです。</p>
@@ -1054,6 +1154,14 @@
            書き終わってからの告知は不可＝送信ボタンの脇や確認画面には置かない -->
       <p class="cast-note">匿名のまま漂い、いつか知らない誰かのもとへ。<br>
         打った過程も——消した文字も、ためらいの間も——そのまま流れます。</p>
+      {# 2026-07-27：出口を柱のいちばん下へ移した。sticky で底に貼るので、後ろに
+         何か置くとその下敷きになる——告知（打鍵が流れること・著作権）は必ず読める
+         位置に要るので、出口より前に出した。「送信ボタンの脇には置かない」という
+         v2追補 §1 の線も、下ではなく上に出すことで守られる。 #}
+      <div class="cast-row">
+        <button class="cast-send ruled" id="castSend" type="button">放つ</button>
+        <button class="cast-close ruled" id="castClose" type="button">閉じる</button>
+      </div>
     </div>
   </div>
   <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
@@ -1061,12 +1169,14 @@
       <div class="read-body" id="readBody" tabindex="-1"></div>
       <p class="read-note" id="readNote"></p>
       <button class="like-mark" id="readLike" type="button" aria-pressed="false" hidden>
-        <span class="dot" aria-hidden="true"></span><span class="txt">そっと、しるしをつける</span>
+        <span class="ic ic-lamp" aria-hidden="true"><span class="g"></span><span class="c"></span></span
+        ><span class="txt">灯を、ともす</span>
       </button>
-      <!-- 印とは別の行為（v13 §9）。印＝その場のしるし／棚＝手元に残すこと。
+      <!-- 印とは別の行為（v13 §9）。印＝その場に灯を残すこと／棚＝手元に持ち帰ること。
            残せるのは、いまこの柱で開いたことばだけ（降ってきた他人のも、帰ってきた自分のも） -->
       <button class="like-mark keep-mark" id="readKeep" type="button" aria-pressed="false" hidden>
-        <span class="dot" aria-hidden="true"></span><span class="txt">自分の棚に、とっておく</span>
+        <span class="ic ic-shelf" aria-hidden="true"><span class="b"></span><span class="p"></span></span
+        ><span class="txt">棚に、とっておく</span>
       </button>
       <!-- 残した、その場で貼る付箋（v2.2 §3）。中身は JS が入れる -->
       <div id="readFusen"></div>
@@ -1675,7 +1785,7 @@
     roomDrop.classList.add('off');
     roomLayer.classList.remove('off');
     document.body.classList.remove('in-room','in-room-archived');
-    whisper('');
+    whisper('');watermark('');   // 部屋を出たら、その部屋の透かしも畳む
     pool=[];shown.clear();live.clear();liveText.clear();seeded=false;
     [...liveEls].forEach(el=>{el.remove();liveEls.delete(el);});
     if(push) history.pushState({},'','/mood');
@@ -1902,8 +2012,9 @@
   let seeded=false;
   /* 宙のひとこと（v14）：闇なので「読み込み中」は出さない。
      何も漂っていない時と、宙に届かなかった時だけ、そっと一行置く。 */
-  const whisperEl=document.getElementById('whisper');
-  let whisperT=0;
+  const whisperEl=document.getElementById('whisper'),
+        wmarkEl=document.getElementById('wmark');
+  let whisperT=0, wmarkT=0;
   /* hold（消えるまでの秒数）を渡した声＝一時の知らせ。柱の中で起きたことも伝わるよう
      前面に出す。渡さない声＝宙の佇まいなので、柱の後ろに沈めたままにする。 */
   function whisper(html,hold){
@@ -1913,6 +2024,16 @@
     whisperEl.classList.toggle('top',!!hold);
     whisperEl.classList.add('on');
     if(hold)whisperT=setTimeout(()=>whisperEl.classList.remove('on','top'),hold);
+  }
+  /* 透かし。手引きと場の様子だけがここを通る（知らせは whisper のまま）。
+     hold を渡さなければ消えない——透かしは「知らせ」ではなく紙の地なので、
+     秒数で追い立てず、用が済んだ時（触れた・ことばが漂い出した）に引く。 */
+  function watermark(html,hold){
+    clearTimeout(wmarkT);
+    if(!html){wmarkEl.classList.remove('on');return;}
+    wmarkEl.innerHTML=html;
+    wmarkEl.classList.add('on');
+    if(hold)wmarkT=setTimeout(()=>wmarkEl.classList.remove('on'),hold);
   }
   function fetchWords(){
     if(!inRoom())return;      // 部屋の外ではことばを取りにいかない（B-8）
@@ -1925,12 +2046,13 @@
         if(!pool.length){
           // 静かな部屋は、静かなまま見せる（B-6）。空でもエラーにしない・他の部屋から借りない。
           // 放てない部屋（アーカイブ）で「放ってみてください」とは言わない。
-          whisper(ROOM.archived
+          // 場の様子は透かしで（知らせではないので、秒数で消さない）
+          watermark(ROOM.archived
             ? 'ここは、<wbr>名前が<wbr>つく<wbr>前に<wbr>放たれた<wbr>ことばです。<br>いまは、<wbr>静かです。'
             : (LOGGED_IN
                ? 'ここは、<wbr>まだ<wbr>静かです。<br>最初の<wbr>ひとことを、<wbr>放って<wbr>みてください。'
                : 'ここは、<wbr>まだ<wbr>静かです。'));
-        }else if(!liveEls.size){ whisper(''); }
+        }else if(!liveEls.size){ whisper('');watermark(''); }
         // ことばが揃った瞬間から書きはじめる（暗闇のまま数秒待たせない）
         if(!seeded&&pool.length){
           seeded=true;[0,1100,2500,4200,6200].forEach(ms=>setTimeout(driftOne,ms));
@@ -1999,7 +2121,7 @@
     // 触れられることを、要素そのものに持たせる（読み上げも辿れる）
     el.setAttribute('role','button');
     el.setAttribute('tabindex','0');
-    el.setAttribute('aria-label','tayori-たより- のことば：'+poem+'。ひらくと、しるしをつける・自分の棚にとっておく ができます。');
+    el.setAttribute('aria-label','tayori-たより- のことば：'+poem+'。ひらくと、灯をともす・棚にとっておく ができます。');
     el._poem=poem; el._sid=id||null; el._color=color||null;
     el._life=life; el._born=performance.now();
     el.addEventListener('click',()=>catchWord(el));
@@ -2171,9 +2293,11 @@
 
   /* ══ ことばを受け止める（v14）════════════════════════════════
      漂っていることばに触れると、そのことばだけが漂うのをやめて手のうちに残る。
-     隣に二つの行いが立ち上がる：しるしをつける／自分の棚にとっておく。
-     ——2026-07-27に「印を結ぶ／手元に、残す」から改名した。何が起きるのかが
-     初見で分からず、押す前に意味を推測させていた（Apple §16.6 concise & clear）。
+     隣に二つの行いが立ち上がる：灯をともす／棚にとっておく。
+     ——2026-07-27に「印を結ぶ／手元に、残す」→「しるしをつける／棚にとっておく」→
+     「灯を、ともす／棚に、とっておく」と直した。文言だけ変えても区別はつかず、
+     決め手は姿のほうだった：灯（外へにじむ光・一度きり）と棚（紙片が棚板へ降りる・外せる）
+     という別々の絵にし、灯は押した瞬間にボタンをやめて証の一行になる。
      ・止め方は「いまの見えている位置から」（Apple §3：目標値ではなく現在値から始める）。
        matrix を読んで transition を切り、その値で固定する＝掴んだ瞬間に飛ばない。
      ・放すと、残りの寿命でまた漂いはじめる（中断できて、戻せる）。
@@ -2181,8 +2305,22 @@
      ・未登録の人にも受け止めさせる。印と棚は要るが、それは静かに知らせるだけ。 */
   const holdBox=document.getElementById('hold');
   let held=null;                       // いま受け止めていることば
-  // marks=しるしをつけた公開id / kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
+  // marks=灯をともした公開id / kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
   const marks=new Set(), kept=new Set();
+  /* 灯と棚の絵は、宙・読む柱・辿りの三か所で同じものを使う。
+     ここを唯一の出どころにする（三度書くと、直すとき一つ書き漏らす）。 */
+  const IC_LAMP='<span class="ic ic-lamp" aria-hidden="true"><span class="g"></span><span class="c"></span></span>',
+        IC_SHELF='<span class="ic ic-shelf" aria-hidden="true"><span class="b"></span><span class="p"></span></span>';
+  const T_LAMP_OFF='灯を、ともす', T_LAMP_ON='灯が、ともりました',
+        T_KEEP_OFF='棚に、とっておく', T_KEEP_ON='棚から、出す';
+  /* 灯ったあとの「証」。ボタンではないので、押せる姿を持たない。
+     渡すのは自前の文言だけ（利用者の本文は通さない）＝文節の <wbr> を活かすため innerHTML。 */
+  function litRow(html){
+    const p=document.createElement('p');
+    p.className='hold-lit lit-now on';
+    p.innerHTML=IC_LAMP+'<span class="txt">'+html+'</span>';
+    return p;
+  }
 
   /* v4：止め方は「その一歩を進めない」だけ（hold）。位置は毎フレーム rAF が書いているので、
      掴んだ瞬間の値がそのまま現在値＝どこにも飛ばない（Apple §3）。
@@ -2202,7 +2340,8 @@
     if(everTouched()||held)return;
     setTimeout(()=>{
       if(everTouched()||held||!liveEls.size)return;   // その間に触れていたら、もう出さない
-      whisper('ことばに、<wbr>触れてみてください。',7000);
+      // 漂うことばの上に載せない＝透かしとして、ことばの後ろに沈める
+      watermark('ことばに、<wbr>触れてみてください。',12000);
     },2600);   // 一つ目が書き上がるころに、そっと
   }
   function markTouched(){ try{ localStorage.setItem(TOUCH_KEY,'1'); }catch(_){} }
@@ -2212,7 +2351,7 @@
     if(held) release();
     held=el;
     markTouched();        // これ以後、手引きは出さない
-    whisper('');          // 手引きが出ていたら、触れた時点で引く
+    whisper('');watermark('');   // 手引き・場の様子は、触れた時点で引く
     noteTouch();          // 受け止めた＝触れた。灯にだけ気配が走る（宙v1 §4.2）
     disarmDrift(el);
     el.classList.remove('out');
@@ -2255,23 +2394,29 @@
   function renderHold(){
     if(!held) return;
     if(!LOGGED_IN){
-      holdBox.innerHTML='<p class="hold-note">このことばに<wbr>しるしを<wbr>つけたり、<wbr>'+
+      holdBox.innerHTML='<p class="hold-note">このことばに<wbr>灯を<wbr>ともしたり、<wbr>'+
         '自分の<wbr>棚に<wbr>とっておいたり<wbr>できます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
       holdExtras();   // 辿るだけは、はじめる前のひとにも開いておく
       return;
     }
     const m=marks.has(held._sid), s=kept.has('drift:'+held._sid),
-          old=m&&!justMarked.has(held._sid);   // いま結んだのではなく、いつか結んでいた
+          old=m&&!justMarked.has(held._sid);   // いま灯したのではなく、いつか灯していた
+    /* 宙v1 §4.1: 灯は外せない。だから灯ったあとはボタンを置かず、証の一行だけを置く
+       （押せる姿のまま残すと「もう一度押せる」に見え、外せると誤解させる）。 */
     holdBox.innerHTML=
-      (old
-        /* 宙v1 §4.1: 印は外せない。数ヶ月後の偶然の再会で、自分の灯だけが残っている */
-        ? '<p class="hold-lit">このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。</p>'
-        : '<button type="button" class="hold-act mark'+(m?' on':'')+'" aria-pressed="'+(m?'true':'false')+'">'+
-            '<span class="dot" aria-hidden="true"></span><span class="txt">'+
-            (m?'しるしを、つけました':'そっと、しるしをつける')+'</span></button>')+
+      (m ? '' :
+        '<button type="button" class="hold-act mark" aria-pressed="false">'+
+          IC_LAMP+'<span class="txt">'+T_LAMP_OFF+'</span></button>')+
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
-        '<span class="dot" aria-hidden="true"></span><span class="txt">'+
-        (s?'棚に、とっておきました':'自分の棚に、とっておく')+'</span></button>';
+        IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>';
+    if(m){
+      /* 数ヶ月後の偶然の再会では、いつ灯したかではなく「もう灯っている」ことだけを伝える */
+      const lit=old
+        ? litRow('このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。')
+        : litRow(T_LAMP_ON);
+      if(old)lit.classList.add('lit-old');
+      holdBox.insertBefore(lit,holdBox.firstChild);
+    }
     const mb=holdBox.querySelector('.mark');
     if(mb)mb.addEventListener('click',()=>markWord(held));
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
@@ -2283,8 +2428,12 @@
   function holdExtras(){
     if(!held||!held._sid)return;
     const id=held._sid;
+    /* 灯と棚は「このことばへの行い」、辿るは「別の場所へ行く行い」。
+       同じ列に同じ姿で三つ並ぶと、どれも同じ重さに見える——罫を一本引いて分ける。 */
+    const hr=document.createElement('div');hr.className='hold-sep';
+    holdBox.appendChild(hr);
     const tb=document.createElement('button');
-    tb.type='button';tb.className='hold-act';
+    tb.type='button';tb.className='hold-act sub';
     tb.innerHTML='<span class="txt">この空気に、近いことば</span>';
     tb.addEventListener('click',()=>openTrace('near',id,'この空気に、近いことば'));
     holdBox.appendChild(tb);
@@ -2302,14 +2451,17 @@
   async function markWord(el){
     if(!el||!el._sid||marks.has(el._sid)) return;
     marks.add(el._sid);justMarked.add(el._sid);
-    paintAct('.mark',true,'しるしを、つけました','そっと、しるしをつける');
+    /* 押した瞬間にボタンを証へ入れ替える（灯は外せない＝もう押せないことを姿で言う）。
+       付箋が開いていることがあるので holdBox ごと描き直さず、この一行だけを差し替える。 */
+    const mb=holdBox.querySelector('.mark'), lit=litRow(T_LAMP_ON);
+    if(mb)mb.replaceWith(lit);
     try{
       const r=await fetch('/api/sky/word/'+el._sid+'/mark',{method:'POST',
         headers:{'Content-Type':'application/json'},body:'{}'});
       if(!r.ok)throw new Error('mark');
     }catch(e){
       marks.delete(el._sid);justMarked.delete(el._sid);
-      paintAct('.mark',false,'しるしを、つけました','そっと、しるしをつける');
+      if(mb&&lit.isConnected)lit.replaceWith(mb);   // 届かなかったら、押せる姿へ戻す
       whisper('いま、<wbr>tayori-たより- に<wbr>手が<wbr>届きませんでした。',6000);
     }
   }
@@ -2317,7 +2469,7 @@
     if(!el||!el._sid) return;
     const key='drift:'+el._sid, on=!kept.has(key);
     if(on)kept.add(key); else kept.delete(key);
-    paintAct('.keep',on,'棚に、とっておきました','自分の棚に、とっておく');
+    paintAct('.keep',on,T_KEEP_ON,T_KEEP_OFF);
     if(!on)dropPad(holdBox);
     try{
       const r=await fetch('/api/shelf',{method:'POST',
@@ -2330,7 +2482,7 @@
     }catch(e){
       dropPad(holdBox);
       if(on)kept.delete(key); else kept.add(key);
-      paintAct('.keep',!on,'棚に、とっておきました','自分の棚に、とっておく');
+      paintAct('.keep',!on,T_KEEP_ON,T_KEEP_OFF);
       whisper('いま、<wbr>棚に<wbr>届きませんでした。',6000);
     }
   }
@@ -2514,24 +2666,26 @@
     tActs.innerHTML='';
     if(!LOGGED_IN||w.mine)return;
     if(marks.has(w.id)){
-      const p=document.createElement('p');p.className='hold-lit';
-      p.innerHTML='このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。';
+      const p=litRow('このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。');
+      p.classList.add('lit-old');
       tActs.appendChild(p);
     }else{
       const mb=document.createElement('button');
       mb.type='button';mb.className='hold-act mark';
-      mb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt">そっと、しるしをつける</span>';
+      mb.innerHTML=IC_LAMP+'<span class="txt">'+T_LAMP_OFF+'</span>';
       mb.addEventListener('click',async()=>{
         if(marks.has(w.id))return;
         marks.add(w.id);
-        mb.classList.add('on');mb.querySelector('.txt').textContent='しるしを、つけました';
+        // 灯は外せない。押した瞬間にボタンをやめ、証の一行へ入れ替える
+        const lit=litRow(T_LAMP_ON);
+        mb.replaceWith(lit);
         try{
           const r=await fetch('/api/sky/word/'+w.id+'/mark',{method:'POST',
             headers:{'Content-Type':'application/json'},body:'{}'});
           if(!r.ok)throw new Error('mark');
         }catch(e){
           marks.delete(w.id);
-          mb.classList.remove('on');mb.querySelector('.txt').textContent='そっと、しるしをつける';
+          if(lit.isConnected)lit.replaceWith(mb);
         }
       });
       tActs.appendChild(mb);
@@ -2541,9 +2695,9 @@
     const paintKeep=on=>{
       kb.classList.toggle('on',on);
       kb.setAttribute('aria-pressed',on?'true':'false');
-      kb.querySelector('.txt').textContent=on?'棚に、とっておきました':'自分の棚に、とっておく';
+      kb.querySelector('.txt').textContent=on?T_KEEP_ON:T_KEEP_OFF;
     };
-    kb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt"></span>';
+    kb.innerHTML=IC_SHELF+'<span class="txt"></span>';
     paintKeep(kept.has('drift:'+w.id));
     kb.addEventListener('click',async()=>{
       const key='drift:'+w.id,on=!kept.has(key);
@@ -2757,7 +2911,8 @@
      筆先が止まったままになるのを検証で踏んだ。測るだけで本文も選択も触らないので、
      二度描いても副作用はない＝素直に毎回描くほうが安全。 */
   function drawCaret(){
-    if(document.activeElement!==ta){vcaret.style.display='none';return;}
+    // 横書きの間はネイティブのカーソルが素直に出るので、自前の横棒は出さない
+    if(horiz||document.activeElement!==ta){vcaret.style.display='none';return;}
     const cs=getComputedStyle(ta);
     const cw=parseFloat(cs.lineHeight)||36;                     // 列幅＝カーソルの長さ
     const box=ta.getBoundingClientRect(), origin=ta.parentNode.getBoundingClientRect();
@@ -2852,7 +3007,8 @@
     cnt.textContent=n;
     cntBox.classList.toggle('near',n>=68&&n<80);
     cntBox.classList.toggle('full',n>=80);
-    send.disabled=!ta.textContent.trim();
+    // ことばがあり、置き場所も決まって初めて放てる（サーバも部屋を必須にしている）
+    send.disabled=!ta.textContent.trim()||!castRoom;
   }
   /* 打鍵イベント（TypeTrace／v2追補 §1）。打った過程は——消した文字も含めて——
      そのまま宙に流れる（そのことは書き始める前に .cast-note で明示してある）。
@@ -2894,6 +3050,9 @@
   function open(){release();                          // 受け止めていたことばは、そっと放す
                   pane.classList.add('on');pane.setAttribute('aria-hidden','false');
                   btn.classList.add('away');ta.focus();
+                  // 部屋の中から開いたなら、そこが置き場所。外から開いたなら、まだ決めない
+                  castRoom=(inRoom()&&!ROOM.archived)?ROOM.id:null;
+                  renderWhere();
                   paintCast();
                   requestAnimationFrame(drawCaret);}   // 柱が立った直後から筆先を置く
   function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');
@@ -2922,7 +3081,58 @@
     requestAnimationFrame(()=>n.classList.add('on'));
   }
 
+  /* ── 書く向き（2026-07-27）────────────────────────────────────
+     縦書きは宙の見た目の核だが、**打つあいだ**だけは横に倒せるようにした。
+     スマホのIME変換候補は必ず横に出るので、縦の字の流れと直交して打ちにくい
+     （「入力の画面が縦方向でとても入力しづらい」と言われた）。
+     倒すのは入力欄だけ——漂う姿も読む柱も縦書きのままで、放たれた後は変わらない。
+     選んだ向きは端末に覚えさせる（毎回選ばせない）。 */
+  const dirBtn=document.getElementById('castDir'), DIR_KEY='tayori.castdir';
+  let horiz=false;
+  try{ horiz=localStorage.getItem(DIR_KEY)==='h'; }catch(_){}
+  function paintDir(){
+    ta.classList.toggle('h',horiz);
+    dirBtn.textContent=horiz?'縦書きにする':'横書きにする';
+    dirBtn.setAttribute('aria-pressed',horiz?'true':'false');
+    // 自前カーソルは縦書きのための細工。横書きではネイティブに返す
+    vcaret.style.display='none';
+    if(!horiz)requestAnimationFrame(drawCaret);
+  }
+  dirBtn.addEventListener('click',()=>{
+    horiz=!horiz;
+    try{ localStorage.setItem(DIR_KEY,horiz?'h':'v'); }catch(_){}
+    paintDir();ta.focus();
+  });
+  paintDir();   // 端末が覚えている向きで立ち上げる（毎回選ばせない）
+
   const castTitle=document.getElementById('castTitle');
+
+  /* ── 置き場所をえらぶ（2026-07-27）──────────────────────────────
+     書いたあとに選ぶ。部屋の中から開いたなら、そこが選ばれた状態で立つ
+     （今までどおり、何も選ばずに放てる）。アーカイブ部屋は置けないので出さない。 */
+  const whereBox=document.getElementById('castWhere'),
+        whereLead=document.getElementById('whereLead');
+  let castRoom=null;
+  function paintWhere(){
+    whereBox.querySelectorAll('button').forEach(b=>{
+      const on=String(b.dataset.id)===String(castRoom);
+      b.classList.toggle('on',on);
+      b.setAttribute('aria-checked',on?'true':'false');
+    });
+    paintCast();      // 置き場所が決まって初めて放てる＝押せる姿も連動させる
+  }
+  function renderWhere(){
+    whereBox.innerHTML='';
+    (ROOMS||[]).filter(r=>!r.archived).forEach(r=>{
+      const b=document.createElement('button');
+      b.type='button';b.setAttribute('role','radio');
+      b.dataset.id=r.id;b.textContent=r.name;
+      b.addEventListener('click',()=>{castRoom=r.id;paintWhere();});
+      whereBox.appendChild(b);
+    });
+    whereLead.textContent=castRoom?'どこに置きますか。':'どこに置きますか。まだ決めていません。';
+    paintWhere();
+  }
 
   send.addEventListener('click',async()=>{
     const poem=ta.textContent.replace(/\s+$/,'');
@@ -2936,10 +3146,17 @@
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({mode:'sky',poem:poem,title:title,seal_color:color,
                              vertical:1,trace:steps,
-                             room:inRoom()?ROOM.id:null})});
+                             room:castRoom})});
       const d=await res.json().catch(()=>null);
       if(res.ok&&d&&d.ok){
         shut();
+        /* 部屋の外から放ったなら、置いた部屋へそのまま降りる。
+           そうしないと、放ったことばが立ち上がる場所に自分が居ないことになる
+           （「置いた」のに何も起きないように見える）。 */
+        const dest=(ROOMS||[]).find(r=>String(r.id)===String(castRoom));
+        if(dest&&(!inRoom()||String(ROOM.id)!==String(castRoom))){
+          enterRoom(dest,true);
+        }
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
         ta.textContent='';normalizeEmpty();H=H0;T=T0;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
@@ -2987,9 +3204,11 @@
   function setLike(on,old){
     rl.classList.toggle('on',!!on);
     rl.setAttribute('aria-pressed',on?'true':'false');
+    // 灯ったら押せる姿をやめる（外せないものが押せそうに見えていてはいけない）
+    rl.disabled=!!on;
     rl.querySelector('.txt').textContent=
-      on?(old?'いつかのあなたが、もう灯をともしています':'しるしを、つけました')
-        :'そっと、しるしをつける';
+      on?(old?'いつかのあなたが、もう灯をともしています':T_LAMP_ON)
+        :T_LAMP_OFF;
   }
   rl.addEventListener('click',async()=>{
     if(!readDid||rl.classList.contains('on'))return;
@@ -3011,7 +3230,7 @@
   function setKeep(on){
     rk.classList.toggle('on',!!on);
     rk.setAttribute('aria-pressed',on?'true':'false');
-    rk.querySelector('.txt').textContent=on?'棚に、とっておきました':'自分の棚に、とっておく';
+    rk.querySelector('.txt').textContent=on?T_KEEP_ON:T_KEEP_OFF;
   }
   const readFusen=document.getElementById('readFusen');
   rk.addEventListener('click',async()=>{
