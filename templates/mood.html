@@ -564,7 +564,34 @@
            box-shadow:0 0 16px 4px rgba(222,205,160,.35);
            transition:opacity 2.6s var(--ease,ease)}
   .lantern.on{opacity:.6}
-  @media (prefers-reduced-motion: reduce){ .lantern{transition:opacity 1s ease} }
+  /* 3秒を超える「間」のもうひとつの表現（v2追補 §1）：一度だけの深い呼吸。
+     書き手がそこで長く止まった、ということだけが、時間を使わずに伝わる */
+  .lantern.deep{opacity:.55;animation:lanternDeep 4.2s var(--ease,ease-in-out) 1}
+  @keyframes lanternDeep{0%,100%{transform:scale(1)}42%{transform:scale(1.6)}}
+  @media (prefers-reduced-motion: reduce){ .lantern{transition:opacity 1s ease} .lantern.deep{animation:none} }
+  /* 同じ「間」の、ことば側の表現：インクが滲む。glow は inline の text-shadow が
+     持っているので、ここでは filter だけを動かす（打ち消し合わない） */
+  .nijimi{animation:inkNijimi 2.8s ease-in-out infinite}
+  @keyframes inkNijimi{0%,100%{filter:blur(0)}50%{filter:blur(.7px) brightness(1.12)}}
+  @media (prefers-reduced-motion: reduce){ .nijimi{animation:none} }
+
+  /* ── 天灯の野（v2追補 §3・§4）───────────────────────────
+     漂いの層（z-index:4）の下・部屋の名前（z-index:6）の下。
+     いま（ズーム1）では奥の気配としてかすかに透け、遠ざかるほど野が主役になる。
+     ズームアウト中だけ触れられる（掴んで動かす・天灯に触れる） */
+  .sky-field{position:fixed;inset:0;z-index:3;pointer-events:none}
+  .sky-field.active{pointer-events:auto;cursor:grab;touch-action:none}
+  .sky-field.drag{cursor:grabbing}
+  /* 相談窓口（右端の縦の列）の左隣の列に。重ねない：あれは宙で一番消えてはいけない導線 */
+  .far-btn{position:fixed;right:calc(96px + var(--safe-r,0px));bottom:calc(22px + var(--safe-b));
+           z-index:11;min-height:var(--touch);color:var(--ink-3,var(--ink-2));font-size:12.5px;
+           letter-spacing:0.34em;padding:10px 12px 10px 16px;opacity:.75}
+  .far-btn:hover{opacity:1}
+  /* 遠くを見ているあいだ、漂い・部屋の名前・放つは静かに退く（消えるのではなく、今から離れる） */
+  body.far-view .drift-layer,body.far-view .room-layer,
+  body.far-view .cast-btn,body.far-view .arrivals{opacity:0;pointer-events:none;
+    transition:opacity .9s var(--ease,ease)}
+  .drift-layer,.room-layer,.cast-btn,.arrivals{transition:opacity .9s var(--ease,ease)}
 
   /* ══ 部屋（2026-07-26 B-7）══════════════════════════════════
      トップに漂うのは、ことばではなく部屋の名前。
@@ -838,6 +865,10 @@
       </div>
     </div>
   </div>
+  <!-- 天灯の野（v2追補 §3）：手紙は消えない。小さく・淡く・奥へ遠ざかるだけ。
+       漂いの層（drift-layer）の後ろに、放たれたことば全部が灯として在り続ける。
+       ズームアウト＝過去を見る／ズームイン＝今を見る。参照イメージは九份の天灯 -->
+  <canvas class="sky-field" id="skyField" aria-hidden="true"></canvas>
   <div class="drift-layer" id="driftLayer" aria-label="漂っていることば"></div>
   <!-- 受け止めたことばに添う、二つの行い。中身は JS が入れる -->
   <div class="hold" id="hold" role="group" aria-label="このことばに、する" hidden></div>
@@ -845,6 +876,9 @@
   <p class="whisper" id="whisper" aria-live="polite"></p>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
   <div class="lantern" id="lantern" aria-hidden="true"></div>
+  <!-- 天灯の野への出入り口。ホイール・ピンチでも行き来できるが、入口は目に見える形でも置く -->
+  <button class="far-btn ruled" id="farBtn" type="button" aria-pressed="false"
+          aria-label="遠くの宙を見る（過去のことばの野へ）">とおくへ</button>
   <!-- 相談窓口の常時導線（宙v1 §12）：宙のすみに、いつでもある -->
   <a class="care-link" href="https://www.mhlw.go.jp/mamorouyokokoro/"
      target="_blank" rel="noopener">相談窓口</a>
@@ -915,8 +949,10 @@
       <!-- 著作権はUIに書く（v2 §13）：規約ではなく、書く手の目に入る場所に、常時一行。
            歌詞は一行でもアウト。ここは引用を集める場所ではない -->
       <p class="cast-own">ここに置けるのは、あなたのことばだけです。</p>
+      <!-- 打った過程が流れることは、書き始める前に必ず目に入る場所で言う（v2追補 §1）。
+           書き終わってからの告知は不可＝送信ボタンの脇や確認画面には置かない -->
       <p class="cast-note">放ったことばは、匿名のまま漂い、<br>いつか、知らない誰かのもとへ降ります。<br>あなた自身にも、忘れた頃に。<br>
-        書いている途中の筆致（打ち直しも含む）は、<br>あなたの開封のときの再生のためだけに、いっしょに封じられます。</p>
+        打った過程も、そのまま宙に流れます。<br>消した文字も、ためらいの間も、いっしょに。</p>
     </div>
   </div>
   <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
@@ -1020,7 +1056,7 @@
      （壁にすると、狭い隙間に挟まったものが毎フレーム押し合って震える）。
      v3 の pickSpot は「置く瞬間だけ」これを避けていた。いまは在るあいだ避け続ける。 */
   const TOP_CHROME='header,.room-bar,.about,.arrivals';
-  const LOW_CHROME='.lp,.room-new,.cast-btn,.care-link';
+  const LOW_CHROME='.lp,.room-new,.cast-btn,.care-link,.far-btn';
   function chromeBand(){
     const H=viewH();
     let top=EDGE,low=H-EDGE;
@@ -1375,6 +1411,40 @@
     if(total>9000){const k=9000/total;out.forEach(o=>o.at*=k);}   // 全体は9秒に収める
     return out;
   }
+  /* ── 実時間の再生（v2追補 §1）──────────────────────────────
+     間はそのまま流す——300ms〜3sの帯が「ためらい」としていちばん効く。
+     3sを超える長い間だけ 3s+log圧縮（上限5s）に畳み、時間としてではなく別の表現へ
+     逃がす：インクが滲み、灯が一度深く呼吸する。「ここで長く止まった」という情報は
+     残るが、見る側は待たされない。 */
+  function clampGap(dt){
+    if(dt<=3000)return dt;
+    return Math.min(5000,3000+380*Math.log(dt/3000));
+  }
+  function normEvents(ev){
+    const out=[];let acc=0,cur='';
+    for(const e of ev){
+      const dt=+e[0]||0,op=e[1],ch=String(e[2]==null?'':e[2]);
+      acc+=clampGap(dt);
+      if(op==='s')cur=ch;
+      else if(op==='i')cur+=ch;
+      else if(op==='d')cur=cur.slice(0,Math.max(0,cur.length-ch.length));
+      out.push({at:acc,v:cur,pause:dt>3000});   // pause＝この一手の前に、長く止まった
+    }
+    return out;
+  }
+  /* 再生の材料をひとつの形に。ev1（実際の打鍵イベント）＞旧スナップショット＞合成 */
+  function traceFrames(text,steps){
+    if(steps&&steps.fmt==='ev1'&&steps.ev&&steps.ev.length>1)return normEvents(steps.ev);
+    if(steps&&steps.length>1)return normTrace(steps);
+    return synthTrace(text);
+  }
+  /* 3秒を超えた「間」のもうひとつの表現：灯が一度、深く呼吸する */
+  function deepBreath(){
+    const l=document.getElementById('lantern');
+    if(!l||l.classList.contains('deep'))return;
+    l.classList.add('deep');
+    setTimeout(()=>l.classList.remove('deep'),4200);
+  }
   function synthTrace(text){
     const chars=[...String(text||'')];
     const out=[];let acc=0,v='';
@@ -1389,17 +1459,25 @@
   }
   function playType(el,text,steps,done){
     const run=(el._run=(el._run||0)+1);
-    const norm=(steps&&steps.length>1)?normTrace(steps):synthTrace(text);
+    const norm=traceFrames(text,steps);
     if(REDUCED||norm.length<2){el.textContent=text;if(done)done();return;}
     const caret='<span class="tcaret"></span>';
     let i=0;const t0=performance.now();
     el.innerHTML=esc(norm[0].v)+caret;
     requestAnimationFrame(function frame(now){
-      if(el._run!==run||!el.isConnected) return;      // 閉じた・別のことばに差し替わった
+      if(el._run!==run||!el.isConnected){el.classList.remove('nijimi');return;}   // 閉じた・差し替わった
       const e=now-t0;
-      while(i<norm.length&&norm[i].at<=e){el.innerHTML=esc(norm[i].v)+caret;i++;}
-      if(i<norm.length) requestAnimationFrame(frame);
-      else{ el.textContent=text; if(done)done(); }
+      while(i<norm.length&&norm[i].at<=e){
+        el.innerHTML=esc(norm[i].v)+caret;
+        el.classList.remove('nijimi');el._nij=false;   // 間が明けた＝滲みは引く
+        i++;
+      }
+      if(i<norm.length){
+        // 次の一手の前に長い間があるなら、待っているあいだインクが滲み、灯が深く呼吸する
+        if(norm[i].pause&&!el._nij){el._nij=true;el.classList.add('nijimi');deepBreath();}
+        requestAnimationFrame(frame);
+      }
+      else{ el.textContent=text; el.classList.remove('nijimi'); if(done)done(); }
     });
   }
 
@@ -1539,11 +1617,13 @@
     }
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       el.classList.add('on');
-      playType(el,poem,steps);          // ここで一字ずつ書かれていく
+      el._typing=true;                  // ローテーション再生（§2）と重ねない
+      playType(el,poem,steps,()=>{el._typing=false;});   // ここで一字ずつ書かれていく
     }));
     // 消えぎわと片づけ。受け止めている間は止めるので、時計は付け外しできる形で持つ
     el._fadeAt=Math.max(6000,life-5600);
     armDrift(el);
+    return el;   // 天灯の野から引き寄せた時に、そのまま受け止めるため
   }
   /* 消える時計を掛ける／外す。受け止めた間はことばを消さない（手の中にある紙は勝手に飛ばない） */
   function armDrift(el){
@@ -1564,6 +1644,8 @@
     if(held===el) release();
   }
   function driftOne(){
+    // 遠くを見ているあいだは、新しい一筆を漂わせない（見えない紙を増やさない）
+    if(document.body.classList.contains('far-view')) return;
     // 定員は「いま実際に浮かんでいる枚数」で見る（自分で放った一筆も数に入る）
     if(!pool.length||liveEls.size>=liveCap()) return;
     // 画面に浮かんでいる一筆は選ばない。未出のものを優先し、出尽くしたら再演を許す
@@ -1608,6 +1690,271 @@
     fetch('/api/sky/seen',{method:'POST',headers:{'Content-Type':'application/json'},
       keepalive:true,body:JSON.stringify({ids:ids})}).catch(()=>{});
   }
+
+  /* ══ 再生のローテーション（v2追補 §2）════════════════════════
+     宙は「言葉が生きている」状態の表現——常に画面のどこかで trace が再生されている。
+     ・ことばに安定した番号を振る（公開idのハッシュ。スクロールや取得順でズレない）
+     ・グローバル tick を8秒で回し、hash%4===tick の一群がその周期で再生する
+     ・4周期でどのことばも必ず一度は書き直される＝永久に黙る手紙が存在しない。
+       1〜3通しか無い部屋でも hash%4 はどれかの tick に必ず当たる
+     再生の材料（打鍵イベント）は必要になった時にだけ取りにいき、手元に控える。
+     持っていないことば（明示の前に放たれた分）は合成打鍵で代替する。 */
+  function fnv(s){let h=2166136261;s=String(s);
+    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+    return h>>>0;}
+  const traceCache=new Map();   // 公開id → {fmt:'ev1',ev} または null（無い＝合成で代替）
+  function getTrace(id){
+    if(traceCache.has(id))return Promise.resolve(traceCache.get(id));
+    return fetch('/api/sky/word/'+encodeURIComponent(id)+'/trace')
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{
+        const ev=(d&&d.trace_ev&&d.trace_ev.length>1)?{fmt:'ev1',ev:d.trace_ev}:null;
+        if(traceCache.size>120)traceCache.clear();   // 控えは軽く。宙は流れるものなので戻りは稀
+        traceCache.set(id,ev);
+        return ev;
+      }).catch(()=>null);
+  }
+  let tick=0,tickAt=performance.now();
+  async function rotateOne(el){
+    if(el._typing)return;                            // いま書かれている最中なら重ねない
+    el._typing=true;
+    const tr=el._sid?await getTrace(el._sid):null;
+    if(!el.isConnected){el._typing=false;return;}
+    playType(el,el._poem,tr,()=>{el._typing=false;});
+  }
+  setInterval(()=>{
+    tick=(tick+1)%4;tickAt=performance.now();
+    if(REDUCED||document.hidden)return;              // 減モーションでは書き直さない（静けさを守る）
+    for(const el of liveEls){
+      if(el===held||el.classList.contains('out'))continue;   // 手の中・消えぎわの紙はそのまま
+      if(el._sid&&fnv(el._sid)%4===tick)rotateOne(el);
+    }
+  },8000);
+
+  /* ══ 天灯の野（v2追補 §3・§4）════════════════════════════════
+     手紙は消滅しない。経過時間に応じて小さく・淡く・奥へ移動するだけ。
+     ・Z軸＝時間。新しいことばは手前（中心）に大きく明るく、古いことばは奥（外）に
+       小さく淡く。中心からの距離は実時間の対数（Kosei確定：対数）＝最近が濃く、
+       過去は圧縮されて奥に詰まる。
+     ・ズームアウト＝過去を見る／ズームイン＝今を見る。下限は全件が見えるところまで
+       （Kosei確定：霧は掛けない。最古の一通も、光の粒として必ず視界に入る）。
+     ・flare（§4）：およそ100日に一度、数時間だけ、古いことばが浮上する。判定は
+       サーバの決定論的疑似乱数＝全ユーザーが同じ浮上を見る。立ち上がりは約30分、
+       引きはやや早く（非対称）。サイズだけのポップアップにしない。
+     ・野の天灯に触れると、そのことばは「いま」へ引き寄せられ、漂いの一枚として
+       手のうちに降りる（ズームイン＝今を見る、の身体化）。
+     ・描画：ビューポート外は描かない。遠く小さい層は「光の粒」に落とす（LOD）。
+       母数は単調増加する前提（削除されない）。数万通になったら空間インデックスを
+       入れる場所はここ（いまは全走査でも 1frame に収まる規模）。 */
+  const fieldCv=document.getElementById('skyField');
+  const fieldCtx=fieldCv.getContext('2d');
+  const FIELD_DPR=Math.min(2,window.devicePixelRatio||1);
+  const LSIZE=8;                         // いま放たれたことばの芯の大きさ（px・z=1）
+  let fieldW=0,fieldH=0,fieldWords=[],fieldAt=0;
+  let cam={z:1,x:0,y:0},camTgt={z:1,x:0,y:0},zmin=0.08,fieldDirty=true,fieldRaf=0;
+  function fieldResize(){
+    fieldW=viewW();fieldH=viewH();
+    fieldCv.width=Math.round(fieldW*FIELD_DPR);fieldCv.height=Math.round(fieldH*FIELD_DPR);
+    fieldCtx.setTransform(FIELD_DPR,0,0,FIELD_DPR,0,0);
+    fieldDirty=true;fieldWake();
+  }
+  function fetchField(){
+    fetch('/api/sky/field').then(r=>r.ok?r.json():null).then(d=>{
+      if(!(d&&d.words))return;
+      fieldAt=performance.now();
+      fieldWords=d.words.map(w=>{
+        const id=w[0],h1=fnv('lay:'+id),h2=fnv('jit:'+id);
+        return {id:id,color:w[1],age:+w[2]||0,room:w[4],fl:w[5]||null,
+                th:(h1%4096)/4096*Math.PI*2,        // 置き場所は決定論（座標はDBに持たない）
+                jr:0.82+(h2%1000)/1000*0.36};       // 同じ日のことばが同心円に並ばないゆらぎ
+      });
+      fitZ();fieldDirty=true;fieldWake();
+    }).catch(()=>{});
+  }
+  function fieldVis(){
+    const rid=inRoom()?ROOM.id:null;
+    return rid==null?fieldWords:fieldWords.filter(w=>w.room===rid);
+  }
+  // 対数マッピング（§7-2）：1週間と1年の差は大きく、5年と6年の差は小さく見える
+  const FIELD_R0=90,FIELD_RK=250;
+  function fieldRadius(w){return (FIELD_R0+FIELD_RK*Math.log1p(w.age/40))*w.jr;}
+  function fieldBase(w){return Math.max(0.12,1/(1+w.age/365));}   // §3 調和減衰＋floor
+  /* flare の包絡：約30分かけてゆっくり最大まで → 滞留 → やや早く沈む */
+  function fieldFlare(w,now){
+    if(!w.fl)return 1;
+    const m=w.fl[0],el=w.fl[1]+(now-fieldAt)/1000,dur=w.fl[2];
+    if(el<0||el>=dur)return 1;
+    const t=Math.min(Math.min(1,el/1800),Math.min(1,(dur-el)/1200));
+    const env=t*t*(3-2*t);                              // smoothstep（呼吸と同じ、角のない波）
+    return 1+(m-1)*env;
+  }
+  function fitZ(){
+    let mx=300;
+    for(const w of fieldVis()){const r=fieldRadius(w);if(r>mx)mx=r;}
+    zmin=Math.max(0.02,Math.min(0.6,(Math.min(fieldW,fieldH)/2-40)/(mx+60)));
+    if(camTgt.z<zmin)camTgt.z=zmin;
+  }
+  /* 色ごとの天灯スプライト（毎フレーム radialGradient を作らないための控え） */
+  const fieldSprites=new Map();
+  function fieldSprite(color){
+    let s=fieldSprites.get(color);
+    if(s)return s;
+    const t=tintOf(color)||{solid:'#d8cfc0'};
+    const c=document.createElement('canvas');c.width=c.height=64;
+    const g=c.getContext('2d');
+    const grad=g.createRadialGradient(32,32,0,32,32,32);
+    grad.addColorStop(0,'rgba(255,251,242,.9)');       // 芯は炎のあかり
+    grad.addColorStop(0.3,t.solid);                     // 紙の色＝封の色
+    grad.addColorStop(1,'rgba(0,0,0,0)');               // 加算合成なので黒は消える
+    g.fillStyle=grad;g.fillRect(0,0,64,64);
+    if(fieldSprites.size>240)fieldSprites.clear();
+    fieldSprites.set(color,s=c);
+    return s;
+  }
+  function fieldRender(now){
+    fieldCtx.clearRect(0,0,fieldW,fieldH);
+    const vis=fieldVis();
+    if(!vis.length){fieldDirty=false;return;}
+    // いま（z=1）はかすかな奥の気配。遠ざかるほど野が主役になる
+    const depth=Math.max(0,Math.min(1,(1-cam.z)/Math.max(0.001,1-zmin)));
+    const fieldA=0.30+0.70*depth;
+    fieldCtx.globalCompositeOperation='lighter';
+    const cx=fieldW/2,cy=fieldH/2;
+    let mx=300;
+    for(const w of vis){
+      const r=fieldRadius(w);if(r>mx)mx=r;
+      if(live.has(w.id))continue;                      // いま漂いに出ている一筆は野に重ねない
+      const sx=cx+(Math.cos(w.th)*r-cam.x)*cam.z;
+      const sy=cy+(Math.sin(w.th)*r-cam.y)*cam.z;
+      if(sx<-48||sx>fieldW+48||sy<-48||sy>fieldH+48)continue;   // ビューポート外（§6）
+      const fm=fieldFlare(w,now);
+      let s=LSIZE*fieldBase(w)*fm*Math.pow(cam.z,0.55);
+      if(!REDUCED&&fnv(w.id)%4===tick){
+        // ローテーションの鼓動（§2）：この周期の一群は、野でもかすかに息づく
+        const ph=Math.max(0,Math.min(1,(now-tickAt)/8000));
+        s*=1+0.20*Math.sin(Math.PI*ph);
+      }
+      let a=fieldA*(0.28+0.72*fieldBase(w));
+      if(fm>1)a=Math.min(1,a*(1+0.8*(fm-1)));          // 浮上中は明るさも戻る
+      if(s<1.1){                                       // 遠い層は光の粒（LOD）
+        const t=tintOf(w.color);
+        fieldCtx.globalAlpha=a*0.8;
+        fieldCtx.fillStyle=t?t.solid:'#cfc4b0';
+        fieldCtx.fillRect(sx,sy,1.2,1.2);
+        continue;
+      }
+      fieldCtx.globalAlpha=Math.min(1,a);
+      const d=s*5;                                     // グロー込みの敷き幅
+      fieldCtx.drawImage(fieldSprite(w.color),sx-d/2,sy-d/2,d,d);
+    }
+    fieldCtx.globalAlpha=1;fieldCtx.globalCompositeOperation='source-over';
+    zmin=Math.max(0.02,Math.min(0.6,(Math.min(fieldW,fieldH)/2-40)/(mx+60)));
+    fieldDirty=false;
+  }
+  function fieldStep(now){
+    const k=REDUCED?1:0.10;                            // 減モーションは即着（揺らさない）
+    cam.z+=(camTgt.z-cam.z)*k;cam.x+=(camTgt.x-cam.x)*k;cam.y+=(camTgt.y-cam.y)*k;
+    if(Math.abs(cam.z-camTgt.z)<0.0006)cam.z=camTgt.z;
+    if(Math.abs(cam.x-camTgt.x)<0.4)cam.x=camTgt.x;
+    if(Math.abs(cam.y-camTgt.y)<0.4)cam.y=camTgt.y;
+    document.body.classList.toggle('far-view',cam.z<0.92);
+    fieldCv.classList.toggle('active',cam.z<0.985||camTgt.z<1);
+    fieldRender(now);
+  }
+  function fieldLoop(now){
+    fieldRaf=0;
+    if(document.hidden)return;
+    fieldStep(now);
+    const settled=cam.z===camTgt.z&&cam.x===camTgt.x&&cam.y===camTgt.y;
+    // 減モーションでは、動きが済んだら止まる。通常は野が呼吸し続ける（flare・鼓動）
+    if(!REDUCED||!settled||fieldDirty)fieldRaf=requestAnimationFrame(fieldLoop);
+  }
+  function fieldWake(){if(!fieldRaf)fieldRaf=requestAnimationFrame(fieldLoop);}
+  /* ── 出入り：ズーム＝時間の移動 ── */
+  function setFieldZ(z){camTgt.z=Math.max(zmin,Math.min(1,z));syncFarBtn();fieldWake();}
+  function uiBusy(t){
+    return document.querySelector('.cast.on,.read.on,.trace.on,.ask.on,.shiori-list.on')
+      ||(t&&t.closest&&t.closest('.cast,.read,.trace,.ask,.about,.lp,.shiori,.shiori-list,.hold,button,a,input,[contenteditable]'));
+  }
+  addEventListener('wheel',e=>{
+    if(uiBusy(e.target))return;
+    e.preventDefault();
+    setFieldZ(camTgt.z*Math.pow(1.0016,-e.deltaY));
+  },{passive:false});
+  // 触れる指二本＝時間をつまむ。柱が立っている間は奪わない
+  let fieldPinch=null;
+  function tdist(e){const a=e.touches[0],b=e.touches[1];
+    return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1;}
+  document.addEventListener('touchstart',e=>{
+    if(e.touches.length===2&&!uiBusy(e.target))fieldPinch={d:tdist(e),z:camTgt.z};
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(fieldPinch&&e.touches.length===2){e.preventDefault();setFieldZ(fieldPinch.z*tdist(e)/fieldPinch.d);}
+  },{passive:false});
+  document.addEventListener('touchend',()=>{fieldPinch=null;});
+  /* 掴んで過去を巡る（ズームアウト中だけ canvas が触れられる）。指の動きが小さければ「触れた」 */
+  let fieldDrag=null,fieldMoved=0;
+  fieldCv.addEventListener('pointerdown',e=>{
+    if(fieldDrag){fieldDrag=null;return;}              // 二本目の指＝ピンチに譲る
+    fieldDrag={x:e.clientX,y:e.clientY,cx:camTgt.x,cy:camTgt.y};fieldMoved=0;
+    fieldCv.classList.add('drag');
+    try{fieldCv.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  fieldCv.addEventListener('pointermove',e=>{
+    if(!fieldDrag||fieldPinch)return;
+    const dx=e.clientX-fieldDrag.x,dy=e.clientY-fieldDrag.y;
+    fieldMoved=Math.max(fieldMoved,Math.abs(dx)+Math.abs(dy));
+    camTgt.x=fieldDrag.cx-dx/cam.z;camTgt.y=fieldDrag.cy-dy/cam.z;fieldWake();
+  });
+  fieldCv.addEventListener('pointerup',e=>{
+    fieldCv.classList.remove('drag');
+    const tap=fieldDrag&&fieldMoved<8;fieldDrag=null;
+    if(tap&&!fieldPinch){const w=fieldPick(e.clientX,e.clientY);if(w)fieldPluck(w);}
+  });
+  fieldCv.addEventListener('pointercancel',()=>{fieldDrag=null;fieldCv.classList.remove('drag');});
+  function fieldPick(mx,my){
+    const cx=fieldW/2,cy=fieldH/2;
+    let best=null,bd=1e9;
+    for(const w of fieldVis()){
+      if(live.has(w.id))continue;
+      const r=fieldRadius(w);
+      const sx=cx+(Math.cos(w.th)*r-cam.x)*cam.z;
+      const sy=cy+(Math.sin(w.th)*r-cam.y)*cam.z;
+      const dx=mx-sx,dy=my-sy,d2=dx*dx+dy*dy;
+      if(d2<bd){bd=d2;best=w;}
+    }
+    return (best&&bd<=26*26)?best:null;                // 指の腹ひとつぶん
+  }
+  async function fieldPluck(w){
+    let d=null;
+    try{d=await fetch('/api/sky/word/'+encodeURIComponent(w.id)).then(r=>r.ok?r.json():null);}catch(_){}
+    if(!d||!d.poem){whisper('そのことばは、<wbr>いまは<wbr>遠いようです。',5000);return;}
+    // 引き寄せる＝いまへ帰る。天灯は漂いの一枚として、そのまま手のうちに降りる
+    camTgt.z=1;camTgt.x=0;camTgt.y=0;syncFarBtn();
+    noteSeen(w.id);
+    const tr=await getTrace(w.id);
+    const el=spawnDrift(d.poem,d.color,d.vertical,w.id,tr);
+    if(el)catchWord(el);
+    fieldWake();
+  }
+  const farBtn=document.getElementById('farBtn');
+  function syncFarBtn(){
+    const far=camTgt.z<1;
+    farBtn.textContent=far?'いまへ':'とおくへ';
+    farBtn.setAttribute('aria-pressed',far?'true':'false');
+    farBtn.setAttribute('aria-label',far?'いまの宙へ戻る':'遠くの宙を見る（過去のことばの野へ）');
+  }
+  farBtn.addEventListener('click',()=>{
+    if(camTgt.z<1){camTgt.z=1;camTgt.x=0;camTgt.y=0;}
+    else{fitZ();camTgt.z=zmin;}                        // 全件が見えるところまで（霧は掛けない）
+    syncFarBtn();fieldWake();
+  });
+  fieldResize();
+  addEventListener('resize',fieldResize);
+  fetchField();
+  setInterval(fetchField,60000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){fieldWake();}});
+  fieldWake();
   addEventListener('pagehide',flushSeen);
 
   /* ── 触れた気配を灯へ（宙v1 §4.2）── どのことばかは送らない・残らない */
@@ -2305,15 +2652,40 @@
     cntBox.classList.toggle('full',n>=80);
     send.disabled=!ta.textContent.trim();
   }
-  // 打鍵スナップショット（TypeTrace）。書いていた時の迷いごと封じて、再生に使う
-  let trace=[],traceT0=0;
+  /* 打鍵イベント（TypeTrace／v2追補 §1）。打った過程は——消した文字も含めて——
+     そのまま宙に流れる（そのことは書き始める前に .cast-note で明示してある）。
+     ・記録は3文字目が入った時点から。それ以前に消してやり直した分は永久に残らない
+       ＝書き手の最初のためらいは保護する。
+     ・カーソル移動は追わない。末尾以外の編集は、その時点の全文スナップショット
+       （op:'s'）で代替する。
+     形式は [dt, op, ch]。dt=直前イベントからのms差分、op: i=打つ / d=消す / s=全文。 */
+  let trace=[],traceLast=0,tracePrev='';
+  function recTrace(){
+    const now=performance.now(),text=ta.textContent;
+    if(!trace.length){
+      if([...text].length<3){tracePrev=text;return;}
+      trace.push([0,'s',text]);traceLast=now;tracePrev=text;return;
+    }
+    if(text===tracePrev)return;
+    if(trace.length>=3000){tracePrev=text;return;}   // 暴走の上限。再生は最後に全文へ整う
+    const dt=Math.max(0,Math.round(now-traceLast));traceLast=now;
+    const old=tracePrev;tracePrev=text;
+    // 共通の頭を測る（サロゲートペアの途中では切らない）
+    let p=0;const n=Math.min(old.length,text.length);
+    while(p<n&&old.charCodeAt(p)===text.charCodeAt(p))p++;
+    if(p>0){const c=text.charCodeAt(p-1);if(c>=0xD800&&c<=0xDBFF)p--;}
+    const cut=old.slice(p),add=text.slice(p);
+    // 消えた側と増えた側が同じ字で終わる＝変化は末尾ではなく途中で起きた → 全文で代替
+    if(cut&&add&&cut[cut.length-1]===add[add.length-1]){trace.push([dt,'s',text]);return;}
+    let first=dt;
+    for(const ch of [...cut].reverse()){trace.push([first,'d',ch]);first=0;}
+    for(const ch of add){trace.push([first,'i',ch]);first=0;}
+  }
   ta.addEventListener('input',()=>{
     normalizeEmpty();
     if(!composing)enforceLimit();
     paintCast();
-    const now=performance.now();
-    if(!trace.length)traceT0=now;
-    if(trace.length<3000)trace.push({t:Math.round(now-traceT0),v:ta.textContent});
+    recTrace();
   });
   /* 柱を開いた／閉じたときのフォーカス。閉じたら「放つ」へ返す（来た道から出る／Apple §7）。
      書きかけの本文は消さない——閉じるのは取り消しではない（Apple §2 forgiveness）。 */
@@ -2356,7 +2728,7 @@
     const title=castTitle.value.trim();      // 題は任意。無いまま放ってよい（v2.2 §2.1）
     send.disabled=true;
     const color=cssOf(toneColor(H,T));   // 放たれることばには必ず色がのる（v12）
-    const steps=(trace.length>1?trace.slice():null);
+    const steps=(trace.length>1?{fmt:'ev1',ev:trace.slice()}:null);
     try{
       const res=await fetch('/api/letters',{method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -2368,10 +2740,11 @@
         shut();
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
-        ta.textContent='';normalizeEmpty();H=H0;T=T0;trace=[];traceT0=0;paint();drawCaret();
+        ta.textContent='';normalizeEmpty();H=H0;T=T0;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
         castTitle.value='';
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
         setTimeout(fetchWords,600);
+        setTimeout(fetchField,900);   // 天灯の野にも、いま生まれた一灯を足す
         if(d.care)setTimeout(showCareNote,1600);
       }else{
         /* 届かなかったことは、必ず言う。v2 まではここが無音で、押しても柱が閉じないまま
@@ -2515,7 +2888,7 @@
   async function openArrival(A){
     if(A.opened){
       showRead({poem:A.poem,vertical:A.vertical,color:A.color,note:ANON_NOTE,
-                did:A.did,liked:A.liked});
+                did:A.did,liked:A.liked,steps:A.steps||null});
       return;
     }
     try{
@@ -2524,9 +2897,11 @@
       const d=await res.json().catch(()=>null);
       if(res.ok&&d&&d.ok){
         A.opened=true;A.poem=d.poem;A.vertical=d.vertical;A.liked=d.liked;A.color=d.color;
+        // 打った過程もいっしょに降りてくる（v2追補 §1）。無ければ合成にまかせる
+        A.steps=(d.trace_ev&&d.trace_ev.length>1)?{fmt:'ev1',ev:d.trace_ev}:null;
         renderArrivals();
         showRead({poem:d.poem,vertical:d.vertical,color:d.color,note:ANON_NOTE,
-                  did:A.did,liked:d.liked});
+                  did:A.did,liked:d.liked,steps:A.steps});
       }else{
         showReadError((d&&d.error)||'そのことばは開けませんでした。');
       }
@@ -2550,7 +2925,8 @@
           let steps=null;
           try{
             const t=await fetch('/api/letters/'+OPEN_ID+'/trace').then(r=>r.ok?r.json():null);
-            if(t&&Array.isArray(t.trace))steps=t.trace;
+            if(t&&t.trace_ev&&t.trace_ev.length>1)steps={fmt:'ev1',ev:t.trace_ev};
+            else if(t&&Array.isArray(t.trace))steps=t.trace;
           }catch(e){}
           // 日付は機械の刻印ではなく、そっと添える一行に（ISOのままは出さない）
           const p=String(L.sent_date||'').slice(0,10).split('-');

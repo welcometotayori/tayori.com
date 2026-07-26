@@ -12,6 +12,7 @@ import os
 import re
 import ssl
 import gzip
+import zlib
 import json
 import time
 import html
@@ -35,7 +36,7 @@ from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr, parseaddr, make_msgid, formatdate
 from functools import wraps
 from collections import Counter, deque
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone, time as dtime
 
 from flask import Flask, request, jsonify, render_template, g, session, Response, redirect, abort
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -769,6 +770,11 @@ def init_db():
             # 部屋（2026-07-26）。どの小さな宙に属することばか。NOT NULL 制約は付けない
             # （SQLite は後付けで NOT NULL にできない）＝投函経路の側で必須にする。
             "ALTER TABLE letters ADD COLUMN room_id INTEGER",
+            # 打鍵イベント列（v2追補 §1・§6）。{dt,op,ch} を圧縮した BLOB。
+            # 旧 trace（全文スナップショットのJSON）は「開封のときの再生のためだけ」という
+            # 約束の下で記録されたので、公開経路には決して載せない。宙に流してよいのは、
+            # 「打った過程がそのまま宙に流れます」を書く前に見た人のことば＝この列だけ。
+            "ALTER TABLE letters ADD COLUMN trace_z BLOB",
         ):
             try:
                 db.execute(stmt)
@@ -3512,6 +3518,49 @@ def _sky_decay(sent_date):
     return 1.0 / (1.0 + months / _SKY_DECAY_MONTHS)
 
 
+def _sky_age_days(sent_date):
+    """経過日数（天灯の野のZ軸の材料）。読めない日付は0＝いま、として扱う。"""
+    try:
+        return max(0.0, (datetime.now() - datetime.fromisoformat(sent_date)).total_seconds() / 86400.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# ── flare：ランダムなサイズ復活（v2追補 §4）───────────────────────
+# 「一度発された言葉は永遠に生きている」。古いことばが、およそ100日に一度、
+# 2〜6時間だけ浮上する。決定論的疑似乱数＝DBに状態を持たず、全ユーザーが同じものを見る。
+# 密度が過剰になったら発生率は下げず DUR_SCALE で継続時間だけ縮める（浮上の回数＝
+# 生きている感は守ったまま、画面の密度だけを調整する）。
+_SKY_FLARE_AIR = _env_num("TAYORI_SKY_FLARE_AIR", 0.6, 0.05, 1.0)        # §5 探索補正（要調整）
+_SKY_FLARE_DUR_SCALE = _env_num("TAYORI_SKY_FLARE_DUR_SCALE", 1.0, 0.05, 1.0)
+
+
+def _flare_state(letter_id, jnow=None):
+    """いまこの手紙が flare 中なら (倍率, 開始からの秒, 継続秒) を返す。そうでなければ None。
+    判定単位は「宙の一日」（JST朝4時始まり）。開始時刻はその一日の中に収まるように取るので、
+    日をまたいで残る flare は無い＝当日の seed だけ見ればよい。"""
+    jnow = jnow or datetime.now(JST)
+    day = (jnow - timedelta(hours=4)).date()   # 宙の一日の日付
+    h = hashlib.sha256(f"flare:{letter_id}:{day.isoformat()}".encode()).digest()
+    if int.from_bytes(h[0:4], "big") % 100 != 0:   # 発生率 1/100（1通あたり年3〜4回）
+        return None
+    # 2〜6h。固定値は機械的に見えるので seed でばらつかせる（§4）
+    dur = (7200 + int.from_bytes(h[4:8], "big") % 14400) * _SKY_FLARE_DUR_SCALE
+    start_off = int.from_bytes(h[8:12], "big") % max(1, int(86400 - dur))
+    start = datetime.combine(day, dtime(4, 0), JST) + timedelta(seconds=start_off)
+    since = (jnow - start).total_seconds()
+    if not (0 <= since < dur):
+        return None
+    mult = 0.9 + (int.from_bytes(h[12:16], "big") % 1000) / 1000.0 * 0.5   # 0.9〜1.4
+    return (round(mult, 3), int(since), int(dur))
+
+
+def _flare_air_factor(entry):
+    """§5: flare 中のことばは air_distance を縮めて、探索の候補として拾われやすくする。
+    既存の距離の式そのものには触れない（意味には一切触れない、も変わらない）。"""
+    return _SKY_FLARE_AIR if entry[7] else 1.0
+
+
 # ── 宙の一日（宙v1 §3.1）───────────────────────────────────────
 # 境目は JST 朝4時。0時にしない：深夜が tayori のコアタイムなので、滞在中に
 # 宙が総入れ替わりするのを避ける。運営者が海外にいても JST 固定（ユーザーは日本にいる）。
@@ -3696,6 +3745,8 @@ def _sky_rebuild():
             r["user_id"],                 # 「自分のことば」判定（辿る §4.1）にだけ使う。クライアントへは出さない
             r["title"],                   # 題（§2.2）。辿るの一覧でだけ足す（漂いには出さない）
             r["room_id"],                 # どの部屋のことばか（B-6）。絞り込みにだけ使う
+            _flare_state(r["id"]),        # 浮上（v2追補 §4）。15秒の古さは30分の立ち上がりに沈む
+            _sky_age_days(r["sent_date"]),  # 天灯の野のZ軸（v2追補 §3）
         ))
         index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["title"])
     with _sky_lock:
@@ -3708,8 +3759,9 @@ def _sky_rebuild():
 def _sky_score(entry, now_air, reso):
     """v2 §3.3: weight = (1 - air_distance(閲覧者のいま, 手紙)) × 沈降 × 偶然(0.7–1.3)。
     沈降で古いことばは深く沈むが、ゼロにはしない（まれに深いところから浮かぶ）。
-    母数が小さいうちは距離を reso で薄めて、ほぼ偶然だけにする（【F】）。"""
-    air = air_distance(now_air, entry[1]) * reso
+    母数が小さいうちは距離を reso で薄めて、ほぼ偶然だけにする（【F】）。
+    flare 中のことばは距離が縮む（v2追補 §5）＝古い言葉が、その数時間だけ拾われやすい。"""
+    air = air_distance(now_air, entry[1]) * _flare_air_factor(entry) * reso
     return max(1e-6, 1.0 - air) * entry[3] * random.uniform(0.7, 1.3)
 
 
@@ -3947,6 +3999,55 @@ def api_sky():
     return jsonify(words=words)
 
 
+@app.route("/api/sky/field")
+def api_sky_field():
+    """天灯の野（v2追補 §3）。宙にあることば全部の「位置の材料」だけを返す：
+    公開id・色・経過日数・縦書き・部屋・flare。本文は載せない（触れた時に word/<h> で引く）。
+    読み手ごとの除外（自分の・今日見た・棚の）はここには持ち込まない——野は「降ってくる偶然」
+    ではなく、消えずに在り続けるものの眺めなので、自分のことばもそこに灯っている。
+    ?room=<id> でその部屋だけに絞る。無指定は宙の全部（部屋の外から遠くを見る眺め）。"""
+    pool = _sky_pool()
+    raw = request.args.get("room")
+    if raw is not None and str(raw).strip() != "":
+        try:
+            pool = _in_room(pool, int(raw))
+        except (TypeError, ValueError):
+            pool = []
+    words = []
+    for e in pool:
+        fl = e[7]
+        words.append([
+            e[0]["id"],                     # 公開id
+            e[0]["color"],                  # 封の色
+            round(e[8], 1),                 # 経過日数（Z軸。0.1日=2.4h より細かくは出さない）
+            1 if e[0]["vertical"] else 0,
+            e[6],                           # 部屋id（クライアント側の絞り込みに使う）
+            [fl[0], fl[1], fl[2]] if fl else 0,   # flare: [倍率, 開始からの秒, 継続秒]
+        ])
+    return jsonify(words=words)
+
+
+@app.route("/api/sky/word/<h>")
+def api_sky_word(h):
+    """天灯ひとつの中身。野で触れられた時にだけ引く（本文を一覧では配らない）。"""
+    hit = _sky_index().get(h)
+    if not hit:
+        return jsonify(error="そのことばは、もう宙にありません。"), 404
+    lid, poem, color, vertical, title = hit
+    return jsonify(poem=poem, color=color, vertical=bool(vertical))
+
+
+@app.route("/api/sky/word/<h>/trace")
+def api_sky_word_trace(h):
+    """そのことばの打鍵イベント（v2追補 §1・§2）。ローテーション再生の材料。
+    配ってよいのは trace_z（「打った過程がそのまま宙に流れます」を書く前に見た人の
+    ことば）だけ。旧 trace 列＝開封再生のためだけの約束で預かった筆致は、決して出さない。"""
+    hit = _sky_index().get(h)
+    if not hit:
+        return jsonify(error="そのことばは、もう宙にありません。"), 404
+    return jsonify(trace_ev=_letter_trace_ev(hit[0]))
+
+
 @app.route("/api/sky/seen", methods=["POST"])
 def api_sky_seen():
     """実際に画面へ浮かんだことばの控え（宙v1 §3.2）。クライアントが「浮かべた」公開idを
@@ -4134,7 +4235,8 @@ def api_sky_near(pub_id):
     pool = _in_room(_sky_pool(), base[6])
     limit, offset = _trace_params()
     rest = [e for e in pool if e[0]["id"] != pub_id]
-    items, more = _trace_page(rest, lambda e: air_distance(base[1], e[1]), limit, offset)
+    items, more = _trace_page(
+        rest, lambda e: air_distance(base[1], e[1]) * _flare_air_factor(e), limit, offset)
     return jsonify(here=_trace_item(base, session.get("uid")), items=items, more=more)
 
 
@@ -4147,7 +4249,8 @@ def api_sky_near_now():
     pool = _in_room(_sky_pool(), room_id)
     now_air = _viewer_air()
     limit, offset = _trace_params()
-    items, more = _trace_page(pool, lambda e: air_distance(now_air, e[1]), limit, offset)
+    items, more = _trace_page(
+        pool, lambda e: air_distance(now_air, e[1]) * _flare_air_factor(e), limit, offset)
     return jsonify(items=items, more=more)
 
 
@@ -4271,6 +4374,58 @@ def api_letters():
     return jsonify(received=received, in_transit=in_transit, sky_arrivals=sky_arrivals)
 
 
+# ── 打鍵イベントの梱包（v2追補 §1・§6）───────────────────────────
+# 形式は {fmt:'ev1', ev:[[dt,op,ch],...]}。op は i=打つ / d=消す / s=スナップショット
+# （末尾以外の編集はカーソルを追わず、その時点の全文で代替する）。dt はミリ秒差分。
+# 生のJSON配列のまま列に置くと数万通で破綻するので、コンパクトに直して zlib で潰す
+# （§6の「圧縮JSON」）。クランプ（3s+log圧縮）は保存時ではなく再生時に行う——
+# 元の間隔を捨てると、後から表現を変える余地が消えるため。
+_TRACE_EV_MAX = 6000          # 80字のことばで数百。これを超えるのは異常入力
+
+
+def _pack_trace(t):
+    """ev1 の trace を検証して zlib 圧縮バイト列にする。形式が違えば None（黙って捨てる
+    ——本文は既に受かっているので、再生の材料だけ諦める）。"""
+    if not isinstance(t, dict) or t.get("fmt") != "ev1":
+        return None
+    ev = t.get("ev")
+    if not isinstance(ev, list) or not (1 < len(ev) <= _TRACE_EV_MAX):
+        return None
+    out = []
+    for e in ev:
+        if not (isinstance(e, list) and len(e) == 3):
+            return None
+        dt, op, ch = e
+        if not isinstance(dt, (int, float)) or not (0 <= dt <= 86_400_000):
+            return None
+        if op not in ("i", "d", "s") or not isinstance(ch, str) or len(ch) > 120:
+            return None
+        out.append([int(dt), op, ch])
+    raw = json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode()
+    if len(raw) > 400_000:
+        return None
+    return zlib.compress(raw, 6)
+
+
+def _unpack_trace(blob):
+    """trace_z → ev1 のイベント列。壊れていれば None（再生しないだけで、本文は無事）。"""
+    if not blob:
+        return None
+    try:
+        return json.loads(zlib.decompress(blob).decode())
+    except (zlib.error, ValueError, TypeError, UnicodeDecodeError):
+        return None
+
+
+def _letter_trace_ev(letter_id):
+    """公開してよい打鍵イベント（trace_z）だけを引く。旧 trace 列はここから決して返さない。"""
+    row = get_db().execute("SELECT trace_z FROM letters WHERE id=?", (letter_id,)).fetchone()
+    if not row:
+        return None
+    keys = row.keys()
+    return _unpack_trace(row["trace_z"] if "trace_z" in keys else None)
+
+
 @app.route("/api/letters", methods=["POST"])
 @login_required
 def api_create_letter():
@@ -4337,9 +4492,16 @@ def api_create_letter():
     seal_color = (data.get("seal_color") or "").strip()[:32] or None
     seal_q = (data.get("seal_q") or "").strip()[:80] or None
 
-    # タイプ再生（TypeTrace）の打鍵スナップショット列。JSON文字列で保存。暴走サイズは捨てる。
+    # タイプ再生（TypeTrace）。二つの形式を受ける：
+    #   ・ev1（{fmt:'ev1',ev:[[dt,op,ch],...]}）＝v2追補 §1。宙に流してよい打鍵イベント。
+    #     書く前に「打った過程がそのまま宙に流れます」を見た人のことばだけがこの形で届く。
+    #   ・旧スナップショット列（[{t,v},...]）＝本人の開封再生のためだけの列。公開しない。
     trace = data.get("trace")
-    if trace is not None and not isinstance(trace, str):
+    trace_z = None
+    if isinstance(trace, dict):
+        trace_z = _pack_trace(trace)   # 形式が壊れていれば None＝再生の材料だけ諦める
+        trace = None
+    elif trace is not None and not isinstance(trace, str):
         trace = json.dumps(trace, ensure_ascii=False)
     if trace and len(trace) > 600_000:
         trace = None
@@ -4384,13 +4546,13 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status,room_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,trace_z,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status,room_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
              1 if care else 0,   # ケアのことばは帰還メールを閉じた状態で置く（§3.4）
              emos_json,
-             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace,
+             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace, trace_z,
              seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
              grid_id, excluded, mode, sky_status, room_id),
         )
@@ -4479,7 +4641,9 @@ def api_get_trace(lid):
         steps = json.loads(raw) if raw else None
     except (TypeError, ValueError):
         steps = None
-    return jsonify(trace=steps)
+    # 新形式（イベント列）はべつの鍵で。旧クライアントは trace しか見ないので壊れない
+    ev = _unpack_trace(row["trace_z"] if "trace_z" in row.keys() else None)
+    return jsonify(trace=steps, trace_ev=ev)
 
 
 @app.route("/api/letters/<lid>/open", methods=["POST"])
@@ -4635,7 +4799,8 @@ def api_open_sky_delivery(did):
     """宙から降ってきた、だれかのことばの開封。本文テキストだけを初めて配信する
     （書き手の写真・声・場所・日時は最初から配達に含めない）。冪等。"""
     row = get_db().execute(
-        "SELECT d.id, d.deliver_at, d.opened_at, d.liked_at, l.poem, l.seal_color, l.vertical"
+        "SELECT d.id, d.deliver_at, d.opened_at, d.liked_at, l.id AS lid,"
+        "       l.poem, l.seal_color, l.vertical"
         "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
         " WHERE d.id=? AND d.recipient=?", (did, uid())).fetchone()
     if not row:
@@ -4651,8 +4816,11 @@ def api_open_sky_delivery(did):
                              (datetime.now().isoformat(timespec="seconds"), did, uid()))
             get_db().commit()
     _lantern_touch()   # 開いた＝触れた（宙v1 §4.2）。どのことばかは灯に残らない
+    # 打った過程もいっしょに降りる（v2追補 §1）。公開してよいのは trace_z（新形式）だけ
+    ev = _letter_trace_ev(row["lid"])
     return jsonify(ok=True, poem=row["poem"], color=row["seal_color"],
-                   vertical=bool(row["vertical"]), liked=bool(row["liked_at"]))
+                   vertical=bool(row["vertical"]), liked=bool(row["liked_at"]),
+                   trace_ev=ev)
 
 
 @app.route("/api/sky/<did>/like", methods=["POST"])
