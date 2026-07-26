@@ -50,6 +50,10 @@
   #map{flex:1;background:var(--paper)}
   /* ベースタイルを紙に寄せる（タイル自体はCarto Positronの淡いもの前提） */
   .leaflet-tile-pane{filter:grayscale(1) contrast(0.82) brightness(1.06) sepia(0.14)}
+  /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
+     ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
+     新しい部品を足すたびに書き漏らして一箇所だけ書体が変わる（2026-07-26 部屋UIで実際に起きた）。 */
+  button,input,textarea,select{font-family:inherit}
   .leaflet-container{background:var(--paper);font-family:inherit}
   /* 点に触れた時のささやき（エリア名と時間帯だけ） */
   .area-tip,.mood-tip{background:var(--paper-raised);border:1px solid var(--rule);border-radius:2px;

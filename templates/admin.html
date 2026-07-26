@@ -16,6 +16,10 @@
             margin: 0;
             padding: 40px 20px;
         }
+        /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
+                 ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
+                 新しい部品を足すたびに書き漏らして一箇所だけ書体が変わる（2026-07-26 部屋UIで実際に起きた）。 */
+        button,input,textarea,select{font-family:inherit}
         .container {
             max-width: 1080px;
             margin: 0 auto;

@@ -827,9 +827,15 @@
   const drifters=[];
   let roomRAF=0;
 
+  /* 画面の寸法。innerWidth は文脈によって 0 を返すことがあり、そのまま ||360 に
+     落ちると「360pxの端末」として格子を組んでしまう（あふれた部屋を画面外のつもりで
+     置いた座標が、実際の広い画面では真ん中に出て重なる）。documentElement を先に見る。 */
+  function viewW(){ return document.documentElement.clientWidth||innerWidth||360; }
+  function viewH(){ return document.documentElement.clientHeight||innerHeight||640; }
+
   function placeRooms(list){
     roomLayer.innerHTML='';drifters.length=0;
-    const W=innerWidth||360,H=innerHeight||640;
+    const W=viewW(),H=viewH();
     const els=[];
     list.forEach(r=>{
       const el=document.createElement('button');
@@ -874,12 +880,23 @@
     const top=76, bottom=150;                       // 上の栞と下の導線は空けておく
     const usable=Math.max(ch,H-top-bottom);
     const cols=Math.max(1,Math.floor(W/cw)), rows=Math.max(1,Math.floor(usable/ch));
-    const cap=Math.min(MAX_ROOMS_ON_SCREEN,cols*rows);
-    const cells=[];
-    for(let i=0;i<cols*rows;i++) cells.push(i);
+    // 説明・導線の上には置かない。文字が読めることが最優先で、部屋の名前が
+    // 説明文に重なると両方読めなくなる（漂うことばの pickSpot と同じ考え方）。
+    const keep=[...document.querySelectorAll('header,.lp,.about,.room-new,.care-link')]
+      .map(e=>e.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
+    const free=[];
+    for(let i=0;i<cols*rows;i++){
+      const cx=(i%cols)*cw, cy=top+Math.floor(i/cols)*ch;
+      const box={left:cx,top:cy,right:cx+cw,bottom:cy+ch};
+      if(!keep.some(k=>k.right>box.left&&k.left<box.right&&k.bottom>box.top&&k.top<box.bottom))
+        free.push(i);
+    }
+    // 全部ふさがっていたら（画面が小さい等）、読めないより漂わせる方を採る
+    const cells=free.length?free:Array.from({length:cols*rows},(_,i)=>i);
     for(let i=cells.length-1;i>0;i--){              // Fisher–Yates
       const j=Math.floor(Math.random()*(i+1));[cells[i],cells[j]]=[cells[j],cells[i]];
     }
+    const cap=Math.min(MAX_ROOMS_ON_SCREEN,cells.length);
     const out=[];
     for(let i=0;i<Math.min(els.length,cap);i++){
       const c=cells[i], cx=(c%cols)*cw, cy=Math.floor(c/cols)*ch;
@@ -896,7 +913,7 @@
     if(!lastT){lastT=now;return;}
     const dt=Math.min(0.1,(now-lastT)/1000);lastT=now;
     if(document.hidden||inRoom())return;
-    const W=innerWidth||360,H=innerHeight||640;
+    const W=viewW(),H=viewH();
     for(const d of drifters){
       d.x+=d.vx*dt; d.y+=d.vy*dt;
       if(d.x>W+20) d.x=-d.w-20; else if(d.x<-d.w-20) d.x=W+20;

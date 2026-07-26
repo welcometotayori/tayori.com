@@ -41,6 +41,10 @@
        font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
        -webkit-font-smoothing:antialiased;line-break:strict}
   /* 触れるものの共通作法：指の即応・押した瞬間に応える・焦点が見える */
+  /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
+     ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
+     新しい部品を足すたびに書き漏らして一箇所だけ書体が変わる（2026-07-26 部屋UIで実際に起きた）。 */
+  button,input,textarea,select{font-family:inherit}
   button,a{touch-action:manipulation}
   button{cursor:pointer}
   :where(button,a,[tabindex]):focus-visible{outline:1px solid var(--rule);outline-offset:5px}

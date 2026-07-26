@@ -78,6 +78,10 @@
   html{-webkit-text-size-adjust:100%}
   body{background:var(--ground);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;
     background-image:radial-gradient(circle at 20% 10%,rgba(113,0,20,0.04),transparent 40%),radial-gradient(circle at 80% 80%,rgba(179,143,111,0.05),transparent 45%);overflow-x:hidden}
+  /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
+     ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
+     新しい部品を足すたびに書き漏らして一箇所だけ書体が変わる（2026-07-26 部屋UIで実際に起きた）。 */
+  button,input,textarea,select{font-family:inherit}
   body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.5;mix-blend-mode:multiply;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}
   /* ---- 日本語の折り返し ----
