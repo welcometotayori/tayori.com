@@ -37,7 +37,7 @@ from functools import wraps
 from collections import Counter, deque
 from datetime import datetime, date, timedelta, timezone
 
-from flask import Flask, request, jsonify, render_template, g, session, Response, redirect
+from flask import Flask, request, jsonify, render_template, g, session, Response, redirect, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # サーバーのタイムゾーンを日本時間に固定する。
@@ -610,6 +610,16 @@ def init_db():
             # ここは「テーブルが無い」で素通りし、列は CREATE 側の定義で入る）。
             # この一行が効くのは、すでに棚を持っている既存DBだけ。
             "ALTER TABLE saved_words ADD COLUMN title TEXT",
+            # ── 運営権限（2026-07-26）────────────────────────────────
+            # これまで運営判定は username='admin' の文字列比較だった。名前は変えられるし、
+            # 「admin」を名乗る一般ユーザーが生まれた瞬間に権限が漏れる。列で持つ。
+            "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
+            # 最終ログイン。運営が「生きているアカウントか」を見るためだけの一列で、
+            # 本人にも他人にも出さない（誰がいつ来たかは、宙の側では一切扱わない）。
+            "ALTER TABLE users ADD COLUMN last_login_at TEXT",
+            # 停止（凍結）。NULL=有効 / ISO日時=その時から停止。削除とは別物で、
+            # データには一切触れない＝復帰すればそのまま戻る。
+            "ALTER TABLE users ADD COLUMN suspended_at TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -791,6 +801,22 @@ def init_db():
             )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_letter_tags_tag ON letter_tags (tag)")
 
+        # ── 運営の操作記録（2026-07-26 admin A-3）──────────────────────
+        # 運営が何をしたかを、運営自身が消せない形で残す。誰が・いつ・何を・どの対象に、
+        # の四つだけ。本文は入れない（target_id は letters.id や users.id のような識別子）。
+        # note には裁定の結果など短い語だけを入れ、ことばそのものは決して書かない。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS admin_audit_log (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor_id  TEXT,
+                actor     TEXT NOT NULL,
+                action    TEXT NOT NULL,
+                target_id TEXT,
+                note      TEXT,
+                at        TEXT NOT NULL
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_audit_at ON admin_audit_log (at)")
+
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
         # answers × questions.letter_fragment_template を封をする時に組み立てる（＝回答→一文の変換はDB側で管理）。
@@ -889,6 +915,9 @@ def init_db():
         else:
             db.execute("UPDATE users SET pw_hash=? WHERE username='admin'",
                        (_hash_pw(admin_pw),))
+        # 権限を列へ移す（冪等）。以後の判定は is_admin だけを見る＝名前を変えても権限は動かない。
+        # 逆に、あとから「admin」を名乗った一般ユーザーに権限が付くこともない。
+        db.execute("UPDATE users SET is_admin=1 WHERE username='admin' AND COALESCE(is_admin,0)=0")
 
         for r in db.execute("SELECT id FROM users WHERE unsub_token IS NULL OR unsub_token=''").fetchall():
             db.execute("UPDATE users SET unsub_token=? WHERE id=?", (secrets.token_urlsafe(16), r["id"]))
@@ -903,7 +932,8 @@ def current_user():
         return None
     return get_db().execute(
         "SELECT id,username,email,email_verified,onboarded,"
-        "aggregate_opt_out,night_map_notice_seen_at FROM users WHERE id=?", (u,)
+        "aggregate_opt_out,night_map_notice_seen_at,is_admin,suspended_at"
+        " FROM users WHERE id=? AND suspended_at IS NULL", (u,)
     ).fetchone()
 
 
@@ -1175,11 +1205,25 @@ def _generate_weekly_questions(user_id, n):
     return new_ids
 
 
+def _is_suspended(user_id):
+    """停止中のアカウントか。列が無い（マイグレーション前）なら停止していない扱い。"""
+    try:
+        r = get_db().execute("SELECT suspended_at FROM users WHERE id=?", (user_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    return bool(r and r["suspended_at"])
+
+
 def login_required(f):
     @wraps(f)
     def wrapper(*a, **kw):
         if not session.get("uid"):
             return jsonify(error="ログインしてください。", auth=False), 401
+        # 停止は既存のセッションにも効かせる（停止した瞬間から書けない）。
+        # セッションを捨てるので、次のリクエストからは普通の未ログインとして扱われる。
+        if _is_suspended(session["uid"]):
+            session.pop("uid", None)
+            return jsonify(error="このアカウントは現在ご利用いただけません。", auth=False), 401
         return f(*a, **kw)
     return wrapper
 
@@ -1190,7 +1234,7 @@ def uid():
 def index():
     # Adminは一般ユーザーUI（投函・受信・年表）を使わない。管理ダッシュボードへ直行させる。
     u = current_user()
-    if u and u["username"] == "admin":
+    if u and _row_flag(u, "is_admin"):
         return redirect("/admin.welcometotayori")
     # ホーム＝宙（2026-07-25 全面刷新）。登録の有無にかかわらず、開くとまず宙が広がる。
     # ?start=1 は宙の「はじめる」から来た人（ログイン/登録画面）、?app=1 は宙から
@@ -1472,6 +1516,9 @@ def api_login():
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if not row or not check_password_hash(row["pw_hash"], password):
         return jsonify(error="名前かパスワードが違います。"), 401
+    # 停止中は、正しいパスワードでも入れない。理由は書かない（運営に問い合わせてもらう）。
+    if "suspended_at" in row.keys() and row["suspended_at"]:
+        return jsonify(error="このアカウントは現在ご利用いただけません。"), 403
     try:
         if not str(row["pw_hash"]).startswith("pbkdf2:"):
             with _WRITE_LOCK:
@@ -1479,11 +1526,18 @@ def api_login():
                 db.commit()
     except Exception as e:
         print(f"[たより] pw再ハッシュ失敗（継続）: {e}", flush=True)
+    try:
+        with _WRITE_LOCK:
+            db.execute("UPDATE users SET last_login_at=? WHERE id=?",
+                       (datetime.now().isoformat(timespec="seconds"), row["id"]))
+            db.commit()
+    except Exception as e:
+        print(f"[たより] last_login_at 記録失敗（ログインは継続）: {e}", flush=True)
     session.permanent = True
     session["uid"] = row["id"]
     keys = row.keys()
     return jsonify(ok=True, username=row["username"],
-                   is_admin=(row["username"] == "admin"),
+                   is_admin=_row_flag(row, "is_admin"),
                    email=row["email"] if "email" in keys else None,
                    email_verified=bool(row["email_verified"]) if "email_verified" in keys else False,
                    onboarded=bool(row["onboarded"]) if "onboarded" in keys else True)
@@ -1500,7 +1554,7 @@ def api_me():
         return jsonify(auth=False, weather_enabled=NETWORK_ENABLED)
     keys = u.keys()
     return jsonify(auth=True, username=u["username"],
-                   is_admin=(u["username"] == "admin"),
+                   is_admin=_row_flag(u, "is_admin"),
                    email=u["email"] if "email" in keys else None,
                    email_verified=bool(u["email_verified"]) if "email_verified" in keys else False,
                    onboarded=bool(u["onboarded"]) if "onboarded" in keys else True,
@@ -1538,10 +1592,10 @@ def api_change_name():
     if not USERNAME_RE.match(new):
         return jsonify(error="名前は2〜24文字で。漢字・かな・英数字と _ . - が使えます。"), 400
     db = get_db()
-    cur = db.execute("SELECT username FROM users WHERE id=?", (uid(),)).fetchone()
+    cur = db.execute("SELECT username, is_admin FROM users WHERE id=?", (uid(),)).fetchone()
     if not cur:
         return jsonify(error="ユーザーが見つかりません。"), 404
-    if cur["username"] == "admin":
+    if _row_flag(cur, "is_admin"):
         return jsonify(error="管理者アカウントの名前は変更できません。"), 403
     if cur["username"] == new:
         return jsonify(ok=True, username=new)
@@ -1589,10 +1643,10 @@ def api_account_delete():
     data = request.get_json(force=True) or {}
     db = get_db()
     me = uid()
-    row = db.execute("SELECT username, pw_hash FROM users WHERE id=?", (me,)).fetchone()
+    row = db.execute("SELECT username, pw_hash, is_admin FROM users WHERE id=?", (me,)).fetchone()
     if not row:
         return jsonify(error="ユーザーが見つかりません。"), 404
-    if row["username"] == "admin":
+    if _row_flag(row, "is_admin"):
         return jsonify(error="管理者アカウントは退会できません。"), 403
     # 取り返しがつかないので、二つ揃った時だけ通す（パスワード＋その場で書き写す一語）。
     if not check_password_hash(row["pw_hash"], data.get("password") or ""):
@@ -3801,7 +3855,7 @@ def api_create_letter():
         return jsonify(error="写真が大きすぎます。もう少し小さい画像でお願いします。"), 413
     if voice and len(voice) > 5_500_000:
         return jsonify(error="音声が長すぎます。短く録り直してください。"), 413
-    
+
     # 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も受け取らない
     # （クライアントが arrive_at 等を送ってきても無視する）。降ってくる日時は
     # サーバの乱数だけが知っている（レスポンスにも返さない）。
@@ -5666,17 +5720,55 @@ def api_make_chapters():
 
 
 def _admin_ok():
+    """運営かどうか。判定は users.is_admin 一本（username の文字列比較はもうしない）。
+    緊急用に環境変数のトークンも残す（ログインできない事故＝パスワード再生成からの復旧路）。"""
     u = current_user()
-    if u and u["username"] == "admin":
+    if u and _row_flag(u, "is_admin"):
         return True
     want = os.environ.get("TAYORI_ADMIN_TOKEN")
     if want:
         got = request.args.get("token") or request.headers.get("X-Admin-Token")
-        if got == want:
+        if got and secrets.compare_digest(got, want):
             return True
     return False
 
-ADMIN_READ_CONTENT = bool(os.environ.get("TAYORI_ADMIN_READ_CONTENT", "1"))
+
+def _row_flag(row, key):
+    """sqlite3.Row に列が無い可能性（マイグレーション前の一瞬）を吸収して真偽を返す。"""
+    try:
+        return bool(row[key])
+    except (IndexError, KeyError):
+        return False
+
+
+def admin_required(f):
+    """未認可には 403 ではなく 404 を返す＝管理画面の存在自体を隠す。
+    ボット/スキャナーの総当たり（デプロイ地雷#16）に対して、403 は「ここに何かある」と
+    教えてしまう。API も同じく 404 で揃える。"""
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not _admin_ok():
+            return abort(404)
+        return f(*a, **kw)
+    return wrapper
+
+
+def _admin_log(action, target_id=None, note=None):
+    """運営の操作を残す。本文は絶対に書かない（note は 'approve' のような短い語だけ）。
+    記録に失敗しても本体の操作は止めない（監査のためにサービスを落とさない）。"""
+    try:
+        u = current_user()
+        db = get_db()
+        db.execute(
+            "INSERT INTO admin_audit_log (actor_id, actor, action, target_id, note, at)"
+            " VALUES (?,?,?,?,?,?)",
+            (u["id"] if u else None,
+             (u["username"] if u else "token"),
+             action, target_id, note,
+             datetime.now().isoformat(timespec="seconds")))
+        db.commit()
+    except Exception as e:
+        print(f"[たより] 監査ログ書き込み失敗（操作は継続）: {e}", flush=True)
 
 def _make_db_snapshot(dest_path):
     src = sqlite3.connect(DB_PATH, timeout=30)
@@ -5744,9 +5836,9 @@ def _run_backup_to_s3():
 
 
 @app.route("/admin.welcometotayori/backup")
+@admin_required
 def admin_backup():
-    if not _admin_ok():
-        return "アクセス権がありません。", 403
+    _admin_log("backup")
     fd, tmp = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:
@@ -5763,16 +5855,88 @@ def admin_backup():
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
+def _admin_metrics(db):
+    """運営用の分析。ここで触れてよいのは「ことばの外側」だけ＝日時・色・季節・時刻・
+    天候・エリアといったメタ情報に限る。poem は一度も SELECT しない。
+    出来上がった数字は管理画面の中だけのもので、ユーザー側の画面には決して回さない
+    （件数・ランキング・人気度を見せないのが tayori の原則）。"""
+    m = {}
+
+    # ── ことばの巡り ──────────────────────────────────────────
+    m["sky_total"] = db.execute(
+        "SELECT COUNT(*) c FROM letters WHERE mode='sky' AND COALESCE(demo_mode,0)=0"
+    ).fetchone()["c"]
+    for key, cond in (("live", "COALESCE(sky_status,'live')='live'"),
+                      ("pending", "sky_status='pending'"),
+                      ("blocked", "sky_status='blocked'")):
+        m["sky_" + key] = db.execute(
+            f"SELECT COUNT(*) c FROM letters WHERE mode='sky'"
+            f" AND COALESCE(demo_mode,0)=0 AND {cond}").fetchone()["c"]
+    # 探索された＝初めて誰かの宙に浮かんだ（first_seen_at は一度だけ書かれる永久の記録）。
+    # 「何回読まれたか」は数えない設計なので、ここでも延べ回数は出せない・出さない。
+    m["explored"] = db.execute(
+        "SELECT COUNT(*) c FROM letters WHERE mode='sky' AND first_seen_at IS NOT NULL"
+    ).fetchone()["c"]
+    # 返却された＝書いた本人のもとへ帰った回数（returned_count は帰るたびに増える）。
+    r = db.execute(
+        "SELECT COUNT(*) c, COALESCE(SUM(returned_count),0) s FROM letters"
+        " WHERE mode='sky' AND COALESCE(returned_count,0)>0").fetchone()
+    m["returned_letters"], m["returned_times"] = r["c"], r["s"]
+    m["shelved"] = db.execute(
+        "SELECT COUNT(*) c FROM letters WHERE shelved_at IS NOT NULL").fetchone()["c"]
+    m["delivered"] = db.execute("SELECT COUNT(*) c FROM sky_deliveries").fetchone()["c"]
+    m["lanterns"] = db.execute("SELECT COUNT(*) c FROM sky_reaction").fetchone()["c"]
+
+    # ── 分布（封の色・季節・時間帯・天候・エリア）────────────────
+    rows = db.execute(
+        "SELECT sent_date, seal_color, seal_env, weather_event, time_bucket, area_name"
+        "  FROM letters WHERE COALESCE(demo_mode,0)=0").fetchall()
+    hue_buckets = [{"deg": d, "n": 0} for d in range(0, 360, 30)]
+    gray = 0
+    seasons = {k: 0 for k in _AIR_SEASONS}
+    bands = {k: 0 for k in _AIR_BANDS}
+    weathers = {k: 0 for k in ("clear", "cloud", "rain", "snow")}
+    areas = Counter()
+    for row in rows:
+        hsl = _parse_hsl(row["seal_color"])
+        if hsl:
+            h, s, _l = hsl
+            if s < _AIR_GRAY_S:
+                gray += 1          # 無彩色は色相を持たない＝別扱い（_hue_distance と同じ線引き）
+            else:
+                hue_buckets[int(h // 30) % 12]["n"] += 1
+        seasons[_mood_season(row["sent_date"])] += 1
+        band = _hour_band(_mood_hour(row))
+        if band in bands:
+            bands[band] += 1
+        weathers[_mood_weather(row)] += 1
+        if row["area_name"]:
+            areas[row["area_name"]] += 1
+    m["hue_buckets"], m["hue_gray"] = hue_buckets, gray
+    m["hue_max"] = max([b["n"] for b in hue_buckets] + [gray, 1])
+    m["seasons"] = [{"key": k, "ja": _SEASON_JA[k], "n": seasons[k]} for k in _AIR_SEASONS]
+    m["bands"] = [{"key": k, "ja": _DAYPART_JA.get(k, k), "n": bands[k]} for k in _AIR_BANDS]
+    m["weathers"] = [{"key": k, "ja": ja, "n": weathers[k]} for k, ja in
+                     (("clear", "晴"), ("cloud", "曇"), ("rain", "雨"), ("snow", "雪"))]
+    # エリアは上位20だけ。これは運営が地域の偏りを見るためのもので、ユーザー側の
+    # 地図は既存どおりセル単位のしきい値（10通未満は出さない）を守る。
+    m["areas"] = [{"name": n, "n": c} for n, c in areas.most_common(20)]
+    m["areas_total"] = len(areas)
+    m["dist_max"] = max([s["n"] for s in m["seasons"]] + [b["n"] for b in m["bands"]] +
+                        [w["n"] for w in m["weathers"]] + [1])
+    return m
+
+
 @app.route("/admin.welcometotayori")
+@admin_required
 def admin_page():
-    if not _admin_ok():
-        return "管理画面へのアクセス権がありません。", 403
     db = get_db()
     now_iso = datetime.now().isoformat(timespec="seconds")
 
     users = db.execute(
         """SELECT id,username,email,email_verified,notify_enabled,
-                  onboarding,onboarded,last_lat,created
+                  onboarding,onboarded,last_lat,created,is_admin,
+                  last_login_at,suspended_at
            FROM users ORDER BY created"""
     ).fetchall()
 
@@ -5852,6 +6016,7 @@ def admin_page():
         "onboarded": sum(1 for u in users if user_stats[u["id"]]["onb_answered"]),
         "located": sum(1 for u in users if u["last_lat"]),
         "notify": sum(1 for u in users if u["notify_enabled"]),
+        "suspended": sum(1 for u in users if u["suspended_at"]),
     }
     totals["open_rate"] = round(totals["opened"] / totals["received"] * 100) if totals["received"] else 0
     totals["email_rate"] = round(totals["emails"] / totals["users"] * 100) if totals["users"] else 0
@@ -5863,6 +6028,13 @@ def admin_page():
         day = (u["created"] or "")[:10]
         if day:
             signups[day] = signups.get(day, 0) + 1
+    # 同じ14日窓で「放たれたことば」も数える（登録の棒グラフと並べて読めるように）。
+    released = {}
+    for r in db.execute(
+            "SELECT sent_date FROM letters WHERE mode='sky' AND COALESCE(demo_mode,0)=0"):
+        day = (r["sent_date"] or "")[:10]
+        if day:
+            released[day] = released.get(day, 0) + 1
     trend = []
     cumulative_before = 0
     span_days = 14
@@ -5876,11 +6048,14 @@ def admin_page():
         d = (start + timedelta(days=i)).isoformat()
         new = signups.get(d, 0)
         running += new
-        trend.append({"date": d, "new": new, "cumulative": running})
+        trend.append({"date": d, "new": new, "cumulative": running,
+                      "released": released.get(d, 0)})
 
     max_new = max((t["new"] for t in trend), default=0)
+    max_rel = max((t["released"] for t in trend), default=0)
     for t in trend:
         t["bar_h"] = int(round(t["new"] / max_new * 100)) if (max_new and t["new"]) else 0
+        t["rel_h"] = int(round(t["released"] / max_rel * 100)) if (max_rel and t["released"]) else 0
 
     enriched_users = []
     for u in users:
@@ -5890,46 +6065,9 @@ def admin_page():
         d.pop("onboarding", None)
         enriched_users.append(d)
 
-    recent_letters = []
-    if ADMIN_READ_CONTENT:
-        uname = {u["id"]: u["username"] for u in users}
-        rows = db.execute(
-            """SELECT id, user_id, poem, photo, voice, sent_date,
-                      arrive_at, arrive_date, arrive_label, weather_event,
-                      weather_met_at, opened, emos
-               FROM letters
-               ORDER BY sent_date DESC, id DESC
-               LIMIT 50"""
-        ).fetchall()
-        for r in rows:
-            wevent = r["weather_event"]
-            if wevent:
-                met = r["weather_met_at"]
-                status = "受信済み" if (met and met <= now_iso) else "天気待ち"
-            else:
-                arrive_at = r["arrive_at"] or (r["arrive_date"] + "T00:00:00")
-                status = "受信済み" if arrive_at <= now_iso else "配送中"
-            tcount = db.execute(
-                "SELECT COUNT(*) AS c FROM thread WHERE letter_id=?", (r["id"],)
-            ).fetchone()["c"]
-            try:
-                emos = json.loads(r["emos"] or "[]")
-            except Exception:
-                emos = []
-            poem = (r["poem"] or "").strip()
-            recent_letters.append({
-                "id": r["id"],
-                "username": uname.get(r["user_id"], "—"),
-                "poem": poem,
-                "has_photo": bool(r["photo"]),
-                "has_voice": bool(r["voice"]),
-                "sent_date": r["sent_date"],
-                "arrive_label": r["arrive_label"] or "",
-                "status": status,
-                "opened": bool(r["opened"]),
-                "emos": emos,
-                "thread_count": tcount,
-            })
+    # ※「最近の便り（中身つき）」の一覧は 2026-07-26 に撤去した。運営が本文を読める場所は
+    #   下の承認キュー（掲載の門番）だけに絞る＝覗き窓を閉じ、門だけを残す。
+    #   `ADMIN_READ_CONTENT` と `/api/admin/letters/<id>` も同時に廃止している。
 
     # ── 承認キュー（2026-07-25 v13 §8）──────────────────────────────
     # 門番がグレーと見たことばだけが、ここで待っている。掲載/却下を決めるには本文を
@@ -5955,54 +6093,50 @@ def admin_page():
         trend=trend,
         pending_sky=pending_sky,
         blocked_count=blocked_count,
-        recent_letters=recent_letters,
-        read_content=ADMIN_READ_CONTENT,
+        metrics=_admin_metrics(db),
+        audit=[dict(a) for a in db.execute(
+            "SELECT actor, action, target_id, note, at FROM admin_audit_log"
+            " ORDER BY id DESC LIMIT 50")],
         onb_total=onb_total,
     )
 
-@app.route("/api/admin/letters/<lid>")
-def api_admin_letter_detail(lid):
-    if not _admin_ok():
-        return jsonify(error="権限がありません。"), 403
-    if not ADMIN_READ_CONTENT:
-        return jsonify(error="中身の閲覧は無効化されています。"), 403
+
+@app.route("/api/admin/users/<uid_>/suspend", methods=["POST"], defaults={"verb": "suspend"})
+@app.route("/api/admin/users/<uid_>/restore", methods=["POST"], defaults={"verb": "restore"})
+@admin_required
+def api_admin_user_state(uid_, verb):
+    """停止（凍結）と復帰。データには一切触れない＝復帰すればそのまま戻る。
+    停止した人のことばは宙に残したまま（放たれたことばは、放った人のものではない）。
+    ルートは suspend/restore を別々に切る（`<verb>` の総称にすると同階層の
+    `/delete` と曖昧になり、どちらが勝つかが werkzeug の並べ替え任せになるため）。"""
     db = get_db()
-    r = db.execute(
-        """SELECT l.*, u.username AS username
-           FROM letters l JOIN users u ON u.id = l.user_id
-           WHERE l.id=?""", (lid,)
-    ).fetchone()
-    if not r:
-        return jsonify(error="便りが見つかりません。"), 404
+    row = db.execute("SELECT username, is_admin FROM users WHERE id=?", (uid_,)).fetchone()
+    if not row:
+        return jsonify(error="ユーザーが見つかりません。"), 404
+    if _row_flag(row, "is_admin"):
+        return jsonify(error="管理者アカウントは停止できません。"), 403
+    at = datetime.now().isoformat(timespec="seconds") if verb == "suspend" else None
     try:
-        emos = json.loads(r["emos"] or "[]")
-    except Exception:
-        emos = []
-    thread = db.execute(
-        "SELECT who,text,created,created_at,kind FROM thread WHERE letter_id=? ORDER BY id",
-        (lid,)
-    ).fetchall()
-    return jsonify(
-        id=r["id"],
-        username=r["username"],
-        poem=r["poem"] or "",
-        has_photo=bool(r["photo"]),
-        has_voice=bool(r["voice"]),
-        sent_date=r["sent_date"],
-        arrive_label=r["arrive_label"] or "",
-        opened=bool(r["opened"]),
-        emos=emos,
-        thread=[dict(t) for t in thread],
-    )
+        with _WRITE_LOCK:
+            db.execute("UPDATE users SET suspended_at=? WHERE id=?", (at, uid_))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 停止/復帰 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    _admin_log(verb, uid_)
+    return jsonify(ok=True, suspended_at=at)
+
+
+# 2026-07-26: `/api/admin/letters/<lid>` は廃止した。ことばの全文と対話ログを運営へ
+# そのまま返す唯一の経路であり、承認キューの外側にある覗き窓だったため。復活させないこと。
 
 
 @app.route("/api/admin/sky/<lid>/<verdict>", methods=["POST"])
+@admin_required
 def api_admin_sky_moderate(lid, verdict):
     """承認キューの裁定（§8）。掲載＝そこで初めて宙へ出て、だれか一人への配達も始まる。
     却下＝宙に出さない（本文は本人の手元に残り、帰還メールもそのまま生きている）。
     どちらでも、放った本人には何も通知しない（【J】非対称性）。"""
-    if not _admin_ok():
-        return jsonify(error="権限がありません。"), 403
     if verdict not in ("approve", "reject"):
         return jsonify(error="不正な裁定です。"), 400
     db = get_db()
@@ -6025,24 +6159,52 @@ def api_admin_sky_moderate(lid, verdict):
         # （sky_deliveries）は取り上げない——一度その人の手に渡ったことばは、こちらの
         # 都合で消さない。手元から消したい時は本人が棚から外す。
         _sky_cache_bust()
+    _admin_log("sky_moderate", lid, verdict)
     return jsonify(ok=True, status=status)
 
 
 @app.route("/api/admin/users/<uid_>/delete", methods=["POST"])
+@admin_required
 def api_admin_delete_user(uid_):
-    if not _admin_ok():
-        return jsonify(error="権限がありません。"), 403
     db = get_db()
-    row = db.execute("SELECT username FROM users WHERE id=?", (uid_,)).fetchone()
+    row = db.execute("SELECT username, is_admin FROM users WHERE id=?", (uid_,)).fetchone()
     if not row:
         return jsonify(error="ユーザーが見つかりません。"), 404
-    if row["username"] == "admin":
+    if _row_flag(row, "is_admin"):
         return jsonify(error="管理者アカウントは削除できません。"), 403
+    # 削除要求（GDPR 的な「消してほしい」）への物理削除。この人に紐づく行を残さない。
+    # ただし他人の棚に渡った控え（他ユーザーの saved_words）は消さない：一度その人の手に
+    # 渡ったことばは取り上げない、という §1.5 の担保。控えは匿名のスナップショットで、
+    # 書き手を指す情報を一切持たないので、この人へ遡れる経路も残らない。
+    _sub = "(SELECT id FROM letters WHERE user_id=?)"
     try:
         with _WRITE_LOCK:
+            db.execute(f"DELETE FROM thread      WHERE letter_id IN {_sub}", (uid_,))
+            db.execute(f"DELETE FROM letter_tags WHERE letter_id IN {_sub}", (uid_,))
+            db.execute(f"DELETE FROM sky_seen     WHERE letter_id IN {_sub}", (uid_,))
+            db.execute(f"DELETE FROM sky_reaction WHERE letter_id IN {_sub}", (uid_,))
+            db.execute(f"DELETE FROM sky_marks    WHERE letter_id IN {_sub}", (uid_,))
+            db.execute(f"DELETE FROM sky_deliveries WHERE letter_id IN {_sub}", (uid_,))
+            # この人が「読み手」として残した痕跡
+            db.execute("DELETE FROM sky_seen      WHERE reader_id=?", (uid_,))
+            db.execute("DELETE FROM sky_reaction  WHERE reader_id=?", (uid_,))
+            db.execute("DELETE FROM sky_marks     WHERE user_id=?",   (uid_,))
+            db.execute("DELETE FROM sky_deliveries WHERE recipient=?", (uid_,))
             db.execute(
-                "DELETE FROM thread WHERE letter_id IN (SELECT id FROM letters WHERE user_id=?)",
-                (uid_,))
+                "DELETE FROM saved_tags WHERE saved_id IN"
+                " (SELECT id FROM saved_words WHERE user_id=?)", (uid_,))
+            db.execute(
+                "DELETE FROM shelf_items WHERE shelf_id IN"
+                " (SELECT id FROM shelves WHERE owner_id=?)", (uid_,))
+            db.execute("DELETE FROM shelves     WHERE owner_id=?", (uid_,))
+            db.execute("DELETE FROM saved_words WHERE user_id=?",  (uid_,))
+            db.execute(
+                "DELETE FROM answers WHERE letter_id IN"
+                " (SELECT id FROM survey_letters WHERE user_id=?)", (uid_,))
+            db.execute("DELETE FROM survey_letters    WHERE user_id=?", (uid_,))
+            db.execute("DELETE FROM unemptyable_trash WHERE user_id=?", (uid_,))
+            db.execute("DELETE FROM woven_scraps      WHERE user_id=?", (uid_,))
+            db.execute("DELETE FROM notes             WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM letters WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM drafts  WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM users   WHERE id=?",      (uid_,))
@@ -6050,6 +6212,9 @@ def api_admin_delete_user(uid_):
     except sqlite3.OperationalError as e:
         print(f"[たより] ユーザー削除 書き込み失敗（再試行可）: {e}", flush=True)
         return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    _sky_cache_bust()
+    # 監査ログには識別子だけを残す（消した人の名前は残さない＝削除要求の趣旨に沿う）。
+    _admin_log("delete_user", uid_)
     return jsonify(ok=True)
 
 

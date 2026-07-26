@@ -121,6 +121,110 @@
             font-size: 13px;
             font-style: italic;
         }
+        /* 停止／復帰。削除（赤）より一段おとなしく＝取り返しがつく操作であることを色で示す */
+        .btn-state {
+            background-color: #f5f3ef;
+            color: #57534e;
+            border: 1px solid #d6cdbe;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-right: 6px;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .btn-state:hover { background-color: #e9e5dd; }
+        .btn-state:active { transform: scale(0.97); }
+        @media (prefers-reduced-motion: reduce) {
+            .btn-state:active { transform: none; }
+        }
+        .state-cell { white-space: nowrap; }
+
+        /* ── 封の色の分布 ─────────────────────────────── */
+        .hue-strip {
+            display: flex;
+            gap: 4px;
+            align-items: flex-end;
+            height: 130px;
+            padding: 10px 4px 0;
+        }
+        .hue-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            height: 100%;
+        }
+        .hue-bar {
+            width: 100%;
+            background: #d6cdbe;
+            border-radius: 3px 3px 0 0;
+            min-height: 3px;
+        }
+        .hue-lbl {
+            font-size: 10px;
+            color: #a8a29e;
+            margin-top: 5px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ── 季節・時間帯・天候・エリアの分布 ─────────────── */
+        .dist-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .dist-box {
+            flex: 1;
+            min-width: 220px;
+            background: #fbfaf8;
+            border: 1px solid #eae6de;
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+        .dist-box.wide { min-width: 100%; }
+        .dist-title {
+            font-size: 12px;
+            color: #78716c;
+            margin-bottom: 10px;
+            letter-spacing: .04em;
+        }
+        .dist-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 7px;
+        }
+        .dist-key {
+            width: 44px;
+            font-size: 13px;
+            color: #57534e;
+            flex-shrink: 0;
+        }
+        .dist-key.wide { width: 150px; }
+        .dist-track {
+            flex: 1;
+            height: 8px;
+            background: #eee9e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .dist-fill {
+            display: block;
+            height: 100%;
+            background: #b9ad99;
+            border-radius: 4px;
+            min-width: 2px;
+        }
+        .dist-n {
+            width: 42px;
+            text-align: right;
+            font-size: 12px;
+            color: #78716c;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+        }
 
         /* ---- 統計サマリー ---- */
         .stats-grid {
@@ -575,6 +679,83 @@
             <div class="trend-note">棒は各日の新規登録数。バーにカーソルを合わせると累計が出ます。</div>
         </div>
 
+        <div class="trend">
+            <div class="section-title">放たれたことばの推移（直近14日）</div>
+            <div class="trend-bars">
+                {% for t in trend %}
+                <div class="trend-col" title="{{ t.date }} ・ 放たれた {{ t.released }}">
+                    <span class="count">{% if t.released %}{{ t.released }}{% endif %}</span>
+                    <div class="trend-bar rel" data-h="{{ t.rel_h }}"></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="trend-axis">
+                {% for t in trend %}
+                <span>{{ t.date[5:] }}</span>
+                {% endfor %}
+            </div>
+            <div class="trend-note">棒は各日に宙へ放たれたことばの数（デモを除く）。</div>
+        </div>
+
+        <div class="section-title">ことばの巡り</div>
+        <div class="breakdown">
+            <div class="bd-card"><div class="bd-num">{{ metrics.sky_total }}</div><div class="bd-lbl">放たれたことば</div></div>
+            <div class="bd-card"><div class="bd-num">{{ metrics.explored }}</div><div class="bd-lbl">誰かの宙に浮かんだ</div></div>
+            <div class="bd-card"><div class="bd-num">{{ metrics.delivered }}</div><div class="bd-lbl">だれか一人へ配られた</div></div>
+            <div class="bd-card"><div class="bd-num">{{ metrics.returned_letters }}</div><div class="bd-lbl">本人へ帰った</div></div>
+            <div class="bd-card"><div class="bd-num">{{ metrics.shelved }}</div><div class="bd-lbl">誰かの棚に入った</div></div>
+            <div class="bd-card"><div class="bd-num">{{ metrics.lanterns }}</div><div class="bd-lbl">灯された</div></div>
+            <div class="bd-card"><div class="bd-num">{{ metrics.sky_blocked }}</div><div class="bd-lbl">掲載しなかった</div></div>
+        </div>
+        <div class="trend-note">「誰かの宙に浮かんだ」は初回のみの記録です（何回読まれたかは設計上どこにも残していません）。「本人へ帰った」は通数で、延べ帰還回数は {{ metrics.returned_times }} 回。</div>
+
+        <div class="section-title">封の色の分布</div>
+        <div class="hue-strip">
+            {% for b in metrics.hue_buckets %}
+            <div class="hue-col" title="色相 {{ b.deg }}°〜{{ b.deg + 29 }}° ・ {{ b.n }} 通">
+                <div class="hue-bar" data-h="{{ (b.n * 100 / metrics.hue_max) | round | int }}"
+                     data-color="hsl({{ b.deg + 15 }}, 55%, 55%)"></div>
+                <span class="hue-lbl">{{ b.deg }}</span>
+            </div>
+            {% endfor %}
+            <div class="hue-col" title="無彩色（彩度12%未満）・ {{ metrics.hue_gray }} 通">
+                <div class="hue-bar" data-h="{{ (metrics.hue_gray * 100 / metrics.hue_max) | round | int }}"
+                     data-color="hsl(0, 0%, 62%)"></div>
+                <span class="hue-lbl">灰</span>
+            </div>
+        </div>
+        <div class="trend-note">横軸は色相（度）。いちばん右は彩度12%未満の無彩色で、色相を持たないため別に数えています。</div>
+
+        <div class="section-title">季節・時間帯・天候の分布</div>
+        <div class="dist-row">
+            {% for group, label in [(metrics.seasons, '季節'), (metrics.bands, '時間帯'), (metrics.weathers, '天候')] %}
+            <div class="dist-box">
+                <div class="dist-title">{{ label }}</div>
+                {% for d in group %}
+                <div class="dist-line">
+                    <span class="dist-key">{{ d.ja }}</span>
+                    <span class="dist-track"><span class="dist-fill" data-h="{{ (d.n * 100 / metrics.dist_max) | round | int }}"></span></span>
+                    <span class="dist-n">{{ d.n }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="trend-note">封をした瞬間の記録から集計しています（本文には触れていません）。</div>
+
+        {% if metrics.areas %}
+        <div class="section-title">エリアの分布（上位 {{ metrics.areas | length }} / 全 {{ metrics.areas_total }} エリア）</div>
+        <div class="dist-box wide">
+            {% for a in metrics.areas %}
+            <div class="dist-line">
+                <span class="dist-key wide">{{ a.name }}</span>
+                <span class="dist-track"><span class="dist-fill" data-h="{{ (a.n * 100 / metrics.areas[0].n) | round | int }}"></span></span>
+                <span class="dist-n">{{ a.n }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div class="section-title">tayori-たより- の承認キュー（{{ pending_sky | length }}）</div>
         <div class="queue-note">
             門番（キーワード照合）がグレーと見たことばだけが、ここで待っています。<strong>掲載</strong>を押した瞬間に tayori-たより- へ出て、だれか一人への配達も始まります。<strong>却下</strong>すると tayori-たより- には出ませんが、本文は本人の手元に残り、帰還メールもそのまま生きています。<br>
@@ -600,44 +781,8 @@
         <p class="trend-note">いま、承認を待っていることばはありません。</p>
         {% endif %}
 
-        {% if read_content %}
-        <div class="section-title">最近の便り（中身つき）</div>
-        <div class="content-warn">
-            ⚠ これは管理用の覗き窓です。tayori 本来は「本人すら開封日まで中身を見られない」設計です。公開時は環境変数 <code>TAYORI_ADMIN_READ_CONTENT</code> を外すと、この一覧は表示されなくなります。
-        </div>
-        {% if recent_letters %}
-        <div class="letters-list">
-            {% for L in recent_letters %}
-            <div class="letter-card" onclick="openLetter('{{ L.id }}')">
-                <div class="lc-top">
-                    <span class="lc-user">{{ L.username }}</span>
-                    <span class="lc-badges">
-                        {% if L.status == '受信済み' %}<span class="badge recv">受信済み</span>
-                        {% elif L.status == '天気待ち' %}<span class="badge wx">天気待ち</span>
-                        {% else %}<span class="badge tran">配送中</span>{% endif %}
-                        {% if L.has_photo %}<span class="badge mute">写真</span>{% endif %}
-                        {% if L.has_voice %}<span class="badge mute">声</span>{% endif %}
-                        {% if L.thread_count %}<span class="badge mute">対話 {{ L.thread_count }}</span>{% endif %}
-                    </span>
-                </div>
-                {% if L.poem %}
-                <div class="lc-poem">{{ L.poem }}</div>
-                {% else %}
-                <div class="lc-poem empty">（テキストなし{% if L.has_photo %}・写真の便り{% elif L.has_voice %}・声の便り{% endif %}）</div>
-                {% endif %}
-                <div class="lc-meta">
-                    <span>投函 {{ L.sent_date[:10] }}</span>
-                    {% if L.arrive_label %}<span>届け先 {{ L.arrive_label }}</span>{% endif %}
-                    {% if L.emos %}<span>{{ L.emos | join('・') }}</span>{% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        <p class="trend-note">最新50件まで表示。便りをクリックすると全文と対話が見られます。</p>
-        {% else %}
-        <p class="trend-note">まだ便りはありません。</p>
-        {% endif %}
-        {% endif %}
+        {# 2026-07-26: 「最近の便り（中身つき）」の覗き窓は撤去した。運営が本文を読める場所は
+           上の承認キューだけ＝門番として必要な一瞬に限る。復活させないこと。 #}
 
         <div class="section-title">ユーザー一覧（行をクリックでも詳細）</div>
 
@@ -653,7 +798,9 @@
                     <th class="num">向き合い</th>
                     <th>オンボード</th>
                     <th>位置 / 通知</th>
+                    <th>状態</th>
                     <th>アカウント作成日</th>
+                    <th>最終ログイン</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -697,9 +844,29 @@
                         {% if u.has_location %}<span class="pill ok">位置</span>{% else %}<span class="pill off">位置—</span>{% endif %}
                         {% if u.notify_enabled %}<span class="pill ok">通知</span>{% else %}<span class="pill off">通知—</span>{% endif %}
                     </td>
+                    <td class="state-cell">
+                        {% if u.suspended_at %}
+                            <span class="pill warn">停止中</span>
+                            <div class="sub-inline">{{ u.suspended_at[:10] }}</div>
+                        {% else %}
+                            <span class="pill ok">有効</span>
+                        {% endif %}
+                    </td>
                     <td><span class="date">{{ u.created[:19].replace('T', ' ') }}</span></td>
                     <td>
-                        {% if u.username != 'admin' %}
+                        {% if u.last_login_at %}
+                            <span class="date">{{ u.last_login_at[:16].replace('T', ' ') }}</span>
+                        {% else %}
+                            <span class="email-none">記録なし</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not u.is_admin %}
+                            {% if u.suspended_at %}
+                                <button class="btn-state" onclick="setUserState('{{ u.id }}', '{{ u.username }}', 'restore')">復帰</button>
+                            {% else %}
+                                <button class="btn-state" onclick="setUserState('{{ u.id }}', '{{ u.username }}', 'suspend')">停止</button>
+                            {% endif %}
                             <button class="btn-delete" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')">削除</button>
                         {% else %}
                             <span class="protected">保護対象 (管理者)</span>
@@ -710,6 +877,29 @@
             </tbody>
         </table>
         </div>
+
+        <div class="section-title">運営の操作記録（直近50件）</div>
+        <div class="trend-note">運営が何をしたかの記録です。ことばの中身は一切記録していません。</div>
+        {% if audit %}
+        <div class="table-scroll">
+        <table>
+            <thead><tr><th>日時</th><th>操作者</th><th>操作</th><th>対象</th><th>結果</th></tr></thead>
+            <tbody>
+                {% for a in audit %}
+                <tr>
+                    <td><span class="date">{{ a.at[:19].replace('T', ' ') }}</span></td>
+                    <td><span class="username">{{ a.actor }}</span></td>
+                    <td>{{ a.action }}</td>
+                    <td><span class="date">{{ a.target_id or '—' }}</span></td>
+                    <td>{{ a.note or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="trend-note">まだ記録はありません。</p>
+        {% endif %}
     </div>
 
     <div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()">
@@ -729,44 +919,40 @@
         });
 
         // 棒グラフの高さを data-h から反映（インラインstyleにロジックを置かないため）
-        document.querySelectorAll('.trend-bar[data-h]').forEach(function(el){
+        document.querySelectorAll('.trend-bar[data-h], .hue-bar[data-h]').forEach(function(el){
             el.style.height = el.getAttribute('data-h') + '%';
+            const c = el.getAttribute('data-color');
+            if (c) el.style.background = c;
         });
+        // 分布バーは横向きなので幅を入れる
+        document.querySelectorAll('.dist-fill[data-h]').forEach(function(el){
+            el.style.width = el.getAttribute('data-h') + '%';
+        });
+
+        // 停止／復帰。データには触らないので、削除ほど強い確認は出さない。
+        function setUserState(uid, username, verb){
+            const isSuspend = verb === 'suspend';
+            const msg = isSuspend
+                ? `ユーザー「${username}」を停止しますか？\n\nログインできなくなります。ことばや棚のデータはそのまま残り、復帰すれば元に戻ります。`
+                : `ユーザー「${username}」を復帰させますか？`;
+            if (!confirm(msg)) return;
+            fetch(`/api/admin/users/${uid}/${verb}`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
+            })
+            .then(res => res.json().then(d => {
+                if (!res.ok || !d.ok) throw new Error(d.error || '失敗しました。');
+                window.location.reload();
+            }))
+            .catch(err => alert('エラー: ' + err.message));
+        }
 
         const esc = s => (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
         function closeModal(){ document.getElementById('modalBack').classList.remove('on'); }
-
-        async function openLetter(id){
-            const back = document.getElementById('modalBack');
-            const body = document.getElementById('modalBody');
-            body.innerHTML = '<div class="m-sub">読み込み中…</div>';
-            back.classList.add('on');
-            try {
-                const res = await fetch('/api/admin/letters/' + id);
-                const d = await res.json();
-                if(!res.ok){ body.innerHTML = '<div class="m-sub">'+esc(d.error||'読み込めませんでした')+'</div><button class="modal-close" onclick="closeModal()">閉じる</button>'; return; }
-                let h = '<h2>' + esc(d.username) + ' さんの便り</h2>';
-                h += '<div class="m-sub">投函 ' + esc((d.sent_date||'').slice(0,10)) + ' ・ 届け先 ' + esc(d.arrive_label||'—') + ' ・ ' + (d.opened?'開封済み':'未開封') + '</div>';
-                if(d.poem){ h += '<div class="m-poem">' + esc(d.poem) + '</div>'; }
-                else { h += '<div class="m-poem" style="color:#a8a29e;font-style:italic">（テキストなし' + (d.has_photo?'・写真の便り':(d.has_voice?'・声の便り':'')) + '）</div>'; }
-                if(d.emos && d.emos.length){ h += '<div class="m-sub">感情タグ: ' + esc(d.emos.join('・')) + '</div>'; }
-                const t = d.thread || [];
-                if(t.length){
-                    h += '<div class="m-section-lbl">過去の自分と今の自分の対話</div>';
-                    t.forEach(m => {
-                        const who = m.who==='now' ? '今のあなた' : (m.who==='ai' ? '過去のあなたからの問い' : '過去のあなた');
-                        const when = m.created_at ? ' · ' + esc(m.created_at.slice(0,16).replace('T',' ')) : '';
-                        h += '<div class="m-msg ' + esc(m.who) + '"><div class="m-who">' + who + when + '</div><div class="m-bubble">' + esc(m.text) + '</div></div>';
-                    });
-                }
-                h += '<button class="modal-close" onclick="closeModal()">閉じる</button>';
-                body.innerHTML = h;
-            } catch(e){
-                body.innerHTML = '<div class="m-sub">通信エラー</div><button class="modal-close" onclick="closeModal()">閉じる</button>';
-            }
-        }
         document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+        // 2026-07-26: 便りの全文と対話を開く openLetter() は撤去した（/api/admin/letters も廃止）。
+        // モーダル自体はユーザー詳細で使い続けるので残してある。
 
         // 宙の承認キュー（v13 §8）。裁定はその場で一行に畳む（ページを再読み込みしない）
         async function moderateSky(id, verdict){
