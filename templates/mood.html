@@ -283,7 +283,12 @@
      v14：書いている間は宙をもう一段うしろへ下げる（暗くする＋薄くぼかす）。
      漂うことばが便箋の裏で読めていると、自分の字と他人の字が混ざって落ち着かない
      （＝Apple §12「集中させたい時は、背後を暗くして押しやる」）。消すのではなく、退かせる。 */
-  .cast{position:fixed;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;
+  /* 柱が画面より高くなった時は、切り落とさずに送れるようにする（v2.2）。
+     align-items:center のまま溢れると上端が掴めなくなる（中央寄せの古い穴）ので、
+     上端そろえ＋.cast-inner の margin:auto で中央に置く——余白がある時は中央、
+     足りない時は上から素直に伸びる。辿る（.trace）と同じ作法。 */
+  .cast{position:fixed;inset:0;z-index:12;display:flex;align-items:flex-start;justify-content:center;
+        overflow-y:auto;overscroll-behavior:contain;
         background:rgba(8,8,13,.55);opacity:0;pointer-events:none;
         backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);
         transition:opacity .6s var(--ease),backdrop-filter .6s var(--ease),
@@ -294,12 +299,14 @@
     .cast.on{background:rgba(8,8,13,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
   }
   /* position:relative ＝ 自前カーソル（.vcaret）とミラー要素の座標の基準 */
-  /* 4列の箱ごと中央に置くと、字は右端の列から書き始まるので、短い言葉は箱の右寄りに
-     浮いて見える（罫は4本立っているが、実際に字が乗る列は右端の1本だけ）。
-     箱を左へ1.5列分ずらし、いちばん使われる右端の列を画面の中央に合わせる。 */
-  .cast-inner{position:relative;display:flex;flex-direction:column;align-items:center;
-              gap:var(--s2);padding:var(--s3);max-width:92vw;
-              transform:translateX(calc(var(--cw) * -1.5))}
+  /* 中央に合わせる基準は「箱の外枠」でも「右端の列」でもなく、右から2本目の罫。
+     罫は4本とも各列の左境に立つ（右端から --cw, 2--cw, 3--cw, 4--cw）ので、
+     右から2本目＝幅4列の紙のちょうど中心線。紙をそのまま中央に置けば、その一本が
+     画面の中央に来る——つまり、ここに transform は要らない。
+     v13.1 では短い言葉の見え方を優先して箱を左へ1.5列ずらしていたが、それだと
+     字数・色・放つを含む柱ごと左へ寄って見える。便箋という物を中央に据える方を採る。 */
+  .cast-inner{position:relative;margin:auto;display:flex;flex-direction:column;align-items:center;
+              gap:var(--s2);padding:var(--s3);max-width:92vw}
   /* ── 宙の便箋：4本の縦罫（v13.1）────────────────────────────
      列幅＝line-height（--cw）、1列 --cch 字。4列 × 20字 = 80字＝本文の上限とちょうど同じ。
      箱の寸法を固定するのが要点：これまで width:auto だったので、字が増えて列が伸びるたび
@@ -307,12 +314,13 @@
      （＝カーソルが動いて見えた原因の半分）。空でも罫は4本立っている（便箋の姿）。
      画面が低い端末では字面と列幅だけを詰め、20字×4列の関係は崩さない。 */
   .cast{--cw:36px;--fs:17px;--cch:20}
-  /* 柱の総丈 ＝ 便箋 + 307px（字数・色の二段・放つ・添え書き・間）。
-     v14で色の帯の的を44pxに広げた分だけ丈が伸びたので、しきい値もその分下げてある。
+  /* 柱の総丈 ＝ 便箋 + 363px（字数・題・色の二段・付箋・放つ・添え書き・間）。
+     v14で色の帯の的を44pxに広げた分、v2.2で題の一行（44px＋gap12px＝56px）が増えた分だけ
+     丈が伸びるので、しきい値も同じだけ上げてある（740/690/640 → 796/746/696）。
      低い画面では字面と列幅だけを詰め、20字×4列の関係は絶対に崩さない。 */
-  @media (max-height:740px){ .cast{--cw:32px;--fs:15px} }
-  @media (max-height:690px){ .cast{--cw:28px;--fs:13px} }
-  @media (max-height:640px){ .cast{--cw:26px;--fs:12px} }
+  @media (max-height:796px){ .cast{--cw:32px;--fs:15px} }
+  @media (max-height:746px){ .cast{--cw:28px;--fs:13px} }
+  @media (max-height:696px){ .cast{--cw:26px;--fs:12px} }
   /* v16：textarea → contenteditable。vertical-rl の <textarea> は Chrome/Safari とも
      IME変換中の文字（プレビュー・候補）を正しく描けない実装上の穴があり、宙で漢字変換が
      効かなかった（textareaは専用の内部エディタで、日本語縦書き＋IMEの対応が薄い）。
@@ -341,6 +349,17 @@
   @media (prefers-reduced-motion: reduce){ .vcaret{animation:none} }
   .cast-count{font-family:'Courier Prime',monospace;font-size:var(--t-mono);
               letter-spacing:0.3em;color:var(--ink-4)}
+  /* 題（v2.2 §2.1・§3）：書き手が付けるのはこれ一つだけ。10字以内・任意。
+     便箋のすぐ下に置く——名は紙より後（開くと筆先が立つのは便箋のほうで、ここではない）。
+     付箋と同じ「罫一本」の姿にそろえ、中央に据えて〈この一枚の名〉であることを示す。
+     的は44px（v14）。書いている間の字数表示は付けない：10字は数える前に見て分かる。 */
+  #castTitle{width:100%;max-width:min(70vw,300px);background:none;border:none;
+             border-bottom:1px solid var(--rule);color:var(--ink-1);font-family:inherit;
+             font-size:13.5px;letter-spacing:0.16em;text-align:center;
+             padding:12px 2px;min-height:var(--touch);outline:none;
+             transition:border-color .22s var(--ease),color .22s var(--ease)}
+  #castTitle::placeholder{color:var(--ink-4);letter-spacing:0.12em}
+  #castTitle:focus{border-bottom-color:var(--ink-4)}
   /* 色｜v11.1：パステル固定をやめ、色相バー＋トーンバーの二段に戻す。
      上＝色相（鮮やかなまま全周）、下＝淡い⇄鮮やか⇄深い。選んだ色はその場で文字にのる。
      v14：帯の見た目は11pxのまま、指の的だけ上下パディングで44pxに広げた
@@ -370,6 +389,9 @@
   .cast-close:hover{border-bottom-color:var(--rule-act)}
   .cast-note{margin:0;font-size:11.5px;line-height:2.1;letter-spacing:var(--tr-body);
              color:var(--ink-4);text-align:center}
+  /* 著作権の一行（v2 §13）。注記より一段だけ立たせる：常時・消えない・畳まない */
+  .cast-own{margin:0 0 6px;font-size:12px;line-height:2;letter-spacing:0.14em;
+            color:var(--ink-3);text-align:center;word-break:keep-all}
   /* 開く：メールの開封リンク（/open/<id>）から宙に着地したときだけ立ち上がる柱。
      書く柱（.cast）と同じ作法で、宙が暗くなり、本文がひと筋立つ。 */
   .read{position:fixed;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;
@@ -436,6 +458,92 @@
   .care-note .care-close{display:block;margin:var(--s1) 0 0 auto;min-height:var(--touch);
              color:var(--ink-3);font-size:11.5px;letter-spacing:0.2em;padding:12px 2px}
   @media (prefers-reduced-motion: reduce){ .care-note{transition:opacity .4s ease;transform:translate(-50%,0)} }
+
+  /* ── 灯（宙v1 §4.2）──
+     いま、自分以外の誰かが宙のことばに触れた——その気配だけの、かすかな明滅。
+     位置は宙の下のすみ。数字も文字も持たない（数えた瞬間に灯でなくなる）。 */
+  .lantern{position:fixed;left:26px;bottom:30px;width:7px;height:7px;border-radius:50%;
+           background:var(--thread,#c9b98a);opacity:0;pointer-events:none;z-index:9;
+           box-shadow:0 0 16px 4px rgba(222,205,160,.35);
+           transition:opacity 2.6s var(--ease,ease)}
+  .lantern.on{opacity:.6}
+  @media (prefers-reduced-motion: reduce){ .lantern{transition:opacity 1s ease} }
+
+  /* 相談窓口の常時導線（宙v1 §12）。宙の右下に、闇より一段だけ明るく置く */
+  .care-link{position:fixed;right:20px;bottom:22px;z-index:9;
+             font-size:11.5px;letter-spacing:0.18em;color:var(--ink-4);
+             text-decoration:none;border-bottom:1px solid var(--rule);
+             padding:10px 2px;text-shadow:0 0 12px rgba(8,8,13,.9)}
+  .care-link:hover{color:var(--ink-2)}
+
+  /* 灯がすでにともっていることば（宙v1 §4.1）。ボタンではなく、状態の一文 */
+  .hold-lit{margin:0;font-size:12px;line-height:2.1;letter-spacing:0.06em;color:var(--ink-3)}
+
+  /* ══ 辿る（v2 §4）＝似た空気を追う面 ══════════════════════════
+     一覧だが、数は出さない・ページ番号も出さない。「もっと」だけ。
+     暗い宙の上に、ことばが色ごと縦に連なる。 */
+  .trace{position:fixed;inset:0;z-index:60;background:rgba(8,8,13,.9);display:none;
+         overflow-y:auto;overscroll-behavior:contain;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .trace.on{display:block}
+  .trace-inner{max-width:560px;margin:0 auto;padding:11vh 24px 14vh;
+               display:flex;flex-direction:column;gap:6px}
+  .trace-lead{margin:0 0 14px;font-size:var(--t-meta,12px);letter-spacing:0.2em;
+              color:var(--ink-3);word-break:keep-all}
+  /* いま立っていることば（辿りの現在地）。罫で下を締める */
+  .trace-here{padding:0 0 18px;margin-bottom:14px;border-bottom:1px solid var(--rule)}
+  .trace-here-poem{font-size:16.5px;line-height:2.3;letter-spacing:0.05em;color:var(--ink-1);
+                   white-space:pre-wrap;word-break:break-word}
+  .trace-acts{display:flex;flex-wrap:wrap;gap:2px 18px;margin-top:6px}
+  .trace-acts .hold-act{min-height:var(--touch)}
+  /* 連なることば。ボタンだが札にしない：ことばそのものが押せる */
+  .trace-word{display:block;width:100%;text-align:left;background:none;border:none;
+              font-family:inherit;font-size:14.5px;line-height:2.15;letter-spacing:0.05em;
+              color:var(--ink-2);padding:12px 2px;min-height:var(--touch);cursor:pointer;
+              white-space:pre-wrap;word-break:break-word;
+              transition:opacity .22s var(--ease)}
+  .trace-word:active{opacity:.6}
+  .trace-word:focus-visible{outline:1px solid var(--rule);outline-offset:6px}
+  .trace-word .yours{display:block;font-size:10.5px;letter-spacing:0.22em;color:var(--ink-4);
+                     margin-top:-2px}
+  /* 題（v2.2 §3）。一覧でだけ立つ。ことばより一段退いて上に置く——先に読まれるのは
+     ことばのほうで、題はそれを探すための手がかりに留める（漂いには出ない） */
+  .trace-word .title,.here-title{display:block;font-size:11px;letter-spacing:0.2em;
+                     color:var(--ink-4);margin-bottom:3px;
+                     word-break:keep-all;overflow-wrap:anywhere}
+  .here-title[hidden]{display:none}
+  .trace-more{align-self:flex-start;margin-top:16px;color:var(--ink-3);
+              font-size:12px;letter-spacing:0.24em;padding:12px 2px;min-height:var(--touch)}
+  .trace-close{align-self:flex-end;margin-top:26px;color:var(--ink-3);
+               font-size:12px;letter-spacing:0.24em;padding:12px 2px;min-height:var(--touch)}
+  .trace-quiet{margin:22px 0 0;font-size:12px;line-height:2.1;letter-spacing:0.06em;
+               color:var(--ink-4);word-break:keep-all}
+
+  /* ── 付箋（v2.2 §3）＝棚に残す瞬間に、読み手が自分の控えへ貼る小さな紙片。
+     宙にも辿るにも出ない・書き手には返らない。だからここでは「触れて辿る」入口にはしない
+     （貼った本人の、自分の棚のための目印）。 ── */
+  .fusen-row{display:flex;flex-wrap:wrap;gap:8px}
+  .fusen{display:inline-flex;align-items:center;gap:6px;max-width:100%;
+         background:rgba(250,248,243,.07);border:1px solid var(--rule);border-radius:1px;
+         font-family:inherit;font-size:11.5px;letter-spacing:0.14em;color:var(--ink-3);
+         padding:7px 10px;min-height:32px;cursor:pointer;
+         transition:color .22s var(--ease),background .22s var(--ease)}
+  .fusen:active{color:var(--ink-1);background:rgba(250,248,243,.12)}
+  .fusen .x{color:var(--ink-4);font-size:13px;line-height:1}
+  .hold .fusen{min-height:30px;padding:5px 9px}
+
+  /* 棚に残したその場に開く、付箋の紙片。残すことは一押しで終わり——
+     これは「そのままでもいい」続きなので、罫一本ぶんだけ静かに開く（Apple §16 簡潔さ）。 */
+  /* 置かれる先（読む柱・受け止めた所・辿る）はどれも中身なりの幅なので、
+     紙片の幅はここで決める（親に合わせると罫が数文字ぶんに縮む） */
+  .fusen-pad{width:min(280px,72vw);margin-top:10px}
+  #readFusen{width:min(280px,72vw)}
+  .fusen-pad .fusen-row{margin-bottom:8px}
+  .fusen-in{width:100%;background:none;border:none;border-bottom:1px solid var(--rule);
+            font-family:inherit;font-size:12.5px;letter-spacing:0.1em;color:var(--ink-2);
+            padding:11px 2px;min-height:var(--touch);outline:none}
+  .fusen-in::placeholder{color:var(--ink-4)}
+  .fusen-in:focus{border-bottom-color:var(--ink-4)}
+  .fusen-sug{display:flex;flex-wrap:wrap;gap:8px;padding-top:10px}
 </style>
 </head>
 <body>
@@ -451,10 +559,14 @@
     </button>
   </header>
   <ul class="shiori-list" id="shioriList">
-    <li><a href="/about">tayoriについて</a></li>
+    <li><a href="#" id="traceNowLink">いまの空気に、近いことば</a></li>
+    <li><a href="/about">tayori-たより-について</a></li>
     <li><a href="/philosophy">理念</a></li>
-    {% if logged_in %}<li><a href="/shelf">手元の棚</a></li>{% endif %}
+    {% if logged_in %}<li><a href="/shelf">棚</a></li>
+    <li><a href="/mine">自分の書架</a></li>
+    <li><a href="/settings">設定</a></li>{% endif %}
     <li><a href="/operator">運営者</a></li>
+    <li><a href="https://www.mhlw.go.jp/mamorouyokokoro/" target="_blank" rel="noopener">相談窓口</a></li>
     <li><a href="/contact">お問い合わせ</a></li>
     <li class="thin"><a href="/terms">利用規約</a></li>
     <li class="thin"><a href="/privacy">プライバシー</a></li>
@@ -466,13 +578,18 @@
   <div class="hold" id="hold" role="group" aria-label="このことばに、する" hidden></div>
   <!-- 宙が空っぽの時・遠い時のひとこと -->
   <p class="whisper" id="whisper" aria-live="polite"></p>
+  <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
+  <div class="lantern" id="lantern" aria-hidden="true"></div>
+  <!-- 相談窓口の常時導線（宙v1 §12）：宙のすみに、いつでもある -->
+  <a class="care-link" href="https://www.mhlw.go.jp/mamorouyokokoro/"
+     target="_blank" rel="noopener">相談窓口</a>
 
   {% if not logged_in %}
   <!-- 宙の上のほう：何が起きる場所なのかを、二行だけ。全文はその場で開く -->
   <div class="about">
     <p>ここは、<wbr>行き先を<wbr>決めずに<wbr>ことばを<wbr>放つ<wbr>場所です。<br>
        だれかが<wbr>偶然<wbr>ひらくかもしれないし、<wbr>だれにも<wbr>読まれないまま<wbr>漂うかもしれない。</p>
-    <button class="about-more ruled" id="aboutMore" type="button">tayoriについて</button>
+    <button class="about-more ruled" id="aboutMore" type="button">tayori-たより-について</button>
   </div>
   <!-- ランディング＝宙。眺めるのに登録は要らない。放つ時だけ、はじめる画面へ -->
   <div class="lp">
@@ -511,17 +628,27 @@
       <!-- 縦書き用の自前カーソル（ネイティブは字面まで縮み、位置も定まらないため） -->
       <div class="vcaret" id="castCaret"></div>
       <div class="cast-count"><span id="castCount">0</span> / 80</div>
+      <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚・書架・辿るでだけ立つ -->
+      <input id="castTitle" type="text" maxlength="10" autocomplete="off"
+             placeholder="題をつける（10字まで・なくても）"
+             aria-label="このことばの題（10字まで・任意）">
       <div class="picker">
         <div class="colorbar huebar" id="hueBar" role="slider" aria-label="いまの気分の色（色相）"
              aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
         <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
              aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
       </div>
+      <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
+           付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
       <div class="cast-row">
         <button class="cast-send ruled" id="castSend" type="button">放つ</button>
         <button class="cast-close ruled" id="castClose" type="button">閉じる</button>
       </div>
-      <p class="cast-note">放ったことばは、匿名のまま漂い、<br>いつか、知らない誰かのもとへ降ります。<br>あなた自身にも、忘れた頃に。</p>
+      <!-- 著作権はUIに書く（v2 §13）：規約ではなく、書く手の目に入る場所に、常時一行。
+           歌詞は一行でもアウト。ここは引用を集める場所ではない -->
+      <p class="cast-own">ここに置けるのは、あなたのことばだけです。</p>
+      <p class="cast-note">放ったことばは、匿名のまま漂い、<br>いつか、知らない誰かのもとへ降ります。<br>あなた自身にも、忘れた頃に。<br>
+        書いている途中の筆致（打ち直しも含む）は、<br>あなたの開封のときの再生のためだけに、いっしょに封じられます。</p>
     </div>
   </div>
   <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
@@ -536,10 +663,29 @@
       <button class="like-mark keep-mark" id="readKeep" type="button" aria-pressed="false" hidden>
         <span class="dot" aria-hidden="true"></span><span class="txt">手元に、残す</span>
       </button>
+      <!-- 残した、その場で貼る付箋（v2.2 §3）。中身は JS が入れる -->
+      <div id="readFusen"></div>
       <button class="read-close ruled" id="readClose" type="button">とじる</button>
     </div>
   </div>
   {% endif %}
+
+  <!-- 辿る（v2 §4）：似た空気を追う面。漂いのルール（既読1日1回・沈降）はここに持ち込まない -->
+  <div class="trace" id="tracePane" role="dialog" aria-modal="true"
+       aria-label="ことばを辿る" aria-hidden="true">
+    <div class="trace-inner">
+      <p class="trace-lead" id="traceLead"></p>
+      <div class="trace-here" id="traceHere" hidden>
+        <div class="here-title" id="traceHereTitle" hidden></div>
+        <div class="trace-here-poem" id="traceHerePoem"></div>
+        <div class="trace-acts" id="traceActs"></div>
+      </div>
+      <div class="trace-list" id="traceList"></div>
+      <button class="trace-more ruled" id="traceMore" type="button" hidden>もっと</button>
+      <p class="trace-quiet" id="traceQuiet" hidden>この空気の<wbr>近くに、<wbr>ことばは<wbr>まだ<wbr>ありません。</p>
+      <button class="trace-close ruled" id="traceClose" type="button">とじる</button>
+    </div>
+  </div>
 
 <script>
 /* ══ 宙モードv2：漂うことば・放つ ══════════════════════════
@@ -760,7 +906,8 @@
     if(!src.length) return;   // 全部いま浮かんでいる＝この回は何も足さない
     const pick=src[Math.floor(Math.random()*src.length)];
     shown.add(pick.id); if(shown.size>300) shown.clear();
-    spawnDrift(pick.poem,pick.color,pick.vertical,pick.id);
+    noteSeen(pick.id);   // 実際に浮かべたことばだけを控える（宙v1 §3.2）
+    spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,null);
   }
   // 反映の待ち時間を削る（v11.1）：取得は20秒ごと、流れ込みは4.5〜10秒ごと
   fetchWords();
@@ -769,6 +916,48 @@
     setTimeout(()=>{driftOne();tick();},4500+Math.random()*5500);
   })();
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) fetchWords(); });
+
+  /* ── きょう浮かんだことばの控え（宙v1 §3.2）──
+     実際に画面へ浮かんだ公開idだけを、まとめてそっと置いていく。
+     サーバ側で「今日もう見た」（明朝4時まで浮かばない）と「初めて誰かの宙に浮かんだ」
+     （§7・一度きり）に変わる。回数は数えられない。 */
+  const seenQ=new Set();let seenT=0;
+  function noteSeen(id){
+    if(!id||!LOGGED_IN)return;   // 匿名の閲覧は記録しない（本人がログアウトで居る画面のため）
+    seenQ.add(id);
+    if(!seenT)seenT=setTimeout(flushSeen,8000);
+  }
+  function flushSeen(){
+    seenT=0;
+    if(!seenQ.size)return;
+    const ids=[...seenQ];seenQ.clear();
+    fetch('/api/sky/seen',{method:'POST',headers:{'Content-Type':'application/json'},
+      keepalive:true,body:JSON.stringify({ids:ids})}).catch(()=>{});
+  }
+  addEventListener('pagehide',flushSeen);
+
+  /* ── 触れた気配を灯へ（宙v1 §4.2）── どのことばかは送らない・残らない */
+  let lastTouch=0;
+  function noteTouch(){
+    const now=Date.now();
+    if(now-lastTouch<5000)return;
+    lastTouch=now;
+    fetch('/api/sky/touch',{method:'POST'}).catch(()=>{});
+  }
+
+  /* ── 灯のあかり ── 直近30秒に、自分以外の誰かが触れたか。それだけを聞く */
+  const lantern=document.getElementById('lantern');
+  function pollLantern(){
+    fetch('/api/sky/lantern').then(r=>r.ok?r.json():null).then(d=>{
+      if(!(d&&lantern))return;
+      if(d.lit){
+        lantern.classList.add('on');
+        setTimeout(()=>lantern.classList.remove('on'),7000);
+      }
+    }).catch(()=>{});
+  }
+  setTimeout(pollLantern,4000);
+  setInterval(pollLantern,30000);
 
   /* ══ ことばを受け止める（v14）════════════════════════════════
      漂っていることばに触れると、そのことばだけが漂うのをやめて手のうちに残る。
@@ -795,6 +984,7 @@
     if(held===el){ release(); return; }
     if(held) release();
     held=el;
+    noteTouch();          // 受け止めた＝触れた。灯にだけ気配が走る（宙v1 §4.2）
     disarmDrift(el);
     el.classList.remove('out');
     el.style.setProperty('--in','.34s');
@@ -841,18 +1031,37 @@
     if(!LOGGED_IN){
       holdBox.innerHTML='<p class="hold-note">このことばに<wbr>印を<wbr>結んだり、<wbr>'+
         '手元に<wbr>残したり<wbr>できます。<br><a href="/?start=1">はじめる</a></p>';
+      holdExtras();   // 辿るだけは、はじめる前のひとにも開いておく
       return;
     }
-    const m=marks.has(held._sid), s=kept.has('drift:'+held._sid);
+    const m=marks.has(held._sid), s=kept.has('drift:'+held._sid),
+          old=m&&!justMarked.has(held._sid);   // いま結んだのではなく、いつか結んでいた
     holdBox.innerHTML=
-      '<button type="button" class="hold-act mark'+(m?' on':'')+'" aria-pressed="'+(m?'true':'false')+'">'+
-        '<span class="dot" aria-hidden="true"></span><span class="txt">'+
-        (m?'印を結びました':'このことばに、印を結ぶ')+'</span></button>'+
+      (old
+        /* 宙v1 §4.1: 印は外せない。数ヶ月後の偶然の再会で、自分の灯だけが残っている */
+        ? '<p class="hold-lit">このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。</p>'
+        : '<button type="button" class="hold-act mark'+(m?' on':'')+'" aria-pressed="'+(m?'true':'false')+'">'+
+            '<span class="dot" aria-hidden="true"></span><span class="txt">'+
+            (m?'印を結びました':'このことばに、印を結ぶ')+'</span></button>')+
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
         '<span class="dot" aria-hidden="true"></span><span class="txt">'+
         (s?'棚に、残しました':'手元に、残す')+'</span></button>';
-    holdBox.querySelector('.mark').addEventListener('click',()=>toggleMark(held));
+    const mb=holdBox.querySelector('.mark');
+    if(mb)mb.addEventListener('click',()=>markWord(held));
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
+    holdExtras();
+  }
+  /* 辿るの入口（v2 §4.3）。未登録の人にも開く。
+     v2.2：付箋はここに出さない——付箋は読み手が自分の棚に貼る私物になったので、
+     宙を漂うことばには、そもそも貼られていない。 */
+  function holdExtras(){
+    if(!held||!held._sid)return;
+    const id=held._sid;
+    const tb=document.createElement('button');
+    tb.type='button';tb.className='hold-act';
+    tb.innerHTML='<span class="txt">この空気に、近いことば</span>';
+    tb.addEventListener('click',()=>openTrace('near',id,'この空気に、近いことば'));
+    holdBox.appendChild(tb);
   }
   function paintAct(sel,on,onTxt,offTxt){
     const b=holdBox.querySelector(sel); if(!b) return;
@@ -860,18 +1069,21 @@
     b.setAttribute('aria-pressed',on?'true':'false');
     b.querySelector('.txt').textContent=on?onTxt:offTxt;
   }
-  async function toggleMark(el){
-    if(!el||!el._sid) return;
-    const on=!marks.has(el._sid);
-    if(on)marks.add(el._sid); else marks.delete(el._sid);
-    paintAct('.mark',on,'印を結びました','このことばに、印を結ぶ');
+  /* 印＝灯は一度きり・永久（宙v1 §4.1）。外す経路は作らない。
+     いま結んだもの（justMarked）だけ「結びました」と応え、以後の再会では
+     「もう灯をともしています」の状態で描く。 */
+  const justMarked=new Set();
+  async function markWord(el){
+    if(!el||!el._sid||marks.has(el._sid)) return;
+    marks.add(el._sid);justMarked.add(el._sid);
+    paintAct('.mark',true,'印を結びました','このことばに、印を結ぶ');
     try{
       const r=await fetch('/api/sky/word/'+el._sid+'/mark',{method:'POST',
-        headers:{'Content-Type':'application/json'},body:JSON.stringify({on:on})});
+        headers:{'Content-Type':'application/json'},body:'{}'});
       if(!r.ok)throw new Error('mark');
     }catch(e){
-      if(on)marks.delete(el._sid); else marks.add(el._sid);
-      paintAct('.mark',!on,'印を結びました','このことばに、印を結ぶ');
+      marks.delete(el._sid);justMarked.delete(el._sid);
+      paintAct('.mark',false,'印を結びました','このことばに、印を結ぶ');
       whisper('いま、<wbr>tayori-たより- に<wbr>手が<wbr>届きませんでした。',6000);
     }
   }
@@ -880,12 +1092,17 @@
     const key='drift:'+el._sid, on=!kept.has(key);
     if(on)kept.add(key); else kept.delete(key);
     paintAct('.keep',on,'棚に、残しました','手元に、残す');
+    if(!on)dropPad(holdBox);
     try{
       const r=await fetch('/api/shelf',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({src:'drift',ref:el._sid,on:on})});
       if(!r.ok)throw new Error('keep');
+      const d=await r.json().catch(()=>null);
+      // 残した、その場に付箋の紙片が開く（貼らずに閉じてよい・v2.2 §3）
+      if(on&&d&&d.id&&held===el)fusenPad(holdBox,d.id,[]);
     }catch(e){
+      dropPad(holdBox);
       if(on)kept.delete(key); else kept.add(key);
       paintAct('.keep',!on,'棚に、残しました','手元に、残す');
       whisper('いま、<wbr>棚に<wbr>届きませんでした。',6000);
@@ -940,6 +1157,224 @@
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape'&&aFull.classList.contains('on'))shutAbout();});
   }
+
+  /* ══ 辿る（v2 §4）════════════════════════════════════════════
+     能動の面。漂いのルール（既読1日1回・沈降）はここに効かない：
+     何度でも見られて、古いことばも等しく出る。数は出さない——「もっと」があるだけ。
+     導線の言葉は空気で書く（§4.4）。「関連」「おすすめ」「人気」は使わない。 */
+  const tPane=document.getElementById('tracePane'),tLead=document.getElementById('traceLead'),
+        tHere=document.getElementById('traceHere'),tHerePoem=document.getElementById('traceHerePoem'),
+        tHereTitle=document.getElementById('traceHereTitle'),
+        tActs=document.getElementById('traceActs'),
+        tList=document.getElementById('traceList'),tMore=document.getElementById('traceMore'),
+        tQuiet=document.getElementById('traceQuiet'),tClose=document.getElementById('traceClose');
+  let tq=null,tBusy=false;   // tq={mode:'near'|'now', key, offset, label}
+
+  /* ── 付箋（v2.2 §3の反転）＝棚に残した、その場で貼る ──
+     貼るのは読み手。残すこと自体は一押しで終わっていて、付箋はそのあとに開く
+     「そのままでもいい」続き（空のまま閉じてよく、あとから棚でも貼れる）。
+     書き手には何も返らない。サジェストは自分がこれまで貼った付箋だけから拾う
+     ——他人の付箋は見えないので、寄せられるのは自分の表記ゆれだけ。 */
+  function dropPad(box){
+    const p=box&&box.querySelector(':scope > .fusen-pad');
+    if(p)p.remove();
+  }
+  function fusenPad(box,savedId,initial){
+    dropPad(box);
+    if(!box||!savedId)return;
+    const pad=document.createElement('div');pad.className='fusen-pad';
+    const row=document.createElement('div');row.className='fusen-row';
+    const inp=document.createElement('input');
+    inp.type='text';inp.className='fusen-in';inp.maxLength=24;inp.autocomplete='off';
+    inp.placeholder='付箋を貼る（3枚まで・そのままでも）';
+    inp.setAttribute('aria-label','この控えに貼る付箋');
+    const sug=document.createElement('div');sug.className='fusen-sug';sug.hidden=true;
+    let tags=(initial||[]).slice(),sugT=0,busy=false;
+    function paint(){
+      row.innerHTML='';
+      tags.forEach(t=>{
+        const b=document.createElement('button');
+        b.type='button';b.className='fusen';
+        b.innerHTML='<span></span><span class="x" aria-hidden="true">×</span>';
+        b.firstChild.textContent=t;
+        b.setAttribute('aria-label','付箋「'+t+'」をはがす');
+        b.addEventListener('click',()=>post({remove:t}));
+        row.appendChild(b);
+      });
+      inp.style.display=tags.length>=3?'none':'';
+      if(tags.length>=3)sug.hidden=true;
+    }
+    async function post(payload){
+      if(busy)return; busy=true;
+      try{
+        const r=await fetch('/api/shelf/'+savedId+'/tags',{method:'POST',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const d=await r.json().catch(()=>null);
+        if(r.ok&&d&&d.ok){tags=d.tags||[];paint();}
+      }catch(e){ whisper('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。',6000); }
+      finally{ busy=false; }
+    }
+    function commit(raw){
+      const t=String(raw||'').replace(/^[#＃]+/,'').trim().toLowerCase().slice(0,24);
+      inp.value='';sug.hidden=true;
+      if(!t||tags.indexOf(t)>=0||tags.length>=3)return;
+      post({tags:[t]});
+    }
+    inp.addEventListener('keydown',e=>{
+      if(e.isComposing)return;
+      if(e.key==='Enter'||e.key===','||e.key==='、'){e.preventDefault();commit(inp.value);}
+    });
+    inp.addEventListener('input',()=>{
+      clearTimeout(sugT);
+      sugT=setTimeout(()=>{
+        fetch('/api/tags/suggest?q='+encodeURIComponent(inp.value))
+          .then(r=>r.ok?r.json():null).then(d=>{
+            if(!d)return;
+            sug.innerHTML='';
+            (d.tags||[]).filter(t=>tags.indexOf(t)<0).slice(0,6).forEach(t=>{
+              const b=document.createElement('button');
+              b.type='button';b.className='fusen';b.textContent=t;
+              b.addEventListener('mousedown',e=>e.preventDefault());  // blurで消える前に拾う
+              b.addEventListener('click',()=>commit(t));
+              sug.appendChild(b);
+            });
+            sug.hidden=!sug.children.length;
+          }).catch(()=>{});
+      },250);
+    });
+    inp.addEventListener('blur',()=>setTimeout(()=>{sug.hidden=true;},150));
+    pad.appendChild(row);pad.appendChild(inp);pad.appendChild(sug);
+    box.appendChild(pad);
+    paint();
+  }
+  function traceURL(){
+    // 辿るのは air_distance 一本（v2.2 §3）。付箋から辿る経路は廃した
+    const base=tq.mode==='near'?'/api/sky/near/'+encodeURIComponent(tq.key)
+          :'/api/sky/near_now';
+    return base+'?offset='+tq.offset;
+  }
+  function traceWordEl(w){
+    const b=document.createElement('button');
+    b.type='button';b.className='trace-word';
+    const c=tintOf(w.color);
+    if(c){b.style.color=c.text;b.style.textShadow='0 0 16px '+c.glow;}
+    if(w.title){                       // 題は一覧でだけ立つ（v2.2 §3）
+      const t=document.createElement('span');
+      t.className='title';t.textContent=w.title;
+      b.appendChild(t);
+    }
+    b.appendChild(document.createTextNode(w.poem));
+    if(w.mine){
+      const y=document.createElement('span');
+      y.className='yours';y.textContent='あなたのことば';
+      b.appendChild(y);
+    }
+    b.setAttribute('aria-label',(w.title?('題「'+w.title+'」。'):'')+
+                   'このことばから、さらに辿る：'+w.poem);
+    b.addEventListener('click',()=>openTrace('near',w.id,'この空気に、近いことば'));
+    return b;
+  }
+  /* 辿りの現在地。ことば・付箋・（他人のことばなら）印と棚 */
+  function renderHere(w){
+    tHere.hidden=false;
+    const c=tintOf(w.color);
+    tHerePoem.style.color=c?c.text:'';
+    tHerePoem.style.textShadow=c?('0 0 18px '+c.glow):'';
+    tHerePoem.textContent=w.poem;
+    tHereTitle.textContent=w.title||'';
+    tHereTitle.hidden=!w.title;
+    tActs.innerHTML='';
+    if(!LOGGED_IN||w.mine)return;
+    if(marks.has(w.id)){
+      const p=document.createElement('p');p.className='hold-lit';
+      p.innerHTML='このことばには、<wbr>いつかのあなたが、<wbr>もう灯を<wbr>ともしています。';
+      tActs.appendChild(p);
+    }else{
+      const mb=document.createElement('button');
+      mb.type='button';mb.className='hold-act mark';
+      mb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt">このことばに、印を結ぶ</span>';
+      mb.addEventListener('click',async()=>{
+        if(marks.has(w.id))return;
+        marks.add(w.id);
+        mb.classList.add('on');mb.querySelector('.txt').textContent='印を結びました';
+        try{
+          const r=await fetch('/api/sky/word/'+w.id+'/mark',{method:'POST',
+            headers:{'Content-Type':'application/json'},body:'{}'});
+          if(!r.ok)throw new Error('mark');
+        }catch(e){
+          marks.delete(w.id);
+          mb.classList.remove('on');mb.querySelector('.txt').textContent='このことばに、印を結ぶ';
+        }
+      });
+      tActs.appendChild(mb);
+    }
+    const kb=document.createElement('button');
+    kb.type='button';kb.className='hold-act keep';
+    const paintKeep=on=>{
+      kb.classList.toggle('on',on);
+      kb.setAttribute('aria-pressed',on?'true':'false');
+      kb.querySelector('.txt').textContent=on?'棚に、残しました':'手元に、残す';
+    };
+    kb.innerHTML='<span class="dot" aria-hidden="true"></span><span class="txt"></span>';
+    paintKeep(kept.has('drift:'+w.id));
+    kb.addEventListener('click',async()=>{
+      const key='drift:'+w.id,on=!kept.has(key);
+      if(on)kept.add(key);else kept.delete(key);
+      paintKeep(on);
+      if(!on)dropPad(tActs);
+      try{
+        const r=await fetch('/api/shelf',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({src:'drift',ref:w.id,on:on})});
+        if(!r.ok)throw new Error('keep');
+        const d=await r.json().catch(()=>null);
+        if(on&&d&&d.id)fusenPad(tActs,d.id,[]);   // 残した、その場で貼れる
+      }catch(e){
+        if(on)kept.delete(key);else kept.add(key);
+        paintKeep(!on);dropPad(tActs);
+      }
+    });
+    tActs.appendChild(kb);
+  }
+  function loadTrace(){
+    if(!tq||tBusy)return;
+    tBusy=true;tMore.disabled=true;
+    fetch(traceURL()).then(r=>r.ok?r.json():null).then(d=>{
+      if(!d||!tq)return;
+      if(d.here&&tq.offset===0)renderHere(d.here);
+      (d.items||[]).forEach(w=>tList.appendChild(traceWordEl(w)));
+      tq.offset+=(d.items||[]).length;
+      tMore.hidden=!d.more;
+      tQuiet.hidden=!!(tList.children.length);
+    }).catch(()=>{
+      whisper('いま、<wbr>tayori-たより- が<wbr>遠いようです。',6000);
+    }).finally(()=>{tBusy=false;tMore.disabled=false;});
+  }
+  function openTrace(mode,key,label){
+    if(held)release();                 // 受け止めていたことばは、そっと放してから
+    tq={mode:mode,key:key,offset:0,label:label};
+    tLead.textContent=label;
+    tHere.hidden=true;tList.innerHTML='';tMore.hidden=true;tQuiet.hidden=true;
+    tPane.classList.add('on');tPane.setAttribute('aria-hidden','false');
+    tPane.scrollTop=0;
+    loadTrace();
+  }
+  function shutTrace(){
+    tq=null;
+    tPane.classList.remove('on');tPane.setAttribute('aria-hidden','true');
+  }
+  tMore.addEventListener('click',loadTrace);
+  tClose.addEventListener('click',shutTrace);
+  tPane.addEventListener('click',e=>{if(e.target===tPane)shutTrace();});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&tPane.classList.contains('on'))shutTrace();});
+  /* 入口①（§4.3）：いまの空気に近いことば。栞から、宙の外へ出ずに開く */
+  const tnl=document.getElementById('traceNowLink');
+  if(tnl)tnl.addEventListener('click',e=>{
+    e.preventDefault();
+    document.getElementById('shioriList').classList.remove('on');
+    openTrace('now',null,'いまの空気に、近いことば');
+  });
 
   if(!LOGGED_IN) return;
 
@@ -1116,22 +1551,27 @@
     requestAnimationFrame(()=>n.classList.add('on'));
   }
 
+  const castTitle=document.getElementById('castTitle');
+
   send.addEventListener('click',async()=>{
     const poem=ta.textContent.replace(/\s+$/,'');
     if(!poem.trim())return;
+    const title=castTitle.value.trim();      // 題は任意。無いまま放ってよい（v2.2 §2.1）
     send.disabled=true;
     const color=cssOf(toneColor(H,T));   // 放たれることばには必ず色がのる（v12）
     const steps=(trace.length>1?trace.slice():null);
     try{
       const res=await fetch('/api/letters',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({mode:'sky',poem:poem,seal_color:color,vertical:1,trace:steps})});
+        body:JSON.stringify({mode:'sky',poem:poem,title:title,seal_color:color,
+                             vertical:1,trace:steps})});
       const d=await res.json().catch(()=>null);
       if(res.ok&&d&&d.ok){
         shut();
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
         ta.textContent='';normalizeEmpty();cnt.textContent='0';H=H0;T=T0;trace=[];traceT0=0;paint();drawCaret();
+        castTitle.value='';
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
         setTimeout(fetchWords,600);
         if(d.care)setTimeout(showCareNote,1600);
@@ -1158,22 +1598,25 @@
   rp.addEventListener('click',e=>{if(e.target===rp)shutRead();});
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&rp.classList.contains('on'))shutRead();});
-  function setLike(on){
+  /* 印＝灯は一度きり・永久（宙v1 §4.1）。結んだあとは外せない。
+     再訪時（すでに結んであった時）は「もう灯をともしています」の状態で描く。 */
+  function setLike(on,old){
     rl.classList.toggle('on',!!on);
     rl.setAttribute('aria-pressed',on?'true':'false');
-    rl.querySelector('.txt').textContent=on?'印を結びました':'このことばに、印を結ぶ';
+    rl.querySelector('.txt').textContent=
+      on?(old?'いつかのあなたが、もう灯をともしています':'印を結びました')
+        :'このことばに、印を結ぶ';
   }
   rl.addEventListener('click',async()=>{
-    if(!readDid)return;
-    const on=!rl.classList.contains('on');
-    setLike(on);
+    if(!readDid||rl.classList.contains('on'))return;
+    setLike(true);
     try{
       const r=await fetch('/api/sky/'+readDid+'/like',{method:'POST',
-        headers:{'Content-Type':'application/json'},body:JSON.stringify({on:on})});
+        headers:{'Content-Type':'application/json'},body:'{}'});
       const d=await r.json().catch(()=>null);
-      if(!(r.ok&&d&&d.ok))setLike(!on);
-      else{const A=arrivals.find(x=>String(x.did)===String(readDid));if(A)A.liked=on;}
-    }catch(e){setLike(!on);}
+      if(!(r.ok&&d&&d.ok))setLike(false);
+      else{const A=arrivals.find(x=>String(x.did)===String(readDid));if(A)A.liked=true;}
+    }catch(e){setLike(false);}
   });
   /* ── 手元の棚（v13 §9）──
      残せるのは、いまこの柱で開いたことばだけ。宙を漂っていることばには手を伸ばせない
@@ -1186,22 +1629,28 @@
     rk.setAttribute('aria-pressed',on?'true':'false');
     rk.querySelector('.txt').textContent=on?'棚に、残しました':'手元に、残す';
   }
+  const readFusen=document.getElementById('readFusen');
   rk.addEventListener('click',async()=>{
     if(!readRef)return;
     const on=!rk.classList.contains('on');
     setKeep(on);
+    if(!on)dropPad(readFusen);
     try{
       const r=await fetch('/api/shelf',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({src:readRef.src,ref:readRef.ref,on:on})});
       const d=await r.json().catch(()=>null);
-      if(r.ok&&d&&d.ok){ if(on)kept.add(keptKey(readRef)); else kept.delete(keptKey(readRef)); }
+      if(r.ok&&d&&d.ok){
+        if(on)kept.add(keptKey(readRef)); else kept.delete(keptKey(readRef));
+        if(on&&d.id)fusenPad(readFusen,d.id,[]);   // 残した、その場で貼れる
+      }
       else setKeep(!on);
-    }catch(e){ setKeep(!on); }
+    }catch(e){ setKeep(!on);dropPad(readFusen); }
   });
 
   function showRead(o){
     release();                    // 宙で受け止めていたことばは、柱が立つ前に放す
+    dropPad(readFusen);           // 前に開いた付箋の紙片は持ち越さない
     readDid=o.did||null;
     rb.classList.toggle('h',!o.vertical);
     rb.textContent='';
@@ -1213,7 +1662,7 @@
     rk.hidden=!readRef;
     if(readRef)setKeep(kept.has(keptKey(readRef)));
     rp.setAttribute('aria-label',o.mine?'あの日の、あなたのことば':'降りてきたことば');
-    if(o.did)setLike(!!o.liked);
+    if(o.did)setLike(!!o.liked,true);   // 開いた時点で結んであった印は「いつかの灯」
     const c=tintOf(o.color);
     rb.style.color=c?c.text:'';
     rp.classList.add('on');rp.setAttribute('aria-hidden','false');
@@ -1295,9 +1744,13 @@
           // 日付は機械の刻印ではなく、そっと添える一行に（ISOのままは出さない）
           const p=String(L.sent_date||'').slice(0,10).split('-');
           const day=p.length===3?('封をした日　'+p[0]+'年'+(+p[1])+'月'+(+p[2])+'日'):'';
+          let note='あの日の、あなたのことば'+(day?'\n'+day:'');
+          // 放ったあとの話（宙v1 §5・§7）。該当しない時は行ごと無音
+          //（「まだ誰にも読まれていません」は絶対に出さない）。
+          if(L.first_seen)note+='\nこの言葉は、'+L.first_seen+'に、一度浮かびました。';
+          if(L.in_someones_hands)note+='\nこのことばは、だれかの手元にあります。';
           showRead({poem:L.poem||'',vertical:L.vertical,color:L.seal_color,steps:steps,
-                    mine:true,lid:OPEN_ID,
-                    note:'あの日の、あなたのことば'+(day?'\n'+day:'')});
+                    mine:true,lid:OPEN_ID,note:note});
         }else{
           showReadError((d&&d.error)||'そのたよりは開けませんでした。');
         }

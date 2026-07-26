@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>設定 — たより</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#08080D">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+{% include '_sky_doc.html' %}
+<style>
+  /* ── 設定（v2.2 §4）──────────────────────────────────
+     名前・メール・パスワード・退会。ここは「道具」の紙なので、宙の作法のまま、
+     入口だけを並べる：押すとその場に一枚ぶんの罫が開き、書いたら閉じる。
+     箱もカードも作らない（v3.10）。開いていない設定は、ただの一行に見える。 */
+  .setting{border-bottom:1px solid var(--rule-faint)}
+  .setting:last-of-type{border-bottom:0}
+  .set-head{width:100%;background:none;border:none;font-family:inherit;text-align:left;
+            cursor:pointer;padding:var(--s3) 2px;min-height:var(--touch);
+            display:flex;align-items:baseline;gap:var(--s3);
+            transition:color .22s var(--ease)}
+  .set-head .nm{font-size:13.5px;letter-spacing:0.2em;color:var(--ink-1)}
+  .set-head .now{flex:1;min-width:0;text-align:right;font-size:11.5px;letter-spacing:0.12em;
+                 color:var(--ink-4);overflow-wrap:anywhere}
+  /* 「（確認待ち）」はアドレスの一部ではないので、割らずに丸ごと次の行へ落とす
+     （日本語の改行は文節で。字の途中で折るのはアドレスだけ） */
+  .set-head .now .mark{white-space:nowrap}
+  .set-head:hover .nm{color:var(--ink-1)}
+  .set-head:active{opacity:.62}
+  .set-body{padding:0 2px var(--s3)}
+  .set-body[hidden]{display:none}
+  .set-note{margin:0 0 var(--s3);font-size:11.5px;line-height:2.1;letter-spacing:0.1em;
+            color:var(--ink-4);word-break:keep-all;overflow-wrap:anywhere}
+  /* 入力は罫一本。宙の書く柱・棚の名前入力と同じ姿にそろえる */
+  .set-field{display:block;width:100%;max-width:340px;background:none;border:none;
+             border-bottom:1px solid var(--rule);color:var(--ink-1);font-family:inherit;
+             font-size:13px;letter-spacing:0.1em;padding:12px 2px;min-height:var(--touch);
+             outline:none;margin-bottom:var(--s2);
+             transition:border-color .22s var(--ease)}
+  .set-field::placeholder{color:var(--ink-4)}
+  .set-field:focus{border-bottom-color:var(--ink-4)}
+  .set-row{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s4);margin-top:var(--s2)}
+  .set-do{background:none;border:none;font-family:inherit;cursor:pointer;color:var(--ink-2);
+          font-size:12px;letter-spacing:0.24em;padding:12px 2px;min-height:var(--touch);
+          border-bottom:1px solid var(--rule-act);
+          transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .set-do:hover{color:var(--ink-1)}
+  .set-do:active{opacity:.62}
+  .set-do:disabled{opacity:.35;cursor:default;border-bottom-color:var(--rule-faint)}
+  .set-cancel{border-bottom-color:transparent;color:var(--ink-4)}
+  .set-say{margin:var(--s2) 0 0;font-size:11.5px;line-height:2;letter-spacing:0.1em;
+           color:var(--ink-3);word-break:keep-all;overflow-wrap:anywhere}
+  .set-say[hidden]{display:none}
+  /* 退会だけは、他の設定と同じ顔にしない。罫を一本ぶん離し、字も一段落とす。
+     隠しはしない（探させるのは不誠実）が、並びのいちばん下に置く。 */
+  .leave{margin-top:var(--s6)}
+  .leave .set-head .nm{color:var(--ink-3);font-size:12.5px}
+  .leave-warn{margin:0 0 var(--s3);font-size:12px;line-height:2.2;letter-spacing:0.1em;
+              color:var(--ink-2);word-break:keep-all;overflow-wrap:anywhere}
+  .leave-warn b{font-weight:500;color:var(--ink-1)}
+  .leave-list{margin:0 0 var(--s3);padding:0;list-style:none}
+  .leave-list li{font-size:11.5px;line-height:2.1;letter-spacing:0.1em;color:var(--ink-3);
+                 padding-left:1.1em;text-indent:-1.1em;word-break:keep-all;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="doc">
+  <a class="back" href="/mood">← tayori-たより- へ</a>
+
+  <h1>設定<span class="romaji">settings</span></h1>
+
+  <p class="quiet">名前と<wbr>メールと<wbr>パスワード、<wbr>それと<wbr>退会。<br>
+     ここに<wbr>あるのは<wbr>それだけです。</p>
+
+  <div class="rule"></div>
+
+  <!-- 名前 -->
+  <section class="setting">
+    <button class="set-head" type="button" data-open="name" aria-expanded="false" aria-controls="bodyName">
+      <span class="nm">名前</span><span class="now" id="nowName"></span>
+    </button>
+    <div class="set-body" id="bodyName" hidden>
+      <p class="set-note">名前は<wbr>ログインに<wbr>使います。<wbr>放った<wbr>ことばには<wbr>出ません<wbr>——<wbr>宙は<wbr>いつも<wbr>匿名です。</p>
+      <input class="set-field" id="fName" type="text" maxlength="24" autocomplete="username"
+             placeholder="あたらしい名前（2〜24文字）" aria-label="あたらしい名前">
+      <div class="set-row">
+        <button class="set-do" id="doName" type="button">変える</button>
+        <button class="set-do set-cancel" type="button" data-close>やめる</button>
+      </div>
+      <p class="set-say" id="sayName" hidden></p>
+    </div>
+  </section>
+
+  <!-- メールアドレス -->
+  <section class="setting">
+    <button class="set-head" type="button" data-open="mail" aria-expanded="false" aria-controls="bodyMail">
+      <span class="nm">メールアドレス</span><span class="now" id="nowMail"></span>
+    </button>
+    <div class="set-body" id="bodyMail" hidden>
+      <p class="set-note">帰ってきた<wbr>ことばの<wbr>お知らせは、<wbr>ここへ<wbr>届きます。<br>
+         変えると<wbr>確認の<wbr>メールを<wbr>送ります。<wbr><b>確認が<wbr>済むまで<wbr>お知らせは<wbr>止まります。</b><br>
+         打ち間違えた<wbr>まま<wbr>確認できないと、<wbr>ことばは<wbr>帰る<wbr>先を<wbr>失います<wbr>——<wbr>送信の<wbr>前に、<wbr>もう一度<wbr>お確かめください。</p>
+      <input class="set-field" id="fMail" type="email" maxlength="120" autocomplete="email"
+             placeholder="あたらしいメールアドレス" aria-label="あたらしいメールアドレス">
+      <div class="set-row">
+        <button class="set-do" id="doMail" type="button">確認メールを送る</button>
+        <button class="set-do set-cancel" type="button" data-close>やめる</button>
+      </div>
+      <p class="set-say" id="sayMail" hidden></p>
+    </div>
+  </section>
+
+  <!-- パスワード -->
+  <section class="setting">
+    <button class="set-head" type="button" data-open="pw" aria-expanded="false" aria-controls="bodyPw">
+      <span class="nm">パスワード</span><span class="now">＊＊＊＊＊＊＊＊</span>
+    </button>
+    <div class="set-body" id="bodyPw" hidden>
+      <p class="set-note">8文字<wbr>以上。<wbr>変えても、<wbr>放った<wbr>ことばには<wbr>何も<wbr>起きません。</p>
+      <input class="set-field" id="fPwNow" type="password" autocomplete="current-password"
+             placeholder="いまのパスワード" aria-label="いまのパスワード">
+      <input class="set-field" id="fPwNew" type="password" autocomplete="new-password"
+             placeholder="あたらしいパスワード（8文字以上）" aria-label="あたらしいパスワード">
+      <div class="set-row">
+        <button class="set-do" id="doPw" type="button">変える</button>
+        <button class="set-do set-cancel" type="button" data-close>やめる</button>
+      </div>
+      <p class="set-say" id="sayPw" hidden></p>
+    </div>
+  </section>
+
+  <!-- 退会（v2.2 §4：問い合わせ窓口ではなく、ここで閉じられる） -->
+  <section class="setting leave">
+    <button class="set-head" type="button" data-open="leave" aria-expanded="false" aria-controls="bodyLeave">
+      <span class="nm">退会する</span>
+    </button>
+    <div class="set-body" id="bodyLeave" hidden>
+      <p class="leave-warn"><b>退会すると、元には戻せません。</b><br>
+         あなたが<wbr>放った<wbr>ことばは<wbr>宙から<wbr>降り、<wbr>あなたの<wbr>棚も<wbr>いっしょに<wbr>閉じます。</p>
+      <ul class="leave-list">
+        <li>・消えるもの<wbr>……<wbr>アカウント、<wbr>放った<wbr>ことば（<wbr>宙からも<wbr>消えます）、<wbr>棚と<wbr>その控え、<wbr>印、<wbr>屑籠</li>
+        <li>・残るもの<wbr>……<wbr>すでに<wbr>だれかの<wbr>棚に<wbr>置かれた<wbr>控え。<wbr>一度<wbr>その人の<wbr>手に<wbr>渡った<wbr>ことばは、<wbr>こちらの<wbr>都合で<wbr>取り上げません（<wbr>控えは<wbr>だれが<wbr>書いたかを<wbr>持たないので、<wbr>匿名の<wbr>ままです）</li>
+      </ul>
+      <p class="set-note">持ち出したい<wbr>ものが<wbr>あれば、<wbr>先に<wbr><a href="/shelf">棚</a>と<wbr><a href="/mine">自分の書架</a>を<wbr>ご覧ください。</p>
+      <input class="set-field" id="fLeavePw" type="password" autocomplete="current-password"
+             placeholder="パスワード" aria-label="パスワード">
+      <input class="set-field" id="fLeaveOk" type="text" maxlength="12" autocomplete="off"
+             placeholder="確かめのため「退会します」と書き写す" aria-label="確かめのことば">
+      <div class="set-row">
+        <button class="set-do" id="doLeave" type="button">退会する</button>
+        <button class="set-do set-cancel" type="button" data-close>やめる</button>
+      </div>
+      <p class="set-say" id="sayLeave" hidden></p>
+    </div>
+  </section>
+
+{% include '_sky_foot.html' %}
+</div>
+
+<script>
+(function(){
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const bodies={name:$('bodyName'),mail:$('bodyMail'),pw:$('bodyPw'),leave:$('bodyLeave')};
+
+  /* 開くのは一つだけ（設定は並べて見比べるものではない）。押した所がその場で開く */
+  function open(key){
+    Object.keys(bodies).forEach(k=>{
+      const on=(k===key), b=bodies[k];
+      b.hidden=!on;
+      b.previousElementSibling.setAttribute('aria-expanded',on?'true':'false');
+      if(!on)b.querySelectorAll('.set-say').forEach(s=>{s.hidden=true;});
+    });
+    if(key){
+      const f=bodies[key].querySelector('.set-field');
+      if(f)f.focus();
+    }
+  }
+  document.querySelectorAll('.set-head').forEach(h=>{
+    h.addEventListener('click',()=>{
+      const k=h.dataset.open;
+      open(bodies[k].hidden?k:null);
+    });
+  });
+  document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>open(null)));
+
+  function say(el,msg){ el.hidden=!msg; el.textContent=msg||''; }
+  async function post(url,payload){
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload||{})});
+    const d=await r.json().catch(()=>null);
+    if(!r.ok||!d||!d.ok)throw new Error((d&&d.error)||'いま、tayori-たより- に手が届きませんでした。');
+    return d;
+  }
+  /* 押した瞬間に応える（Apple §1）。名前を変えている間、ボタンは止まって見える */
+  function busy(btn,on){ btn.disabled=on; }
+
+  // ── いまの状態を持ってくる ──
+  function load(){
+    fetch('/api/me').then(r=>r.ok?r.json():null).then(d=>{
+      if(!d||!d.auth){location.href='/?start=1';return;}
+      $('nowName').textContent=d.username||'';
+      const mail=$('nowMail');
+      mail.textContent='';
+      if(!d.email){ mail.textContent='登録なし'; }
+      else{
+        const a=document.createElement('span');a.textContent=d.email;mail.appendChild(a);
+        if(!d.email_verified){
+          const m=document.createElement('span');
+          m.className='mark';m.textContent='（確認待ち）';mail.appendChild(m);
+        }
+      }
+    }).catch(()=>{});
+  }
+  load();
+
+  // ── 名前 ──
+  $('doName').addEventListener('click',async()=>{
+    const v=$('fName').value.trim();
+    if(!v)return say($('sayName'),'あたらしい名前を書いてください。');
+    busy($('doName'),true);
+    try{ await post('/api/account/name',{username:v});
+         say($('sayName'),'名前を変えました。'); $('fName').value=''; load(); }
+    catch(e){ say($('sayName'),e.message); }
+    finally{ busy($('doName'),false); }
+  });
+
+  // ── メールアドレス ──
+  $('doMail').addEventListener('click',async()=>{
+    const v=$('fMail').value.trim();
+    if(!v)return say($('sayMail'),'あたらしいメールアドレスを書いてください。');
+    busy($('doMail'),true);
+    try{ await post('/api/email',{email:v});
+         say($('sayMail'),'確認のメールを送りました。届いたリンクを開くまで、お知らせは止まっています。');
+         $('fMail').value=''; load(); }
+    catch(e){ say($('sayMail'),e.message); }
+    finally{ busy($('doMail'),false); }
+  });
+
+  // ── パスワード ──
+  $('doPw').addEventListener('click',async()=>{
+    const cur=$('fPwNow').value, nw=$('fPwNew').value;
+    if(!cur||!nw)return say($('sayPw'),'いまのパスワードと、あたらしいパスワードを書いてください。');
+    busy($('doPw'),true);
+    try{ await post('/api/account/password',{current:cur,new:nw});
+         say($('sayPw'),'パスワードを変えました。'); $('fPwNow').value='';$('fPwNew').value=''; }
+    catch(e){ say($('sayPw'),e.message); }
+    finally{ busy($('doPw'),false); }
+  });
+
+  // ── 退会（取り返しがつかないので、パスワードと書き写しの二つが揃った時だけ通る） ──
+  $('doLeave').addEventListener('click',async()=>{
+    const pw=$('fLeavePw').value, ok=$('fLeaveOk').value.trim();
+    if(!pw||!ok)return say($('sayLeave'),'パスワードと、確かめのことばを書いてください。');
+    busy($('doLeave'),true);
+    try{ await post('/api/account/delete',{password:pw,confirm:ok});
+         document.body.innerHTML=
+           '<div class="doc"><h1>またいつか<span class="romaji">farewell</span></h1>'+
+           '<p class="quiet">退会しました。<br>ここまで、ありがとうございました。</p>'+
+           '<p class="quiet"><a href="/mood">← tayori-たより- へ</a></p></div>'; }
+    catch(e){ say($('sayLeave'),e.message); busy($('doLeave'),false); }
+  });
+})();
+</script>
+</body>
+</html>

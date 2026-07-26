@@ -26,6 +26,7 @@ import colorsys
 import hashlib
 import tempfile
 import threading
+import unicodedata
 import urllib.request   # 関数内で遅延importすると、複数スレッドが同時に初回importを走らせた際
 import urllib.error     # 「cannot access submodule 'request'（循環import）」で失敗する。
                         # 起動時にモジュールレベルで1回だけimportして競合を防ぐ。
@@ -33,8 +34,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr, parseaddr, make_msgid, formatdate
 from functools import wraps
-from collections import Counter
-from datetime import datetime, date, timedelta
+from collections import Counter, deque
+from datetime import datetime, date, timedelta, timezone
 
 from flask import Flask, request, jsonify, render_template, g, session, Response, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -586,6 +587,29 @@ def init_db():
             # 判定理由も引っかかった語も保存しない（残すのはこの一語だけ）。
             # NULL は v13 より前に放たれたことば＝live として読む（COALESCE で拾う）。
             "ALTER TABLE letters ADD COLUMN sky_status TEXT",
+            # ── 宙v1仕様書（2026-07-26）──
+            # shelved_at: 初めて誰かの棚に入った日時。一度だけ書き、以後更新しない（§5）。
+            # shelved_notified: その一度きりの報せを送ったか（送れずに諦めた場合も1で閉じる）。
+            "ALTER TABLE letters ADD COLUMN shelved_at TEXT",
+            "ALTER TABLE letters ADD COLUMN shelved_notified INTEGER DEFAULT 0",
+            "ALTER TABLE letters ADD COLUMN shelved_notify_attempts INTEGER DEFAULT 0",
+            # first_seen_*: 初めて誰かの宙に浮かんだ季節と時刻（§7）。一度だけ書く。
+            "ALTER TABLE letters ADD COLUMN first_seen_season TEXT",
+            "ALTER TABLE letters ADD COLUMN first_seen_at TEXT",
+            # birth_ym: 'YYYY-MM'。枠だけ先に切る（§2.4）。入力必須にしない・UIもまだ作らない。
+            "ALTER TABLE users ADD COLUMN birth_ym TEXT",
+            # ── 題（v2.2 §2.1・§3）──────────────────────────────
+            # 書き手がつける10字以内の名。タグは廃し、書き手が付けるのはこれ一つだけ。
+            # 宙を漂っている間は出さない（漂いは本文だけの世界）。立つのは棚・書架・辿るの
+            # 一覧の三面のみ。題での検索経路は作らないこと（表記ゆれで機能しないため。
+            # 探しものは air_distance ＝色・季節・時刻・天気が一本で担う）。
+            # saved_words 側にも持つ：棚の控えは本文と同じくスナップショットなので、
+            # 元が宙から降ろされても題ごと手元に残る。
+            "ALTER TABLE letters ADD COLUMN title TEXT",
+            # saved_words の CREATE TABLE はこの ALTER 列より後ろにある（新規DBでは
+            # ここは「テーブルが無い」で素通りし、列は CREATE 側の定義で入る）。
+            # この一行が効くのは、すでに棚を持っている既存DBだけ。
+            "ALTER TABLE saved_words ADD COLUMN title TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -653,11 +677,59 @@ def init_db():
                 src      TEXT NOT NULL,
                 ref_id   TEXT NOT NULL,
                 poem     TEXT NOT NULL,
+                title    TEXT,
                 color    TEXT,
                 vertical INTEGER DEFAULT 0,
                 saved_at TEXT NOT NULL,
                 UNIQUE(user_id, src, ref_id)
             )""")
+
+        # ── 棚の複数化（v2仕様書 §5）───────────────────────────────
+        # Pinterest でいうボード。名称は「棚」。本人しか見えない・公開/共有は作らない。
+        # 本文の控えは saved_words が持ち続け、shelf_items は「どの棚に置いたか」だけを指す
+        # （同じことばを複数の棚に置ける）。棚ごとの件数を出す経路は作らない（§5.2）。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS shelves (
+                id         TEXT PRIMARY KEY,
+                owner_id   TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_shelves_owner ON shelves (owner_id)")
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS shelf_items (
+                shelf_id TEXT NOT NULL,
+                saved_id TEXT NOT NULL,
+                saved_at TEXT NOT NULL,
+                PRIMARY KEY (shelf_id, saved_id)
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_shelf_items_saved ON shelf_items (saved_id)")
+        # ── 付箋（v2.2 §3・2026-07-26 反転）─────────────────────────
+        # 付箋を貼るのは書き手ではなく「読み手」。棚に残す瞬間に、その控えへ貼る。
+        # だから letters ではなく saved_words にぶら下げる——これが構造そのものの担保：
+        # 書き手の側から辿れる場所に付箋は一切存在しない（＝絶対に開示されない）。
+        # 公開もしない（宙にも辿るにも出ない）。貼った本人の棚の中だけの、私的な紙片。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS saved_tags (
+                saved_id TEXT NOT NULL,
+                tag      TEXT NOT NULL,
+                PRIMARY KEY (saved_id, tag)
+            )""")
+        # 既存の一枚棚からの移行（冪等）：棚を持たない人に「手元の棚」を一つ作り、
+        # まだどの棚にも属していない控えをそこへ置く。
+        _mig_now = datetime.now().isoformat(timespec="seconds")
+        for u in db.execute(
+                "SELECT DISTINCT user_id FROM saved_words WHERE user_id NOT IN"
+                " (SELECT owner_id FROM shelves)").fetchall():
+            db.execute("INSERT INTO shelves (id, owner_id, name, created_at) VALUES (?,?,?,?)",
+                       (secrets.token_hex(8), u["user_id"], "手元の棚", _mig_now))
+        db.execute(
+            "INSERT OR IGNORE INTO shelf_items (shelf_id, saved_id, saved_at)"
+            " SELECT (SELECT id FROM shelves s WHERE s.owner_id=w.user_id"
+            "          ORDER BY s.created_at, s.id LIMIT 1), w.id, w.saved_at"
+            "   FROM saved_words w WHERE w.id NOT IN ("
+            "     SELECT i.saved_id FROM shelf_items i JOIN shelves s ON s.id=i.shelf_id"
+            "      WHERE s.owner_id=w.user_id)")
 
         # ── 宙のことばに結んだ印（2026-07-25 v14）─────────────────────
         # 漂っていることばに触れて結ぶ、静かな印。受け手側にだけ残り、放った人の世界には
@@ -671,6 +743,53 @@ def init_db():
                 created   TEXT NOT NULL,
                 UNIQUE(user_id, letter_id)
             )""")
+
+        # ── 宙v1仕様書 §2.1（2026-07-26）: きょう見たことば ───────────────
+        # 「その人が今日もう見た手紙」の控え。これは読書履歴なので永久に残さない：
+        # 48時間を超えた行は maintenance_loop が日次で捨てる。
+        # 実際の除外判定は「JST朝4時以降に見たか」（_sky_day_start）で行う。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS sky_seen (
+                reader_id TEXT NOT NULL,
+                letter_id TEXT NOT NULL,
+                seen_at   TEXT NOT NULL,
+                PRIMARY KEY (reader_id, letter_id)
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_sky_seen_at ON sky_seen (seen_at)")
+
+        # ── 宙v1仕様書 §2.2: いいな（灯）───────────────────────────────
+        # 1人につき1つのことばへ1回だけ・永久。主キーで重複を物理的に封じ、
+        # アプリ側は INSERT OR IGNORE で握りつぶす（存在チェックはしない）。
+        # sky_seen は毎朝消えるがこれは残る＝数ヶ月後の偶然の再会で
+        # 「いつかのあなたが、もう灯をともしています」になる（§4.1）。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS sky_reaction (
+                reader_id TEXT NOT NULL,
+                letter_id TEXT NOT NULL,
+                at        TEXT NOT NULL,
+                PRIMARY KEY (reader_id, letter_id)
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_reaction_letter ON sky_reaction (letter_id)")
+        # 既存の印（sky_marks）と配達のいいな（sky_deliveries.liked_at）を移し替える。
+        # INSERT OR IGNORE なので冪等。旧テーブル・旧列は読まなくなるだけで消さない。
+        db.execute(
+            "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at)"
+            " SELECT user_id, letter_id, created FROM sky_marks")
+        db.execute(
+            "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at)"
+            " SELECT recipient, letter_id, liked_at FROM sky_deliveries WHERE liked_at IS NOT NULL")
+
+        # ── 付箋（v2仕様書 §6）─────────────────────────────────
+        # 書き手が、自分のことばに自分で貼る分類。AIは付けない・読み手も付けない。
+        # 1通につき最大3つ。tag は正規化済み（_normalize_tag）で保存する。
+        # 使用件数を数えて出す経路は作らないこと（人気タグ＝ランキングの変装・§12）。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS letter_tags (
+                letter_id TEXT NOT NULL,
+                tag       TEXT NOT NULL,
+                PRIMARY KEY (letter_id, tag)
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_letter_tags_tag ON letter_tags (tag)")
 
         # ── 10問アンケート → 未来への手紙（HTMXの並行フロー。既存 letters には一切触れない）──
         # letters / questions / answers の3テーブル構成。手紙本文はDBに持たず、
@@ -1154,6 +1273,7 @@ def robots_txt():
         "Allow: /privacy\n"
         "Disallow: /open/\n"
         "Disallow: /shelf\n"
+        "Disallow: /mine\n"
         "Disallow: /map\n"
         "Disallow: /api/\n"
         "Disallow: /admin.welcometotayori\n"
@@ -1451,6 +1571,77 @@ def api_change_password():
     return jsonify(ok=True)
 
 
+# ══ 退会（v2.2 §4・2026-07-26 Kosei確定）════════════════════════
+# 設定画面から自己完結で閉じられるようにする（これまでは問い合わせ窓口だけだった）。
+# 消えるもの／残るものを、はっきり分けて決めてある：
+#   消える … アカウント、自分が放ったことば（＝宙からも消える）、自分の棚と控え、
+#             自分の印・既読・下書き・屑籠・受け取った配達
+#   残る  … すでに他の人の棚に置かれた「控え」。一度その人の手に渡ったことばは、
+#           こちらの都合で取り上げない（棚の控えはスナップショットで、書き手を指す
+#           情報を最初から持たない＝退会後も誰のことばか分からないまま残る）。
+# この非対称は仕様であって、実装の都合ではない（規約第8条3(2)・プライバシー第8条と対）。
+_DELETE_CONFIRM = "退会します"
+
+
+@app.route("/api/account/delete", methods=["POST"])
+@login_required
+def api_account_delete():
+    data = request.get_json(force=True) or {}
+    db = get_db()
+    me = uid()
+    row = db.execute("SELECT username, pw_hash FROM users WHERE id=?", (me,)).fetchone()
+    if not row:
+        return jsonify(error="ユーザーが見つかりません。"), 404
+    if row["username"] == "admin":
+        return jsonify(error="管理者アカウントは退会できません。"), 403
+    # 取り返しがつかないので、二つ揃った時だけ通す（パスワード＋その場で書き写す一語）。
+    if not check_password_hash(row["pw_hash"], data.get("password") or ""):
+        return jsonify(error="パスワードが違います。"), 401
+    if (data.get("confirm") or "").strip() != _DELETE_CONFIRM:
+        return jsonify(error=f"確かめのため、「{_DELETE_CONFIRM}」と書き写してください。"), 400
+    # 自分のことばのidを先に押さえる（letters を消した後では引けない）
+    lids = [r["id"] for r in db.execute("SELECT id FROM letters WHERE user_id=?", (me,))]
+    saved = [r["id"] for r in db.execute("SELECT id FROM saved_words WHERE user_id=?", (me,))]
+    try:
+        with _WRITE_LOCK:
+            for lid in lids:
+                db.execute("DELETE FROM thread WHERE letter_id=?", (lid,))
+                db.execute("DELETE FROM letter_tags WHERE letter_id=?", (lid,))
+                # 自分のことばの配達（＝他の人の手元に降りていた分）も閉じる。
+                # 相手の棚に控えがあれば、そちらは saved_words に残る（上のコメント）。
+                db.execute("DELETE FROM sky_deliveries WHERE letter_id=?", (lid,))
+            for sid in saved:
+                db.execute("DELETE FROM saved_tags WHERE saved_id=?", (sid,))
+                db.execute("DELETE FROM shelf_items WHERE saved_id=?", (sid,))
+            for stmt, args in (
+                ("DELETE FROM letters WHERE user_id=?", (me,)),
+                ("DELETE FROM drafts WHERE user_id=?", (me,)),
+                ("DELETE FROM notes WHERE user_id=?", (me,)),
+                ("DELETE FROM saved_words WHERE user_id=?", (me,)),
+                ("DELETE FROM shelf_items WHERE shelf_id IN"
+                 " (SELECT id FROM shelves WHERE owner_id=?)", (me,)),
+                ("DELETE FROM shelves WHERE owner_id=?", (me,)),
+                ("DELETE FROM sky_deliveries WHERE recipient=?", (me,)),
+                ("DELETE FROM sky_seen WHERE reader_id=?", (me,)),
+                ("DELETE FROM sky_reaction WHERE reader_id=?", (me,)),
+                ("DELETE FROM sky_marks WHERE user_id=?", (me,)),
+                ("DELETE FROM unemptyable_trash WHERE user_id=?", (me,)),
+                ("DELETE FROM woven_scraps WHERE user_id=?", (me,)),
+                ("DELETE FROM users WHERE id=?", (me,)),
+            ):
+                try:
+                    db.execute(stmt, args)
+                except sqlite3.OperationalError:
+                    pass          # 古いDBに無いテーブルは、無いままでよい
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 退会 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    _sky_cache_bust()             # 放っていたことばを、いま宙から降ろす
+    session.clear()
+    return jsonify(ok=True)
+
+
 @app.route("/api/settings/aggregate-opt-out", methods=["GET", "POST"])
 @login_required
 def api_aggregate_opt_out():
@@ -1501,8 +1692,11 @@ def _env_num(name, default, lo, hi, cast=float):
 
 
 # 未来の自分への帰還（§4）：最短〜最長と、同じことばが帰ってこられる回数。
-SKY_RETURN_MIN_DAYS = _env_num("TAYORI_SKY_RETURN_MIN_DAYS", 3.0, 0.01, 3650.0)
-SKY_RETURN_MAX_DAYS = _env_num("TAYORI_SKY_RETURN_MAX_DAYS", 365.0, SKY_RETURN_MIN_DAYS, 3650.0)
+# 宙v1 §8: 未来指定の上限は封をした日から1年。終了時期の判断を1年後に先送りする以上、
+# それより長い約束をユーザーに作らせない。環境変数でも366日より先へは伸ばせない
+# （伸ばすのは判断日を越えてから。コードのこの上限を変えるのがその手続き）。
+SKY_RETURN_MIN_DAYS = _env_num("TAYORI_SKY_RETURN_MIN_DAYS", 3.0, 0.01, 366.0)
+SKY_RETURN_MAX_DAYS = _env_num("TAYORI_SKY_RETURN_MAX_DAYS", 365.0, SKY_RETURN_MIN_DAYS, 366.0)
 SKY_RETURN_MAX = _env_num("TAYORI_SKY_RETURN_MAX", 3, 1, 100, cast=int)
 # 宙への配布（§5.3）：ひとつのことばを何人の他者へ届けるか。初期はユーザーが少なく
 # 「誰にも届かないまま滞留」しやすいので、増やす側に倒せるようにしておく。
@@ -1512,7 +1706,10 @@ SKY_FANOUT = _env_num("TAYORI_SKY_FANOUT", 1, 1, 20, cast=int)
 def _sky_arrive_at(now=None):
     """宙に放ったことばが降ってくる日時。最短〜最長（既定3日〜1年）の対数一様乱数
     （近い方寄り：中央値およそ1ヶ月、数日〜数週間が多く、たまに半年・1年後にふと降る）。
-    この値は本人に一切見せない内部パラメータ。レスポンスにも封印カードにも出さない。"""
+    この値は本人に一切見せない内部パラメータ。レスポンスにも封印カードにも出さない。
+    上限1年は約束（v2 §10）：終了時期の判断を1年後に先送りしている以上、それより長い
+    約束を作らない。クライアントから日時は受けず、SKY_RETURN_MAX_DAYS も366日で頭打ち。
+    縮めるのは約束破りだが、伸ばすのは後からできる。"""
     now = now or datetime.now()
     days = SKY_RETURN_MIN_DAYS * ((SKY_RETURN_MAX_DAYS / SKY_RETURN_MIN_DAYS) ** random.random())
     # 降る時刻も日常の中に散らす（7時〜22時）。深夜に通知メールが鳴らないように。
@@ -1712,6 +1909,12 @@ def letter_to_dict(row, include_thread=True):
     d["sky"] = _is_sky(row)                  # 宙へ放たれたことば
     d["liked"] = bool(d.get("liked_at"))     # 降ってきたことばに結んだ静かな印
     d["arrived"] = _is_arrived(row)
+    # 宙v1 §5・§6: 書架にそっと添える状態。該当しない時は False/None のまま＝何も表示しない
+    # （「まだ誰にも読まれていません」は絶対に出さない。沈黙は沈黙のままにする）。
+    d["in_someones_hands"] = bool(d.get("shelved_at"))
+    d["first_seen"] = _first_seen_phrase(d.get("first_seen_season"))
+    d.pop("shelved_notified", None)
+    d.pop("shelved_notify_attempts", None)
     
     if d.get("seal_env"): d["seal_env"] = json.loads(d["seal_env"])
     if d.get("open_env"): d["open_env"] = json.loads(d["open_env"])
@@ -2173,6 +2376,7 @@ def _check_and_notify():
             """SELECT l.id AS lid, l.arrive_at, l.arrive_date, l.arrive_label,
                       l.weather_event AS wevent, l.weather_met_at AS wmet, l.mode AS mode,
                       l.poem AS poem, l.sent_date AS sent_date, l.seal_env AS seal_env,
+                      l.shelved_at AS shelved_at, l.first_seen_season AS first_seen_season,
                       COALESCE(l.returned_count,0) AS returned,
                       COALESCE(l.notify_attempts,0) AS attempts,
                       u.email AS email, u.username AS username, u.unsub_token AS unsub
@@ -2204,12 +2408,21 @@ def _check_and_notify():
             if r["mode"] == "sky" and (r["poem"] or "").strip():
                 # 帰還（§4.2）：メールそのものが「あの日」の追体験になる。
                 # 本文と、放った日の記録（日付・曜日・天気・気温・時刻）を静かに並べる。
+                # 宙v1 §5・§7: 放ったあとの話を、回数ではなく状態と季節で一行だけ添える。
+                # 該当しなければ行ごと出さない（ゼロの可視化はしない＝無音）。
+                after = ""
+                ph = _first_seen_phrase(r["first_seen_season"])
+                if ph:
+                    after += f"\nこの言葉は、\n{ph}に、一度浮かびました。\n"
+                if r["shelved_at"]:
+                    after += "\nこのことばは、\nだれかの手元にあります。\n"
                 subject = "たより — あなたのことばが帰ってきました"
                 body = (
                     f"{r['username']} さんへ。\n"
                     "あの日、あなたはこう書いていました。\n\n"
                     f"  ── {r['poem']} ──\n\n"
                     f"{_sky_return_record(r['sent_date'], r['seal_env'])}"
+                    + after +
                     f"\nもう一度ひらくには:\n{open_url}\n\n"
                     "tayori ーたより\n"
                     + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
@@ -2304,6 +2517,50 @@ def _check_and_notify():
                     db.commit()
                 if failed:
                     print(f"[通知あきらめ] 宙の配達 {r['did']} は {attempts} 回失敗したため停止しました")
+
+        # ── 【本命】棚に残された、ということだけが返る（宙v1 §5・確認済み: メールも送る）──
+        # ある手紙が「初めて」誰かの棚に入った時にだけ、一度きりの報せを送る。
+        # 二人目以降は何も送らない＝数にならない。書くのは出来事ではなく状態（現在形）。
+        hrows = db.execute(
+            """SELECT l.id AS lid, l.poem AS poem,
+                      COALESCE(l.shelved_notify_attempts,0) AS attempts,
+                      u.email AS email, u.username AS username, u.unsub_token AS unsub
+               FROM letters l JOIN users u ON u.id = l.user_id
+               WHERE l.shelved_at IS NOT NULL
+                 AND COALESCE(l.shelved_notified,0)=0
+                 AND u.email IS NOT NULL AND u.email<>''
+                 AND COALESCE(u.email_verified,0)=1
+                 AND COALESCE(u.notify_enabled,1)=1""").fetchall()
+        for r in hrows:
+            unsub_url = f"{BASE_URL}/unsubscribe/{r['unsub']}" if r["unsub"] else None
+            subject = "たより — あなたのことばが、だれかの手元にあります"
+            body = (
+                f"{r['username']} さんへ。\n"
+                "いつか、あなたが放ったことば——\n\n"
+                f"  ── {r['poem']} ──\n\n"
+                "このことばは、\n"
+                "だれかの手元にあります。\n\n"
+                "だれの手元かは、だれにもわかりません。\n"
+                "この報せは、一度きりです。\n\n"
+                "tayori ーたより\n"
+                + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
+            )
+            if send_email(r["email"], subject, body, unsubscribe_url=unsub_url):
+                with _WRITE_LOCK:
+                    db.execute("UPDATE letters SET shelved_notified=1 WHERE id=?", (r["lid"],))
+                    db.commit()
+            else:
+                attempts = r["attempts"] + 1
+                done = 1 if attempts >= MAX_NOTIFY_ATTEMPTS else 0
+                with _WRITE_LOCK:
+                    # 送れずに諦めた時も notified=1 で閉じる（書架の「だれかの手元にあります」
+                    # は shelved_at だけを見るので、状態の表示は失われない）
+                    db.execute(
+                        "UPDATE letters SET shelved_notify_attempts=?, shelved_notified=? WHERE id=?",
+                        (attempts, done, r["lid"]))
+                    db.commit()
+                if done:
+                    print(f"[通知あきらめ] 棚入りの報せ {r['lid']} は {attempts} 回失敗したため停止しました")
     except Exception as e:
         print(f"[通知チェックでエラー] {e}")
     finally:
@@ -2356,6 +2613,7 @@ def start_notifier(interval=None):
         last_backup = time.time() - backup_hours * 3600 + 300
         last_dissolve = 0.0
         last_mood_grid = 0.0    # 気分の地図の集計。0.0 起点で起動直後に一度作る
+        last_seen_gc = 0.0      # sky_seen の掃除（宙v1 §2.1）。起動直後に一度、以後は日次
         time.sleep(grace + 8)   # persist は notifier より少し後ろにずらす
         while True:
             try:
@@ -2376,6 +2634,23 @@ def start_notifier(interval=None):
                         _db.close()
             except Exception as e:
                 print(f"[たより] 溶解バッチでエラー（継続）: {e}", flush=True)
+            try:
+                # 宙v1 §2.1: sky_seen は読書履歴なので、48時間を超えた行を日次で手放す。
+                # 除外判定は「今日の朝4時以降」なので、48時間は余裕を持たせた保険にすぎない。
+                if time.time() - last_seen_gc >= 86400:
+                    last_seen_gc = time.time()
+                    _db = _connect()
+                    try:
+                        cutoff = (datetime.now() - timedelta(hours=48)).isoformat(timespec="seconds")
+                        with _WRITE_LOCK:
+                            cur = _db.execute("DELETE FROM sky_seen WHERE seen_at < ?", (cutoff,))
+                            _db.commit()
+                        if cur.rowcount:
+                            print(f"[たより] 宙のきょうの控え: {cur.rowcount}行を手放しました", flush=True)
+                    finally:
+                        _db.close()
+            except Exception as e:
+                print(f"[たより] sky_seen掃除でエラー（継続）: {e}", flush=True)
             try:
                 # 気分の地図: 集計テーブルを日次で作り直す（即時反映しないのが設計）
                 if time.time() - last_mood_grid >= 86400:
@@ -2826,20 +3101,195 @@ def _sky_public_id(letter_id):
     """宙に出す公開id。手紙のidは絶対に出さない（逆算もできない一方向のハッシュ）。"""
     return hashlib.sha256(("sky:" + letter_id).encode()).hexdigest()[:12]
 
-# ── 共鳴の重み（2026-07-25 v12）──────────────────────────
-# 「いま宙を見ているこの瞬間」の季節・時刻・天気と重なることばが浮かびやすくなる。
-# ただし上位固定にはしない：スコアを重みにした抽選なので、毎回ちがう顔ぶれになる。
-# w_noise は必ず効かせる（これが無いと同じことばばかり浮いて「宙」でなくなる）。
-_SKY_W_SEASON = _env_num("TAYORI_SKY_W_SEASON", 1.0, 0.0, 10.0)
-_SKY_W_WEATHER = _env_num("TAYORI_SKY_W_WEATHER", 1.0, 0.0, 10.0)
-_SKY_W_HOUR = _env_num("TAYORI_SKY_W_HOUR", 0.8, 0.0, 10.0)
-_SKY_W_NOISE = _env_num("TAYORI_SKY_W_NOISE", 0.6, 0.01, 10.0)
-# 時刻の重なりが0になるまでの隔たり（既定6時間）
-_SKY_HOUR_SPAN = _env_num("TAYORI_SKY_HOUR_SPAN", 6.0, 0.5, 12.0)
-# 母数が小さいうちは共鳴を弱める（【F】）。ことばがこの数に届くまで、季節・天気・時刻の
-# 重みを母数に比例して薄め、ほぼ偶然だけで浮かべる。数通しかない宙で重みを効かせると、
-# 「今日と重なる一通」だけが毎回出てきて宙が止まって見えるため。
+# ── 空気の近さ（v2仕様書 §2・v2の心臓）──────────────────────
+# 意味を読まない。条件で並べる。0.0（同じ空気）〜 1.0（遠い）。
+# 色（40%）が主役：気分の色は本人が選んだ唯一の主観指標なので、いちばん信用できる。
+# 言語はこの計算に一切入らない（§2.4）＝ことばが多言語化してもここは1行も変えない。
+# 重みは実データで調整できるよう環境変数に出しておく（§17）。
+_AIR_W_COLOR = _env_num("TAYORI_AIR_W_COLOR", 0.40, 0.0, 1.0)
+_AIR_W_SEASON = _env_num("TAYORI_AIR_W_SEASON", 0.20, 0.0, 1.0)
+_AIR_W_HOUR = _env_num("TAYORI_AIR_W_HOUR", 0.20, 0.0, 1.0)
+_AIR_W_WEATHER = _env_num("TAYORI_AIR_W_WEATHER", 0.15, 0.0, 1.0)
+_AIR_W_AREA = _env_num("TAYORI_AIR_W_AREA", 0.05, 0.0, 1.0)
+
+_HSL_RE = re.compile(
+    r"hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%\s*\)")
+_AIR_GRAY_S = 12.0   # これ未満の彩度は無彩色とみなす（§2.2）
+
+
+def _parse_hsl(s):
+    """"hsl(H, S%, L%)" → (h, s, l)。読めない値は None（成分ごと欠測として扱う）。"""
+    m = _HSL_RE.match(str(s or "").strip())
+    if not m:
+        return None
+    return (float(m.group(1)) % 360.0,
+            min(100.0, float(m.group(2))), min(100.0, float(m.group(3))))
+
+
+def _hue_distance(c1, c2):
+    """気分の色どうしの距離（§2.2）。色相環は円。どちらかが読めなければ None。"""
+    p1, p2 = _parse_hsl(c1), _parse_hsl(c2)
+    if p1 is None or p2 is None:
+        return None
+    (h1, s1, l1), (h2, s2, l2) = p1, p2
+    ds, dl = abs(s1 - s2) / 100.0, abs(l1 - l2) / 100.0
+    if s1 < _AIR_GRAY_S and s2 < _AIR_GRAY_S:
+        # 無彩色どうしは色相を無視して彩度・明度だけで比べる
+        return (0.15 * ds + 0.15 * dl) / 0.30
+    dh = min(abs(h1 - h2), 360.0 - abs(h1 - h2)) / 180.0
+    if (s1 < _AIR_GRAY_S) != (s2 < _AIR_GRAY_S):
+        dh = 0.5   # 片方だけ無彩色：色相は比べられないので中立に置く
+    return 0.70 * dh + 0.15 * ds + 0.15 * dl
+
+
+_AIR_SEASONS = ("spring", "summer", "autumn", "winter")   # 円環（春↔冬は隣接）
+_AIR_BANDS = ("morning", "day", "evening", "night")       # 円環（夜↔朝は隣接）
+_AIR_RING = {0: 0.0, 1: 0.5, 2: 1.0}                      # 同=0 / 隣=0.5 / 対=1.0
+
+
+def _ring_distance(seq, a, b):
+    try:
+        d = abs(seq.index(a) - seq.index(b))
+    except ValueError:
+        return None
+    return _AIR_RING[min(d, len(seq) - d)]
+
+
+def _hour_band(hour):
+    """0.0–24.0 の時刻 → 朝・昼・夕・夜の帯（§2.3）。time_bucket と同じ切り方。"""
+    if hour is None:
+        return None
+    h = hour % 24.0
+    if 4 <= h < 11:
+        return "morning"
+    if 11 <= h < 16:
+        return "day"
+    if 16 <= h < 19:
+        return "evening"
+    return "night"
+
+
+# 天気の距離（§2.3）：同じ=0 / 近い（曇⇄雨など）=0.5 / 遠い（晴⇄雪など）=1.0
+_AIR_WEATHER = {
+    frozenset(("clear", "cloud")): 0.5,
+    frozenset(("cloud", "rain")): 0.5,
+    frozenset(("cloud", "snow")): 0.5,
+    frozenset(("rain", "snow")): 0.5,
+}
+
+_AIR_PREF_RE = re.compile(r"^(.+?[都道府県])")
+
+
+def _area_distance(a1, a2):
+    """同一エリア=0 / 同一都道府県=0.5 / それ以外=1.0（§2.3）。重みは最小（5%）：
+    「近所の人のことば」が集まるのは tayori の狙いではない。"""
+    if not a1 or not a2:
+        return None
+    if a1 == a2:
+        return 0.0
+    m1, m2 = _AIR_PREF_RE.match(a1), _AIR_PREF_RE.match(a2)
+    if m1 and m2 and m1.group(1) == m2.group(1):
+        return 0.5
+    return 1.0
+
+
+def air_distance(a, b):
+    """空気の近さ（§2.1）。a, b は {"color","season","hour","weather","area"} の辞書
+    （hour は 0.0–24.0 の連続値）。どちらかに無い成分は比べずに外し、残りの重みで
+    正規化する——閲覧者の「いま」には色が無く、位置なし手紙には地名が無い、の
+    どちらでも式を変えずに済む。意味には一切触れない。"""
+    parts = []
+    d = _hue_distance(a.get("color"), b.get("color"))
+    if d is not None:
+        parts.append((_AIR_W_COLOR, d))
+    d = _ring_distance(_AIR_SEASONS, a.get("season"), b.get("season"))
+    if d is not None:
+        parts.append((_AIR_W_SEASON, d))
+    d = _ring_distance(_AIR_BANDS, _hour_band(a.get("hour")), _hour_band(b.get("hour")))
+    if d is not None:
+        parts.append((_AIR_W_HOUR, d))
+    w1, w2 = a.get("weather"), b.get("weather")
+    if w1 and w2:
+        parts.append((_AIR_W_WEATHER,
+                      0.0 if w1 == w2 else _AIR_WEATHER.get(frozenset((w1, w2)), 1.0)))
+    d = _area_distance(a.get("area"), b.get("area"))
+    if d is not None:
+        parts.append((_AIR_W_AREA, d))
+    total = sum(w for w, _ in parts)
+    if total <= 0:
+        return 0.5   # 何も比べられない時は中立（同じ空気とも遠いとも言わない）
+    return sum(w * d for w, d in parts) / total
+
+
+# 母数が小さいうちは空気を弱める（v12【F】を継続）。ことばがこの数に届くまで、
+# 空気の距離を母数に比例して薄め、ほぼ偶然だけで浮かべる。数通しかない宙で距離を
+# 効かせると、「今日と重なる一通」だけが毎回出てきて宙が止まって見えるため。
 _SKY_RESONANCE_N = _env_num("TAYORI_SKY_RESONANCE_N", 120, 1, 100000, cast=int)
+
+# ── 沈降（宙v1 §3.3）──────────────────────────────────────────
+# 手紙は宙から消えない。代わりに時間が経つほど浮かびにくくなる。既定は1年で約1/2、
+# 3年で約1/4。ゼロにはしない：深いところへ沈むが、まれに浮かぶ。
+_SKY_DECAY_MONTHS = _env_num("TAYORI_SKY_DECAY_MONTHS", 12.0, 0.1, 1200.0)
+
+
+def _sky_decay(sent_date):
+    try:
+        age_days = (datetime.now() - datetime.fromisoformat(sent_date)).days
+    except (TypeError, ValueError):
+        return 1.0
+    months = max(0.0, age_days / 30.44)
+    return 1.0 / (1.0 + months / _SKY_DECAY_MONTHS)
+
+
+# ── 宙の一日（宙v1 §3.1）───────────────────────────────────────
+# 境目は JST 朝4時。0時にしない：深夜が tayori のコアタイムなので、滞在中に
+# 宙が総入れ替わりするのを避ける。運営者が海外にいても JST 固定（ユーザーは日本にいる）。
+JST = timezone(timedelta(hours=9))
+
+
+def _sky_day_start():
+    """いまの「宙の一日」の始まり（JST朝4時）を、DBの保存形式（サーバのローカル
+    naive datetime）で返す。sky_seen.seen_at との比較にそのまま使える。"""
+    jnow = datetime.now(JST)
+    start = jnow.replace(hour=4, minute=0, second=0, microsecond=0)
+    if jnow < start:
+        start -= timedelta(days=1)
+    return datetime.fromtimestamp(start.timestamp())
+
+
+# ── 出会いの痕跡（宙v1 §7）─────────────────────────────────────
+# 「何回読まれたか」を「いつ誰かの"いま"と重なったか」へ翻訳するための語彙。
+# first_seen_season には 'summer_night' の形の鍵だけを保存し、文はメールを書く時に組む。
+_SEASON_JA = {"spring": "春", "summer": "夏", "autumn": "秋", "winter": "冬"}
+_DAYPART_JA = {"dawn": "明けがた", "morning": "朝", "day": "昼",
+               "evening": "夕方", "night": "夜"}
+
+
+def _daypart_key(dt):
+    h = dt.hour
+    if 4 <= h < 7:
+        return "dawn"
+    if 7 <= h < 11:
+        return "morning"
+    if 11 <= h < 16:
+        return "day"
+    if 16 <= h < 19:
+        return "evening"
+    return "night"
+
+
+def _first_seen_key(dt):
+    return f"{_mood_season(dt.isoformat())}_{_daypart_key(dt)}"
+
+
+def _first_seen_phrase(key):
+    """'summer_night' → 「夏の夜」。読めない値は None（無音のまま）。"""
+    try:
+        season, part = (key or "").split("_", 1)
+    except ValueError:
+        return None
+    s, p = _SEASON_JA.get(season), _DAYPART_JA.get(part)
+    return f"{s}の{p}" if s and p else None
 
 # いまの空模様。外への問い合わせでリクエストを待たせないよう、裏で取りに行って置いておく。
 # 鍵は見ている人のIPのハッシュ（生IPはメモリにも置かない）。値は4分類の天気だけ。
@@ -2900,6 +3350,17 @@ def _sky_now_weather():
     return cond
 
 
+def _viewer_air():
+    """閲覧者の「いま」の空気（v2 §2）。色と地名は持たない＝air_distance 側が
+    残りの成分（季節・時刻帯・天気）だけで正規化して比べる。"""
+    now = datetime.now()
+    return {
+        "season": _mood_season(now.isoformat()),
+        "hour": now.hour + now.minute / 60.0,
+        "weather": _sky_now_weather(),
+    }
+
+
 def _sky_cache_bust():
     """放った瞬間に宙へ映るように、ことばの共有キャッシュをいま無効化する。
     （待ち時間の正体はサーバ側キャッシュだったので、投函の書き込み直後にここを叩く）"""
@@ -2928,13 +3389,17 @@ def _sky_index():
 
 
 def _sky_rebuild():
-    rows = get_db().execute(
-        "SELECT id, poem, seal_color, vertical, sent_date, time_bucket, seal_env, weather_event "
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, user_id, poem, title, seal_color, vertical, sent_date, time_bucket, seal_env, weather_event, area_name "
         "FROM letters "
         "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>'' "
         # 掲載の門番（§8）。承認待ち・掲載しないことばは宙に出さない。
         # v13 より前のことばは sky_status を持たない（NULL）＝これまで通り宙にある。
         "AND COALESCE(sky_status,'live')='live'").fetchall()
+    # 付箋は宙に出さない（v2.2 §3の反転）。付箋は読み手が自分の棚の控えに貼る私的な紙片に
+    # なったので、公開の辞書には最初から入れない。letter_tags（旧・書き手の付箋）は
+    # 過去データとして残っているが、もう読まない・書かない。
     pool, index = [], {}
     for r in rows:
         if _needs_care(r["poem"]):
@@ -2947,11 +3412,20 @@ def _sky_rebuild():
                 "color": r["seal_color"],
                 "vertical": bool(r["vertical"]),
             },
-            _mood_season(r["sent_date"]),
-            _mood_hour(r),
-            _mood_weather(r),
+            # 空気の距離（v2 §2）の材料。クライアントへは出さない
+            {
+                "color": r["seal_color"],
+                "season": _mood_season(r["sent_date"]),
+                "hour": _mood_hour(r),
+                "weather": _mood_weather(r),
+                "area": r["area_name"],
+            },
+            r["id"],                      # 読み手ごとの除外（§3.2）にだけ使う。クライアントへは出さない
+            _sky_decay(r["sent_date"]),   # 沈降（§3.3）。キャッシュは15秒なので鮮度は問題にならない
+            r["user_id"],                 # 「自分のことば」判定（辿る §4.1）にだけ使う。クライアントへは出さない
+            r["title"],                   # 題（§2.2）。辿るの一覧でだけ足す（漂いには出さない）
         ))
-        index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0)
+        index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["title"])
     with _sky_lock:
         _sky_cache["t"] = time.time()
         _sky_cache["pool"] = pool
@@ -2959,40 +3433,254 @@ def _sky_rebuild():
     return pool, index
 
 
-def _sky_score(entry, season, hour, weather, reso):
-    """いまとの重なり。0に張り付かないよう、必ず noise を足してから返す。"""
-    s = _SKY_W_NOISE * random.random() + 1e-9
-    if reso <= 0:
-        return s
-    if entry[1] == season:
-        s += _SKY_W_SEASON * reso
-    if entry[3] == weather:
-        s += _SKY_W_WEATHER * reso
-    d = abs(entry[2] - hour) % 24.0
-    d = min(d, 24.0 - d)                      # 23時と1時は2時間しか離れていない
-    s += _SKY_W_HOUR * reso * max(0.0, 1.0 - d / _SKY_HOUR_SPAN)
-    return s
+def _sky_score(entry, now_air, reso):
+    """v2 §3.3: weight = (1 - air_distance(閲覧者のいま, 手紙)) × 沈降 × 偶然(0.7–1.3)。
+    沈降で古いことばは深く沈むが、ゼロにはしない（まれに深いところから浮かぶ）。
+    母数が小さいうちは距離を reso で薄めて、ほぼ偶然だけにする（【F】）。"""
+    air = air_distance(now_air, entry[1]) * reso
+    return max(1e-6, 1.0 - air) * entry[3] * random.uniform(0.7, 1.3)
 
 
 @app.route("/api/sky")
 def api_sky():
     pool = _sky_pool()
-    now = datetime.now()
-    season = _mood_season(now.isoformat())
-    hour = now.hour + now.minute / 60.0
-    weather = _sky_now_weather()
+    # 読み手ごとの除外（宙v1 §3.2）。共有キャッシュには手を入れず、リクエスト時に間引く。
+    #   ・自分が書いた手紙 …… 永久
+    #   ・棚に入れた手紙 ……… 永久（棚から外せばまた浮かびうる＝現在の棚で判定）
+    #   ・今日もう見た手紙 …… その日だけ（JST朝4時に効力が切れる）
+    reader = session.get("uid")
+    if reader and pool:
+        db = get_db()
+        excl = {r["id"] for r in db.execute(
+            "SELECT id FROM letters WHERE user_id=? AND mode='sky'", (reader,))}
+        excl |= {r["letter_id"] for r in db.execute(
+            "SELECT d.letter_id AS letter_id FROM saved_words s"
+            " JOIN sky_deliveries d ON d.id=s.ref_id"
+            " WHERE s.user_id=? AND s.src='sky'", (reader,))}
+        excl |= {r["letter_id"] for r in db.execute(
+            "SELECT letter_id FROM sky_seen WHERE reader_id=? AND seen_at>=?",
+            (reader, _sky_day_start().isoformat(timespec="seconds")))}
+        # 漂いから直接棚へ載せた分（src='drift'）は公開idで控えているので、そのまま突き合わせる
+        excl_pub = {r["ref_id"] for r in db.execute(
+            "SELECT ref_id FROM saved_words WHERE user_id=? AND src='drift'", (reader,))}
+        pool = [e for e in pool if e[2] not in excl and e[0]["id"] not in excl_pub]
+    now_air = _viewer_air()
     reso = min(1.0, len(pool) / float(_SKY_RESONANCE_N))
     if len(pool) > _SKY_MAX:
         # スコアを重みにした非復元抽選（Efraimidis–Spirakis）。上位固定にしないので
         # 「今日と響き合う一通」が毎回必ず来るわけではない＝偶然性は死なない。
         keyed = sorted(pool,
-                       key=lambda e: random.random() ** (1.0 / _sky_score(e, season, hour, weather, reso)),
+                       key=lambda e: random.random() ** (1.0 / _sky_score(e, now_air, reso)),
                        reverse=True)[:_SKY_MAX]
         words = [e[0] for e in keyed]
     else:
         words = [e[0] for e in pool]
     random.shuffle(words)   # 並び順からは何も推測させない
     return jsonify(words=words)
+
+
+@app.route("/api/sky/seen", methods=["POST"])
+def api_sky_seen():
+    """実際に画面へ浮かんだことばの控え（宙v1 §3.2）。クライアントが「浮かべた」公開idを
+    ここへ置いていく。ログイン中の読み手は sky_seen に記録され、明朝4時まで同じことばは
+    浮かばない。あわせて手紙側に「初めて誰かの宙に浮かんだ」季節と時刻を一度だけ刻む（§7）
+    ——回数は数えない。一度書いたら以後更新しない。"""
+    # ログインしている読み手だけを「誰か」と数える。匿名の画面には書き手本人が
+    # ログアウトのまま居ることがあり（ランディング＝宙）、自分のことばに
+    # 「誰かの宙に浮かびました」が刻まれてしまう——痕跡の信頼が一度で壊れるので、
+    # 匿名の閲覧は記録しない（きょうの控えも、初回の痕跡も）。
+    reader = session.get("uid")
+    if not reader:
+        return jsonify(ok=True)
+    ids = (request.get_json(silent=True) or {}).get("ids") or []
+    if not isinstance(ids, list):
+        return jsonify(ok=True)
+    idx = _sky_index()
+    lids = [idx[h][0] for h in ids[:80] if isinstance(h, str) and h in idx]
+    if not lids:
+        return jsonify(ok=True)
+    now = datetime.now()
+    now_iso = now.isoformat(timespec="seconds")
+    season_key = _first_seen_key(now)
+    db = get_db()
+    with _WRITE_LOCK:
+        for lid in lids:
+            db.execute(
+                "INSERT OR REPLACE INTO sky_seen (reader_id, letter_id, seen_at)"
+                " VALUES (?,?,?)", (reader, lid, now_iso))
+            # 書いた本人の画面に浮かんでも「誰かの宙に浮かんだ」ことにはしない
+            db.execute(
+                "UPDATE letters SET first_seen_season=?, first_seen_at=?"
+                " WHERE id=? AND first_seen_at IS NULL AND user_id<>?",
+                (season_key, now_iso, lid, reader))
+        db.commit()
+    return jsonify(ok=True)
+
+
+# ══ 灯（宙v1 §4.2）═══════════════════════════════════════════════
+# 「誰かがそこにいた」という事実だけを運ぶ。保存しない・数えない・誰かは言わない。
+# メモリ上のリングだけで持つ（プロセスが落ちれば消える——それでいい）。
+# 自分が触れた灯は自分に見せない：自分の反射だと気づいた瞬間、灯は一生嘘になる。
+_LANTERN_WINDOW = 30.0     # 粒度30秒。「いま誰かいる」が伝われば成立する
+_lantern_lock = threading.Lock()
+_lantern_touches = deque()  # (time.time(), 触れた人の鍵)
+
+
+def _lantern_key():
+    if session.get("uid"):
+        return "u:" + session["uid"]
+    return "a:" + hashlib.sha256(("lt:" + _client_ip()).encode()).hexdigest()[:12]
+
+
+def _lantern_touch():
+    now = time.time()
+    try:
+        key = _lantern_key()
+    except RuntimeError:          # リクエスト文脈の外から呼ばれた時は気配だけ灯す
+        key = "s:"
+    with _lantern_lock:
+        while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
+            _lantern_touches.popleft()
+        _lantern_touches.append((now, key))
+        while len(_lantern_touches) > 400:
+            _lantern_touches.popleft()
+
+
+@app.route("/api/sky/touch", methods=["POST"])
+def api_sky_touch():
+    """ことばに触れた（開いた・読んだ）気配。どのことばかは受け取らない・残さない。"""
+    _lantern_touch()
+    return jsonify(ok=True)
+
+
+@app.route("/api/sky/lantern")
+def api_sky_lantern():
+    """直近30秒に、自分以外の誰かが宙のことばに触れたか。boolean をひとつだけ返す。"""
+    me = _lantern_key()
+    now = time.time()
+    with _lantern_lock:
+        while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
+            _lantern_touches.popleft()
+        lit = any(k != me for _, k in _lantern_touches)
+    return jsonify(lit=lit)
+
+
+# ══ 辿る（v2仕様書 §4）═══════════════════════════════════════════
+# 能動的に探す面。①漂う のルールをここへ持ち込まない：
+#   ・既読除外なし（何度でも見られる）・沈降なし（古いことばも等しく出る）
+#   ・自分のことばも含める（2026-07-26 Kosei確定）
+# 件数は返さない（total を含めない）。ページングは「もっと」形式（more の真偽だけ）。
+# 導線ラベルは空気の言葉で書く：「関連」「おすすめ」「人気」は使わない（§4.4）。
+
+_TRACE_LIMIT_MAX = 40
+
+
+def _normalize_tag(s):
+    """付箋の正規化（§6.2）：NFKC（全角英数→半角も済む）→前後空白除去→小文字化。
+    「かなしい／悲しい／哀しい」の割れは救えないが、サジェストで寄せる。"""
+    t = unicodedata.normalize("NFKC", str(s or "")).strip()
+    t = t.lstrip("#＃").strip().lower()
+    t = re.sub(r"\s+", " ", t)
+    return t[:24]
+
+
+def _clean_tags(raw):
+    """クライアントから来た付箋の列を、正規化・重複除去して最大3つに整える。"""
+    out = []
+    for s in (raw or [])[:12]:
+        t = _normalize_tag(s)
+        if t and t not in out:
+            out.append(t)
+        if len(out) >= 3:
+            break
+    return out
+
+
+_TITLE_MAX = 10   # 題は10字以内（v2.2 §2.1）。本文の80字と同じく、数えるのは字であって語ではない
+
+
+def _clean_title(raw):
+    """題を整える。改行・連続する空白はひとつに畳み、前後を落として10字で切る。
+    空なら None——題は任意で、無いことが欠けではない（無題のまま漂ってよい）。"""
+    t = re.sub(r"\s+", " ", str(raw or "")).strip()
+    return t[:_TITLE_MAX] or None
+
+
+def _trace_item(e, reader):
+    """辿るの一件。書き手を指す情報は載せない。mine だけは本人にだけ意味を持つ
+    （自分のことばも並ぶので、印を勧めない・「あなたのことば」と静かに分かるため）。"""
+    d = dict(e[0])
+    d["mine"] = bool(reader and e[4] == reader)
+    # 題は一覧でだけ立つ（v2.2 §3）。宙へ配る辞書（e[0]）には最初から入れず、
+    # 辿るの一件を組むここでだけ足す——漂いに題が混ざる経路を構造として持たない。
+    d["title"] = e[5]
+    return d
+
+
+def _trace_page(entries, key, limit, offset):
+    """air_distance の近い順に並べ、offset から limit 件と「まだ先があるか」を返す。
+    ソートは決定的（§4.1: 偶然は弱い）。件数・ページ番号は返さない。"""
+    ordered = sorted(entries, key=key)
+    page = ordered[offset:offset + limit]
+    reader = session.get("uid")
+    return [_trace_item(e, reader) for e in page], len(ordered) > offset + limit
+
+
+def _trace_params():
+    try:
+        limit = min(_TRACE_LIMIT_MAX, max(1, int(request.args.get("limit", 12))))
+    except ValueError:
+        limit = 12
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except ValueError:
+        offset = 0
+    return limit, offset
+
+
+@app.route("/api/sky/near/<pub_id>")
+def api_sky_near(pub_id):
+    """この空気に、近いことば（§4.2）。基準は開いたことば自身の空気。"""
+    pool = _sky_pool()
+    base = next((e for e in pool if e[0]["id"] == pub_id), None)
+    if base is None:
+        return jsonify(error="そのことばは、いま宙にありません。"), 404
+    limit, offset = _trace_params()
+    rest = [e for e in pool if e[0]["id"] != pub_id]
+    items, more = _trace_page(rest, lambda e: air_distance(base[1], e[1]), limit, offset)
+    return jsonify(here=_trace_item(base, session.get("uid")), items=items, more=more)
+
+
+@app.route("/api/sky/near_now")
+def api_sky_near_now():
+    """いまの空気に近いことば（§4.3）。基準は閲覧者のいまの季節・時刻・天気。"""
+    pool = _sky_pool()
+    now_air = _viewer_air()
+    limit, offset = _trace_params()
+    items, more = _trace_page(pool, lambda e: air_distance(now_air, e[1]), limit, offset)
+    return jsonify(items=items, more=more)
+
+
+# 「その付箋を持つことばを宙から辿る」経路（旧 /api/sky/by_tag）は v2.2 で廃した。
+# 付箋が読み手の私物になった以上、それを鍵に他人のことばを引ける経路があってはならない。
+# 宙を辿るのは air_distance（色・季節・時刻・天気）一本。付箋で絞るのは自分の棚の中だけ。
+
+
+@app.route("/api/tags/suggest")
+@login_required
+def api_tags_suggest():
+    """付箋のサジェスト（表記ゆれ対策）。他人の付箋は見せない——拾うのは
+    自分がこれまで自分の棚に貼った付箋だけ。前方一致→部分一致、並びは五十音。"""
+    q = _normalize_tag(request.args.get("q", ""))
+    rows = get_db().execute(
+        "SELECT DISTINCT t.tag FROM saved_tags t JOIN saved_words w ON w.id=t.saved_id"
+        " WHERE w.user_id=? ORDER BY t.tag", (uid(),)).fetchall()
+    tags = [r["tag"] for r in rows]
+    if q:
+        head = [t for t in tags if t.startswith(q)]
+        rest = [t for t in tags if q in t and not t.startswith(q)]
+        tags = head + rest
+    return jsonify(tags=tags[:8])
 
 
 # ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
@@ -3102,6 +3790,8 @@ def api_create_letter():
     poem = (data.get("poem") or "")[:80].rstrip()
     if not poem.strip():
         poem = ""
+    # 題（v2.2 §2.1）：10字以内・任意。無題のまま放ってよい
+    title = _clean_title(data.get("title"))
     photo = data.get("photo")
     voice = data.get("voice")
     if not poem and not photo and not voice:
@@ -3169,6 +3859,9 @@ def api_create_letter():
 
     # 縦書きで書かれた手紙かどうか（書いた時の姿ごと封入する）
     vertical = 1 if data.get("vertical") else 0
+    # 付箋は、もう書き手のものではない（v2.2 §3）。書き手が付けるのは題だけ。
+    # クライアントが tags を送ってきても受け取らない（letter_tags には書かない）。
+    # 付箋は読み手が棚に残す瞬間に貼るもので、saved_tags に入る。
     # 書体は明朝のみ（書体選択は撤去。letters.font 列は過去データ互換のため残置し、新規は書かない）
 
     sent_iso = datetime.now().isoformat(timespec="seconds")
@@ -3189,9 +3882,9 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (lid, uid(), poem, photo, voice, sent_iso, arrive_date, arrive_at,
+               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
              1 if care else 0,   # ケアのことばは帰還メールを閉じた状態で置く（§3.4）
              emos_json,
@@ -3452,6 +4145,7 @@ def api_open_sky_delivery(did):
             get_db().execute("UPDATE sky_deliveries SET opened_at=? WHERE id=? AND recipient=?",
                              (datetime.now().isoformat(timespec="seconds"), did, uid()))
             get_db().commit()
+    _lantern_touch()   # 開いた＝触れた（宙v1 §4.2）。どのことばかは灯に残らない
     return jsonify(ok=True, poem=row["poem"], color=row["seal_color"],
                    vertical=bool(row["vertical"]), liked=bool(row["liked_at"]))
 
@@ -3459,21 +4153,33 @@ def api_open_sky_delivery(did):
 @app.route("/api/sky/<did>/like", methods=["POST"])
 @login_required
 def api_like_sky_delivery(did):
-    """だれかのことばへの静かな印。配達行（受け手側）にだけ残り、放った本人の世界には
-    何も起きない——通知も集計も書き戻しもない（§1.5）。"""
+    """降ってきたことばへの、いいな＝灯（宙v1 §4.1）。1回だけ・永久・外せない。
+    書き手には数も誰からも伝えない（sky_reaction に残るだけ）。すでにともっていても
+    エラーにせず already を返す。"""
     row = get_db().execute(
-        "SELECT opened_at FROM sky_deliveries WHERE id=? AND recipient=?", (did, uid())).fetchone()
+        "SELECT letter_id, opened_at FROM sky_deliveries WHERE id=? AND recipient=?",
+        (did, uid())).fetchone()
     if not row:
         return jsonify(error="そのことばは見つかりません。"), 404
     if not row["opened_at"]:
         return jsonify(error="まだ封の中です。"), 403
-    on = bool(request.get_json(force=True).get("on", True))
-    liked_at = datetime.now().isoformat(timespec="seconds") if on else None
-    with _WRITE_LOCK:
-        get_db().execute("UPDATE sky_deliveries SET liked_at=? WHERE id=? AND recipient=?",
-                         (liked_at, did, uid()))
-        get_db().commit()
-    return jsonify(ok=True, liked=bool(liked_at))
+    db = get_db()
+    already = bool(db.execute(
+        "SELECT 1 FROM sky_reaction WHERE reader_id=? AND letter_id=?",
+        (uid(), row["letter_id"])).fetchone())
+    if not already:
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        with _WRITE_LOCK:
+            db.execute(
+                "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at) VALUES (?,?,?)",
+                (uid(), row["letter_id"], now_iso))
+            # 配達行の liked_at は受信一覧の表示用の控えとして一度だけ書く（外す経路は無い）
+            db.execute(
+                "UPDATE sky_deliveries SET liked_at=COALESCE(liked_at,?) WHERE id=? AND recipient=?",
+                (now_iso, did, uid()))
+            db.commit()
+    _lantern_touch()
+    return jsonify(ok=True, liked=True, already=already)
 
 # ══ 手元の棚（2026-07-25 v13 §9）══════════════════════════════════
 # 宙で出会って、手元に残したいと思ったことばだけを並べる、本人しか見られない棚。
@@ -3489,28 +4195,31 @@ _SHELF_MAX = 500
 
 
 def _shelf_source(db, src, ref):
-    """棚に載せてよい出どころかを確かめ、載せる控え（本文・色・縦横）を返す。
-    開いていないことば・他人の配達・自分のものでない手紙はすべて None。"""
+    """棚に載せてよい出どころかを確かめ、載せる控え（本文・色・縦横・手紙id・題）を返す。
+    開いていないことば・他人の配達・自分のものでない手紙はすべて None。
+    手紙idは初回棚入りの検知（宙v1 §5）にだけ使い、クライアントへは出さない。
+    題（v2.2 §3）は棚では立つので、本文と一緒に控えへ写す。"""
     if src == "drift":
         # 宙を漂っていることば（v14：触れて棚へ）。本文はもともと誰にでも見えているので
         # 新しく何かを晒すわけではない。引き当てはサーバ側の index だけが持つ。
         got = _sky_index().get(ref)
         if not got:
             return None
-        return got[1], got[2], got[3]
+        return got[1], got[2], got[3], got[0], got[4]
     if src == "sky":
         r = db.execute(
-            "SELECT d.opened_at, l.poem, l.seal_color, l.vertical"
+            "SELECT d.opened_at, d.letter_id, l.poem, l.title, l.seal_color, l.vertical"
             "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
             " WHERE d.id=? AND d.recipient=?", (ref, uid())).fetchone()
         if not r or not r["opened_at"]:
             return None
-        return r["poem"], r["seal_color"], 1 if r["vertical"] else 0
+        return r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["letter_id"], r["title"]
     if src == "mine":
         r = own_letter(ref)
         if not r or not _letter_opened(r):
             return None
-        return r["poem"], r["seal_color"], 1 if r["vertical"] else 0
+        title = r["title"] if "title" in r.keys() else None
+        return r["poem"], r["seal_color"], 1 if r["vertical"] else 0, None, title
     return None
 
 
@@ -3522,53 +4231,284 @@ def shelf_page():
     return render_template("shelf.html")
 
 
+# ══ 自分の書架（v2 §11）═══════════════════════════════════════════
+# 自分が放ったことばの全部が並ぶ、本人だけの場所。
+# 並べるのは時間順ではなく「季節と気分の色」。件数・文字数・連続日数は一切出さない。
+# 3年書いたら、眺めただけで「自分は冬に多く書く」「去年の夏は青ばかりだった」が分かる状態へ。
+@app.route("/mine")
+def mine_page():
+    if not session.get("uid"):
+        return redirect("/?start=1")
+    return render_template("mine.html")
+
+
+# ══ 設定（v2.2 §4）═══════════════════════════════════════════════
+# 名前・メール・パスワード・退会。APIは前からあったのに入口だけが無かった。
+# エクスポートはここに置かない（2026-07-26 Kosei確定）。
+@app.route("/settings")
+def settings_page():
+    if not session.get("uid"):
+        return redirect("/?start=1")
+    return render_template("settings.html")
+
+
+@app.route("/api/mine")
+@login_required
+def api_mine():
+    """自分の書架のことば。季節（年つき）ごとの塊で返す。数は返さない。
+    ケア分岐で宙に出なかったことば（mode='letter' の宙由来）も本人の書架には並ぶ。"""
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, poem, title, seal_color, vertical, sent_date, shelved_at"
+        "  FROM letters WHERE user_id=? AND COALESCE(demo_mode,0)=0"
+        "   AND COALESCE(poem,'')<>'' ORDER BY sent_date DESC", (uid(),)).fetchall()
+    # 付箋は書架に出さない（v2.2 §3）。書き手が自分のことばに付けるのは題だけで、
+    # 付箋は読み手が自分の棚に貼るもの——だから自分の書架には、そもそも存在しない。
+    groups, order = {}, []
+    for r in rows:
+        year = str(r["sent_date"] or "")[:4]
+        season = _mood_season(r["sent_date"])
+        key = f"{year}_{season}"
+        if key not in groups:
+            groups[key] = {"year": year, "season": season, "words": []}
+            order.append(key)
+        p = _parse_hsl(r["seal_color"])
+        groups[key]["words"].append({
+            "poem": r["poem"],
+            "title": r["title"],                  # 題は書架でも立つ（v2.2 §3）
+            "color": r["seal_color"],
+            "hue": p[0] if p else None,           # 並び替え（色相順）はクライアントで
+            "in_someones_hands": bool(r["shelved_at"]),   # 該当時のみ添える（§11）
+        })
+    return jsonify(seasons=[groups[k] for k in order])
+
+
+# 棚の数の上限（v2 §5.3・2026-07-26 Kosei確定＝10前後）。無制限だと整理そのものが作業になる。
+_SHELVES_MAX = 10
+
+
+def _default_shelf(db, user):
+    """いちばん古い棚（無ければ「手元の棚」を作って返す）。宙からの「手元に、残す」は
+    棚を選ばせない——ひと呼吸で置けることが先。整理は /shelf でゆっくりやればいい。"""
+    r = db.execute("SELECT id FROM shelves WHERE owner_id=? ORDER BY created_at, id LIMIT 1",
+                   (user,)).fetchone()
+    if r:
+        return r["id"]
+    sid = secrets.token_hex(8)
+    db.execute("INSERT INTO shelves (id, owner_id, name, created_at) VALUES (?,?,?,?)",
+               (sid, user, "手元の棚", datetime.now().isoformat(timespec="seconds")))
+    return sid
+
+
+def _own_shelf(db, sid):
+    r = db.execute("SELECT id FROM shelves WHERE id=? AND owner_id=?", (sid, uid())).fetchone()
+    return r["id"] if r else None
+
+
 @app.route("/api/shelf")
 @login_required
 def api_shelf():
-    rows = get_db().execute(
-        "SELECT id, src, ref_id, poem, color, vertical, saved_at FROM saved_words"
+    db = get_db()
+    shelf_rows = db.execute(
+        "SELECT id, name, created_at FROM shelves WHERE owner_id=?"
+        " ORDER BY created_at, id", (uid(),)).fetchall()
+    word_rows = db.execute(
+        "SELECT id, src, ref_id, poem, title, color, vertical, saved_at FROM saved_words"
         " WHERE user_id=? ORDER BY saved_at DESC", (uid(),)).fetchall()
-    return jsonify(words=[{"id": r["id"], "src": r["src"], "ref": r["ref_id"],
-                           "poem": r["poem"], "color": r["color"],
-                           "vertical": bool(r["vertical"]),
-                           "saved_at": r["saved_at"]} for r in rows])
+    # どの棚に置いてあるか（同じことばが複数の棚にあってよい・§5）
+    on_shelves = {}
+    for r in db.execute(
+            "SELECT i.shelf_id, i.saved_id FROM shelf_items i"
+            " JOIN shelves s ON s.id=i.shelf_id WHERE s.owner_id=?", (uid(),)):
+        on_shelves.setdefault(r["saved_id"], []).append(r["shelf_id"])
+    # 付箋（v2.2 §3）。自分が自分の控えに貼ったものだけ。並びは五十音・数は出さない
+    tags_by_saved = {}
+    for r in db.execute(
+            "SELECT t.saved_id, t.tag FROM saved_tags t JOIN saved_words w ON w.id=t.saved_id"
+            " WHERE w.user_id=? ORDER BY t.tag", (uid(),)):
+        tags_by_saved.setdefault(r["saved_id"], []).append(r["tag"])
+    words = [{"id": r["id"], "src": r["src"], "ref": r["ref_id"],
+              "poem": r["poem"], "title": r["title"], "color": r["color"],
+              "vertical": bool(r["vertical"]),
+              "saved_at": r["saved_at"],
+              "tags": tags_by_saved.get(r["id"], []),
+              "shelves": on_shelves.get(r["id"], [])} for r in word_rows]
+    # 棚の一覧は「中のことばの色の集合」で見分ける（§5.2）。件数は出さない：
+    # 色の帯は上限まででそっと切る（帯の長さから数を読ませない）。
+    colors = {}
+    for w in reversed(words):          # 古い色から並べ、新しい色が帯の先へ
+        for sid in w["shelves"]:
+            colors.setdefault(sid, [])
+            if w["color"] and len(colors[sid]) < 24:
+                colors[sid].append(w["color"])
+    shelves = [{"id": r["id"], "name": r["name"],
+                "colors": colors.get(r["id"], [])} for r in shelf_rows]
+    return jsonify(shelves=shelves, words=words)
+
+
+@app.route("/api/shelves", methods=["POST"])
+@login_required
+def api_shelves_create():
+    """棚を編む（v2 §5）。上限10。数えないのは「ことば」であって、棚の管理は本人の道具。"""
+    data = request.get_json(force=True) or {}
+    name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:24]
+    if not name:
+        return jsonify(error="棚に、名前をひとつ。"), 400
+    db = get_db()
+    n = db.execute("SELECT COUNT(*) AS c FROM shelves WHERE owner_id=?", (uid(),)).fetchone()
+    if n and n["c"] >= _SHELVES_MAX:
+        return jsonify(error="棚は10までです。ひとつ手放してからにしてください。"), 409
+    if db.execute("SELECT 1 FROM shelves WHERE owner_id=? AND name=?", (uid(), name)).fetchone():
+        return jsonify(error="その名前の棚は、もうあります。"), 409
+    sid = secrets.token_hex(8)
+    with _WRITE_LOCK:
+        db.execute("INSERT INTO shelves (id, owner_id, name, created_at) VALUES (?,?,?,?)",
+                   (sid, uid(), name, datetime.now().isoformat(timespec="seconds")))
+        db.commit()
+    return jsonify(ok=True, id=sid, name=name)
+
+
+@app.route("/api/shelves/<sid>", methods=["POST"])
+@login_required
+def api_shelves_update(sid):
+    """棚の名前を変える／空の棚を手放す。ことばの残っている棚は手放せない
+    （中のことばごと消える経路を作らない＝DELETEしない恒久ルールと同じ心）。"""
+    if not _own_shelf(get_db(), sid):
+        return jsonify(error="その棚は見つかりません。"), 404
+    data = request.get_json(force=True) or {}
+    db = get_db()
+    if data.get("remove"):
+        if db.execute("SELECT 1 FROM shelf_items WHERE shelf_id=? LIMIT 1", (sid,)).fetchone():
+            return jsonify(error="ことばの残っている棚は、手放せません。"), 409
+        if not db.execute("SELECT 1 FROM shelves WHERE owner_id=? AND id<>? LIMIT 1",
+                          (uid(), sid)).fetchone():
+            return jsonify(error="最後の棚は、手放せません。"), 409
+        with _WRITE_LOCK:
+            db.execute("DELETE FROM shelves WHERE id=? AND owner_id=?", (sid, uid()))
+            db.commit()
+        return jsonify(ok=True, removed=True)
+    name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:24]
+    if not name:
+        return jsonify(error="棚に、名前をひとつ。"), 400
+    if db.execute("SELECT 1 FROM shelves WHERE owner_id=? AND name=? AND id<>?",
+                  (uid(), name, sid)).fetchone():
+        return jsonify(error="その名前の棚は、もうあります。"), 409
+    with _WRITE_LOCK:
+        db.execute("UPDATE shelves SET name=? WHERE id=? AND owner_id=?", (name, sid, uid()))
+        db.commit()
+    return jsonify(ok=True, name=name)
 
 
 @app.route("/api/shelf", methods=["POST"])
 @login_required
 def api_shelf_save():
-    """手元に残す／棚から外す。冪等（同じことばは一度だけ棚に載る）。
-    外しても、ことばそのものは宙にも配達にも残る——棚から降ろすだけ。"""
+    """手元に残す／棚から外す。冪等（同じことばは棚ごとに一度だけ載る）。
+    shelf を指定すればその棚へ、無ければいちばん古い棚へ。外しても、ことばそのものは
+    宙にも配達にも残る——棚から降ろすだけ。どの棚にも残らなくなったことばは控えごと
+    手放す（＝宙にまた浮かびうる。§3.2 の除外は「どれかの棚に入れた」だから）。"""
     data = request.get_json(force=True) or {}
     src = data.get("src")
     ref = str(data.get("ref") or "")
     on = bool(data.get("on", True))
+    sid = str(data.get("shelf") or "") or None
     if src not in ("sky", "mine", "drift") or not re.fullmatch(r"[A-Za-z0-9]{1,64}", ref):
         return jsonify(error="そのことばは棚に載せられません。"), 400
     db = get_db()
+    if sid and not _own_shelf(db, sid):
+        return jsonify(error="その棚は見つかりません。"), 404
     if not on:
+        saved = db.execute("SELECT id FROM saved_words WHERE user_id=? AND src=? AND ref_id=?",
+                           (uid(), src, ref)).fetchone()
+        if not saved:
+            return jsonify(ok=True, saved=False)
         with _WRITE_LOCK:
-            db.execute("DELETE FROM saved_words WHERE user_id=? AND src=? AND ref_id=?",
-                       (uid(), src, ref))
+            if sid:
+                db.execute("DELETE FROM shelf_items WHERE shelf_id=? AND saved_id=?",
+                           (sid, saved["id"]))
+            else:
+                db.execute(
+                    "DELETE FROM shelf_items WHERE saved_id=? AND shelf_id IN"
+                    " (SELECT id FROM shelves WHERE owner_id=?)", (saved["id"], uid()))
+            still = db.execute("SELECT 1 FROM shelf_items WHERE saved_id=? LIMIT 1",
+                               (saved["id"],)).fetchone()
+            if not still:
+                # 控えごと手放すので、そこに貼ってあった付箋も一緒に剥がれる
+                db.execute("DELETE FROM saved_tags WHERE saved_id=?", (saved["id"],))
+                db.execute("DELETE FROM saved_words WHERE id=?", (saved["id"],))
             db.commit()
-        return jsonify(ok=True, saved=False)
+        return jsonify(ok=True, saved=bool(still))
     got = _shelf_source(db, src, ref)
     if not got:
         return jsonify(error="そのことばは棚に載せられません。"), 404
-    poem, color, vertical = got
+    poem, color, vertical, letter_id, title = got
     if not (poem or "").strip():
         return jsonify(error="そのことばは棚に載せられません。"), 400
     n = db.execute("SELECT COUNT(*) AS c FROM saved_words WHERE user_id=?", (uid(),)).fetchone()
     if n and n["c"] >= _SHELF_MAX:
         return jsonify(error="棚がいっぱいです。いくつか外してからにしてください。"), 409
+    now_iso = datetime.now().isoformat(timespec="seconds")
     with _WRITE_LOCK:
         db.execute(
-            "INSERT OR IGNORE INTO saved_words (id,user_id,src,ref_id,poem,color,vertical,saved_at)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (secrets.token_hex(8), uid(), src, ref, poem, color, vertical,
-             datetime.now().isoformat(timespec="seconds")))
+            "INSERT OR IGNORE INTO saved_words"
+            " (id,user_id,src,ref_id,poem,title,color,vertical,saved_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (secrets.token_hex(8), uid(), src, ref, poem, title, color, vertical, now_iso))
+        saved = db.execute("SELECT id FROM saved_words WHERE user_id=? AND src=? AND ref_id=?",
+                           (uid(), src, ref)).fetchone()
+        db.execute("INSERT OR IGNORE INTO shelf_items (shelf_id, saved_id, saved_at)"
+                   " VALUES (?,?,?)",
+                   (sid or _default_shelf(db, uid()), saved["id"], now_iso))
+        # 付箋（v2.2 §3）：残すこの瞬間に貼れる。無くてもよい・後から貼ってもよい
+        for t in _clean_tags(data.get("tags")):
+            db.execute("INSERT OR IGNORE INTO saved_tags (saved_id, tag) VALUES (?,?)",
+                       (saved["id"], t))
+        # 【本命】棚に残された、ということだけが返る（宙v1 §5）。
+        # 他人のことばが「初めて」誰かの棚に入った時、一度だけ手紙側に刻む。
+        # 二人目以降は何も起きない——1人でも100人でも同じ。だから数えられない。
+        # 棚から外されても消さない（出来事ではなく、一度きりの状態）。
+        # 一度きりの報せ（メール）は通知ループ側が shelved_notified で送る——ここでは刻むだけ。
+        if letter_id:
+            db.execute(
+                "UPDATE letters SET shelved_at=? WHERE id=? AND shelved_at IS NULL AND user_id<>?",
+                (now_iso, letter_id, uid()))
         db.commit()
-    return jsonify(ok=True, saved=True)
+    _lantern_touch()
+    # 控えのidを返す：残したその場で付箋を貼れるようにするため（クライアント側の続き）。
+    # このidは本人の棚の中だけの識別子で、手紙や書き手には結びつかない。
+    return jsonify(ok=True, saved=True, id=saved["id"])
+
+
+@app.route("/api/shelf/<wid>/tags", methods=["POST"])
+@login_required
+def api_shelf_tags(wid):
+    """棚の控えに付箋を貼る／剥がす（v2.2 §3）。あとから貼ってもいい。
+    書き手には何も返らない——ここで貼られたことは、書き手の世界では起きていない。"""
+    db = get_db()
+    row = db.execute("SELECT id FROM saved_words WHERE id=? AND user_id=?",
+                     (wid, uid())).fetchone()
+    if not row:
+        return jsonify(error="そのことばは棚にありません。"), 404
+    data = request.get_json(force=True) or {}
+    with _WRITE_LOCK:
+        if data.get("remove"):
+            t = _normalize_tag(data.get("remove"))
+            db.execute("DELETE FROM saved_tags WHERE saved_id=? AND tag=?", (wid, t))
+        else:
+            # 1枚の控えに貼れるのは3枚まで（棚は分類の道具であって、索引ではない）
+            have = [r["tag"] for r in db.execute(
+                "SELECT tag FROM saved_tags WHERE saved_id=? ORDER BY tag", (wid,))]
+            for t in _clean_tags(data.get("tags")):
+                if t in have:
+                    continue
+                if len(have) >= 3:
+                    break
+                db.execute("INSERT OR IGNORE INTO saved_tags (saved_id, tag) VALUES (?,?)",
+                           (wid, t))
+                have.append(t)
+        db.commit()
+    tags = [r["tag"] for r in db.execute(
+        "SELECT tag FROM saved_tags WHERE saved_id=? ORDER BY tag", (wid,))]
+    return jsonify(ok=True, tags=tags)
 
 
 # ══ 宙のことばに、触れる（2026-07-25 v14）══════════════════════════
@@ -3579,6 +4519,10 @@ def api_shelf_save():
 @app.route("/api/sky/word/<h>/mark", methods=["POST"])
 @login_required
 def api_sky_word_mark(h):
+    """いいな＝灯をともす（宙v1 §4.1）。1人につき1つのことばへ1回だけ・永久。
+    外す経路は無い。すでにともっていてもエラーにしない——「すでに反応済み」は
+    制御であって記憶ではない。代わりに already を返し、クライアントは
+    「いつかのあなたが、もう灯をともしています」の状態で描く。"""
     if not re.fullmatch(r"[0-9a-f]{12}", h or ""):
         return jsonify(error="そのことばは見つかりません。"), 400
     got = _sky_index().get(h)
@@ -3586,18 +4530,76 @@ def api_sky_word_mark(h):
         # 宙から降ろされた・キャッシュが入れ替わった。静かに「もう無い」と伝える
         return jsonify(error="そのことばは、もう tayori-たより- にありません。"), 404
     letter_id = got[0]
-    on = bool((request.get_json(silent=True) or {}).get("on", True))
     db = get_db()
-    with _WRITE_LOCK:
-        if on:
+    already = bool(db.execute(
+        "SELECT 1 FROM sky_reaction WHERE reader_id=? AND letter_id=?",
+        (uid(), letter_id)).fetchone())
+    if not already:
+        with _WRITE_LOCK:
             db.execute(
-                "INSERT OR IGNORE INTO sky_marks (id,user_id,letter_id,created) VALUES (?,?,?,?)",
-                (secrets.token_hex(8), uid(), letter_id,
-                 datetime.now().isoformat(timespec="seconds")))
-        else:
-            db.execute("DELETE FROM sky_marks WHERE user_id=? AND letter_id=?", (uid(), letter_id))
-        db.commit()
-    return jsonify(ok=True, marked=on)
+                "INSERT OR IGNORE INTO sky_reaction (reader_id, letter_id, at) VALUES (?,?,?)",
+                (uid(), letter_id, datetime.now().isoformat(timespec="seconds")))
+            db.commit()
+    _lantern_touch()
+    return jsonify(ok=True, marked=True, already=already)
+
+
+@app.route("/api/export")
+@login_required
+def api_export():
+    """すべて持ち出せる（宙v1 §9）。終了時期を決めない代わりの、唯一の保険。
+    自分が書いた手紙のすべてと、棚に残したことばのすべてを一枚のJSONで返す。
+    他人を指す情報（誰の棚に入ったか等）は最初から含めない。"""
+    db = get_db()
+    letters = []
+    for r in db.execute(
+            "SELECT * FROM letters WHERE user_id=? ORDER BY sent_date, id", (uid(),)):
+        env = None
+        if r["seal_env"]:
+            try:
+                env = json.loads(r["seal_env"])
+            except (TypeError, ValueError):
+                env = None
+        letters.append({
+            "id": r["id"],
+            "poem": r["poem"],
+            "title": r["title"],                       # 題（v2.2 §2.1）
+            "sent_date": r["sent_date"],
+            "seal_env": env,
+            "area_name": r["area_name"],
+            "seal_color": r["seal_color"],
+            "vertical": bool(r["vertical"]),
+            "has_trace": bool(r["trace"]),
+            "opened_at": r["opened_at"],
+            "mode": r["mode"],
+        })
+    # 棚は複数（v2 §5）。どのことばがどの棚にあるかごと持ち出せる。
+    word_shelves = {}
+    for r in db.execute(
+            "SELECT s.name AS name, i.saved_id AS sid FROM shelf_items i"
+            " JOIN shelves s ON s.id=i.shelf_id WHERE s.owner_id=?", (uid(),)):
+        word_shelves.setdefault(r["sid"], []).append(r["name"])
+    # 付箋（v2.2 §3）は棚の控えに貼られている＝持ち出せるのは自分が貼ったぶんだけ
+    tags_by_saved = {}
+    for r in db.execute(
+            "SELECT t.saved_id, t.tag FROM saved_tags t JOIN saved_words w ON w.id=t.saved_id"
+            " WHERE w.user_id=? ORDER BY t.tag", (uid(),)):
+        tags_by_saved.setdefault(r["saved_id"], []).append(r["tag"])
+    shelf = [{
+        "poem": r["poem"], "title": r["title"], "color": r["color"],
+        "vertical": bool(r["vertical"]), "saved_at": r["saved_at"],
+        "tags": tags_by_saved.get(r["id"], []),
+        "shelves": word_shelves.get(r["id"], []),
+    } for r in db.execute(
+        "SELECT id, poem, title, color, vertical, saved_at FROM saved_words"
+        " WHERE user_id=? ORDER BY saved_at", (uid(),))]
+    shelves = [r["name"] for r in db.execute(
+        "SELECT name FROM shelves WHERE owner_id=? ORDER BY created_at, id", (uid(),))]
+    resp = jsonify(
+        exported_at=datetime.now().isoformat(timespec="seconds"),
+        letters=letters, shelves=shelves, shelf=shelf)
+    resp.headers["Content-Disposition"] = 'attachment; filename="tayori-export.json"'
+    return resp
 
 
 @app.route("/api/sky/mine")
@@ -3608,7 +4610,7 @@ def api_sky_mine():
     db = get_db()
     idx = _sky_index()
     mine = {row["letter_id"] for row in db.execute(
-        "SELECT letter_id FROM sky_marks WHERE user_id=?", (uid(),))}
+        "SELECT letter_id FROM sky_reaction WHERE reader_id=?", (uid(),))}
     marks = [h for h, v in idx.items() if v[0] in mine]
     kept = [{"src": r["src"], "ref": r["ref_id"]} for r in db.execute(
         "SELECT src, ref_id FROM saved_words WHERE user_id=?", (uid(),))]

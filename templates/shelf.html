@@ -3,18 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>手元の棚 — たより</title>
+<title>棚 — たより</title>
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#08080D">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 {% include '_sky_doc.html' %}
 <style>
-  /* ── 手元の棚（v13／v14で作法を宙と揃えた）──────────────────
+  /* ── 棚（v13→v2で複数化）──────────────────────────────
      宙で出会って、残したいと思ったことばだけの場所。本人しか見えない。
      数も順位も出さない（何通あるかを数えはじめると、棚が成績表になる）。
+     棚は名前と「中のことばの色の集合」＝色の帯で見分ける（v2 §5.2）。
      宙では縦書きで漂っていたことばも、棚では横に寝かせる：ここは眺める場所ではなく
      読み返す場所なので、読みやすさを取る。
      一枚ずつが「付箋」。箱は作らず、左の色糸と下の罫だけで区切る。 */
+  .shelves{display:flex;flex-wrap:wrap;gap:2px var(--s5);margin:0 0 var(--s2)}
+  .shelf-tab{background:none;border:none;font-family:inherit;text-align:left;cursor:pointer;
+             padding:10px 2px 12px;min-height:var(--touch);color:var(--ink-3);
+             transition:color .22s var(--ease)}
+  .shelf-tab .nm{display:block;font-size:13px;letter-spacing:0.16em;word-break:keep-all}
+  .shelf-tab.on{color:var(--ink-1)}
+  /* 色の帯：中のことばの気分の色が、古い順に織り込まれる。長さは固定＝数は読めない */
+  .shelf-band{display:flex;width:96px;height:3px;margin-top:8px;
+              background:var(--rule-faint);border-radius:1px;overflow:hidden}
+  .shelf-band span{flex:1}
+  .shelf-tab.on .shelf-band{height:4px}
+  /* 棚を編む・名前を変える・手放す（本人の道具なので、静かに置くが隠さない） */
+  .shelf-tools{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s4);
+               margin:0 0 var(--s3)}
+  .shelf-tool{background:none;border:none;font-family:inherit;cursor:pointer;
+              color:var(--ink-4);font-size:11.5px;letter-spacing:0.18em;
+              padding:11px 2px;min-height:var(--touch);
+              border-bottom:1px solid transparent;
+              transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .shelf-tool:hover{color:var(--ink-2);border-bottom-color:var(--rule-act)}
+  .shelf-name-input{background:none;border:none;border-bottom:1px solid var(--rule);
+              font-family:inherit;font-size:12.5px;letter-spacing:0.1em;color:var(--ink-2);
+              padding:10px 2px;outline:none;max-width:12em}
+  .shelf-name-input::placeholder{color:var(--ink-4)}
+  .shelf-name-input:focus{border-bottom-color:var(--ink-4)}
+
   .slips{margin:0;padding:0;list-style:none}
   .slip{position:relative;padding:var(--s4) 0 var(--s3) var(--s3);
         border-bottom:1px solid var(--rule-faint)}
@@ -22,10 +49,30 @@
   /* 付箋の左に一本、そのことばの気分の色（--slip は JS が差す） */
   .slip::before{content:'';position:absolute;left:0;top:var(--s4);bottom:var(--s3);width:2px;
                 background:var(--slip,var(--rule));border-radius:1px}
+  /* 題（v2.2 §3）。書き手が付けた10字以内の名。棚では、ことばの上に小さく立つ
+     ——並んだ紙片の中からもう一度見つけるための手がかり（辿る・書架と同じ姿） */
+  .slip-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
+              word-break:keep-all;overflow-wrap:anywhere}
   .slip-poem{margin:0 0 var(--s2);font-size:var(--t-lead);line-height:2.4;
              letter-spacing:var(--tr-word);white-space:pre-wrap;
              word-break:keep-all;overflow-wrap:anywhere;color:var(--ink-1)}
-  .slip-foot{display:flex;align-items:center;gap:var(--s3)}
+  /* 付箋（v2.2 §3）：残した本人が、自分の控えに貼る紙片。あとから貼っても剥がしてもいい。
+     書き手には届かない・宙にも出ない。棚に並べたことばを、自分の言葉で仕分けるためだけのもの。 */
+  .slip-fusen-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 var(--s2)}
+  .slip-fusen{display:inline-flex;align-items:center;gap:6px;max-width:100%;
+              background:rgba(250,248,243,.07);border:1px solid var(--rule);border-radius:1px;
+              font-family:inherit;font-size:11px;letter-spacing:0.14em;color:var(--ink-3);
+              padding:7px 10px;min-height:32px;cursor:pointer;
+              transition:color .22s var(--ease),background .22s var(--ease)}
+  .slip-fusen:active{color:var(--ink-1);background:rgba(250,248,243,.12)}
+  .slip-fusen .x{color:var(--ink-4);font-size:13px;line-height:1}
+  .slip-fusen.add{background:none;border-style:dashed;color:var(--ink-4)}
+  .slip-fusen-in{background:none;border:none;border-bottom:1px solid var(--rule);
+                 font-family:inherit;font-size:11.5px;letter-spacing:0.1em;color:var(--ink-2);
+                 padding:9px 2px;min-height:36px;outline:none;max-width:14em}
+  .slip-fusen-in::placeholder{color:var(--ink-4)}
+  .slip-fusen-in:focus{border-bottom-color:var(--ink-4)}
+  .slip-foot{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3)}
   .slip-when{font-family:'Courier Prime',monospace;font-size:var(--t-mono);
              letter-spacing:0.18em;color:var(--ink-4)}
   /* 外すのは「棚から降ろす」だけ。ことばそのものは宙にも配達にも残る */
@@ -35,6 +82,14 @@
             border-color .22s var(--ease),opacity .22s var(--ease)}
   .slip-off:hover{color:var(--ink-1);border-bottom-color:var(--rule-act)}
   .slip-off:active{opacity:.62}
+  /* ほかの棚にも置く（同じことばを複数の棚に・v2 §5）。小さな付箋のかたち */
+  .slip-put{display:inline-flex;align-items:center;min-height:36px;max-width:100%;
+            background:none;border:1px solid var(--rule);border-radius:1px;
+            font-family:inherit;font-size:10.5px;letter-spacing:0.14em;color:var(--ink-4);
+            padding:6px 9px;cursor:pointer;
+            transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .slip-put.on{color:var(--ink-2);border-color:var(--rule-act)}
+  .slip-put:active{opacity:.62}
   /* 一枚ずつ、順に置かれる（まとめて点灯させない） */
   @media (prefers-reduced-motion: no-preference){
     .slip{opacity:0;animation:slipIn .6s var(--ease) both;
@@ -52,12 +107,15 @@
 <div class="doc">
   <a class="back" href="/mood">← tayori-たより- へ</a>
 
-  <h1>手元の棚<span class="romaji">shelf</span></h1>
+  <h1>棚<span class="romaji">shelf</span></h1>
 
   <p class="quiet">tayori-たより- で<wbr>出会って、<wbr>残したいと<wbr>思った<wbr>ことばだけが<wbr>ここに<wbr>あります。<br>
      この棚は<wbr>あなたしか<wbr>見られません。<wbr>だれが<wbr>書いたかは、<wbr>棚の中でも<wbr>分かりません。</p>
 
   <div class="rule"></div>
+
+  <div class="shelves" id="shelves" role="tablist" aria-label="棚"></div>
+  <div class="shelf-tools" id="shelfTools"></div>
 
   <ul class="slips" id="slips" aria-label="棚に残したことば"></ul>
   <p class="state" id="state" hidden></p>
@@ -68,7 +126,10 @@
 <script>
 (function(){
   'use strict';
-  const box=document.getElementById('slips'), state=document.getElementById('state');
+  const shelvesBox=document.getElementById('shelves'),
+        toolsBox=document.getElementById('shelfTools'),
+        box=document.getElementById('slips'), state=document.getElementById('state');
+  let D=null, cur=null;   // 取ってきた棚とことば／いま開いている棚のid
   function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   function say(html){ state.hidden=!html; state.innerHTML=html||''; }
   /* 気分の色を、闇の中で読める文字色へ（宙の tintOf と同じ作法） */
@@ -84,10 +145,135 @@
     const p=String(iso||'').slice(0,10).split('-');
     return p.length===3?(p[0]+'.'+p[1]+'.'+p[2]):'';
   }
-  function render(words){
+  async function post(url,payload){
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload||{})});
+    const d=await r.json().catch(()=>null);
+    if(!r.ok)throw new Error((d&&d.error)||'shelf');
+    return d;
+  }
+
+  /* ── 棚の一覧：名前と、色の帯（v2 §5.2）。件数は出さない ── */
+  function renderShelves(){
+    shelvesBox.innerHTML='';
+    D.shelves.forEach(s=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='shelf-tab'+(s.id===cur?' on':'');
+      b.setAttribute('role','tab');
+      b.setAttribute('aria-selected',s.id===cur?'true':'false');
+      const band=(s.colors||[]).map(c=>{
+        const t=tint(c);return '<span style="background:'+(t?t.solid:'transparent')+'"></span>';
+      }).join('');
+      b.innerHTML='<span class="nm"></span><span class="shelf-band" aria-hidden="true">'+band+'</span>';
+      b.querySelector('.nm').textContent=s.name;
+      b.addEventListener('click',()=>{cur=s.id;renderShelves();renderTools();renderWords();});
+      shelvesBox.appendChild(b);
+    });
+  }
+
+  /* ── 棚の道具：編む・名前を変える・（空なら）手放す ── */
+  function nameInput(placeholder,done){
+    const inp=document.createElement('input');
+    inp.type='text';inp.maxLength=24;inp.className='shelf-name-input';
+    inp.placeholder=placeholder;
+    inp.addEventListener('keydown',e=>{
+      if(e.isComposing)return;
+      if(e.key==='Enter'&&inp.value.trim())done(inp.value.trim());
+      if(e.key==='Escape')renderTools();
+    });
+    return inp;
+  }
+  function tool(label,fn){
+    const b=document.createElement('button');
+    b.type='button';b.className='shelf-tool';b.textContent=label;
+    b.addEventListener('click',fn);
+    return b;
+  }
+  function renderTools(){
+    toolsBox.innerHTML='';
+    const s=D.shelves.find(x=>x.id===cur);
+    if(D.shelves.length<10){
+      toolsBox.appendChild(tool('あたらしい棚を編む',()=>{
+        const inp=nameInput('棚の名前',async v=>{
+          try{const d=await post('/api/shelves',{name:v});cur=d.id;load();}
+          catch(e){say(esc(e.message));}
+        });
+        toolsBox.replaceChildren(inp);inp.focus();
+      }));
+    }
+    if(s){
+      toolsBox.appendChild(tool('名前を変える',()=>{
+        const inp=nameInput(s.name,async v=>{
+          try{await post('/api/shelves/'+s.id,{name:v});load();}
+          catch(e){say(esc(e.message));}
+        });
+        inp.value=s.name;
+        toolsBox.replaceChildren(inp);inp.focus();
+      }));
+      const empty=!D.words.some(w=>w.shelves.indexOf(s.id)>=0);
+      if(empty&&D.shelves.length>1){
+        toolsBox.appendChild(tool('この棚を手放す',async()=>{
+          try{await post('/api/shelves/'+s.id,{remove:true});cur=null;load();}
+          catch(e){say(esc(e.message));}
+        }));
+      }
+    }
+  }
+
+  /* ── 付箋（v2.2 §3）──
+     貼るのは残した本人。3枚まで。剥がすのも自由。ここでの出来事は書き手には何も返らない。
+     数は出さない（付箋ごとの件数を出すと、棚が集計表になる）。 */
+  function renderFusen(box,w){
     box.innerHTML='';
+    (w.tags||[]).forEach(t=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='slip-fusen';
+      b.innerHTML='<span></span><span class="x" aria-hidden="true">×</span>';
+      b.firstChild.textContent=t;
+      b.setAttribute('aria-label','付箋「'+t+'」をはがす');
+      b.addEventListener('click',async()=>{
+        b.disabled=true;
+        try{ const d=await post('/api/shelf/'+w.id+'/tags',{remove:t});
+             w.tags=d.tags; renderFusen(box,w); }
+        catch(e){ b.disabled=false; say('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。'); }
+      });
+      box.appendChild(b);
+    });
+    if((w.tags||[]).length>=3)return;
+    const add=document.createElement('button');
+    add.type='button';add.className='slip-fusen add';add.textContent='＋ 付箋';
+    add.addEventListener('click',()=>{
+      const inp=document.createElement('input');
+      inp.type='text';inp.maxLength=24;inp.className='slip-fusen-in';
+      inp.placeholder='付箋を貼る';       // 罫の幅に収まる長さで（説明はここでは要らない）
+      inp.setAttribute('aria-label','この控えに貼る付箋');
+      let closed=false;              // Enterとblurで二度走らせない
+      const done=async()=>{
+        if(closed)return; closed=true;
+        const v=inp.value.replace(/^[#＃]+/,'').trim().toLowerCase();
+        if(!v){ renderFusen(box,w); return; }
+        inp.disabled=true;
+        try{ const d=await post('/api/shelf/'+w.id+'/tags',{tags:[v]});
+             w.tags=d.tags; renderFusen(box,w); }
+        catch(e){ inp.disabled=false; say('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。'); }
+      };
+      inp.addEventListener('keydown',e=>{
+        if(e.isComposing)return;
+        if(e.key==='Enter')done();
+        if(e.key==='Escape'){closed=true;renderFusen(box,w);}
+      });
+      inp.addEventListener('blur',()=>setTimeout(done,120));
+      box.replaceChild(inp,add);inp.focus();
+    });
+    box.appendChild(add);
+  }
+
+  /* ── いまの棚のことば。ほかの棚にも置ける（同じことばを複数の棚へ・§5）── */
+  function renderWords(){
+    box.innerHTML='';
+    const words=D.words.filter(w=>w.shelves.indexOf(cur)>=0);
     if(!words.length){
-      say('まだ、<wbr>何も<wbr>残していません。<br>'+
+      say('この棚には、<wbr>まだ<wbr>何も<wbr>置かれていません。<br>'+
           'tayori-たより- で<wbr>ことばに<wbr>触れて<wbr>「手元に、<wbr>残す」<wbr>を<wbr>選ぶと、<wbr>ここへ<wbr>置かれます。');
       return;
     }
@@ -95,24 +281,44 @@
     words.forEach((w,i)=>{
       const li=document.createElement('li');li.className='slip';
       li.style.setProperty('--i',i);
-      li.innerHTML='<p class="slip-poem">'+esc(w.poem)+'</p>'+
+      li.innerHTML=(w.title?'<p class="slip-title">'+esc(w.title)+'</p>':'')+
+        '<p class="slip-poem">'+esc(w.poem)+'</p>'+
+        '<div class="slip-fusen-row"></div>'+
         '<div class="slip-foot"><span class="slip-when">'+esc(whenLabel(w.saved_at))+'</span>'+
-        '<button type="button" class="slip-off">棚から、外す</button></div>';
+        '<span class="slip-puts"></span>'+
+        '<button type="button" class="slip-off">この棚から、外す</button></div>';
       const c=tint(w.color);
       if(c){
         li.style.setProperty('--slip',c.solid);      // 左の糸は、そのことばの気分の色
         li.querySelector('.slip-poem').style.color=c.text;
       }
+      renderFusen(li.querySelector('.slip-fusen-row'),w);
+      // ほかの棚への置き外し。押した棚に置く／すでに置いてあれば降ろす
+      const puts=li.querySelector('.slip-puts');
+      D.shelves.filter(s=>s.id!==cur).forEach(s=>{
+        const on=w.shelves.indexOf(s.id)>=0;
+        const b=document.createElement('button');
+        b.type='button';b.className='slip-put'+(on?' on':'');
+        b.textContent=s.name;
+        b.setAttribute('aria-pressed',on?'true':'false');
+        b.title=on?('「'+s.name+'」から降ろす'):('「'+s.name+'」にも置く');
+        b.addEventListener('click',async()=>{
+          b.disabled=true;
+          try{
+            await post('/api/shelf',{src:w.src,ref:w.ref,on:!on,shelf:s.id});
+            load();
+          }catch(e){b.disabled=false;say('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。');}
+        });
+        puts.appendChild(b);
+      });
       li.querySelector('.slip-off').addEventListener('click',async(e)=>{
         const b=e.currentTarget; b.disabled=true;
         try{
-          const r=await fetch('/api/shelf',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({src:w.src,ref:w.ref,on:false})});
-          if(!r.ok)throw new Error('off');
+          await post('/api/shelf',{src:w.src,ref:w.ref,on:false,shelf:cur});
           // 外した一枚だけを、そのまま静かに降ろす（全部を再描画して並びを揺らさない）
           li.style.transition='opacity .4s var(--ease),transform .4s var(--ease)';
           li.style.opacity='0'; li.style.transform='translateY(-4px)';
-          setTimeout(()=>{ li.remove(); if(!box.children.length)load(); },420);
+          setTimeout(()=>{ li.remove(); load(); },420);
         }catch(err){ b.disabled=false; say('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。'); }
       });
       box.appendChild(li);
@@ -120,7 +326,12 @@
   }
   function load(){
     fetch('/api/shelf').then(r=>r.ok?r.json():null)
-      .then(d=>{ if(!d||!d.words)throw new Error('shelf'); render(d.words); })
+      .then(d=>{
+        if(!d||!d.words)throw new Error('shelf');
+        D=d;
+        if(!cur||!D.shelves.some(s=>s.id===cur))cur=D.shelves.length?D.shelves[0].id:null;
+        renderShelves();renderTools();renderWords();
+      })
       .catch(()=>say('棚が<wbr>遠いようです。<br>すこし<wbr>待ってから、<wbr>もう一度。'));
   }
   load();
