@@ -27,11 +27,13 @@
 }
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Courier+Prime&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&display=swap');
   :root{
     --serif:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     --sans:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-    --mono:'Courier Prime','SFMono-Regular',Menlo,monospace;
+    /* 2026-07-26: 書体は明朝一本に統一した。--mono は使っていないが、
+       過去のCSSが参照していても明朝に落ちるよう同じ値を指す。 */
+    --mono:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     /* ベース色（2026-07-24 明度反転）。派生はすべて color-mix — 新しいhexを足さない。
        紙＝画面で一番明るいレイヤー。地（ページ背景）は紙より暗い暖色。 */
     --paper:#FAF8F3;   /* 紙 — 手紙・カードの面（最明） */
@@ -90,10 +92,10 @@
   .wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:0 20px 120px}
   header{padding:46px 0 30px;text-align:center;position:relative}
   .stamp{position:absolute;top:34px;right:6px;width:62px;height:62px;border:1.5px solid var(--seal);border-radius:50%;color:var(--seal);
-    font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;
+    font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:8px;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;
     text-align:center;transform:rotate(-11deg);opacity:0.7;line-height:1.3}
   h1{font-family:'Shippori Mincho',serif;font-weight:600;font-size:42px;letter-spacing:0.14em;margin-bottom:6px}
-  .romaji{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
+  .romaji{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
   .tagline{margin-top:20px;font-family:'Shippori Mincho',serif;font-size:14px;color:var(--ink-mute);letter-spacing:0.08em}
   .rule{height:1px;background:var(--rule);margin:8px 0 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
   .tabs{display:flex;gap:28px;justify-content:center;margin:26px 0 22px;border-bottom:1px solid var(--rule);position:relative}
@@ -103,7 +105,7 @@
   /* 下線バーをJSでspring滑走させる（旧→新タブへ）。JS不在/失敗時は上のbox-shadowが下線を保つ（§7 空間の連続性） */
   .tabs.has-underline .tab.on{box-shadow:none}
   .tab-underline{position:absolute;bottom:-1px;left:0;height:2px;width:0;background:var(--seal);pointer-events:none;will-change:transform,width}
-  .tab .sub{display:block;font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.2em;margin-top:2px;opacity:0.6}
+  .tab .sub{display:block;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:8px;letter-spacing:0.2em;margin-top:2px;opacity:0.6}
   .panel{display:none;animation:fadePanel .12s ease both}    /* 中身は120msの素早いクロスフェード。空間の連続性は下線バーが担う */
   .panel.on{display:block}
   @keyframes fadePanel{from{opacity:0}to{opacity:1}}
@@ -179,7 +181,7 @@
     box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden}
   .trash-mark{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.3em;color:var(--ink-mute);text-align:center;padding:18px 0 6px}
   /* 堆積の年月：月の変わり目にだけ、籠の左に小さく刻む */
-  .trash-era{position:absolute;left:3.5%;transform:translateY(-50%);font-family:'Courier Prime',monospace;font-size:8px;
+  .trash-era{position:absolute;left:3.5%;transform:translateY(-50%);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:8px;
     letter-spacing:0.16em;color:var(--ink-mute);opacity:0.65;pointer-events:none;z-index:1}
   /* 籠：背(奥の面・底ほど暗い)は紙玉の下、前(手前の壁と縁)は紙玉の上。
      玉は籠に挟まれて「中にある」。z-index：背0 → 玉5〜27(下=手前ほど上) → 底の暗がり28 → 前30 */
@@ -223,7 +225,7 @@
     width:-webkit-fit-content;width:fit-content;max-width:100%;margin:0 auto}
   /* 縦書きの筆跡再生：キャレットは横棒に寝かせる（.letter-poem.vertical と同じ流儀） */
   .trash-open-paper.vertical .trace-caret{width:1.05em;height:2px;margin:2px 0 0;vertical-align:0;display:inline-block}
-  .trash-open-date{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-align:center;word-break:keep-all}
+  .trash-open-date{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-align:center;word-break:keep-all}
   .trash-open-card .trash-close{margin:0 auto}
   /* 手で捨てる：初回だけの使い方の栞 */
   .hand-guide-ov{position:fixed;inset:0;background:rgba(42,37,34,0.55);z-index:82;display:none;align-items:center;justify-content:center;padding:20px}
@@ -240,9 +242,9 @@
   .hg-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.9;color:var(--ink-mute);text-align:center;
     border-top:1px dashed var(--rule);padding-top:14px;word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .hand-guide .trash-close{margin:0 auto}
-  .poem-count{text-align:right;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute);margin-top:4px}
+  .poem-count{text-align:right;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute);margin-top:4px}
   .poem-count.near{color:var(--seal)}
-  .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute)}
+  .voice-row{margin:4px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute)}
   /* 道具は「印」：丸い判のマークが主役、下に小さな添え書き（2026-07-22）。
      マーク（1つ目のspan）が44px円＝タップ域、状態は判の線と朱/墨の色で示す */
   .voice-btn{display:inline-flex;flex-direction:column;align-items:center;gap:6px;border:0;background:none;color:var(--ink-mute);font-family:'Shippori Mincho',serif;font-size:10.5px;letter-spacing:0.12em;padding:2px;cursor:pointer;transition:color .2s;white-space:nowrap}
@@ -259,7 +261,7 @@
   .voice-have{color:var(--seal)}
   .voice-clear{cursor:pointer;text-decoration:underline;color:var(--ink-mute);font-size:11px}
   .env-foot{padding:16px 18px 20px;border-top:1px dashed var(--rule)}
-  .field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;flex-wrap:wrap;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute)}
+  .field-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;flex-wrap:wrap;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute)}
   .field-row>label{white-space:nowrap;padding-top:6px;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;text-transform:none}
   .chips{display:flex;gap:7px;flex-wrap:wrap;flex:1;position:relative}
   /* 囲みは角ばらせず、消印のような丸囲みに（2026-07-22）。
@@ -272,7 +274,7 @@
   .chip-marker{position:absolute;top:0;left:0;height:0;width:0;border:1px solid var(--seal);border-radius:999px;background:rgba(113,0,20,0.07);pointer-events:none;z-index:0;will-change:transform,width,height}
   .chip:focus-visible,.date-pick:focus-visible,.voice-btn:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
   .when-extra{margin-top:-4px}
-  .date-pick{font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.06em;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:999px;padding:7px 15px;cursor:pointer}
+  .date-pick{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:999px;padding:7px 15px;cursor:pointer}
   .date-pick:focus{outline:none;border-color:var(--seal)}
   .when-readout{font-family:'Shippori Mincho',serif;font-size:12.5px;color:var(--seal);letter-spacing:0.08em;margin:2px 0 16px;min-height:18px;text-align:center}
   .when-readout.hidden-mode{color:var(--ink-mute);font-style:italic}
@@ -369,7 +371,7 @@
   .letter.wx-reunion.wx-fog::after{background:rgba(210,206,198,0.14);backdrop-filter:blur(.4px)}
   .letter-highlight{animation:letterGlow 2.6s ease}
   @keyframes letterGlow{0%{box-shadow:0 0 0 0 rgba(113,0,20,0)}25%{box-shadow:0 0 0 4px rgba(113,0,20,0.35),0 8px 30px -10px rgba(113,0,20,0.5)}100%{box-shadow:0 8px 24px -18px rgba(90,70,50,0.5)}}
-  .transit-head{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin:30px 0 18px;opacity:0.7}
+  .transit-head{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin:30px 0 18px;opacity:0.7}
   .sealed-transit{border-style:dashed;background:repeating-linear-gradient(45deg,var(--paper),var(--paper) 13px,rgba(218,204,189,0.16) 13px,rgba(218,204,189,0.16) 14px)}
   .transit-inner{padding:28px 22px;text-align:center;user-select:none}
   .transit-inner .wax.dim{width:48px;height:48px;border-radius:50%;background:var(--rule);color:var(--paper);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:20px;box-shadow:none}
@@ -381,7 +383,7 @@
   .transit-when{font-family:'Shippori Mincho',serif;font-size:17px;color:var(--seal);letter-spacing:0.1em;margin-bottom:8px}
   /* 封の中の棚：受信の届いたたよりの下に、封をした手紙が静かに並ぶ */
   .sealed-shelf{margin:2px 0 16px;padding-top:14px;border-top:1px dashed var(--rule)}
-  .shelf-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin-bottom:12px;opacity:0.7}
+  .shelf-label{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.22em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin-bottom:12px;opacity:0.7}
   .shelf-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px dashed var(--rule);border-radius:3px;margin-bottom:8px;user-select:none;
     background:repeating-linear-gradient(45deg,transparent,transparent 13px,rgba(218,204,189,0.14) 13px,rgba(218,204,189,0.14) 14px)}
   .shelf-item .wax.mini{width:28px;height:28px;border-radius:50%;background:var(--rule);color:var(--paper);display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;font-size:13px;flex-shrink:0;box-shadow:none}
@@ -404,7 +406,7 @@
   .bulk-mini:hover{color:var(--ink)}
   .bulk-mini.go{color:var(--seal)}
   .bulk-mini.go:disabled{opacity:.35;cursor:default}
-  .bulk-count{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.18em;color:var(--ink-mute)}
+  .bulk-count{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;letter-spacing:0.18em;color:var(--ink-mute)}
   .bulk-link:focus-visible,.bulk-mini:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
   /* 選ぶ丸：消印の丸囲みと同族。選ばれると朱の点が灯る */
   .shelf-item.selectable{cursor:pointer}
@@ -428,8 +430,8 @@
   @keyframes basketGulp{35%{transform:translateX(-50%) translateY(5px) scaleY(0.97)}}
   /* デモ用の手紙にだけ出る「開封日を変更」の操作列（seed_demo_data.py 投入分が対象） */
   .shelf-demo{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:-2px 0 8px;border:1px dashed var(--rule);border-radius:3px;opacity:0.85}
-  .shelf-demo .sd-lbl{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.18em;color:var(--seal);text-transform:uppercase;flex-shrink:0}
-  .shelf-demo input{flex:1;min-width:0;background:transparent;border:0;border-bottom:1px solid var(--rule);font-family:'Courier Prime',monospace;font-size:12px;color:var(--ink);padding:2px 0}
+  .shelf-demo .sd-lbl{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.18em;color:var(--seal);text-transform:uppercase;flex-shrink:0}
+  .shelf-demo input{flex:1;min-width:0;background:transparent;border:0;border-bottom:1px solid var(--rule);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:12px;color:var(--ink);padding:2px 0}
   .shelf-demo button{background:transparent;border:1px solid var(--rule);border-radius:3px;font-family:'Shippori Mincho',serif;font-size:11px;color:var(--ink-mute);padding:4px 10px;cursor:pointer;white-space:nowrap}
   .shelf-demo button:hover{color:var(--seal);border-color:var(--seal)}
   .transit-meta{font-family:'Shippori Mincho',serif;font-size:11px;letter-spacing:0.08em;color:var(--ink-mute);margin-bottom:4px}
@@ -502,17 +504,17 @@
   .sc-meta .sep{opacity:.45}
   .shelf-item .sc-meta{justify-content:flex-start;margin-top:4px}
   .thread{border-top:1px dashed var(--rule);margin-top:20px;padding-top:18px}
-  .thread-label{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin-bottom:16px}
+  .thread-label{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.2em;color:var(--ink-mute);text-transform:uppercase;text-align:center;margin-bottom:16px}
   /* 会話の折りたたみトグル（各会話の下・中央に置く押しやすいボタン。「開く／閉じる」） */
   .thread-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px auto 2px;padding:10px 22px;
     background:var(--paper);border:1px solid var(--rule);border-radius:22px;cursor:pointer;
     font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.1em;color:var(--ink-mute);transition:color .2s,border-color .2s}
   .thread-toggle:hover{color:var(--seal);border-color:var(--seal)}
-  .thread-toggle .tt-count{font-family:'Courier Prime',monospace;font-size:10px;min-width:18px;height:18px;padding:0 5px;border:1px solid var(--rule);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-mute)}
+  .thread-toggle .tt-count{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;min-width:18px;height:18px;padding:0 5px;border:1px solid var(--rule);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-mute)}
   .thread-toggle .tt-chev{font-family:'Shippori Mincho',serif;letter-spacing:0.1em;color:var(--seal)}
   .thread-msgs.collapsed{display:none}
   .msg{margin-bottom:14px;display:flex;flex-direction:column}
-  .msg .who{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:5px;color:var(--ink-mute)}
+  .msg .who{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:5px;color:var(--ink-mute)}
   .msg .bubble{font-family:'Shippori Mincho',serif;font-size:15px;line-height:1.95;padding:11px 15px;border-radius:3px;max-width:90%;word-break:break-word;overflow-wrap:anywhere}
   .msg.past .bubble{background:rgba(218,204,189,0.28);align-self:flex-start;border-left:2px solid var(--rule)}
   .msg.now{align-items:flex-end}
@@ -535,7 +537,7 @@
   /* 届いた時の自分の記録 ── 時間の層 */
   .strata{margin:18px 0 4px;padding:12px 14px;border:1px solid var(--rule);border-radius:3px;
     background:repeating-linear-gradient(180deg,transparent,transparent 21px,rgba(218,204,189,0.10) 21px,rgba(218,204,189,0.10) 22px)}
-  .strata-row{display:flex;align-items:center;gap:10px;font-family:'Courier Prime',monospace;
+  .strata-row{display:flex;align-items:center;gap:10px;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
     font-size:10px;letter-spacing:0.08em;color:var(--ink-mute);padding:3px 0}
   .strata-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
   .strata-dot.seal{background:var(--seal)}
@@ -570,25 +572,25 @@
             transition:border-color .2s,box-shadow .2s,transform .2s}
   .map-link:hover{border-color:var(--ink-mute);box-shadow:0 9px 22px -10px rgba(90,70,50,0.62);transform:translateY(-1px)}
   .map-link:active{transform:translateY(0) scale(0.985)}   /* 押した瞬間に応える（v14） */
-  .map-link .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;text-transform:uppercase}
+  .map-link .sub{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.2em;opacity:0.6;text-transform:uppercase}
   .tl-filter{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 26px}
   .tl{position:relative;margin-left:14px;padding-left:26px;border-left:1.5px solid var(--rule)}
   .tl-node{position:relative;margin-bottom:26px}
   .tl-node::before{content:"";position:absolute;left:-33px;top:5px;width:11px;height:11px;border-radius:50%;background:var(--paper);border:2px solid var(--seal)}
   .tl-node.is-now::before{background:var(--seal)}
   .tl-node.is-future::before{border-color:var(--rule-firm);border-style:dashed}
-  .tl-when{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.14em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:4px}
+  .tl-when{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;letter-spacing:0.14em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:4px}
   .tl-card{background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:12px 15px;cursor:pointer;transition:border-color .2s}
   .tl-card:hover{border-color:var(--seal)}
   .tl-text{font-family:'Shippori Mincho',serif;font-size:14px;line-height:1.9;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .tl-meta{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.1em;color:var(--ink-mute);margin-top:6px;text-transform:uppercase}
+  .tl-meta{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.1em;color:var(--ink-mute);margin-top:6px;text-transform:uppercase}
   .tl-future .tl-card{border-style:dashed;opacity:0.75}
   
   /* ---- 開封の差分：本文を読み終えたあとに「あの日と今日」が静かに並ぶ ---- */
   .letter-diff{position:relative;border-top:1px dashed var(--rule);margin-top:20px;padding-top:18px;overflow:hidden}
   .ld-row{position:relative;display:flex;align-items:stretch;justify-content:center;gap:14px;margin-bottom:14px}
   .ld-box{flex:1;max-width:180px;background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:12px 12px 10px;text-align:center}
-  .ld-lbl{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.14em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:8px;border-bottom:1px dashed var(--rule);padding-bottom:5px}
+  .ld-lbl{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.14em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:8px;border-bottom:1px dashed var(--rule);padding-bottom:5px}
   .ld-val{font-family:'Shippori Mincho',serif;font-size:15px;color:var(--seal);line-height:1.6}
   .ld-val.now{color:var(--seal)}
   .ld-arrow{align-self:center;font-family:'Shippori Mincho',serif;font-size:18px;color:var(--ink-mute);opacity:0.6}
@@ -600,7 +602,7 @@
   .ld-maplink a{font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-mute);
     text-decoration:none;border-bottom:1px solid var(--rule);padding-bottom:2px}
   .ld-maplink a:hover{color:var(--ink)}
-  .ld-maplink .sub{font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.2em;opacity:0.6;margin-left:8px;text-transform:uppercase}
+  .ld-maplink .sub{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:9px;letter-spacing:0.2em;opacity:0.6;margin-left:8px;text-transform:uppercase}
   /* 投函から開封までの一筆箋の色が、点になって背景をゆっくり流れる */
   .ld-dots{position:absolute;inset:0;pointer-events:none;overflow:hidden}
   .ld-dot{position:absolute;bottom:-12px;width:9px;height:9px;border-radius:50%;opacity:0;animation:dotDrift linear infinite}
@@ -647,7 +649,7 @@
   .lib-card.on{box-shadow:0 0 0 2px var(--paper),0 0 0 3px var(--seal)}/* 選択の印＝色見本と同じ流儀 */
   .lib-quote{font-size:13px;line-height:1.85;letter-spacing:0.04em;overflow:hidden;
     display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
-  .lib-year{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.2em;opacity:0.85}
+  .lib-year{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;letter-spacing:0.2em;opacity:0.85}
   @media (prefers-reduced-motion:reduce){.lib-card{transition:none}.lib-card:hover{transform:none}}
   .color-hint{font-family:'Shippori Mincho',serif;font-size:10.5px;color:var(--ink-mute);opacity:0.8;letter-spacing:0.04em;margin-top:5px;text-align:center}
   .color-chip{display:inline-block;width:26px;height:26px;border-radius:50%;border:1px solid rgba(42,37,34,0.25);box-shadow:0 2px 6px -3px rgba(90,70,50,0.5);vertical-align:middle}
@@ -843,7 +845,7 @@
   .portrait-ov{position:fixed;inset:0;z-index:88;background:var(--paper);overflow-y:auto;padding:52px 22px 40px;display:none}
   .portrait-ov.on{display:block}
   .portrait-inner{max-width:480px;margin:0 auto}
-  .portrait-mark{font-family:'Courier Prime',monospace;font-size:8px;line-height:1.5;letter-spacing:0.2em;color:var(--seal);
+  .portrait-mark{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:8px;line-height:1.5;letter-spacing:0.2em;color:var(--seal);
     text-align:center;text-transform:uppercase;opacity:0.7;margin-bottom:14px}
   .portrait-title{font-family:'Shippori Mincho',serif;font-size:25px;letter-spacing:0.14em;color:var(--ink);text-align:center;margin:0 0 12px}
   .portrait-lead{font-family:'Shippori Mincho',serif;font-size:12.5px;line-height:2;letter-spacing:0.05em;color:var(--ink-mute);text-align:center;margin-bottom:26px}
@@ -855,7 +857,7 @@
   .portrait-loading{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--ink-mute);
     font-family:'Shippori Mincho',serif;font-size:13px;letter-spacing:0.08em;padding:30px 0}
   .portrait-loading svg{width:26px;height:26px;opacity:0.8}
-  .portrait-meta{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-mute);text-align:center;opacity:0.7;margin:2px 0 22px;min-height:12px}
+  .portrait-meta{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;letter-spacing:0.08em;color:var(--ink-mute);text-align:center;opacity:0.7;margin:2px 0 22px;min-height:12px}
   .portrait-actions{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:0 auto}
   .portrait-go{width:100%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:15px;letter-spacing:0.18em;padding:14px;border-radius:2px;transition:background .2s,transform .2s,opacity .2s}
@@ -869,7 +871,7 @@
   .portrait-close:hover{color:var(--seal);border-color:var(--seal)}
   /* ── 三ヶ月ごとの章（年表タブ上部のキュレーション） ── */
   .chapters{margin:6px 0 40px}
-  .ch-mark{font-family:'Courier Prime',monospace;font-size:8px;letter-spacing:0.24em;color:var(--seal);
+  .ch-mark{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:8px;letter-spacing:0.24em;color:var(--seal);
     text-transform:uppercase;text-align:center;opacity:0.7;margin-bottom:10px}
   .ch-title{font-family:'Shippori Mincho',serif;font-size:19px;letter-spacing:0.14em;color:var(--ink);
     text-align:center;margin:0 0 6px;font-weight:600}
@@ -882,7 +884,7 @@
     border:1px solid var(--seal);color:var(--seal);display:flex;align-items:center;justify-content:center;
     font-family:'Shippori Mincho',serif;font-size:14px;background:var(--paper);
     transform:rotate(-6deg);box-shadow:0 0 0 4px var(--paper)}
-  .ch-when{font-family:'Courier Prime',monospace;font-size:10.5px;letter-spacing:0.12em;color:var(--ink-mute);margin-bottom:5px}
+  .ch-when{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10.5px;letter-spacing:0.12em;color:var(--ink-mute);margin-bottom:5px}
   .ch-card{background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:14px 15px 12px;
     box-shadow:0 6px 20px -16px rgba(90,70,50,0.5)}
   .ch-card h4{font-family:'Shippori Mincho',serif;font-size:15.5px;letter-spacing:0.1em;color:var(--ink);margin:0 0 8px;font-weight:600}
@@ -892,13 +894,13 @@
   .ch-words{display:flex;flex-wrap:wrap;align-items:center;gap:6px 7px;margin-bottom:9px}
   .ch-word{font-family:'Shippori Mincho',serif;border:1px solid var(--rule);border-radius:999px;
     padding:2px 10px;color:var(--ink);background:var(--paper);letter-spacing:0.04em}
-  .ch-stats{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.1em;color:var(--ink-mute);opacity:0.85}
+  .ch-stats{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;letter-spacing:0.1em;color:var(--ink-mute);opacity:0.85}
   .ch-actions{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:2px}
   .ch-gen{background:none;border:1px solid var(--rule);cursor:pointer;font-family:'Shippori Mincho',serif;
     font-size:13px;color:var(--ink-mute);letter-spacing:0.12em;padding:10px 26px;border-radius:3px;transition:color .2s,border-color .2s,opacity .2s}
   .ch-gen:hover{color:var(--seal);border-color:var(--seal)}
   .ch-gen:disabled{opacity:0.45;cursor:default}
-  .ch-meta{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-mute);opacity:0.7;min-height:12px}
+  .ch-meta{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:10px;letter-spacing:0.08em;color:var(--ink-mute);opacity:0.7;min-height:12px}
 
   /* ── アカウント設定（名前・パスワード） ── */
   .acct-sec{max-width:360px;margin:0 auto 22px;text-align:left}
@@ -973,7 +975,7 @@
 <main class="concept" id="concept">
   <div class="concept-inner">
     <div class="concept-mark">JP<br>たより<br>Post</div>
-    <h2 class="concept-title"><span style="font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
+    <h2 class="concept-title"><span style="font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:13px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
     <div class="concept-body">
       <p>ここに置いた<wbr>言葉や写真、<wbr>声は、<wbr>いますぐ<wbr>誰かに届くものでは<wbr>ありません。<wbr>時間をおいて、<wbr>あなたのもとへ<wbr>返ってきます。</p>
       <p>返ってくる<wbr>言葉に、<wbr>正解や情報を<wbr>求めないでください。<wbr>それらは<wbr>検索の答えではなく、<wbr>かつてのあなたからの<wbr>問いかけです。</p>

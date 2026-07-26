@@ -17,6 +17,14 @@
 <meta name="theme-color" content="{{ theme_color | default('#FAF8F3') }}">
 <meta name="apple-mobile-web-app-title" content="たより">
 
+{# 書体は明朝一本（Shippori Mincho）。ここで読み込むのは、この <head> を使う紙
+   （利用規約・プライバシー等）が font-family だけ宣言して webfont を読んでおらず、
+   端末ごとに Hiragino / Yu Mincho へ散っていたため（2026-07-26）。
+   宙側は _sky_tokens.html が同じ書体を読む。 #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&display=swap">
+
 <meta property="og:site_name" content="tayori-たより-">
 <meta property="og:locale" content="ja_JP">
 <meta property="og:type" content="{{ og_type | default('website') }}">
