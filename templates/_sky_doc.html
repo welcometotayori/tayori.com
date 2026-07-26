@@ -33,6 +33,10 @@
   p{margin:0 0 var(--s4);font-size:13.5px;line-height:2.5;letter-spacing:var(--tr-body);
     word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .quiet{color:var(--ink-3);font-size:12.5px;line-height:2.3}
+  /* 短い行だけ中央へ（2026-07-27 Kosei）。上の「本文＝左」の線はそのまま——
+     行頭が毎行ずれると読みにくいのは長い段落の話で、宛先・電話番号・一行の添え書きの
+     ように「掲げるもの」は中央のほうが面に収まる。折り返す長さの文には付けないこと。 */
+  .center{text-align:center}
   a{color:var(--thread);text-decoration:underline;text-underline-offset:4px}
   /* 区切りは線を引くのではなく、紙に入った一本の罫（両端が消えていく） */
   .rule{height:1px;margin:var(--s5) 0;border:0;
