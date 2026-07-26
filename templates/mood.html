@@ -273,6 +273,30 @@
          word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .wmark.on{opacity:1}
   @media (prefers-reduced-motion: reduce){ .wmark{transition:opacity .3s ease} }
+  /* ── 放ったあとの、ひと呼吸（2026-07-27）──────────────────────
+     柱より前・宙より前に一度だけ立ち、自分で退く。触れれば早く退く（待たせない）。
+     ボタンは置かない——「確認」を押させると、放つ行為が二段階になる。 */
+  .sent{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:var(--s2);
+        background:rgba(8,8,13,.72);
+        backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+        opacity:0;pointer-events:none;visibility:hidden;
+        transition:opacity .5s var(--ease),visibility 0s linear .5s}
+  .sent.on{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .5s var(--ease)}
+  .sent-1{margin:0;font-size:var(--t-lead);letter-spacing:var(--tr-lead);color:var(--ink-1);
+          /* 立ち上がりは下から。放たれたものが昇る向きに合わせる */
+          transform:translateY(6px);opacity:0;
+          transition:transform .7s var(--ease),opacity .7s var(--ease)}
+  .sent-2{margin:0;font-size:var(--t-meta);letter-spacing:var(--tr-meta);color:var(--ink-3);
+          text-align:center;transform:translateY(6px);opacity:0;
+          transition:transform .7s var(--ease) .12s,opacity .7s var(--ease) .12s;
+          word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .sent.on .sent-1,.sent.on .sent-2{transform:none;opacity:1}
+  @media (prefers-reduced-motion: reduce){
+    .sent-1,.sent-2{transform:none;transition:opacity .3s ease}
+    .sent{transition:opacity .3s ease,visibility 0s linear .3s}
+    .sent.on{transition:opacity .3s ease}
+  }
   /* 書いている最中の筆先。縦書きの時は横棒に倒す（棚のtrace-caretと同じ作法） */
   .tcaret{display:inline-block;width:2px;height:1.05em;background:currentColor;margin-left:1px;
           vertical-align:-0.16em;opacity:.75;animation:tblink .9s steps(1) infinite}
@@ -1060,6 +1084,14 @@
   {# 透かし＝手引きと場の様子。知らせ（.whisper）とは層も濃さも別にする。
      読み上げには出す（薄いのは目に対してだけで、聞く人には同じ一行） #}
   <p class="wmark" id="wmark" aria-live="polite"></p>
+  {# 放ったあとの、ひと呼吸（2026-07-27）。
+     放つと柱が畳まれて宙に戻るだけで、放てたのかどうかが姿で分からなかった
+     （Apple §16 feedback：成功にも合図が要る）。数も順位も出さない場所なので、
+     祝わない・褒めない——起きたことだけを言って、すぐ退く。 #}
+  <div class="sent" id="sentVeil" aria-hidden="true">
+    <p class="sent-1">放たれました。</p>
+    <p class="sent-2">いつか、<wbr>知らない<wbr>誰かの<wbr>もとへ。</p>
+  </div>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
   <div class="lantern" id="lantern" aria-hidden="true"></div>
   <!-- 相談窓口の常時導線（宙v1 §12）：宙のすみに、いつでもある -->
@@ -2043,7 +2075,13 @@
         if(!d||!d.words) throw new Error('sky');
         if(!inRoom()||ROOM.id!==rid) return;   // 待っているあいだに部屋を出ていた
         pool=d.words;
-        if(!pool.length){
+        if(!pool.length&&liveEls.size){
+          /* 放った直後がここに来る。自分のことばは自分のプールから除かれる（§3.2）ので
+             pool は空のままだが、画面には自分の一筆が昇っている——その状態で
+             「まだ静かです。最初のひとことを、放ってみてください」と言うと、
+             いま放ったことが無かったことになる。ここでは何も言わないのが正しい。 */
+          watermark('');
+        }else if(!pool.length){
           // 静かな部屋は、静かなまま見せる（B-6）。空でもエラーにしない・他の部屋から借りない。
           // 放てない部屋（アーカイブ）で「放ってみてください」とは言わない。
           // 場の様子は透かしで（知らせではないので、秒数で消さない）
@@ -2179,7 +2217,17 @@
     const pick=src[Math.floor(Math.random()*src.length)];
     shown.add(pick.id); if(shown.size>300) shown.clear();
     noteSeen(pick.id);   // 実際に浮かべたことばだけを控える（宙v1 §3.2）
-    spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,null);
+    /* 初めて現れる時から、その人が実際に打った過程で立ち上がる（2026-07-27）。
+       v2追補 §1 で打鍵の実時間再生を入れたが、本物の打鍵が使われるのは書き直しの
+       周期（rotateOne）だけで、初出はいつも合成だった＝いちばん見られる一回目が
+       他人の筆致になっていなかった。控え(traceCache)があるので二度目からは待たない。
+       持っていないことば（明示の前に放たれた分・種のことば）は今までどおり合成。
+       ことばが現れる間隔はもともと4.5〜10秒なので、一往復ぶんの遅れは沈む。 */
+    getTrace(pick.id).then(tr=>{
+      // 待っているあいだに部屋を出た／定員が埋まった／同じことばが浮かんだ、を見直す
+      if(!inRoom()||liveEls.size>=liveCap()||live.has(pick.id)||liveText.has(pick.poem))return;
+      spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,tr);
+    });
   }
   // 反映の待ち時間を削る（v11.1）：取得は20秒ごと、流れ込みは4.5〜10秒ごと
   // 立ち上がり（B-7）：まずは部屋を並べる。?room= で来た人はその部屋へ直接降りる。
@@ -3068,6 +3116,26 @@
     if(e.key==='Escape'&&!e.isComposing&&!composing&&pane.classList.contains('on'))shut();});
   paintCast();   // 開く前から、押せない姿で置いておく（開いた瞬間に切り替わって見えないように）
 
+  /* 放ったあとの、ひと呼吸。自分で退く（2.6秒）か、触れれば即退く。
+     退いたあとの焦点は「放つ」——shut() が既にそこへ返している。
+     ケアの紙（showCareNote）が続く時は、そちらが前に立つので重ならない。 */
+  const sentVeil=document.getElementById('sentVeil');
+  let sentT=0;
+  function hideSent(){
+    clearTimeout(sentT);
+    sentVeil.classList.remove('on');
+    sentVeil.setAttribute('aria-hidden','true');
+  }
+  function showSent(){
+    clearTimeout(sentT);
+    sentVeil.setAttribute('aria-hidden','false');
+    sentVeil.classList.add('on');
+    sentT=setTimeout(hideSent,2600);
+  }
+  sentVeil.addEventListener('click',hideSent);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&sentVeil.classList.contains('on'))hideSent();});
+
   function showCareNote(){
     if(document.querySelector('.care-note'))return;
     const n=document.createElement('div');n.className='care-note';
@@ -3159,6 +3227,7 @@
         }
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
+        showSent();   // ひと呼吸。退いた時には、自分のことばがもう昇っている
         ta.textContent='';normalizeEmpty();H=H0;T=T0;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
         castTitle.value='';
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
