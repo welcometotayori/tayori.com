@@ -1446,6 +1446,18 @@ def index():
     # 302 先が noindex のため「顔」が一枚も索引されず、トップが検索に出なかった（2026-07-27）。
     return render_template("index.html", open_letter_id="")
 
+
+# 出ていく道（2026-07-27）。栞の「設定」のすぐ下に置く。
+# POST だけを受ける：GET で出られると、他所に置かれた <img src="/logout"> や
+# ただのリンクを踏んだだけで席を立たされる。SESSION_COOKIE_SAMESITE="Lax" が
+# 他所から来た POST に cookie を付けないので、これで CSRF の口は閉じている。
+# session.clear() ＝ uid だけでなく、開きかけのたよりの控えなども一緒に畳む。
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect("/")
+
+
 @app.route("/open/<lid>")
 def open_letter_page(lid):
     safe = lid if re.fullmatch(r"[A-Za-z0-9]{1,32}", lid or "") else ""
@@ -1994,18 +2006,40 @@ def _sky_arrive_at(now=None):
                       second=0, microsecond=0)
 
 
-# 放つ時だけ通す最小限のキーワード照合。結果は配布経路…ではなく「相談窓口の一文を添えるか」
-# だけに使い、判定も本文もどこにも記録・保存・学習しない（AIにも読ませない）。
-_CARE_PATTERNS = (
-    "死にたい", "死のう", "死にたく", "死んでしまいたい", "自殺",
-    "消えたい", "消えてしまいたい", "いなくなりたい",
-    "リストカット", "リスカ", "生きていたくない", "生きるのがつらい", "生きるのが辛い",
+# ══ ケアの気配（2026-07-27 改訂）════════════════════════════════
+# ここは「宙に出していいか」を決める場所では **ない**。当たっても当たらなくても、
+# ことばはこれまでどおり宙へ出て、これまでどおり誰かのもとへ降り、辿りの候補にも入る。
+# ここが決めるのはただ一つ——**書いた本人にだけ、相談窓口の紙片をそっと添えるか**。
+#
+# 【なぜ語で見ないのか】
+# 「死」「殺」は日本語の詩と手紙のふつうの語彙で、語で撃つと 必死・殺風景・死角・
+# 見殺し・死ぬほど嬉しい まで巻き込む。改訂前は「限界」「苦しい」「助けて」も見ていて、
+# これは失恋にも仕事にも締め切りにも出てくる——この宙にいちばん多い声そのものを
+# 撃っていた（_ABUSE_SOFT_RE に 上司/母 を入れてはいけないのと、まったく同じ理由）。
+# だから見るのは **主語と意思がそろったひと続きの言い回し** だけにする。
+# 「死ねない」「死にたくない」「死にたいほど眠い」のような否定・反転・誇張は必ず外す。
+#
+# 【残さない】判定の結果も、当たった言い回しも、DBにもログにも書かない。
+# AIには通さない（正規表現の照合だけ）。他のだれにも見えない。
+_CARE_RE = re.compile(
+    # ── 自分を終わらせる意思 ──
+    # 「死にたくない」は 死にたく で切れるので、そもそも 死にたい に当たらない。
+    # 「死にたいほど〜」は誇張の言い回しなので外す。
+    r"死にたい(?!ほど)"
+    r"|死んでしまいたい|死のうと(?:思|し)|死んでもいい(?:や|かな)?と"
+    r"|自殺(?:したい|しよう|する|を考え)"
+    r"|消えたい|消えてしまいたい|消えてなくなりたい|いなくなりたい"
+    r"|生きていたくない|もう生きたくない|生きるのを(?:やめ|終わ)"
+    r"|生きるのが(?:つらい|辛い|しんどい)"
+    r"|生きて(?:い)?る意味がない"
+    # ── 自傷 ──
+    r"|リストカット|リスカ|手首を切|自分を傷つけ"
 )
 
 
 def _needs_care(poem):
-    t = (poem or "").strip()
-    return bool(t) and any(p in t for p in _CARE_PATTERNS)
+    """相談窓口の一文を本人に添えるか。掲載可否には一切関与しない。"""
+    return bool(_CARE_RE.search((poem or "").strip()))
 
 
 # ══ 掲載の門番（2026-07-25 v13 §8）════════════════════════════════
@@ -2079,12 +2113,10 @@ _ADDRESS_RE = re.compile(
     # ハイフンでつながれた数字が続く時だけ。「大阪市で三年働いた」は数字が続かないので当たらない）
     r"|[^\s0-9０-９]{1,8}[市区町村][^\s0-9０-９]{0,10}\s*[0-9０-９]{1,4}\s*[-‐‑–—−ー－]\s*[0-9０-９]{1,4}"
 )
-# ケアの気配（強いシグナルほどではないが、ひとりで抱えている感じ＝gray）。
-# 宙へは出さず、その場では相談窓口の一文だけを本人に添える（既存の §3.4 と同じ紙片）。
-_CARE_SOFT_RE = re.compile(
-    r"もう無理|もうむり|限界|たすけて|助けて|苦しい|くるしい|くるしくて"
-    r"|生きてる意味|生きる意味がない|独りぼっち|ひとりぼっち"
-)
+# 2026-07-27：ここにあった _CARE_SOFT_RE（もう無理／限界／苦しい／助けて／ひとりぼっち）は
+# 廃した。語ひとつで承認待ちに落としていたので、失恋も仕事も締め切りも——つまり
+# この宙にいちばん多い声が、まとめて宙に出ないまま止まっていた。
+# ケアの気配は _CARE_RE がフレーズで見て、掲載には触れず、本人に窓口を渡すだけにした。
 
 # AI一次検知の再有効化フラグ（既定OFF＝キーワードだけ）。AI撤去（2026-07-16）の作法に倣い、
 # 環境変数を立てた時だけ経路が生きる。ONでも本文は保存されず、返るのは三値だけ。
@@ -2124,12 +2156,16 @@ _MOD_RANK = {"live": 0, "pending": 1, "blocked": 2}
 
 
 def _moderate(poem):
-    """(sky_status, care_note) を返す。care_note=True なら相談窓口の紙片を本人に添える。
-    判定結果以外は何も返さない・何も残さない。"""
+    """(sky_status, care_note) を返す。判定結果以外は何も返さない・何も残さない。
+
+    2026-07-27：care_note は常に False を返す（第二要素は呼び出し側の互換のために残す）。
+    ケアの気配は掲載可否と切り離し、_needs_care が本人への一文だけを決める。
+    門番がことばを止めるのは、誹謗中傷・脅迫・連絡先・所在——**他人に及ぶもの**だけ。
+    自分の痛みは、止める理由にならない。"""
     t = (poem or "").strip()
     if not t:
         return "live", False
-    status, care = "live", False
+    status = "live"
     if _ABUSE_HARD_RE.search(t):
         status = "blocked"
     elif _CONTACT_RE.search(t) or _ADDRESS_RE.search(t):
@@ -2138,15 +2174,11 @@ def _moderate(poem):
         status = "pending"
     elif _ABUSE_SOFT_RE.search(t) and _SECOND_PERSON_RE.search(t):
         status = "pending"
-    if _CARE_SOFT_RE.search(t):
-        # ケアの気配は「宙に出さない」だけでなく、その場で窓口をそっと渡す
-        status = "blocked" if status == "blocked" else "pending"
-        care = True
     ai = _moderate_ai(t)
     # AIは厳しくする方向にしか効かない（門を開ける権限は持たせない）
     if ai and _MOD_RANK[ai] > _MOD_RANK[status]:
         status = ai
-    return status, care
+    return status, False
 
 
 def _assign_sky_delivery(db, letter_id, author_id):
@@ -3780,10 +3812,12 @@ def _sky_rebuild():
     # 付箋は宙に出さない（v2.2 §3の反転）。付箋は読み手が自分の棚の控えに貼る私的な紙片に
     # なったので、公開の辞書には最初から入れない。letter_tags（旧・書き手の付箋）は
     # 過去データとして残っているが、もう読まない・書かない。
+    # 2026-07-27：ここに `if _needs_care(...): continue` が立っていた。門番を通って
+    # 宙に在ることばを、毎回の組み直しのたびに語で弾き直す二重の関所で、しかも
+    # 漂いにも辿り（air_distance）にも一度も現れない＝本人にも他人にも見えなかった。
+    # ケアは掲載可否に関与しない（本人へ窓口を渡すだけ）ので、ここでは何も見ない。
     pool, index = [], {}
     for r in rows:
-        if _needs_care(r["poem"]):
-            continue
         h = _sky_public_id(r["id"])
         pool.append((
             {
@@ -4558,24 +4592,22 @@ def api_create_letter():
     # （クライアントが arrive_at 等を送ってきても無視する）。降ってくる日時は
     # サーバの乱数だけが知っている（レスポンスにも返さない）。
     #
-    # セーフティ分岐（§3）：ケアのシグナルを検知したことばは「宙に流さない」＝
-    # mode を letter に落として本人にだけ置く。しんどい日のことばが後日メールで
-    # 不意に帰ってくるのは危ういので、帰還の対象からも外す（notified=1 で先に閉じる）。
-    # その場で棚に置かれ、いつでも読み返せる（書いて安心する用途に留める）。
-    # 判定フラグは持たない——mode がふつうの手紙と同じ値になるだけで、痕跡は残らない。
+    # セーフティ（§3・2026-07-27 改訂）：ケアのシグナルは、ことばの行き先を **変えない**。
+    # 以前はここで mode を letter に落として宙から外し、帰還も notified=1 で閉じていた。
+    # つまり「死にたい」と書いた人のことばだけが、だれにも届かず、本人にも帰ってこない
+    # まま手元に置かれていた——いちばん誰かに届いてほしい一行を、装置が黙って留めていた。
+    # いまは、ふつうのことばとまったく同じに扱う：宙へ出て、だれかに降り、辿りの候補に
+    # なり、いつかの自分にも帰ってくる。変わるのは一つだけ——**本人の画面にだけ、
+    # 相談窓口の紙片がそっと添う**。care は保存もログもしない、その場かぎりの真偽値。
     care = _needs_care(poem)
-    mode = "letter" if care else "sky"
-    # 掲載の門番（§8 / v13）：宙へ向かうことばだけ、三段に振り分ける。
-    # 本人への応答は live/pending/blocked で一切変えない（【J】告げない）。
-    # 返すのは相談窓口を添えるかどうか（care）だけ。
-    # care_note は「相談窓口の紙片を本人に添えるか」だけ。強いシグナル（care）は
-    # 上の分岐で mode を letter に落とすが、気配（soft）はことばの行き先を変えない
-    # ——宙へ向かい、帰還メールも生きたまま、その場で窓口だけをそっと渡す。
-    sky_status, care_note = None, care
-    if mode == "sky" and poem:
-        sky_status, soft_care = _moderate(poem)
-        care_note = care_note or soft_care
-    dt = datetime.now() if care else _sky_arrive_at()
+    mode = "sky"
+    # 掲載の門番（§8 / v13）：他人に及ぶもの（誹謗中傷・脅迫・連絡先・所在）だけを
+    # 三段に振り分ける。本人への応答は live/pending/blocked で一切変えない（【J】告げない）。
+    sky_status = None
+    if poem:
+        sky_status, _ = _moderate(poem)
+    care_note = care
+    dt = _sky_arrive_at()
     arrive_at = dt.isoformat(timespec="seconds")
     arrive_date = dt.date().isoformat()
     weather_event = None
@@ -4645,14 +4677,15 @@ def api_create_letter():
                VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
-             1 if care else 0,   # ケアのことばは帰還メールを閉じた状態で置く（§3.4）
+             # notified は常に 0。ここに care を書くと「ケアと判定した」という痕跡が
+             # 列として残り、後から誰でも読めてしまう（2026-07-27：判定は保存しない）。
+             0,
              emos_json,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace, trace_z,
              seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
              grid_id, excluded, mode, sky_status, room_id),
         )
         # 他人のことばが初めて入った瞬間に、その部屋へ鍵をかける（B-5）。
-        # ケア分岐で letter に落ちたことばも「その部屋に置かれた」ことに変わりはない。
         _room_lock_if_needed(db, room_id, uid())
         db.commit()
     # 開封のお知らせメールは認証済みアドレスにしか送られない（_check_and_notify の条件と対）。
@@ -4663,7 +4696,8 @@ def api_create_letter():
         notify_reason = "none"
     elif not u["verified"]:
         notify_reason = "pending"
-    # 宙に入ったことば（ケア分岐で letter に落ちたものは除く）は、他のだれか一人へも配る。
+    # 宙に入ったことばは、他のだれか一人へも配る。ケアの気配があることばも同じに配る
+    # （2026-07-27：しんどい日の一行こそ、だれかに届いてよい）。
     # 写真・声だけのことばは配らない（他人に渡るのはテキストだけ＝写り込み等の身元漏れを防ぐ）。
     # 承認待ち・掲載しないことばは配らない（掲載された時にはじめて配る＝admin の承認で走る）。
     if mode == "sky" and poem and sky_status == "live":

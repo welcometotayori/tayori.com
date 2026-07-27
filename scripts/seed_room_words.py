@@ -247,9 +247,13 @@ def seed(username, dry_run=False, seed_value=20260726):
         if poem in have:
             skipped.append((room_name, poem, "もう置いてある"))
             continue
-        # 門番とケアの判定は素通りさせない。宙に出ないことばは、置く意味がない。
+        # 門番は素通りさせない。宙に出ないことばは、置く意味がない。
+        # ケアの気配は 2026-07-27 から掲載を止めない（本人に窓口を渡すだけ）が、
+        # ここで置くことばは実在の誰かが書いたものではない。だれも書いていない
+        # 「死にたい」を種として宙に撒くのは、この本の作法（作者は実在の人にしない）と
+        # 同じ理由で採らない——痛みは、こちらで拵えるものではない。
         if _needs_care(poem):
-            skipped.append((room_name, poem, "ケアの判定に触れる（宙には出ない）"))
+            skipped.append((room_name, poem, "ケアの気配がある（種としては置かない）"))
             continue
         status, _care = _moderate(poem)
         if status != "live":

@@ -3196,8 +3196,13 @@ async function detectWeather(){
     const scale=total>14000?14000/total:1;
     target.classList.add('tracing');
     const caret='<span class="trace-caret"></span>';
-    let idx=0;const t0=performance.now();
+    // 時計は最初のフレームで合わせる（mood.html の playType と同じ理由）。
+    // 呼んだ瞬間を 0 にすると、フレームが止まっている端末（携帯：伏せている・
+    // 低電力・スクロール中）では戻ってきた一フレームで全部を食べてしまい、
+    // 再生されずにいきなり書き上がる。
+    let idx=0,t0=null;
     function frame(now){
+      if(t0===null)t0=now;
       const el=now-t0;
       while(idx<norm.length&&norm[idx].at*scale<=el){target.innerHTML=esc(norm[idx].v)+caret;idx++;}
       if(idx<norm.length){requestAnimationFrame(frame);}
