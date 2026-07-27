@@ -782,6 +782,13 @@ def init_db():
             # ＝穴は穴のまま残す（「自分の部屋はあの位置」という空間の記憶を壊さないため）。
             # 座標そのものは持たない。番号→座標は画面側の純関数（roomSeat）が決める。
             "ALTER TABLE rooms ADD COLUMN position_index INTEGER",
+            # 色は書き手が「選んだ」時だけ空気になる（2026-07-28）。
+            # 色は air の4変数（色・季節・時刻・天気）で唯一、書き手が作る変数。
+            # 触られなかった既定色（淡い青）を発言として流通させると、色という記号が
+            # 静かに嘘になる——未選択の色は air_distance の色項から外す（表示の色味は残す：
+            # 全員同じ既定は「まだ何も言っていない」と読める無標のしるし）。
+            # 既存の手紙は DEFAULT 1＝選択済み扱い（帯が常時見えていた頃の挙動を変えない）。
+            "ALTER TABLE letters ADD COLUMN seal_color_chosen INTEGER DEFAULT 1",
         ):
             try:
                 db.execute(stmt)
@@ -3849,7 +3856,7 @@ def _sky_index():
 def _sky_rebuild():
     db = get_db()
     rows = db.execute(
-        "SELECT id, user_id, poem, title, seal_color, vertical, sent_date, time_bucket, seal_env, weather_event, area_name, room_id "
+        "SELECT id, user_id, poem, title, seal_color, COALESCE(seal_color_chosen,1) AS seal_color_chosen, vertical, sent_date, time_bucket, seal_env, weather_event, area_name, room_id "
         "FROM letters "
         "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>'' "
         # 掲載の門番（§8）。承認待ち・掲載しないことばは宙に出さない。
@@ -3872,9 +3879,13 @@ def _sky_rebuild():
                 "color": r["seal_color"],
                 "vertical": bool(r["vertical"]),
             },
-            # 空気の距離（v2 §2）の材料。クライアントへは出さない
+            # 空気の距離（v2 §2）の材料。クライアントへは出さない。
+            # 色は書き手が「選んだ」時だけ空気に入れる（2026-07-28）——触られなかった
+            # 既定色は発言ではないので、色項ごと外す。air_distance は無い成分を比べずに
+            # 残りの重みで正規化する（§2.1）ので、None を置くだけで式は変わらない。
+            # 表示の色味（上の公開dict）は未選択でも残る＝一様な既定は無標のしるし。
             {
-                "color": r["seal_color"],
+                "color": r["seal_color"] if r["seal_color_chosen"] else None,
                 "season": _mood_season(r["sent_date"]),
                 "hour": _mood_hour(r),
                 "weather": _mood_weather(r),
@@ -4813,6 +4824,9 @@ def api_create_letter():
     # 封入する「その時」の記録：気分の色（カラー・ピッカー）と、便箋に透けていた問い
     seal_color = (data.get("seal_color") or "").strip()[:32] or None
     seal_q = (data.get("seal_q") or "").strip()[:80] or None
+    # 色に「触れた」かどうか（2026-07-28）。触れていない既定色は色として発言させない
+    # ＝air_distance の色項から外れる（_sky_rebuild 側）。色そのものは常に保存する。
+    seal_color_chosen = 1 if data.get("color_chosen") else 0
 
     # タイプ再生（TypeTrace）。二つの形式を受ける：
     #   ・ev1（{fmt:'ev1',ev:[[dt,op,ch],...]}）＝v2追補 §1。宙に流してよい打鍵イベント。
@@ -4868,8 +4882,8 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,trace_z,seal_color,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status,room_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,trace_z,seal_color,seal_color_chosen,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status,room_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
              # notified は常に 0。ここに care を書くと「ケアと判定した」という痕跡が
@@ -4877,7 +4891,7 @@ def api_create_letter():
              0,
              emos_json,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace, trace_z,
-             seal_color, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
+             seal_color, seal_color_chosen, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
              grid_id, excluded, mode, sky_status, room_id),
         )
         # 他人のことばが初めて入った瞬間に、その部屋へ鍵をかける（B-5）。

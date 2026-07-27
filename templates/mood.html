@@ -2924,6 +2924,10 @@
      触らなければ既定の色（藍寄りの淡い青）のまま放たれる＝書く手は止まらない。 */
   const H0=210, T0=0.28;      // 既定＝淡いほうへ寄せた青。宙の闇でも読める明るさ
   let H=H0, T=T0;
+  /* 色に「触れた」か（2026-07-28）。触れていない既定色は air の色項に入れない
+     （サーバ側 seal_color_chosen）——選んでいない色を発言として流通させないため。
+     箱を開いただけでは立たない。帯を動かした（指でも矢印キーでも）時だけ立つ。 */
+  let colorTouched=false;
   function toneColor(h,p){
     let s,l;
     if(p<0.5){ const k=p/0.5;       s=24+(78-24)*k; l=88+(64-88)*k; }   // 淡い → 鮮やか
@@ -2971,8 +2975,8 @@
     bar.addEventListener('pointerdown',e=>{bar.setPointerCapture(e.pointerId);pick(e);});
     bar.addEventListener('pointermove',e=>{if(e.buttons)pick(e);});
   }
-  wireBar(hueBar,p=>{H=Math.round(p*360)%360;paint();});
-  wireBar(toneBar,p=>{T=p;paint();});
+  wireBar(hueBar,p=>{H=Math.round(p*360)%360;colorTouched=true;paint();});
+  wireBar(toneBar,p=>{T=p;colorTouched=true;paint();});
   /* 帯のキー操作。role=slider が約束している一式（←→・↑↓・Home/End・PageUp/Down）を
      全部受ける。v2 までは ←→ だけで、上下キーを押すと画面が送られて帯から離れていた
      （＝同じ形のものが同じに振る舞わない／Apple §16 familiarity）。 */
@@ -2989,6 +2993,7 @@
       else return;
       e.preventDefault();
       apply(d,abs);
+      colorTouched=true;   // 矢印キーで動かすのも「触れた」（2026-07-28）
       paint();
     });
   }
@@ -3433,6 +3438,7 @@
       const res=await fetch('/api/letters',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({mode:'sky',poem:poem,title:title,seal_color:color,
+                             color_chosen:colorTouched?1:0,   // 触れていない既定色は空気にしない（2026-07-28）
                              vertical:1,trace:steps,
                              room:castRoom})});
       const d=await res.json().catch(()=>null);
@@ -3448,7 +3454,7 @@
         // 放ったことばが、そのまま宙にのぼる。自分の打鍵をそのまま再生しながら
         spawnDrift(poem,color,true,null,steps);
         showSent();   // ひと呼吸。退いた時には、自分のことばがもう昇っている
-        ta.textContent='';normalizeEmpty();H=H0;T=T0;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
+        ta.textContent='';normalizeEmpty();H=H0;T=T0;colorTouched=false;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
         castTitle.value='';
         if(window.resetCastOpt) window.resetCastOpt();   // 任意の三つを畳み直す（2026-07-28）
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
