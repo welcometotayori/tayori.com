@@ -785,22 +785,10 @@
   .room::after{content:'';display:block;height:1px;margin-top:9px;
                background:var(--rule);opacity:.5}
   .room.archived{color:var(--ink-4);font-style:italic}
-  /* 円の中心。部屋ではないので罫を引かない（同じ姿にすると「部屋」に見える） */
-  .room-hub{position:absolute;left:0;top:0;
-            transform:translate(-50%,-50%);
-            display:inline-flex;align-items:center;gap:8px;
-            min-height:var(--touch);padding:12px 14px;
-            color:var(--ink-4);text-decoration:none;
-            font-size:12px;letter-spacing:0.2em;white-space:nowrap;
-            text-shadow:0 0 9px rgba(8,8,13,.92);
-            opacity:0;transition:opacity 1.6s var(--ease,ease),color .3s var(--ease)}
-  .room-hub.on{opacity:.7}
-  .room-hub:hover{color:var(--ink-2);opacity:1}
-  .room-hub:active{opacity:.62}
-  .room-hub:focus-visible{color:var(--ink-2);opacity:1;
-                          outline:1px solid var(--rule-act);outline-offset:6px}
-  .room-hub .ico{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1;
-                 stroke-linecap:round;stroke-linejoin:round}
+  /* .room-hub（円の中心の「自分のページ」）は 2026-07-28（4-2）に撤去した。
+     栞メニューの一番上と二重で、雲の中にナビゲーションが混ざっていたため。
+     導線は栞（.shiori-menu の /me）に一本化。中央は空けておく——空くことで
+     雲の求心力が上がる。 */
   /* 部屋の灯。名前のうしろ（z-index:-1）で、ぼんやりと。位置は部屋ごとに決まっていて
      動かない＝毎回おなじ形に灯る。opacity で立つ .room が積み重なりの文脈を作るので、
      -1 は文字の背後までしか沈まない（画面の闇まで抜けない）。 */
@@ -1562,16 +1550,10 @@
      ——画面に収めるのは camera の仕事で、部屋の側は自分がどこに映っているかを知らない。 */
   function placeRooms(list){
     roomCanvas.innerHTML='';
-    if(LOGGED_IN){
-      // 円の中心。部屋ではないので、部屋と同じ姿にはしない
-      const hub=document.createElement('a');
-      hub.className='room-hub';hub.href='/me';
-      hub.innerHTML='<svg class="ico" viewBox="0 0 16 16" aria-hidden="true">'
-        +'<path d="M3 13.2c0-2.3 2.2-3.6 5-3.6s5 1.3 5 3.6"/><circle cx="8" cy="5.4" r="2.6"/></svg>'
-        +'<span>自分のページ</span>';
-      roomCanvas.appendChild(hub);
-      setTimeout(()=>hub.classList.add('on'),90);
-    }
+    /* 2026-07-28（4-2）：円の中心にあった「自分のページ」（.room-hub）を外した。
+       同じ導線が栞メニューの一番上にもあり二重だった上に、文学・恋愛・仕事…と
+       並ぶ雲の中に性質の違うもの（ナビゲーション）が一つ混ざって、コンテンツと
+       同一平面になっていた。栞側に一本化。中央が空くことで雲の求心力が上がる。 */
     list.forEach((r,i)=>{
       const el=document.createElement('button');
       el.type='button';
