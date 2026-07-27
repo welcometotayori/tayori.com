@@ -421,6 +421,13 @@
   .where button:hover{color:var(--ink-2)}
   .where button:active{opacity:.62}
   .where button.on{color:var(--ink-1);border-bottom-color:var(--thread)}
+  /* 4-10（2026-07-28）：1つ選んだら他を沈め、選んだものだけ立たせる。
+     18個がフラットに並ぶと、選択済みのフィードバックが弱かった。
+     沈んだ選択肢は --ink-4（AA下限）を割るが、これは「選び直せる副次の状態」で、
+     触れれば（hover/focus）すぐ元の声に戻る——読ませる文ではなく気配。 */
+  .where.picked button:not(.on){color:rgba(250,248,243,.34)}
+  .where.picked button:not(.on):hover,
+  .where.picked button:not(.on):focus-visible{color:var(--ink-2)}
   body.in-room .lp,body.in-room .about{display:none}
 
   /* 宙の中で書く：モーダルではなく、宙が少し暗くなり書く柱が立つ。
@@ -1229,7 +1236,10 @@
          部屋の中から開いた時はそこが選ばれた状態で立つので、今までの手つきは変わらない。
          2026-07-28：題・色の後ろにあったのを本文の直後へ上げた。これが二つ目の必須で、
          あいだに任意を挟むと「まだ何か決めることがある」に見える。 #}
-      <p class="picker-lead" id="whereLead">どこに置きますか。</p>
+      {# 2026-07-28（4-10）：「どこに置きますか。まだ決めていません。」は問いと状態が
+         一文に混ざっていた。見出しは「どこへ」だけ。未選択かどうかは選択肢の側の
+         見た目（.picked）が言う——文で状態を説明しない。 #}
+      <p class="picker-lead" id="whereLead">どこへ</p>
       <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
 
       {# ── 任意の三つ（2026-07-28）──
@@ -3430,6 +3440,8 @@
       b.classList.toggle('on',on);
       b.setAttribute('aria-checked',on?'true':'false');
     });
+    // 4-10（2026-07-28）：1つ選んだら他を沈める。選んだものだけが立つ
+    whereBox.classList.toggle('picked',castRoom!=null);
     paintCast();      // 置き場所が決まって初めて放てる＝押せる姿も連動させる
   }
   function renderWhere(){
@@ -3441,7 +3453,9 @@
       b.addEventListener('click',()=>{castRoom=r.id;paintWhere();});
       whereBox.appendChild(b);
     });
-    whereLead.textContent=castRoom?'どこに置きますか。':'どこに置きますか。まだ決めていません。';
+    /* 4-10（2026-07-28）：見出しはいつも「どこへ」。未選択の説明文は出さない
+       ——状態は選択肢の姿（.picked で他が沈む）が言う。 */
+    whereLead.textContent='どこへ';
     paintWhere();
   }
 
