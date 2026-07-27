@@ -836,7 +836,10 @@
             gap:0 var(--s3);padding:0 calc(var(--s3) + var(--safe-r)) 0 calc(var(--s3) + var(--safe-l));
             pointer-events:none}
   .room-bar.off{display:none}
-  .room-bar .now{font-size:13px;letter-spacing:0.2em;color:var(--ink-3);
+  /* 4-8（2026-07-28）：「学校　ほかへ」が同じ重さで並び、現在地とボタンの区別が
+     なかった。現在地は場所の名＝ボタンより一段大きく・明るく・字間を広く。
+     罫は引かない（罫一本＝押せる合図。名に引くと押せるものに見える）。 */
+  .room-bar .now{font-size:15px;letter-spacing:0.3em;color:var(--ink-2);
                  text-shadow:0 0 16px rgba(8,8,13,.9)}
   .room-bar .back{pointer-events:auto;font-size:11.5px;letter-spacing:0.18em;
                   color:var(--ink-4);background:none;border:0;
