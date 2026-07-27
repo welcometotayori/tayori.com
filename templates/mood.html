@@ -462,9 +462,12 @@
      v14で色の帯の的を44pxに広げた分、v2.2で題の一行（44px＋gap12px＝56px）が増えた分だけ
      丈が伸びるので、しきい値も同じだけ上げてある（740/690/640 → 796/746/696）。
      低い画面では字面と列幅だけを詰め、20字×4列の関係は絶対に崩さない。 */
-  @media (max-height:796px){ .cast{--cw:32px;--fs:15px} }
-  @media (max-height:746px){ .cast{--cw:28px;--fs:13px} }
-  @media (max-height:696px){ .cast{--cw:26px;--fs:12px} }
+  /* 2026-07-28：題・色・向きを「任意の三つ」の一行へ沈めたぶん柱が縮んだので、
+     しきい値も同じだけ下げた（実測：題57 + 色167 + 旧向きボタン56 − 行68 ≒ 200px）。
+     出口は sticky で常に届くから、便箋の字面はできるだけ大きいまま保つ。 */
+  @media (max-height:600px){ .cast{--cw:32px;--fs:15px} }
+  @media (max-height:550px){ .cast{--cw:28px;--fs:13px} }
+  @media (max-height:500px){ .cast{--cw:26px;--fs:12px} }
   /* v16：textarea → contenteditable。vertical-rl の <textarea> は Chrome/Safari とも
      IME変換中の文字（プレビュー・候補）を正しく描けない実装上の穴があり、宙で漢字変換が
      効かなかった（textareaは専用の内部エディタで、日本語縦書き＋IMEの対応が薄い）。
@@ -491,9 +494,9 @@
         background-image:repeating-linear-gradient(180deg,
               transparent,transparent calc(2.2em - 1px),
               var(--rule-faint) calc(2.2em - 1px),var(--rule-faint) 2.2em)}
-  .cast-dir{align-self:center;padding:8px 4px;min-height:var(--touch);font-size:var(--t-mono);
-            letter-spacing:var(--tr-mono);color:var(--ink-4);border-bottom-color:var(--rule-faint)}
-  .cast-dir:hover{color:var(--ink-2)}
+  /* .cast-dir の単独スタイルは 2026-07-28 に削除：向きの切り替えは「任意の三つ」の行
+     （.cast-opt-row）へ移り、姿もあの行の button と同じになった。旧指定は .ruled の
+     border-bottom 前提（color だけ上書き）だったので、.ruled を外した今は残すと死に体。 */
   /* :empty が成立するのは中身が本当に空（<br>も残っていない）時だけ。JS側で保証する */
   .cast .ctext:empty:before{content:attr(data-placeholder);color:var(--ink-4)}
   /* 自前カーソル：列幅いっぱい（＝横書きの行と同じ背丈）の横棒。
@@ -548,14 +551,46 @@
             transform:translate(-50%,-50%);border:1.5px solid var(--chalk);
             background:transparent;pointer-events:none;
             box-shadow:0 0 10px rgba(0,0,0,.6);transition:background .18s var(--ease)}
+  /* ── 任意の三つ（2026-07-28）────────────────────────────────
+     本線は「書く → どこへ → 放つ」。題・色・向きは必須ではないので、
+     一行に沈めて、触れたときだけその場で開く。
+     ・題／色 … data-opt で対応する箱の hidden を外す
+     ・向き   … それ自体が行為なので、この行で直接切り替える（castDir をここへ移設） */
+  .cast-opt-row{display:flex;flex-wrap:wrap;justify-content:center;
+                /* 間は --s3。--s4(32px) だと 375px 幅で計 309px＞行幅 305px となり
+                   4px だけ溢れて二行に折れた（実測 2026-07-28）。一行に沈めるのが主題 */
+                gap:2px var(--s3);margin:var(--s2) 0 0}
+  .cast-opt-row button{background:none;border:none;font-family:inherit;cursor:pointer;
+                       min-height:var(--touch);padding:11px 4px;
+                       font-size:11.5px;letter-spacing:0.2em;color:var(--ink-4);
+                       border-bottom:1px solid transparent;transition:color .2s var(--ease)}
+  .cast-opt-row button:hover,
+  .cast-opt-row button[aria-expanded="true"]{color:var(--ink-3)}
+  .cast-opt-row button[aria-expanded="true"]{border-bottom-color:var(--rule)}
+  /* 中身が入っている引き金は、閉じていても分かるように点を一つ添える */
+  .cast-opt-row button[data-filled="1"]::after{content:"・";color:var(--ink-3)}
+  .cast-opt{display:flex;flex-direction:column;align-items:center;
+            gap:var(--s2);width:100%;margin:var(--s2) 0 0;
+            /* 開いた箱を scrollIntoView で見せるとき、sticky の出口の裏に
+               尻を差し込ませない遊び（出口の丈 ≒72px + ひと呼吸）。
+               375×560 実測：これが無いと色名の行が出口の下に 8px 欠けた（2026-07-28） */
+            scroll-margin-bottom:88px;scroll-margin-top:var(--s2)}
+  .cast-opt[hidden]{display:none}
   /* 出口は sticky（v4 の作法：スクロールする面の出口は、必ず指の届くところに残す）。
      2026-07-27 に「置き場所をえらぶ」と「向きの切り替え」が加わって柱が伸び、
      背の低い画面では「放つ」が折り返しの下へ落ちた（812pxの端末で実測 964px＝画面外）。
-     柱を縮めるのではなく、放つ／閉じるだけを面の底へ貼り付けて always reachable にする。 */
-  .cast-row{position:sticky;bottom:0;z-index:1;
-            display:flex;gap:var(--s4);align-items:center;
-            padding:var(--s2) var(--s3);margin:0 calc(var(--s3) * -1);
-            background:linear-gradient(180deg,rgba(8,8,13,0),rgba(8,8,13,.86) 38%,rgba(8,8,13,.94))}
+     柱を縮めるのではなく、放つ／閉じるだけを面の底へ貼り付けて always reachable にする。
+     2026-07-28：背景のグラデを止めて不透明にした。旧実装は上端 alpha 0 → .86（38%）
+     の帯で、sticky の裏をスクロールで通過する要素（放つ直前は cast-note、位置により
+     castWhere も）がボタンの字面に透けて重なった。せり上がる感じは border-top 一本で足りる。
+     align-self:stretch は .cast-inner が align-items:center のため（伸ばさないと両端から
+     下が覗く）。safe-b は iPhone のホームバー分の下余白。 */
+  .cast-row{position:sticky;bottom:0;z-index:2;align-self:stretch;
+            display:flex;gap:var(--s4);align-items:center;justify-content:center;
+            padding:var(--s2) var(--s3) calc(var(--s2) + var(--safe-b,0px));
+            margin:var(--s2) calc(var(--s3) * -1) 0;
+            background:#08080D;
+            border-top:1px solid var(--rule-faint)}
   .cast-send{border-bottom-color:var(--rule-act);color:var(--ink-1);
              font-size:14.5px;letter-spacing:0.4em;min-height:var(--touch);
              padding:12px 10px 13px 14px}
@@ -1171,34 +1206,55 @@
          「詩を書け」と言っていた（利用者から「みんな文豪みたいになっている」と言われた）。 #}
       <div id="castText" class="ctext" contenteditable="true" role="textbox" aria-multiline="false"
            data-placeholder="いま思っていることを、ひとこと。" aria-label="tayori-たより- へ放つことば"></div>
-      {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
-         向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。 #}
-      <button class="cast-dir ruled" id="castDir" type="button" aria-pressed="false">横書きにする</button>
       <!-- 縦書き用の自前カーソル（ネイティブは字面まで縮み、位置も定まらないため） -->
       <div class="vcaret" id="castCaret"></div>
       <div class="cast-count" id="castCountBox"><span id="castCount">0</span> / 80</div>
+
+      {# 置き場所（2026-07-27）：書いたあとに選ぶ。書く前に決めさせない——
+         「何を書くか」を分類から逆算させると、書きたかったことが痩せる。
+         部屋の中から開いた時はそこが選ばれた状態で立つので、今までの手つきは変わらない。
+         2026-07-28：題・色の後ろにあったのを本文の直後へ上げた。これが二つ目の必須で、
+         あいだに任意を挟むと「まだ何か決めることがある」に見える。 #}
+      <p class="picker-lead" id="whereLead">どこに置きますか。</p>
+      <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
+
+      {# ── 任意の三つ（2026-07-28）──
+         題も色も向きも、無いまま放ってよい。色には既定値（淡い青）が入っているので、
+         触らないことが欠けにならない。それを画面の形で言う＝一行に沈める。 #}
+      <div class="cast-opt-row" id="castOptRow">
+        <button type="button" data-opt="castOptTitle" aria-expanded="false"
+                aria-controls="castOptTitle">題をつける</button>
+        <button type="button" data-opt="castOptColor" aria-expanded="false"
+                aria-controls="castOptColor">色をえらぶ</button>
+        {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
+           向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。 #}
+        <button class="cast-dir" id="castDir" type="button" aria-pressed="false">横書きにする</button>
+      </div>
+
       <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚・書架・辿るでだけ立つ -->
-      <input id="castTitle" type="text" maxlength="10" autocomplete="off"
-             placeholder="題をつける（10字まで・なくても）"
-             aria-label="このことばの題（10字まで・任意）">
+      <div class="cast-opt" id="castOptTitle" hidden>
+        <input id="castTitle" type="text" maxlength="10" autocomplete="off"
+               placeholder="題をつける（10字まで・なくても）"
+               aria-label="このことばの題（10字まで・任意）">
+      </div>
+
       {# 2026-07-27：帯が二本、無言で並んでいた。何のための色かも、上下の違いも
          画面に出ていない＝初見では触る理由が無い（Apple §16 mapping／§16 feedback:status）。
          ・上に一行、何をするところかを置く
          ・下に、いま選んでいる色の名を出す。静的なラベル（色相／彩度）ではなく
-           **結果**を返す：触るたびに「淡い　あお」が変わるので、二本の役目も自ずと分かる #}
-      <p class="picker-lead">このことばに、色をつけてください。</p>
-      <div class="picker">
-        <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
-             aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
-        <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
-             aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
-        <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
+           **結果**を返す：触るたびに「淡い　あお」が変わるので、二本の役目も自ずと分かる
+         2026-07-28：既定値が入っている以上これは任意なので、畳んだ側へ移した。
+         見出しは命令形（「つけてください」）をやめ、任意だと分かる言い方にした。 #}
+      <div class="cast-opt" id="castOptColor" hidden>
+        <p class="picker-lead">このことばの色。</p>
+        <div class="picker">
+          <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
+               aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
+          <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
+               aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
+          <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
+        </div>
       </div>
-      {# 置き場所（2026-07-27）：書いたあとに選ぶ。書く前に決めさせない——
-         「何を書くか」を分類から逆算させると、書きたかったことが痩せる。
-         部屋の中から開いた時はそこが選ばれた状態で立つので、今までの手つきは変わらない。 #}
-      <p class="picker-lead" id="whereLead">どこに置きますか。</p>
-      <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
       <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
            付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
       <!-- 著作権はUIに書く（v2 §13）：規約ではなく、書く手の目に入る場所に、常時一行。
@@ -3394,6 +3450,7 @@
         showSent();   // ひと呼吸。退いた時には、自分のことばがもう昇っている
         ta.textContent='';normalizeEmpty();H=H0;T=T0;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
         castTitle.value='';
+        if(window.resetCastOpt) window.resetCastOpt();   // 任意の三つを畳み直す（2026-07-28）
         // サーバ側キャッシュは投函で破棄済み。すぐ取りにいって他の人の宙にも早く映す
         setTimeout(fetchWords,600);
         if(d.care)setTimeout(showCareNote,1600);
@@ -3571,6 +3628,45 @@
       }catch(e){ showReadError('そのたよりは開けませんでした。'); }
     })();
   }
+})();
+
+/* 任意の三つ（2026-07-28）。開閉だけを持つ。中身の配線（castTitle / hueBar …）は
+   既存のまま——id を変えていないので、あちらのコードは何も知らなくてよい。 */
+(function(){
+  const row=document.getElementById('castOptRow');
+  if(!row) return;
+  row.addEventListener('click',function(e){
+    const b=e.target.closest('button[data-opt]');
+    if(!b) return;
+    const box=document.getElementById(b.dataset.opt);
+    if(!box) return;
+    const opening=box.hasAttribute('hidden');
+    if(opening) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
+    b.setAttribute('aria-expanded',opening?'true':'false');
+    if(opening){
+      const f=box.querySelector('input,[role="slider"]');
+      if(f) f.focus({preventScroll:true});
+      /* 低い画面では開いた箱が出口(sticky)の裏に潜る（375×560 実測）。
+         便箋を縮めて柱を詰めても 578px 中 46px しか稼げない＝柱の丈の主因は
+         開いた箱と部屋一覧なので、縮めずに「開いたものを見せる」で応える。
+         scroll-margin-bottom が出口のぶんの遊びを持っている（2026-07-28）。 */
+      box.scrollIntoView({block:'nearest',
+        behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    }
+  });
+  const t=document.getElementById('castTitle');
+  if(t) t.addEventListener('input',function(){
+    const b=row.querySelector('[data-opt="castOptTitle"]');
+    if(b) b.dataset.filled = t.value.trim() ? '1' : '';
+  });
+  window.resetCastOpt=function(){
+    row.querySelectorAll('button[data-opt]').forEach(function(b){
+      const box=document.getElementById(b.dataset.opt);
+      if(box) box.setAttribute('hidden','');
+      b.setAttribute('aria-expanded','false');
+      b.dataset.filled='';
+    });
+  };
 })();
 </script>
 </body>
