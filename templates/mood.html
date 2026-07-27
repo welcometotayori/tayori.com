@@ -880,6 +880,12 @@
   /* 題字と栞は position を持っていない（header の flex の子）ので、霞を敷く土台を作る。
      .arrivals / .care-link / .room-new は既に fixed なので触らない（上書きすると位置が壊れる）。 */
   .ttl,.shiori{position:relative}
+  /* 4-9（2026-07-28）：栞の初回だけの手引き。粒の真下に一行、出て、消える */
+  .shiori-hint{position:absolute;top:calc(100% + 2px);right:0;white-space:nowrap;
+               font-size:10.5px;letter-spacing:0.16em;color:var(--ink-3);
+               text-shadow:0 0 10px rgba(8,8,13,.95);pointer-events:none;
+               opacity:0;transition:opacity 1.2s var(--ease)}
+  .shiori-hint.on{opacity:1}
   .room-new.off{display:none}
   .room-new .open{font-size:11.5px;letter-spacing:0.18em;color:var(--ink-4);
                   background:none;border:0;border-bottom:1px solid var(--rule);
@@ -2658,6 +2664,29 @@
       if(sl.classList.contains('on')&&!sl.contains(e.target)&&!sb.contains(e.target))setOpen(false);});
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape'&&sl.classList.contains('on')){setOpen(false);sb.focus();}});
+
+    /* 4-9（2026-07-28）：栞（右上の三つの粒）がメニューだと分からない——装飾に見える。
+       姿は世界観として美しいので変えず、**初回だけ**、粒の真下に一行の手引きを置く。
+       ・一度出したら二度と出さない（触れて分かったことを、毎回言い直さない）
+       ・粒に触れた瞬間に引く（手引きは、要らなくなった瞬間が引き際）
+       ・pointer-events:none・aria-hidden＝読み上げには aria-label が既にある */
+    (function(){
+      const KEY='tayori.shiorihint';
+      try{ if(localStorage.getItem(KEY))return; }catch(_){ return; }
+      if(!LOGGED_IN)return;
+      const h=document.createElement('span');
+      h.className='shiori-hint';h.setAttribute('aria-hidden','true');
+      h.textContent='じぶんのページは、ここに。';
+      sb.appendChild(h);
+      const gone=()=>{h.remove();try{localStorage.setItem(KEY,'1');}catch(_){}};
+      setTimeout(()=>{
+        if(!document.body.contains(h))return;
+        h.classList.add('on');
+        try{localStorage.setItem(KEY,'1');}catch(_){}
+        setTimeout(()=>{h.classList.remove('on');setTimeout(gone,1400);},9000);
+      },1800);
+      sb.addEventListener('click',gone,{once:true});
+    })();
   })();
 
   /* ── この宙について（未登録の入口にだけ）── */
