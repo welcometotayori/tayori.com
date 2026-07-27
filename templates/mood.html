@@ -393,7 +393,9 @@
   .about-doc .about-close{display:block;margin:var(--s1) auto 0;min-height:var(--touch);
              padding:13px 20px;font-size:12px;letter-spacing:0.24em}
 
-  /* 放つ（登録済み）：宙の下辺に静かな一語。この一語が宙で唯一の主動作なので、
+  /* 書く（登録済み・2026-07-28 の 4-5 で「放つ」から改名＝不可逆の決定 castSend と
+     同名だったため。「放つ」は決定にだけ残す）：宙の下辺に静かな一語。
+     この一語が宙で唯一の主動作なので、
      ホームバーの下に潜らせない（vh はアドレスバーの下まで数える／--safe-b はその縁） */
   .cast-btn{position:fixed;left:50%;bottom:calc(7dvh + var(--safe-b));transform:translateX(-50%);
             z-index:11;min-height:var(--touch);color:var(--ink-2);font-size:15px;letter-spacing:0.5em;
@@ -1198,7 +1200,10 @@
   </div>
   {% else %}
   <div class="arrivals" id="arrivals" aria-live="polite"></div>
-  <button class="cast-btn ruled" id="castBtn" type="button">放つ</button>
+  {# 2026-07-28（4-5）：入口の語を「書く」に。書く画面を開く入口（ここ）と、実際に
+     送信する不可逆の決定（castSend）がどちらも「放つ」で、可逆な行為と不可逆な
+     行為が同じ名前だった。「放つ」は決定にだけ残す——書くのはいつでもやめられる。 #}
+  <button class="cast-btn ruled" id="castBtn" type="button">書く</button>
   <div class="cast" id="castPane" role="dialog" aria-modal="true"
        aria-label="tayori-たより- へ、ことばを放つ" aria-hidden="true">
     <div class="cast-inner">
