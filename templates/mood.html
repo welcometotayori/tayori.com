@@ -161,7 +161,9 @@
                     scale var(--in) var(--ease);
          will-change:transform,opacity,filter}
   .drift.v{writing-mode:vertical-rl;max-width:none;max-height:62vh}
-  .drift.on{opacity:.86;filter:blur(0);scale:1}
+  /* 落ち着いた濃さは投函からの経過日数で決まる（サーバが --drift-a を渡す。風化 τ=90日）。
+     渡らなければ従来どおり .86。サイズ（font-size）は近さ＝air_distance でインライン指定。 */
+  .drift.on{opacity:var(--drift-a,.86);filter:blur(0);scale:1}
   .drift.out{opacity:0;filter:blur(4px)}
   /* 押した瞬間、指の下で紙が明るくなる（transform は漂いが使っているので触らない） */
   .drift:active{opacity:1}
@@ -2173,11 +2175,15 @@
     return best;
   }
 
-  function spawnDrift(poem,color,vertical,id,steps){
+  function spawnDrift(poem,color,vertical,id,steps,scale,alpha){
     if(!poem) return;
     if(id)live.add(id);
     const el=document.createElement('div');
     el.className='drift'+(vertical?' v':'');
+    // 表示変数（サーバが決める）：大きさ＝近さ（air_distance）／濃さ＝古さ（経過日数）。
+    // トークン --t-word への倍率で受けるので、寸法体系（_sky_tokens）を壊さない。
+    if(scale){ el.style.fontSize='calc(var(--t-word) * '+scale+')'; }
+    if(alpha!=null){ el.style.setProperty('--drift-a',alpha); }
     const spot=pickSpot(poem,vertical);
     const c=tintOf(color);
     if(c){ el.style.color=c.text; el.style.textShadow='0 0 18px '+c.glow; }
@@ -2253,7 +2259,7 @@
     getTrace(pick.id).then(tr=>{
       // 待っているあいだに部屋を出た／定員が埋まった／同じことばが浮かんだ、を見直す
       if(!inRoom()||liveEls.size>=liveCap()||live.has(pick.id)||liveText.has(pick.poem))return;
-      spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,tr);
+      spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,tr,pick.scale,pick.alpha);
     });
   }
   // 反映の待ち時間を削る（v11.1）：取得は20秒ごと、流れ込みは4.5〜10秒ごと

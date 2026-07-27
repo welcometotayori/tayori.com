@@ -14,6 +14,7 @@ import ssl
 import gzip
 import zlib
 import json
+import math
 import time
 import html
 import random
@@ -927,6 +928,41 @@ def init_db():
                 PRIMARY KEY (reader_id, letter_id)
             )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_sky_seen_at ON sky_seen (seen_at)")
+
+        # ── 宙の選抜＝トランプの山（2026-07-27）──────────────────────────
+        # air_distance で「響く一通」を選ぶ重み付き抽選（v12「宙の共鳴」）をやめ、
+        # 見る人ごとに全手紙を決定論シャッフルした「山」をカーソルで上から消化する
+        # 公平な方式へ全面移行した。air_distance はもう選抜には効かない＝表示（サイズ）
+        # 専用に降格。詳しくは _build_sky / api_sky の傍らのコメント。
+        #
+        # 宙は部屋ごとに閉じている（B-6）ので、カーソルは (viewer, room) ごとに持つ。
+        # spec の viewer_cursor / letter_seen に対応（SQLite・列名は本プロジェクト規約）。
+        # dealt_day / dealt_ids は「同じ日に何度開いても同じ空」（JST朝4時境界）を
+        # 満たすための当日キャッシュ。既存の 4am 機構（_sky_day_start）に乗せる。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS sky_cursor (
+                viewer_id  TEXT    NOT NULL,
+                room_id    INTEGER NOT NULL,
+                cycle_seed INTEGER NOT NULL,
+                position   INTEGER NOT NULL DEFAULT 0,
+                dealt_day  TEXT,
+                dealt_ids  TEXT,
+                updated_at TEXT    NOT NULL,
+                PRIMARY KEY (viewer_id, room_id)
+            )""")
+        # 「この周でもう配ったことば」の控え。cycle_seed が変わる（＝山を一周した）と
+        # 主キーが自然に無効化されるので、周回時に DELETE は要らない。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS sky_cycle_seen (
+                viewer_id  TEXT    NOT NULL,
+                letter_id  TEXT    NOT NULL,
+                cycle_seed INTEGER NOT NULL,
+                seen_at    TEXT    NOT NULL,
+                PRIMARY KEY (viewer_id, letter_id, cycle_seed)
+            )""")
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sky_cycle_seen"
+            " ON sky_cycle_seen (viewer_id, cycle_seed)")
 
         # ── 宙v1仕様書 §2.2: いいな（灯）───────────────────────────────
         # 1人につき1つのことばへ1回だけ・永久。主キーで重複を物理的に封じ、
@@ -1911,6 +1947,8 @@ def api_account_delete():
                 ("DELETE FROM shelves WHERE owner_id=?", (me,)),
                 ("DELETE FROM sky_deliveries WHERE recipient=?", (me,)),
                 ("DELETE FROM sky_seen WHERE reader_id=?", (me,)),
+                ("DELETE FROM sky_cycle_seen WHERE viewer_id=?", (me,)),
+                ("DELETE FROM sky_cursor WHERE viewer_id=?", (me,)),
                 ("DELETE FROM sky_reaction WHERE reader_id=?", (me,)),
                 ("DELETE FROM sky_marks WHERE user_id=?", (me,)),
                 ("DELETE FROM unemptyable_trash WHERE user_id=?", (me,)),
@@ -3459,6 +3497,14 @@ _SKY_CACHE_SECONDS = 15
 # 宙の表示密度（§1.2【A】）：一度に漂わせる他者のことばの上限。世界の見え方を
 # 決める変数なので、デプロイ後も環境変数で詰められるようにしておく。
 _SKY_MAX = _env_num("TAYORI_SKY_MAX", 40, 1, 500, cast=int)
+# 宙の枠数（2026-07-27 カーソル方式）。N 枠のうち K 枠を新着（この周でまだ見ていない
+# いちばん新しいことば）に充て、残りをシャッフルの山から消化する。§7 の暫定値。
+_SKY_N = _env_num("TAYORI_SKY_N", 9, 1, 60, cast=int)
+_SKY_FRESH_K = _env_num("TAYORI_SKY_FRESH_K", 2, 0, 30, cast=int)
+# フォントサイズ＝air_distance（近い＝大きい）。--t-word への倍率で渡す（トークンを壊さない）。
+# 不透明度から距離を剥がし、サイズだけが距離を担う（spec §2.4 の核）。
+_SKY_SCALE_MIN = _env_num("TAYORI_SKY_SCALE_MIN", 0.82, 0.3, 3.0)
+_SKY_SCALE_MAX = _env_num("TAYORI_SKY_SCALE_MAX", 1.34, 0.3, 4.0)
 _sky_lock = threading.Lock()
 # pool: (公開dict, 季節, 封じた時刻0.0-24.0, 天気) の組。公開dict だけがクライアントへ出る。
 # index: 公開id(ハッシュ) → 手紙の実体。宙のことばに触れて印・棚へ載せるために、サーバ側だけが
@@ -3850,13 +3896,10 @@ def _sky_rebuild():
     return pool, index
 
 
-def _sky_score(entry, now_air, reso):
-    """v2 §3.3: weight = (1 - air_distance(閲覧者のいま, 手紙)) × 沈降 × 偶然(0.7–1.3)。
-    沈降で古いことばは深く沈むが、ゼロにはしない（まれに深いところから浮かぶ）。
-    母数が小さいうちは距離を reso で薄めて、ほぼ偶然だけにする（【F】）。
-    flare 中のことばは距離が縮む（v2追補 §5）＝古い言葉が、その数時間だけ拾われやすい。"""
-    air = air_distance(now_air, entry[1]) * _flare_air_factor(entry) * reso
-    return max(1e-6, 1.0 - air) * entry[3] * random.uniform(0.7, 1.3)
+# _sky_score（v2「宙の共鳴」の重み付き抽選）は 2026-07-27 に撤去した。
+# air_distance で「いまと響く一通」を選ぶのをやめ、公平なカーソル方式（_build_sky）に
+# 全面移行したため。air_distance は選抜から外れ、表示（サイズ）専用になった。
+# flare（_flare_state / _flare_air_factor）は辿り（§5）で今も air_distance を縮めるので残す。
 
 
 # ── 部屋の出入り（2026-07-26 B-4・B-5）─────────────────────────────
@@ -4118,16 +4161,173 @@ def _in_room(pool, room_id):
     return [e for e in pool if e[6] == room_id]
 
 
+# ══ 宙の選抜＝トランプの山（2026-07-27）════════════════════════════════
+# air_distance で選ぶのをやめ、決定論シャッフルの山をカーソルで消化する。
+#   ・スコアリング／重み付き抽選は使わない（公平に、全部がいつか出る）
+#   ・カーソルと「見た控え」は内部専用。回数・順位・「前に見た」を UI に出さない
+#   ・カーソルは (viewer, room) ごと（宙は部屋ごとに閉じている B-6）
+# entry のタプル位置：0=公開dict 1=空気 2=letter_id 4=user_id 6=room_id 8=経過日数
+
+
+def _new_cycle_seed():
+    """山を切り直すたびの種。62bit（SQLite INTEGER の正の範囲に収める）。"""
+    return random.getrandbits(62) or 1
+
+
+def _sky_get_cursor(db, viewer_id, room_id):
+    row = db.execute(
+        "SELECT cycle_seed, position, dealt_day, dealt_ids FROM sky_cursor"
+        " WHERE viewer_id=? AND room_id=?", (viewer_id, room_id)).fetchone()
+    if row:
+        return row["cycle_seed"], row["position"], row["dealt_day"], row["dealt_ids"]
+    seed = _new_cycle_seed()
+    db.execute(
+        "INSERT INTO sky_cursor (viewer_id, room_id, cycle_seed, position, updated_at)"
+        " VALUES (?,?,?,0,?)",
+        (viewer_id, room_id, seed, datetime.now().isoformat(timespec="seconds")))
+    return seed, 0, None, None
+
+
+def _sky_shuffled_ids(viewer_id, cycle_seed, pool):
+    """(viewer, cycle_seed) で決まる決定論シャッフルの山。DBに並びは保存しない
+    ——同じ種なら常に同じ順。"""
+    ids = [e[2] for e in pool]
+    ids.sort(key=lambda i: hashlib.blake2b(
+        f"{viewer_id}:{cycle_seed}:{i}".encode(), digest_size=8).digest())
+    return ids
+
+
+def _sky_cycle_seen_ids(db, viewer_id, cycle_seed):
+    return {r["letter_id"] for r in db.execute(
+        "SELECT letter_id FROM sky_cycle_seen WHERE viewer_id=? AND cycle_seed=?",
+        (viewer_id, cycle_seed))}
+
+
+def _sky_take_skipping(pool_ids, start, need, skip, seen):
+    """山を start から下へ、skip と seen を飛ばしながら need 枚とる。
+    返り値は (とれた id 群, カーソルの進み幅)。巡回レーンは必ず山を消費する
+    ——投函が増えても古いことばが餓死しないため（§1.2）。"""
+    out, pos = [], start
+    while pos < len(pool_ids) and len(out) < need:
+        lid = pool_ids[pos]
+        pos += 1
+        if lid in skip or lid in seen:
+            continue
+        out.append(lid)
+    return out, pos - start
+
+
+def _build_sky(db, viewer_id, room_id, pool):
+    """この部屋の山から、この viewer へ配る N 枚を決める（新着 K ＋ 巡回）。
+    同じ日（JST朝4時境界）に何度開いても同じ空になるよう、当日ぶんはカーソルに控える。"""
+    by_id = {e[2]: e for e in pool}
+    seed, position, dealt_day, dealt_ids = _sky_get_cursor(db, viewer_id, room_id)
+    day = _sky_day_start().date().isoformat()
+
+    # 当日キャッシュ：もう配ってあれば、今も宙にあるものだけ再掲（数え直さない・進めない）
+    if dealt_day == day and dealt_ids:
+        try:
+            kept = [by_id[i] for i in json.loads(dealt_ids) if i in by_id]
+        except (ValueError, TypeError):
+            kept = []
+        if kept:
+            return kept
+
+    # 部屋が枠より小さい／ちょうど：全部出す。山を切る意味が無いのでカーソルは動かさない
+    # （種を毎日振り直す消耗も、見えている控えを溜める意味も無い）。当日の安定だけ残す。
+    if len(pool) <= _SKY_N:
+        chosen = sorted(pool, key=lambda e: (e[8], e[2]))
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        with _WRITE_LOCK:
+            db.execute(
+                "UPDATE sky_cursor SET dealt_day=?, dealt_ids=?, updated_at=?"
+                " WHERE viewer_id=? AND room_id=?",
+                (day, json.dumps([e[2] for e in chosen]), now_iso,
+                 viewer_id, room_id))
+            db.commit()
+        return chosen
+
+    seen = _sky_cycle_seen_ids(db, viewer_id, seed)
+    # 新着レーン：この周でまだ見ていない、いちばん新しいことば（e[8]=経過日数 小さい順）
+    fresh = [e for e in sorted(pool, key=lambda e: (e[8], e[2]))
+             if e[2] not in seen][:_SKY_FRESH_K]
+    fresh_ids = {e[2] for e in fresh}
+
+    pool_ids = _sky_shuffled_ids(viewer_id, seed, pool)
+    need = _SKY_N - len(fresh)
+    cyc_ids, consumed = _sky_take_skipping(
+        pool_ids, position, need, skip=fresh_ids, seen=seen)
+    position += consumed
+
+    # 山を消化し切ってなお枠が埋まらない＝一周した。種を振り直して二周目へ（§1.1）。
+    # 再会はここで起きる：cycle_seed が変われば cycle_seen が自然に無効化される。
+    # （母数 > N は保証済みなので、これは「見尽くした」時にだけ立つ＝毎日は起きない。）
+    if position >= len(pool_ids) and (len(fresh) + len(cyc_ids)) < _SKY_N:
+        seed = _new_cycle_seed()
+        seen = set()
+        pool_ids = _sky_shuffled_ids(viewer_id, seed, pool)
+        more, position = _sky_take_skipping(
+            pool_ids, 0, need - len(cyc_ids),
+            skip=fresh_ids | set(cyc_ids), seen=seen)
+        cyc_ids += more
+
+    chosen = fresh + [by_id[i] for i in cyc_ids if i in by_id]
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with _WRITE_LOCK:
+        for e in chosen:
+            db.execute(
+                "INSERT OR IGNORE INTO sky_cycle_seen"
+                " (viewer_id, letter_id, cycle_seed, seen_at) VALUES (?,?,?,?)",
+                (viewer_id, e[2], seed, now_iso))
+        db.execute(
+            "UPDATE sky_cursor SET cycle_seed=?, position=?, dealt_day=?,"
+            " dealt_ids=?, updated_at=? WHERE viewer_id=? AND room_id=?",
+            (seed, position, day, json.dumps([e[2] for e in chosen]),
+             now_iso, viewer_id, room_id))
+        db.commit()
+    return chosen
+
+
+def _anon_deal(pool):
+    """未ログインの宙（ランディング）。カーソルも控えも持たない＝毎回ただ配る。
+    新着 K ＋ 残りは偶然。"""
+    if len(pool) <= _SKY_N:
+        return list(pool)
+    fresh = sorted(pool, key=lambda e: (e[8], e[2]))[:_SKY_FRESH_K]
+    fresh_ids = {e[2] for e in fresh}
+    rest = [e for e in pool if e[2] not in fresh_ids]
+    random.shuffle(rest)
+    return fresh + rest[:_SKY_N - len(fresh)]
+
+
+def _sky_word(entry, now_air):
+    """公開dict に表示変数を足して返す。air_distance はここ（サイズ）だけに効く。
+      ・size … air_distance（近い＝大きい）を log 圧縮した --t-word 倍率
+      ・alpha … 投函からの経過日数の風化（τ=90日＝季節1周）。距離とは別テンポ（§2.4）
+    サイズ＝距離／濃さ＝時間に分けるのは、両方が距離由来だと効果が乗算になり、
+    遠いことばが薄い残像ですら無くなるため。"""
+    w = dict(entry[0])
+    d = max(0.0, min(1.0, air_distance(now_air, entry[1])))       # 0=近い 1=遠い
+    w["scale"] = round(
+        _SKY_SCALE_MIN + (_SKY_SCALE_MAX - _SKY_SCALE_MIN)
+        * math.log1p(9 * (1 - d)) / math.log(10), 3)
+    age = max(0.0, entry[8])
+    w["alpha"] = round(0.32 + 0.68 * math.exp(-age / 90.0), 3)
+    return w
+
+
 @app.route("/api/sky")
 def api_sky():
     room_id, err = _room_scope()
     if err:
         return err
     pool = _in_room(_sky_pool(), room_id)
-    # 読み手ごとの除外（宙v1 §3.2）。共有キャッシュには手を入れず、リクエスト時に間引く。
-    #   ・自分が書いた手紙 …… 永久
-    #   ・棚に入れた手紙 ……… 永久（棚から外せばまた浮かびうる＝現在の棚で判定）
-    #   ・今日もう見た手紙 …… その日だけ（JST朝4時に効力が切れる）
+    # 読み手ごとの「永久の」除外。これは山（選抜）以前の話で、そもそも宙に出してはいけない
+    # ことば——カーソル方式でも常に間引く。共有キャッシュには手を入れず、リクエスト時に。
+    #   ・自分が書いた手紙 …… 永久（自分の空に自分は出ない）
+    #   ・棚に入れた手紙 ……… 永久（棚から外せばまた山に戻る＝現在の棚で判定）
+    # 「今日もう見た」の一時除外はカーソル方式では持たない：見たことばは cycle_seen に
+    # 記録され、山を一周し切るまで再会しない（2026-07-27 の方針転換）。
     reader = session.get("uid")
     if reader and pool:
         db = get_db()
@@ -4137,25 +4337,20 @@ def api_sky():
             "SELECT d.letter_id AS letter_id FROM saved_words s"
             " JOIN sky_deliveries d ON d.id=s.ref_id"
             " WHERE s.user_id=? AND s.src='sky'", (reader,))}
-        excl |= {r["letter_id"] for r in db.execute(
-            "SELECT letter_id FROM sky_seen WHERE reader_id=? AND seen_at>=?",
-            (reader, _sky_day_start().isoformat(timespec="seconds")))}
         # 漂いから直接棚へ載せた分（src='drift'）は公開idで控えているので、そのまま突き合わせる
         excl_pub = {r["ref_id"] for r in db.execute(
             "SELECT ref_id FROM saved_words WHERE user_id=? AND src='drift'", (reader,))}
         pool = [e for e in pool if e[2] not in excl and e[0]["id"] not in excl_pub]
+
     now_air = _viewer_air()
-    reso = min(1.0, len(pool) / float(_SKY_RESONANCE_N))
-    if len(pool) > _SKY_MAX:
-        # スコアを重みにした非復元抽選（Efraimidis–Spirakis）。上位固定にしないので
-        # 「今日と響き合う一通」が毎回必ず来るわけではない＝偶然性は死なない。
-        keyed = sorted(pool,
-                       key=lambda e: random.random() ** (1.0 / _sky_score(e, now_air, reso)),
-                       reverse=True)[:_SKY_MAX]
-        words = [e[0] for e in keyed]
+    # 選抜（どの手紙を出すか）は air_distance を使わない公平なカーソル方式。
+    # air_distance は _sky_word の中で表示（サイズ）にだけ効く。
+    if reader:
+        chosen = _build_sky(get_db(), reader, room_id, pool)
     else:
-        words = [e[0] for e in pool]
-    random.shuffle(words)   # 並び順からは何も推測させない
+        chosen = _anon_deal(pool)
+    words = [_sky_word(e, now_air) for e in chosen]
+    random.shuffle(words)   # 並び順からは何も推測させない（新着を画面上で固めない）
     return jsonify(words=words)
 
 
@@ -7030,11 +7225,14 @@ def api_admin_delete_user(uid_):
             db.execute(f"DELETE FROM thread      WHERE letter_id IN {_sub}", (uid_,))
             db.execute(f"DELETE FROM letter_tags WHERE letter_id IN {_sub}", (uid_,))
             db.execute(f"DELETE FROM sky_seen     WHERE letter_id IN {_sub}", (uid_,))
+            db.execute(f"DELETE FROM sky_cycle_seen WHERE letter_id IN {_sub}", (uid_,))
             db.execute(f"DELETE FROM sky_reaction WHERE letter_id IN {_sub}", (uid_,))
             db.execute(f"DELETE FROM sky_marks    WHERE letter_id IN {_sub}", (uid_,))
             db.execute(f"DELETE FROM sky_deliveries WHERE letter_id IN {_sub}", (uid_,))
             # この人が「読み手」として残した痕跡
             db.execute("DELETE FROM sky_seen      WHERE reader_id=?", (uid_,))
+            db.execute("DELETE FROM sky_cycle_seen WHERE viewer_id=?", (uid_,))
+            db.execute("DELETE FROM sky_cursor    WHERE viewer_id=?", (uid_,))
             db.execute("DELETE FROM sky_reaction  WHERE reader_id=?", (uid_,))
             db.execute("DELETE FROM sky_marks     WHERE user_id=?",   (uid_,))
             db.execute("DELETE FROM sky_deliveries WHERE recipient=?", (uid_,))
