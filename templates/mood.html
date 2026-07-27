@@ -658,9 +658,14 @@
   @keyframes sealPulse{0%,100%{opacity:.55}50%{opacity:1}}
   @media (prefers-reduced-motion: reduce){ .arrival .seal{animation:none} }
 
-  /* 相談窓口のしおり（宙の闇の中でも読める、静かな紙片。宙で唯一、縁のある面） */
+  /* 相談窓口のしおり（宙の闇の中でも読める、静かな紙片。宙で唯一、縁のある面）。
+     2026-07-28（4-1）：紙の中に糸の色をひと刷け（暖の washだけ・文字は紙の白のまま）。
+     about の「書いたあなたにだけ、そっとお渡しします」に当たるのはこの紙のほう
+     なので、常時の右下より一段だけ重い：縁・洗い・墨色の三つが揃うのはここだけ。 */
   .care-note{position:fixed;left:50%;bottom:calc(8dvh + var(--safe-b));transform:translate(-50%,8px);z-index:13;
-             max-width:min(88vw,420px);padding:var(--s3) 22px;background:rgba(15,15,22,.94);
+             max-width:min(88vw,420px);padding:var(--s3) 22px;
+             background:linear-gradient(90deg,rgba(179,143,111,.08),rgba(179,143,111,.03) 40%,rgba(179,143,111,0)),
+                        rgba(15,15,22,.96);
              border-left:2px solid var(--thread);border-radius:var(--edge);
              box-shadow:0 0 0 1px rgba(250,248,243,.14);
              font-size:12.5px;line-height:2.2;letter-spacing:0.06em;color:var(--ink-1);
@@ -918,14 +923,22 @@
     .room{transition:opacity .3s ease,color .4s ease}
   }
 
-  /* 相談窓口の常時導線（宙v1 §12）。宙の右下に、闇より一段だけ明るく置く */
+  /* 相談窓口の常時導線（宙v1 §12）。宙の右下に、闇より一段だけ明るく置く。
+     2026-07-28（4-1）：墨を --ink-care（暖）に。「放つ」「新しいジャンルを作る」と
+     同じ白い墨だと、装飾と見分けがつかない——しんどい状態の人ほど薄い文字は
+     読み飛ばす。大きくも太くもしない：目立たせるのではなく、種類が違うと分かる
+     ようにする（「そっと」と「見えない」は違う）。薬箱がそこにある、程度の重さ。 */
+  /* z は 12：z9 のままだと .cast-btn（z11）の霞（::before 300×180px）がこの文字の
+     上に描かれ、375px 幅では「ひとりで」の四字が文字どおり塗り消されていた
+     （2026-07-28 実測。elementFromPoint は care-link を返す＝触れるのに読めない状態）。
+     書く柱（.cast z12）は DOM で後ろにいるので、柱が立てば今までどおりこの上に被さる。 */
   .care-link{position:fixed;right:calc(20px + var(--safe-r));bottom:calc(22px + var(--safe-b));
-             z-index:9;min-height:var(--touch);display:inline-flex;align-items:center;
-             font-size:11.5px;letter-spacing:0.18em;color:var(--ink-4);
+             z-index:12;min-height:var(--touch);display:inline-flex;align-items:center;
+             font-size:11.5px;letter-spacing:0.18em;color:var(--ink-care);
              text-decoration:none;border-bottom:1px solid var(--rule);
              padding:10px 2px;text-shadow:0 0 12px rgba(8,8,13,.9);
              transition:color .22s var(--ease),opacity .22s var(--ease)}
-  .care-link:hover{color:var(--ink-2)}
+  .care-link:hover{color:color-mix(in srgb,var(--ink-care) 55%,var(--chalk))}
   .care-link:active{opacity:.62}
 
   /* 灯がすでにともっていることば（宙v1 §4.1）。ボタンではなく、状態の一文 */
