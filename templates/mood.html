@@ -2962,6 +2962,19 @@
     try{ pre.setEnd(r.endContainer,r.endOffset); }catch(e){ return null; }
     return pre.toString().length;
   }
+  // 選んでいる範囲を字数で返す [はじめ, おわり]。caretIndex と同じ数え方（Range.toString は
+  // リテラルの改行もそのまま数えるので、textContent の添字とずれない）。
+  function selSpan(){
+    const sel=window.getSelection();
+    if(!sel||!sel.rangeCount)return null;
+    const r=sel.getRangeAt(0);
+    if(!ta.contains(r.startContainer)||!ta.contains(r.endContainer))return null;
+    const a=document.createRange(),b=document.createRange();
+    a.selectNodeContents(ta);b.selectNodeContents(ta);
+    try{ a.setEnd(r.startContainer,r.startOffset);b.setEnd(r.endContainer,r.endOffset); }
+    catch(e){ return null; }
+    return [a.toString().length,b.toString().length];
+  }
   // 本文の pos 字目 → [テキストノード, その中の位置]（変換中はノードが分かれていることがある）
   function pointAt(pos){
     const w=document.createTreeWalker(ta,NodeFilter.SHOW_TEXT);
@@ -3003,8 +3016,20 @@
       return box.right-(c+1)*cw-origin.left;
     };
     let x,y;
+    const text=ta.textContent;
     if(n===0){                       // 空の便箋：右端の列の頭に置く（罫は4本立っている）
       x=x0+w-cw; y=y0;
+    }else if(i>0&&text[i-1]==='\n'){
+      /* 改行の直後＝新しい列の頭（2026-07-27）。この行にはまだ一字も無いので、
+         測れる字が無い。改行そのものの矩形は「終わらせた行」の列に高さ0で出る
+         （実測）ので、その列からひとつ左へ送った所が、いま筆先の立つ場所。
+         連続した改行でも、直前の一つを見れば足りる——二つ目の改行の矩形は、
+         一つ目が作った空の列に出るため（実測：0列目→1列目）。
+         この枝が無いと、末尾の分岐が改行の矩形を「最後の字」として測り、
+         筆先が前の列に居残ったまま動かない。 */
+      const r=charRect(i-1);
+      if(!r){vcaret.style.display='none';return;}
+      x=colLeft(r)-cw; y=y0;
     }else if(i<n){                   // 途中：これから書かれる字の頭
       const r=charRect(i);
       if(!r){vcaret.style.display='none';return;}
@@ -3038,35 +3063,123 @@
   document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)drawCaret();});
   addEventListener('resize',()=>{if(document.activeElement===ta)drawCaret();});
 
-  /* ── 本文の取り出し・上限・改行の作法（v16：contenteditable）───────
-     Enterは改行にしない（縦書きの4列80字はひと続きの流れなので、段落分けは主題にない）。
+  /* ── 本文の取り出し・上限・改行の作法（v16：contenteditable／2026-07-27 改行を通す）──
+     Enter で行が変わるようにした。ここには落とし穴が二つあって、両方踏まないと直らない。
+
+     ①【execCommand は改行を飲む】`document.execCommand('insertText',false,'\n')` は
+       リテラルの改行を入れず、`<div><br></div>` という**箱**に化ける。そして
+       `textContent` は <br> を数えないので、画面には行が変わって見えるのに
+       取り出した本文からは改行が消えている——「改行したのに反映されない」の正体。
+       （実測：'あ'+execCommand('\n')+'い' → textContent は "あい"／長さ2）
+       なので改行は execCommand に頼らず、**リテラルの改行文字のテキストノード**を
+       自分で差す（insertPlain）。便箋は white-space:pre-wrap なので、それだけで行が変わる。
+       本文がただの文字列のままなら、字数・筆先・打鍵の記録の全部が今までの理屈で動く。
+     ②【紙は4列しかない】便箋は 20字×4列で寸法固定・overflow:hidden。改行は列を送るので、
+       字数が80に届かなくても列が尽きる（実測：3字×5行＝19字で5列目が紙の外に出て消えた）。
+       だから上限は字数ではなく**列**で見る（fitText）。
+
      IME変換中（isComposing）はEnterが変換の確定に使われるので横取りしない。
-     貼り付けは書式を持ち込まずプレーンテキストだけ差し込む。 */
+     貼り付けは書式を持ち込まずプレーンテキストだけ差し込む——改行は保つ（①と同じ理由で
+     execCommand は使えないので、こちらも insertPlain を通す）。 */
   let composing=false;
   ta.addEventListener('compositionstart',()=>{composing=true;});
-  ta.addEventListener('compositionend',()=>{composing=false;enforceLimit();});
+  ta.addEventListener('compositionend',()=>{composing=false;enforceLimit();syncTail();});
+
+  /* ── 末尾の改行の番人（2026-07-27）──────────────────────────
+     ③【末尾の改行は食われる】本文の最後がリテラルの改行だと、次の一字を打った瞬間に
+       編集エンジンがその改行を落とす（実測：Enter のあと "forget\n" → "travel" と
+       打つと "forgettravel" になり、改行が消える）。行末の空白は畳んでよい、という
+       HTML編集の作法がそのまま効いてしまうため。
+     防ぎ方は、改行を「末尾」でなくすこと——本文が改行で終わっている間だけ、
+     いちばん後ろに <br> をひとつ立てておく。<br> は textContent に数えられないので
+     本文の値は何も変わらないまま、改行だけが守られる（実測：番人つきなら
+     "forget\n" → 打っても "forget\ntravel" のまま残る）。
+     字が続いたら番人は退く（役目は終わり）。 */
+  function syncTail(){
+    const ends=ta.textContent.slice(-1)==='\n';
+    const last=ta.lastChild, hasBr=!!last&&last.nodeName==='BR';
+    if(ends&&!hasBr)ta.appendChild(document.createElement('br'));
+    else if(!ends&&hasBr)ta.removeChild(last);
+  }
+  /* キャレットの所へ、素の文字をそのまま差す。DOMを直に触るので input は飛ばない
+     ＝呼んだ側が afterEdit() を回すこと。 */
+  function insertPlain(s){
+    const sel=window.getSelection();
+    if(!sel||!sel.rangeCount)return;
+    const r=sel.getRangeAt(0);
+    if(!ta.contains(r.startContainer))return;
+    r.deleteContents();
+    const n=document.createTextNode(s);
+    r.insertNode(n);
+    // 差した字の後ろへ筆先を送る
+    const a=document.createRange();a.setStart(n,s.length);a.collapse(true);
+    sel.removeAllRanges();sel.addRange(a);
+    // 直前・直後のテキストノードと繋いでおく（節が増えると測りが散らかる）
+    ta.normalize();
+  }
   ta.addEventListener('keydown',e=>{
-    if(e.key==='Enter'&&!e.isComposing&&!composing)e.preventDefault();
+    if(e.key!=='Enter'||e.isComposing||composing)return;
+    e.preventDefault();
+    /* 入れてみたら紙に収まるか、先に確かめる。ここで見ずに差してから enforceLimit に
+       任せると、はみ出した分＝**書いた本人の字の末尾**が黙って落ちる。
+       紙が尽きている時は、何も起きないほうがいい（字は消えない）。 */
+    const t=ta.textContent, sp=selSpan();
+    const a=sp?sp[0]:t.length, b=sp?sp[1]:t.length;
+    const next=t.slice(0,a)+'\n'+t.slice(b);
+    if(fitText(next).len<next.length)return;   // 紙に次の列が無い
+    insertPlain('\n');
+    afterEdit();drawCaret();
   });
   ta.addEventListener('paste',e=>{
     e.preventDefault();
-    const text=(e.clipboardData||window.clipboardData).getData('text').replace(/[\r\n]+/g,'');
-    document.execCommand('insertText',false,text);
+    const text=(e.clipboardData||window.clipboardData).getData('text')
+                 .replace(/\r\n?/g,'\n').replace(/[\u2028\u2029]/g,'\n');
+    insertPlain(text);
+    afterEdit();drawCaret();
   });
   function normalizeEmpty(){
     // 変換中は触らない：IMEが握っているノードを消すと、変換そのものが壊れる（v17）
     if(composing)return;
     if(ta.textContent==='')ta.innerHTML='';   // <br>だけ残ると :empty が成立しない
   }
+  /* ── 紙の容れる分（2026-07-27）───────────────────────────────
+     便箋は 20字 × 4列。改行を通したので、上限を字数だけで見ると紙からはみ出す
+     （実測：3字×5行＝19字で、5列目が紙の左端の外に出て overflow:hidden に消えた）。
+     数えるのは**列**。返すのは
+       len   … 紙に収まる先頭からの長さ（ここで切る）
+       slots … いま紙をどれだけ使ったか（(列-1)*20 + その列の字数）
+     改行はひとつで列をひとつ送る。ただし列がちょうど埋まっている時は、
+     折返しがすでに列を送っているので二重には送らない——これは決めごとではなく
+     ブラウザの実測（20字＋改行＋字 の字は2列目に立つ／3列目ではない）に合わせてある。
+     字送りは書記素ではなくコードポイントで進める（サロゲートペアを割らない）。 */
+  const CH_PER_COL=20, MAX_COL=4;
+  function fitText(t){
+    let col=0,run=0,i=0;
+    for(const ch of t){
+      if(ch==='\n'){
+        if(col+1>=MAX_COL)return {len:i,slots:col*CH_PER_COL+run};   // 次の列が紙の外
+        col++;run=0;
+      }else{
+        if(run>=CH_PER_COL){
+          if(col+1>=MAX_COL)return {len:i,slots:col*CH_PER_COL+run};
+          col++;run=0;
+        }
+        run++;
+      }
+      i+=ch.length;
+    }
+    return {len:i,slots:col*CH_PER_COL+run};
+  }
   function enforceLimit(){
     const t=ta.textContent;
-    if(t.length<=80)return;
+    const cap=fitText(t).len;
+    if(t.length<=cap)return;
     // textContent を入れ替えると選択は必ず失われるので、字数で覚えて字数で戻す。
     // v16は「末尾にいるか」をノード比較で見ていたが、キャレットが要素境界にいる時
     // （＝末尾で書いている時そのもの）は必ず外れ、カーソルが先頭へ飛んでいた。
     const i=caretIndex();
-    ta.textContent=t.slice(0,80);
-    const p=pointAt(Math.min(i===null?80:i,80));
+    ta.textContent=t.slice(0,cap);
+    const p=pointAt(Math.min(i===null?cap:i,cap));
     if(p){
       const r=document.createRange();r.setStart(p[0],p[1]);r.collapse(true);
       const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
@@ -3077,12 +3190,17 @@
   /* ── 書いた分だけ、画面が応える（Apple §1・§16）───────────────────
      ・一字も無いあいだ「放つ」は押せない。以前は常に押せたが、押しても何も起きなかった
        （＝死んだ一押し。壊れているのと見分けがつかない）。姿は .cast-send:disabled が既に持つ。
-     ・80字で打鍵は静かに止まる。止まる理由を、字数の色だけで伝える。 */
+     ・紙が尽きたら打鍵は静かに止まる。止まる理由を、字数の色だけで伝える。
+       数えるのは「紙をどれだけ使ったか」（slots）で、字数そのものではない（2026-07-27）。
+       改行を通したので、この二つは一致しなくなった——改行はその列の残りを畳んで
+       次の列へ送るので、19字でも紙が尽きることがある。止めるのは紙のほうなのだから、
+       出す数も紙のほうに合わせる。改行を使わなければ slots は字数と同じ値なので、
+       これまでの見え方は何も変わらない。 */
   function paintCast(){
-    const n=ta.textContent.length;
+    const n=fitText(ta.textContent).slots, cap=CH_PER_COL*MAX_COL;
     cnt.textContent=n;
-    cntBox.classList.toggle('near',n>=68&&n<80);
-    cntBox.classList.toggle('full',n>=80);
+    cntBox.classList.toggle('near',n>=cap-12&&n<cap);
+    cntBox.classList.toggle('full',n>=cap);
     // ことばがあり、置き場所も決まって初めて放てる（サーバも部屋を必須にしている）
     send.disabled=!ta.textContent.trim()||!castRoom;
   }
@@ -3115,12 +3233,16 @@
     for(const ch of [...cut].reverse()){trace.push([first,'d',ch]);first=0;}
     for(const ch of add){trace.push([first,'i',ch]);first=0;}
   }
-  ta.addEventListener('input',()=>{
+  /* 本文が変わったあとに、いつも同じ順で回すもの。打鍵（input）からも、
+     自分でDOMへ差した時（Enter・貼り付け＝input が飛ばない）からも同じ道を通す。 */
+  function afterEdit(){
     normalizeEmpty();
     if(!composing)enforceLimit();
+    syncTail();        // enforceLimit は textContent を入れ替える＝番人ごと消えるので、必ずその後
     paintCast();
     recTrace();
-  });
+  }
+  ta.addEventListener('input',afterEdit);
   /* 柱を開いた／閉じたときのフォーカス。閉じたら「放つ」へ返す（来た道から出る／Apple §7）。
      書きかけの本文は消さない——閉じるのは取り消しではない（Apple §2 forgiveness）。 */
   function open(){release();                          // 受け止めていたことばは、そっと放す
