@@ -498,7 +498,15 @@
               var(--rule-faint) calc(2.2em - 1px),var(--rule-faint) 2.2em)}
   /* .cast-dir の単独スタイルは 2026-07-28 に削除：向きの切り替えは「任意の三つ」の行
      （.cast-opt-row）へ移り、姿もあの行の button と同じになった。旧指定は .ruled の
-     border-bottom 前提（color だけ上書き）だったので、.ruled を外した今は残すと死に体。 */
+     border-bottom 前提（color だけ上書き）だったので、.ruled を外した今は残すと死に体。
+     同日 4-6：中身を状態表示（罫のミニアイコン＋「縦／横」）にしたぶんの器だけ持つ。
+     横は同じ罫が倒れた姿＝rotate（別のアイコンを描かない。物は一つ、向きが変わるだけ）。 */
+  .cast-dir{display:inline-flex;align-items:center;gap:6px}
+  .cast-dir .dico{width:12px;height:12px;flex:none;fill:none;stroke:currentColor;
+                  stroke-width:1;stroke-linecap:round;
+                  transition:transform .3s var(--ease)}
+  .cast-dir.h .dico{transform:rotate(90deg)}
+  @media (prefers-reduced-motion: reduce){ .cast-dir .dico{transition:none} }
   /* :empty が成立するのは中身が本当に空（<br>も残っていない）時だけ。JS側で保証する */
   .cast .ctext:empty:before{content:attr(data-placeholder);color:var(--ink-4)}
   /* 自前カーソル：列幅いっぱい（＝横書きの行と同じ背丈）の横棒。
@@ -1233,8 +1241,9 @@
         <button type="button" data-opt="castOptColor" aria-expanded="false"
                 aria-controls="castOptColor">色をえらぶ</button>
         {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
-           向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。 #}
-        <button class="cast-dir" id="castDir" type="button" aria-pressed="false">横書きにする</button>
+           向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。
+           2026-07-28（4-6）：中身は paintDir が描く（罫のミニアイコン＋現在地「縦／横」）。 #}
+        <button class="cast-dir" id="castDir" type="button" aria-pressed="false"></button>
       </div>
 
       <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚・書架・辿るでだけ立つ -->
@@ -3387,7 +3396,14 @@
   try{ horiz=localStorage.getItem(DIR_KEY)==='h'; }catch(_){}
   function paintDir(){
     ta.classList.toggle('h',horiz);
-    dirBtn.textContent=horiz?'縦書きにする':'横書きにする';
+    /* 2026-07-28（4-6）：ラベルを「次の動作」から「現在地」に。「横書きにする」だと
+       押すまで今どちらなのか分からなかった。便箋の縦罫4本のメタファーを小さく流用し、
+       罫のミニアイコン＋「縦／横」の状態表示にする（横は同じ罫が倒れた姿＝rotate）。
+       何が起きるかは aria-label が言う（見た目は状態・読み上げは行為）。 */
+    dirBtn.classList.toggle('h',horiz);
+    dirBtn.innerHTML='<svg class="dico" viewBox="0 0 12 12" aria-hidden="true">'
+      +'<path d="M2.5 1.5v9M6 1.5v9M9.5 1.5v9"/></svg>'+(horiz?'横':'縦');
+    dirBtn.setAttribute('aria-label',horiz?'いま横書き。押すと縦書きで書く':'いま縦書き。押すと横書きで書く');
     dirBtn.setAttribute('aria-pressed',horiz?'true':'false');
     // 自前カーソルは縦書きのための細工。横書きではネイティブに返す
     vcaret.style.display='none';
