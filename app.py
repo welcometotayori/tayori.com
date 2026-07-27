@@ -3263,7 +3263,8 @@ def api_map_moods():
     # ?until=<ISO日時> は /api/map と同じ「あの日の地図」用（開封状態も当時の姿で判定）。
     until = (request.args.get("until") or "").strip()[:32] or None
     rows = get_db().execute(
-        """SELECT area_name, area_lat, area_lng, opened, opened_at, sent_date, seal_color
+        """SELECT area_name, area_lat, area_lng, opened, opened_at, sent_date, seal_color,
+                  COALESCE(seal_color_chosen,1) AS seal_color_chosen
            FROM letters
            WHERE user_id=? AND area_name IS NOT NULL
              AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
@@ -3280,9 +3281,13 @@ def api_map_moods():
         a["lats"].append(r["area_lat"])
         a["lngs"].append(r["area_lng"])
         if opened:
-            m = _mood_index(r["seal_color"])
-            if m is not None:
-                a["moods"].append(_MOOD_SLUGS[m])
+            # 選ばれた色だけが気分として立つ（2026-07-28）。自分の地図でも同じ——
+            # 触られなかった既定色を「あの日の気分」として見せない。手紙そのものは
+            # 位置と封の気配（lats/lngs/sealed）には残る＝消えるのは色の主張だけ。
+            if r["seal_color_chosen"]:
+                m = _mood_index(r["seal_color"])
+                if m is not None:
+                    a["moods"].append(_MOOD_SLUGS[m])
         else:
             a["sealed"] = True
     out = []
@@ -4626,6 +4631,13 @@ def _refresh_mood_grid(db):
         "SELECT grid_id, seal_color, sent_date, area_lat, area_lng FROM letters "
         "WHERE grid_id IS NOT NULL AND COALESCE(demo_mode,0)=0 "
         "AND COALESCE(excluded_from_aggregate,0)=0 "
+        # 選ばれた色だけを集計する（2026-07-28）。集計は「この土地の人はいまこんな気分」
+        # という主張であり、触られなかった既定色が母数の大半を占める土地では文字通り
+        # 嘘の表示になる。日次で作り直すので既存行はこの条件だけで自動的に治る。
+        # 注意：閾値(MOOD_GRID_THRESHOLD=10)は k-匿名性の担保なので、これで地図が
+        # 疎になっても下げないこと。「無色」を8色目にもしないこと（データの不在は
+        # データ点ではない）。
+        "AND COALESCE(seal_color_chosen,1)=1 "
         "AND seal_color IS NOT NULL AND seal_color<>''").fetchall()
     for r in rows:
         if r["area_lat"] is None or r["area_lng"] is None:
