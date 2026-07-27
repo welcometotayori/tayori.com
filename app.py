@@ -1479,9 +1479,10 @@ def index():
     if u and _row_flag(u, "is_admin"):
         return redirect("/admin.welcometotayori")
     # ログイン済みの人は今まで通り、開くとまず宙が広がる。
-    # ?start=1 は宙の「はじめる」から来た人（ログイン/登録画面）、?app=1 は宙から
-    # 「棚」へ降りてきた人（帰還したことばを開く・設定などの機能画面）。
-    if u and not (request.args.get("start") or request.args.get("app")):
+    # ?start=1 は宙の「はじめる」から来た人（ログイン/登録画面）。
+    # フェーズ5（2026-07-28）：?app=1（旧「手紙」アプリ＝投函・開封・年表・設定）は廃止。
+    # index.html は門だけになった。開封は /open/<id> → /mood、設定は /settings、棚は /me。
+    if u and not request.args.get("start"):
         return redirect("/mood")
     # 未ログイン（＝検索クローラーもここに入る）には、索引できる「顔」＝門(index.html)を返す。
     # 宙そのもの(/mood)は noindex で中身を検索に出さない方針なので、指名検索（たより/tayori）
@@ -4784,15 +4785,13 @@ def api_create_letter():
         poem = ""
     # 題（v2.2 §2.1）：10字以内・任意。無題のまま放ってよい
     title = _clean_title(data.get("title"))
-    photo = data.get("photo")
-    voice = data.get("voice")
-    if not poem and not photo and not voice:
-        return jsonify(error="写真かことば、声をひとつ。"), 400
-
-    if photo and len(photo) > 4_000_000:
-        return jsonify(error="写真が大きすぎます。もう少し小さい画像でお願いします。"), 413
-    if voice and len(voice) > 5_500_000:
-        return jsonify(error="音声が長すぎます。短く録り直してください。"), 413
+    # フェーズ5（2026-07-28）：photo / voice の受け口を閉じた。手紙モードの遺物で、
+    # 宙に写真や声は流れない（決定済み事項）。クライアントが送ってきても受け取らない。
+    # letters の列は DROP しない（SQLite の制約と過去データ互換のため、列だけ残す）。
+    photo = None
+    voice = None
+    if not poem:
+        return jsonify(error="ことばをひとつ。"), 400
 
     # 部屋（B-8）。放つときは必ずどこかの部屋を選ぶ——部屋の外から放つ経路は無い。
     # アーカイブ部屋（archived=1）は旧データを置くだけの場所なので、新しいことばは入らない。
