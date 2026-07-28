@@ -201,10 +201,10 @@
   .hold-sep{height:1px;background:var(--rule-faint);margin:6px 0 2px}
   .hold-act.sub{color:var(--ink-3)}
 
-  /* ── 棚の絵。宙でも読む柱でも辿りでも同じ姿（Apple §16 familiarity）──
+  /* ── 棚の絵。宙でも読む柱でも同じ姿（Apple §16 familiarity）──
      紙片が棚板へ降りて収まる。16px枠なのは、7pxでは形が目に入らないため。
      収まりの合図は **その行自身の .on** だけを見る。この世界では .on を
-     「面がひらいている」意味でも使う（.read.on / .trace.on / .hold.on）ので、
+     「面がひらいている」意味でも使う（.read.on / .hold.on）ので、
      子孫セレクタ（.on .ic-…）にすると、柱をひらいただけで収まって見える。 */
   .ic{position:relative;width:16px;height:16px;flex:0 0 16px}
   .ic-shelf .b{position:absolute;left:1px;right:1px;bottom:3px;height:1px;background:var(--rule-act)}
@@ -439,7 +439,7 @@
   /* 柱が画面より高くなった時は、切り落とさずに送れるようにする（v2.2）。
      align-items:center のまま溢れると上端が掴めなくなる（中央寄せの古い穴）ので、
      上端そろえ＋.cast-inner の margin:auto で中央に置く——余白がある時は中央、
-     足りない時は上から素直に伸びる。辿る（.trace）と同じ作法。 */
+     足りない時は上から素直に伸びる。 */
   .cast{position:fixed;inset:0;z-index:12;display:flex;align-items:flex-start;justify-content:center;
         overflow-y:auto;overscroll-behavior:contain;
         background:rgba(8,8,13,.55);opacity:0;pointer-events:none;visibility:hidden;
@@ -769,7 +769,7 @@
   /* 天灯の野（v2追補 §3・§4）は 2026-07-26 に撤去した。
      過去のことばを「野」として一望し、拡大縮小で時間を行き来する眺めは、
      宙のイメージと合わなかった（Kosei判断）。宙にあるのは、いま漂っていることばと、
-     部屋の名前だけ。過去のことばへは「辿る」（trace）から会いにいく。 */
+     部屋の名前だけ。過去のことばへ会いにいく道は持たない（2026-07-28、辿るごと畳んだ）。 */
   .drift-layer,.room-layer,.cast-btn,.arrivals{transition:opacity .9s var(--ease,ease)}
 
   /* ══ 部屋（2026-07-26 B-7／2026-07-27 円配置とズーム）════════════
@@ -967,73 +967,11 @@
 
   /* 灯がすでにともっていることば（宙v1 §4.1）。ボタンではなく、状態の一文 */
 
-  /* ══ 辿る（v2 §4）＝似た空気を追う面 ══════════════════════════
-     一覧だが、数は出さない・ページ番号も出さない。「もっと」だけ。
-     暗い宙の上に、ことばが色ごと縦に連なる。 */
-  .trace{position:fixed;inset:0;z-index:60;background:rgba(8,8,13,.9);display:none;
-         overflow-y:auto;overscroll-behavior:contain;
-         -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
-  .trace.on{display:block}
-  /* 上は「とじる」の帯ぶんだけ空ける（出口が本文の上に乗らないように） */
-  .trace-inner{max-width:560px;margin:0 auto;
-               padding:calc(11vh + var(--safe-t)) calc(24px + var(--safe-r))
-                       calc(14vh + var(--safe-b)) calc(24px + var(--safe-l));
-               display:flex;flex-direction:column;gap:6px}
-  .trace-lead{margin:0 0 14px;font-size:var(--t-meta,12px);letter-spacing:0.2em;
-              color:var(--ink-3);word-break:keep-all}
-  /* いま立っていることば（辿りの現在地）。罫で下を締める */
-  .trace-here{padding:0 0 18px;margin-bottom:14px;border-bottom:1px solid var(--rule)}
-  .trace-here-poem{font-size:16.5px;line-height:2.3;letter-spacing:0.05em;color:var(--ink-1);
-                   white-space:pre-wrap;word-break:break-word}
-  .trace-acts{display:flex;flex-wrap:wrap;gap:2px 18px;margin-top:6px}
-  .trace-acts .hold-act{min-height:var(--touch)}
-  /* 連なることば。ボタンだが札にしない：ことばそのものが押せる */
-  .trace-word{display:block;width:100%;text-align:left;background:none;border:none;
-              font-family:inherit;font-size:14.5px;line-height:2.15;letter-spacing:0.05em;
-              color:var(--ink-2);padding:12px 2px;min-height:var(--touch);cursor:pointer;
-              white-space:pre-wrap;word-break:break-word;
-              transition:opacity .22s var(--ease)}
-  .trace-word:active{opacity:.6}
-  .trace-word:focus-visible{outline:1px solid var(--rule);outline-offset:6px}
-  /* ことばは何行にもなるので、間の6pxだけでは「どこまでが一つのことばか」が読めない。
-     カードで囲うのではなく、便箋と同じ淡い罫を一本ずつ挟む（v3.10 の物質メタファー） */
-  .trace-word + .trace-word{border-top:1px solid var(--rule-faint);padding-top:18px;margin-top:6px}
-  .trace-word .yours{display:block;font-size:10.5px;letter-spacing:0.22em;color:var(--ink-4);
-                     margin-top:-2px}
-  /* 題（v2.2 §3）。一覧でだけ立つ。ことばより一段退いて上に置く——先に読まれるのは
-     ことばのほうで、題はそれを探すための手がかりに留める（漂いには出ない） */
-  .trace-word .title,.here-title{display:block;font-size:11px;letter-spacing:0.2em;
-                     color:var(--ink-4);margin-bottom:3px;
-                     word-break:keep-all;overflow-wrap:anywhere}
-  .here-title[hidden]{display:none}
-  .trace-more{align-self:flex-start;margin-top:16px;color:var(--ink-3);
-              font-size:12px;letter-spacing:0.24em;padding:12px 2px;min-height:var(--touch)}
-  /* 出口は、辿った長さに関係なく同じ所にある（Apple §16 wayfinding「どうやって出るか」）。
-     v2 までは一覧の末尾にしかなく、連鎖して辿るほど遠ざかっていた——
-     百件めまで送らないと「とじる」が見えない面は、閉じ込めているのと同じ。
-     据え方は sticky（fixed ではない）：この面は backdrop-filter を持つスクロール容器なので、
-     fixed の子は基準がこの面になり、中身と一緒に流れて視界から消える。sticky はスクロールの
-     窓を基準にするので、ぼかしを残したまま留まる。
-     字が下を通っても読めるように、霞をひと刷け連れて動く。 */
-  .trace-close{position:sticky;top:calc(14px + var(--safe-t));align-self:flex-end;margin-right:-6px;
-               z-index:62;color:var(--ink-2);
-               font-size:12px;letter-spacing:0.24em;padding:12px 10px;min-height:var(--touch)}
-  .trace-close::before{content:'';position:absolute;inset:-8px -14px;z-index:-1;pointer-events:none;
-        background:radial-gradient(70% 70% at 50% 50%,
-                   rgba(8,8,13,.94) 0%,var(--veil) 52%,rgba(8,8,13,0) 92%);
-        backdrop-filter:blur(7px) saturate(80%);-webkit-backdrop-filter:blur(7px) saturate(80%);
-        -webkit-mask-image:radial-gradient(68% 68% at 50% 50%,#000 0%,#000 54%,transparent 92%);
-                mask-image:radial-gradient(68% 68% at 50% 50%,#000 0%,#000 54%,transparent 92%)}
-  @media (prefers-reduced-transparency: reduce){
-    .trace-close::before{backdrop-filter:none;-webkit-backdrop-filter:none;
-          background:radial-gradient(74% 74% at 50% 50%,
-                     rgba(8,8,13,.99) 0%,rgba(8,8,13,.97) 58%,rgba(8,8,13,0) 94%)}
-  }
-  .trace-quiet{margin:22px 0 0;font-size:12px;line-height:2.1;letter-spacing:0.06em;
-               color:var(--ink-4);word-break:keep-all}
+  /* 辿る（.trace 一式）の CSS は 2026-07-28 に削除。面ごと畳んだので、
+     .trace-word / .trace-here / .trace-close / .here-title も全部いらない。 */
 
   /* ── 付箋（v2.2 §3）＝棚に残す瞬間に、読み手が自分の控えへ貼る小さな紙片。
-     宙にも辿るにも出ない・書き手には返らない。だからここでは「触れて辿る」入口にはしない
+     宙には出ない・書き手には返らない。だからここでは他人のことばへの入口にもしない
      （貼った本人の、自分の棚のための目印）。 ── */
   .fusen-row{display:flex;flex-wrap:wrap;gap:8px}
   .fusen{display:inline-flex;align-items:center;gap:6px;max-width:100%;
@@ -1047,7 +985,7 @@
 
   /* 棚に残したその場に開く、付箋の紙片。残すことは一押しで終わり——
      これは「そのままでもいい」続きなので、罫一本ぶんだけ静かに開く（Apple §16 簡潔さ）。 */
-  /* 置かれる先（読む柱・受け止めた所・辿る）はどれも中身なりの幅なので、
+  /* 置かれる先（読む柱・受け止めた所）はどれも中身なりの幅なので、
      紙片の幅はここで決める（親に合わせると罫が数文字ぶんに縮む） */
   /* ── 保存したあとの、置き場所（2026-07-27）──────────────────────────
      保存は済んでいる＝ここは報せと、変えたい人のための細い道。だから主張しない。
@@ -1291,7 +1229,8 @@
         <button class="cast-dir" id="castDir" type="button" aria-pressed="false"></button>
       </div>
 
-      <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚・書架・辿るでだけ立つ -->
+      <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚と書架でだけ立つ
+           （辿るを畳んだ 2026-07-28 以後、題が出る面はこの二つだけになった） -->
       <div class="cast-opt" id="castOptTitle" hidden>
         <input id="castTitle" type="text" maxlength="10" autocomplete="off"
                placeholder="題をつける（10字まで・なくても）"
@@ -1335,23 +1274,8 @@
   </div>
   {% endif %}
 
-  <!-- 辿る（v2 §4）：似た空気を追う面。漂いのルール（既読1日1回・沈降）はここに持ち込まない -->
-  <div class="trace" id="tracePane" role="dialog" aria-modal="true"
-       aria-label="ことばを辿る" aria-hidden="true">
-    <div class="trace-inner">
-      {# 出口を先頭に置く：Tab の一つめが「出る道」になる（面の隅に固定して表示する） #}
-      <button class="trace-close ruled" id="traceClose" type="button">とじる</button>
-      <p class="trace-lead" id="traceLead" tabindex="-1"></p>
-      <div class="trace-here" id="traceHere" hidden>
-        <div class="here-title" id="traceHereTitle" hidden></div>
-        <div class="trace-here-poem" id="traceHerePoem"></div>
-        <div class="trace-acts" id="traceActs"></div>
-      </div>
-      <div class="trace-list" id="traceList"></div>
-      <button class="trace-more ruled" id="traceMore" type="button" hidden>もっと</button>
-      <p class="trace-quiet" id="traceQuiet" hidden>この空気の<wbr>近くに、<wbr>ことばは<wbr>まだ<wbr>ありません。</p>
-    </div>
-  </div>
+  {# 辿る（v2 §4）の面は 2026-07-28 に畳んだ。入口（「この空気に、近いことば」）も
+     サーバの /api/sky/near も無い。宙から他人のことばを引ける道は、これで一つも無い。 #}
 
 <script>
 /* ══ 宙モードv2：漂うことば・放つ ══════════════════════════
@@ -2103,7 +2027,7 @@
     if(inRoom()||!ROOMS.length)return;
     if(e.metaKey||e.ctrlKey||e.altKey)return;
     const t=e.target;
-    if(t&&t.closest&&t.closest('input,textarea,[contenteditable],.cast,.read,.trace,.ask,.shiori-list'))return;
+    if(t&&t.closest&&t.closest('input,textarea,[contenteditable],.cast,.read,.ask,.shiori-list'))return;
     const step=Math.round(Math.min(viewW(),viewH())*0.18);
     let hit=true;
     switch(e.key){
@@ -2756,10 +2680,10 @@
 
   /* 天灯の野（v2追補 §3・§4）は 2026-07-26 に撤去した（Kosei判断）。
      「拡大縮小で時間を行き来する」眺めは宙のイメージと合わなかった。canvas も
-     /api/sky/field も消してある。過去のことばへは「辿る」（trace）から会いにいく。
+     /api/sky/field も消してある。辿る（trace）も 2026-07-28 に畳んだ。
      ——同時に、野だけが持っていた二つも消えた：flare（§4）の見た目の浮上と、
      天灯に触れて過去の一筆を「いま」へ引き寄せる手つき。flare 自体はサーバに残り、
-     air_distance を縮める形（§5）で、いまも辿りの候補として静かに効いている。 */
+     air_distance を縮める形（§5）で辿りに効いていたが、それも辿るごと外した。 */
   addEventListener('pagehide',flushSeen);
 
   /* ── 触れた気配を灯へ（宙v1 §4.2）── どのことばかは送らない・残らない */
@@ -2809,7 +2733,7 @@
   let held=null;                       // いま受け止めていることば
   // kept=棚に載せたもの 'src:ref'（読む柱と同じ書式で共有する）
   const kept=new Set();
-  /* 棚の絵は、宙・読む柱・辿りの三か所で同じものを使う。
+  /* 棚の絵は、宙と読む柱の二か所で同じものを使う。
      ここを唯一の出どころにする（三度書くと、直すとき一つ書き漏らす）。 */
   const IC_SHELF='<span class="ic ic-shelf" aria-hidden="true"><span class="b"></span><span class="p"></span></span>';
   /* 2026-07-27：動詞は平易に「保存する」、置き場所の名は「棚」のまま。
@@ -2902,12 +2826,10 @@
         IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>';
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
   }
-  /* 辿るの入口（「この空気に、近いことば」）は 2026-07-28 に外した（Kosei 指示）。
-     受け止めたことばに添う行いは「保存する」ひとつだけ——ここから別の面へ連れて行くと、
-     いま手のうちにある一筆から目が離れる。宙は探す場所ではない。
-     辿るの面（.trace / openTrace / /api/sky/trace）はコードとしては残っているが、
-     いま画面から入る道は無い。畳むなら規約・プライバシーの「空気の近さ」による探索の
-     条項まで一緒に直す必要があるので、そこは別の判断として置いてある。 */
+  /* 辿るの入口（「この空気に、近いことば」）は 2026-07-28 に外し、同日、面もサーバも
+     規約の条項も含めて丸ごと畳んだ（Kosei 指示）。受け止めたことばに添う行いは
+     「保存する」ひとつだけ——ここから別の面へ連れて行くと、いま手のうちにある一筆から
+     目が離れる。宙は探す場所ではない。出会いは、漂いに委ねる。 */
   function paintAct(sel,on,onTxt,offTxt){
     const b=holdBox.querySelector(sel); if(!b) return;
     b.classList.toggle('on',on);
@@ -3006,18 +2928,6 @@
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape'&&aFull.classList.contains('on'))shutAbout();});
   }
-
-  /* ══ 辿る（v2 §4）════════════════════════════════════════════
-     能動の面。漂いのルール（既読1日1回・沈降）はここに効かない：
-     何度でも見られて、古いことばも等しく出る。数は出さない——「もっと」があるだけ。
-     導線の言葉は空気で書く（§4.4）。「関連」「おすすめ」「人気」は使わない。 */
-  const tPane=document.getElementById('tracePane'),tLead=document.getElementById('traceLead'),
-        tHere=document.getElementById('traceHere'),tHerePoem=document.getElementById('traceHerePoem'),
-        tHereTitle=document.getElementById('traceHereTitle'),
-        tActs=document.getElementById('traceActs'),
-        tList=document.getElementById('traceList'),tMore=document.getElementById('traceMore'),
-        tQuiet=document.getElementById('traceQuiet'),tClose=document.getElementById('traceClose');
-  let tq=null,tBusy=false;   // tq={mode:'near'|'now', key, offset, label}
 
   /* ── 付箋（v2.2 §3の反転）＝棚に残した、その場で貼る ──
      貼るのは読み手。残すこと自体は一押しで終わっていて、付箋はそのあとに開く
@@ -3167,120 +3077,9 @@
     putPad(box,pad);
     paint();
   }
-  function traceURL(){
-    // 辿るのは air_distance 一本（v2.2 §3）。付箋から辿る経路は廃した
-    // near は「そのことば」を起点にするので部屋はサーバが引く。near_now だけ部屋を渡す
-    const base=tq.mode==='near'?'/api/sky/near/'+encodeURIComponent(tq.key)
-          :'/api/sky/near_now';
-    const room=(tq.mode==='near'||!inRoom())?'':'&room='+ROOM.id;
-    return base+'?offset='+tq.offset+room;
-  }
-  function traceWordEl(w){
-    const b=document.createElement('button');
-    b.type='button';b.className='trace-word';
-    const c=tintOf(w.color);
-    if(c){b.style.color=c.text;b.style.textShadow='0 0 16px '+c.glow;}
-    if(w.title){                       // 題は一覧でだけ立つ（v2.2 §3）
-      const t=document.createElement('span');
-      t.className='title';t.textContent=w.title;
-      b.appendChild(t);
-    }
-    b.appendChild(document.createTextNode(w.poem));
-    if(w.mine){
-      const y=document.createElement('span');
-      y.className='yours';y.textContent='あなたのことば';
-      b.appendChild(y);
-    }
-    b.setAttribute('aria-label',(w.title?('題「'+w.title+'」。'):'')+
-                   'このことばから、さらに辿る：'+w.poem);
-    b.addEventListener('click',()=>openTrace('near',w.id,'この空気に、近いことば'));
-    return b;
-  }
-  /* 辿りの現在地。ことば・付箋・（他人のことばなら）印と棚 */
-  function renderHere(w){
-    tHere.hidden=false;
-    const c=tintOf(w.color);
-    tHerePoem.style.color=c?c.text:'';
-    tHerePoem.style.textShadow=c?('0 0 18px '+c.glow):'';
-    tHerePoem.textContent=w.poem;
-    tHereTitle.textContent=w.title||'';
-    tHereTitle.hidden=!w.title;
-    tActs.innerHTML='';
-    if(!LOGGED_IN||w.mine)return;
-    // 辿りの現在地でできることも「棚にとっておく」ひとつだけ（2026-07-27 反応を撤去）
-    const kb=document.createElement('button');
-    kb.type='button';kb.className='hold-act keep';
-    const paintKeep=on=>{
-      kb.classList.toggle('on',on);
-      kb.setAttribute('aria-pressed',on?'true':'false');
-      kb.querySelector('.txt').textContent=on?T_KEEP_ON:T_KEEP_OFF;
-    };
-    kb.innerHTML=IC_SHELF+'<span class="txt"></span>';
-    paintKeep(kept.has('drift:'+w.id));
-    kb.addEventListener('click',async()=>{
-      const key='drift:'+w.id,on=!kept.has(key);
-      if(on)kept.add(key);else kept.delete(key);
-      paintKeep(on);
-      if(!on)dropPad(tActs);
-      try{
-        const r=await fetch('/api/shelf',{method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({src:'drift',ref:w.id,on:on})});
-        if(!r.ok)throw new Error('keep');
-        const d=await r.json().catch(()=>null);
-        if(on&&d&&d.id){fusenPad(tActs,d.id,[]);wherePad(tActs,d.id,d.shelf,d.shelves);}   // 残した、その場で
-      }catch(e){
-        if(on)kept.delete(key);else kept.add(key);
-        paintKeep(!on);dropPad(tActs);
-      }
-    });
-    tActs.appendChild(kb);
-  }
-  function loadTrace(){
-    if(!tq||tBusy)return;
-    tBusy=true;tMore.disabled=true;
-    fetch(traceURL()).then(r=>r.ok?r.json():null).then(d=>{
-      if(!d||!tq)return;
-      if(d.here&&tq.offset===0)renderHere(d.here);
-      (d.items||[]).forEach(w=>tList.appendChild(traceWordEl(w)));
-      tq.offset+=(d.items||[]).length;
-      tMore.hidden=!d.more;
-      tQuiet.hidden=!!(tList.children.length);
-    }).catch(()=>{
-      whisper('いま、<wbr>tayori-たより- が<wbr>遠いようです。',6000);
-    }).finally(()=>{tBusy=false;tMore.disabled=false;});
-  }
-  /* 面を開いたら、そこにフォーカスを移す。移さないと、キーボードや読み上げの居場所は
-     宙のまま（背後の漂うことばの上）に残り、「開いたのに何も変わらない」ことになる。
-     閉じたら、開いた場所へ返す（Apple §7：来た道から出る）。 */
-  let tBack=null;
-  function openTrace(mode,key,label){
-    if(held)release();                 // 受け止めていたことばは、そっと放してから
-    // 連鎖して辿る時（面の中のことばから、さらに近いことばへ）は、帰る先を上書きしない。
-    // 上書きすると、その要素は tList.innerHTML='' で消えるので帰る先を失う。
-    if(!tPane.classList.contains('on'))tBack=document.activeElement;
-    tq={mode:mode,key:key,offset:0,label:label};
-    tLead.textContent=label;
-    tHere.hidden=true;tList.innerHTML='';tMore.hidden=true;tQuiet.hidden=true;
-    tPane.classList.add('on');tPane.setAttribute('aria-hidden','false');
-    tPane.scrollTop=0;
-    tLead.focus();                   // 見出し（＝いま何を辿っているか）から読み始める
-    loadTrace();
-  }
-  function shutTrace(){
-    tq=null;
-    tPane.classList.remove('on');tPane.setAttribute('aria-hidden','true');
-    const b=tBack;tBack=null;
-    if(b&&b.isConnected&&typeof b.focus==='function')b.focus();
-  }
-  tMore.addEventListener('click',loadTrace);
-  tClose.addEventListener('click',shutTrace);
-  tPane.addEventListener('click',e=>{if(e.target===tPane)shutTrace();});
-  document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'&&tPane.classList.contains('on'))shutTrace();});
-  /* 栞にあった入口①（「いまの空気に、近いことば」）は 2026-07-26 に廃止した。
-     辿るへは、ことばに触れた時の「この空気に、近いことば」から入る——
-     栞は「行ける場所」だけを並べる面にしたので、行い（機能）はここに置かない。 */
+  /* 辿る（traceURL / traceWordEl / renderHere / loadTrace / openTrace）は
+     2026-07-28 に丸ごと外した。栞にあった入口①（「いまの空気に、近いことば」）は
+     2026-07-26 に、ことばに触れた時の入口②は 2026-07-28 に畳んである。 */
 
   if(!LOGGED_IN) return;
 
@@ -3706,7 +3505,7 @@
   btn.addEventListener('click',open);
   close.addEventListener('click',shut);
   pane.addEventListener('click',e=>{if(e.target===pane)shut();});
-  /* Escape で閉じる。宙の他の面（辿る・読む・この宙について）は全部そうなのに、
+  /* Escape で閉じる。宙の他の面（読む・この宙について）は全部そうなのに、
      書く柱だけ効かなかった＝同じ形のものが同じに振る舞わない（Apple §16 familiarity）。
      変換中（isComposing）は Escape が変換の取り消しなので、横取りしない。 */
   document.addEventListener('keydown',e=>{

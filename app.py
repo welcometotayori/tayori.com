@@ -3682,7 +3682,6 @@ def _sky_age_days(sent_date):
 # 2〜6時間だけ浮上する。決定論的疑似乱数＝DBに状態を持たず、全ユーザーが同じものを見る。
 # 密度が過剰になったら発生率は下げず DUR_SCALE で継続時間だけ縮める（浮上の回数＝
 # 生きている感は守ったまま、画面の密度だけを調整する）。
-_SKY_FLARE_AIR = _env_num("TAYORI_SKY_FLARE_AIR", 0.6, 0.05, 1.0)        # §5 探索補正（要調整）
 _SKY_FLARE_DUR_SCALE = _env_num("TAYORI_SKY_FLARE_DUR_SCALE", 1.0, 0.05, 1.0)
 
 
@@ -3706,10 +3705,8 @@ def _flare_state(letter_id, jnow=None):
     return (round(mult, 3), int(since), int(dur))
 
 
-def _flare_air_factor(entry):
-    """§5: flare 中のことばは air_distance を縮めて、探索の候補として拾われやすくする。
-    既存の距離の式そのものには触れない（意味には一切触れない、も変わらない）。"""
-    return _SKY_FLARE_AIR if entry[7] else 1.0
+# _flare_air_factor（flare 中のことばを探索で拾われやすくする §5 の補正）は
+# 2026-07-28、辿るを畳んだ時に一緒に外した。flare 自体は表示（大きさ）に今も効く。
 
 
 # ── 宙の一日（宙v1 §3.1）───────────────────────────────────────
@@ -3916,7 +3913,7 @@ def _sky_rebuild():
 # _sky_score（v2「宙の共鳴」の重み付き抽選）は 2026-07-27 に撤去した。
 # air_distance で「いまと響く一通」を選ぶのをやめ、公平なカーソル方式（_build_sky）に
 # 全面移行したため。air_distance は選抜から外れ、表示（サイズ）専用になった。
-# flare（_flare_state / _flare_air_factor）は辿り（§5）で今も air_distance を縮めるので残す。
+# flare（_flare_state）は残る。辿るを畳んだ 2026-07-28 以後は、効くのは表示（大きさ）だけ。
 
 
 # ── 部屋の出入り（2026-07-26 B-4・B-5）─────────────────────────────
@@ -4493,14 +4490,11 @@ def api_sky_lantern():
     return jsonify(lit=lit)
 
 
-# ══ 辿る（v2仕様書 §4）═══════════════════════════════════════════
-# 能動的に探す面。①漂う のルールをここへ持ち込まない：
-#   ・既読除外なし（何度でも見られる）・沈降なし（古いことばも等しく出る）
-#   ・自分のことばも含める（2026-07-26 Kosei確定）
-# 件数は返さない（total を含めない）。ページングは「もっと」形式（more の真偽だけ）。
-# 導線ラベルは空気の言葉で書く：「関連」「おすすめ」「人気」は使わない（§4.4）。
-
-_TRACE_LIMIT_MAX = 40
+# ══ 辿る（v2仕様書 §4）は 2026-07-28 に畳んだ ═══════════════════════
+# 「この空気に、近いことば」＝能動的に探す面ごと（/api/sky/near・/api/sky/near_now、
+# 画面の .trace、規約・プライバシーの『空気の近さ』による探索の条項）を外した。
+# 宙は探す場所ではない——受け取ったことばに添う行いは「保存する」ひとつだけ、
+# 出会いは漂いに委ねる。air_distance は残るが、効くのは表示（大きさ）だけ。
 
 
 def _normalize_tag(s):
@@ -4534,70 +4528,10 @@ def _clean_title(raw):
     return t[:_TITLE_MAX] or None
 
 
-def _trace_item(e, reader):
-    """辿るの一件。書き手を指す情報は載せない。mine だけは本人にだけ意味を持つ
-    （自分のことばも並ぶので、印を勧めない・「あなたのことば」と静かに分かるため）。"""
-    d = dict(e[0])
-    d["mine"] = bool(reader and e[4] == reader)
-    # 題は一覧でだけ立つ（v2.2 §3）。宙へ配る辞書（e[0]）には最初から入れず、
-    # 辿るの一件を組むここでだけ足す——漂いに題が混ざる経路を構造として持たない。
-    d["title"] = e[5]
-    return d
-
-
-def _trace_page(entries, key, limit, offset):
-    """air_distance の近い順に並べ、offset から limit 件と「まだ先があるか」を返す。
-    ソートは決定的（§4.1: 偶然は弱い）。件数・ページ番号は返さない。"""
-    ordered = sorted(entries, key=key)
-    page = ordered[offset:offset + limit]
-    reader = session.get("uid")
-    return [_trace_item(e, reader) for e in page], len(ordered) > offset + limit
-
-
-def _trace_params():
-    try:
-        limit = min(_TRACE_LIMIT_MAX, max(1, int(request.args.get("limit", 12))))
-    except ValueError:
-        limit = 12
-    try:
-        offset = max(0, int(request.args.get("offset", 0)))
-    except ValueError:
-        offset = 0
-    return limit, offset
-
-
-@app.route("/api/sky/near/<pub_id>")
-def api_sky_near(pub_id):
-    """この空気に、近いことば（§4.2）。基準は開いたことば自身の空気。
-    辿れるのは、そのことばと同じ部屋の中だけ（B-6）。"""
-    base = next((e for e in _sky_pool() if e[0]["id"] == pub_id), None)
-    if base is None:
-        return jsonify(error="そのことばは、いま宙にありません。"), 404
-    pool = _in_room(_sky_pool(), base[6])
-    limit, offset = _trace_params()
-    rest = [e for e in pool if e[0]["id"] != pub_id]
-    items, more = _trace_page(
-        rest, lambda e: air_distance(base[1], e[1]) * _flare_air_factor(e), limit, offset)
-    return jsonify(here=_trace_item(base, session.get("uid")), items=items, more=more)
-
-
-@app.route("/api/sky/near_now")
-def api_sky_near_now():
-    """いまの空気に近いことば（§4.3）。基準は閲覧者のいまの季節・時刻・天気。"""
-    room_id, err = _room_scope()
-    if err:
-        return err
-    pool = _in_room(_sky_pool(), room_id)
-    now_air = _viewer_air()
-    limit, offset = _trace_params()
-    items, more = _trace_page(
-        pool, lambda e: air_distance(now_air, e[1]) * _flare_air_factor(e), limit, offset)
-    return jsonify(items=items, more=more)
-
-
 # 「その付箋を持つことばを宙から辿る」経路（旧 /api/sky/by_tag）は v2.2 で廃した。
 # 付箋が読み手の私物になった以上、それを鍵に他人のことばを引ける経路があってはならない。
-# 宙を辿るのは air_distance（色・季節・時刻・天気）一本。付箋で絞るのは自分の棚の中だけ。
+# 2026-07-28、残っていた辿り（/api/sky/near・/api/sky/near_now と _trace_* の一式）も
+# 畳んだ。宙から他人のことばを引ける経路は、これで一つも無い。
 
 
 @app.route("/api/tags/suggest")
