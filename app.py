@@ -2417,21 +2417,35 @@ def _smtp_config():
     }
 
 
+# メールの色（2026-07-28）。紙の色（#F2EBDD / #EDE3D1）をやめ、いまの宙の色に合わせた。
+# 開いた人が最後に見ていた画面と、届いたお知らせの地の色が違うと、別のサービスから
+# 来たものに見える。値は _sky_tokens.html の写し（メールに CSS 変数は使えないので、
+# 闇の上に重ねた結果を hex で置く。トークンを直したら、ここも直すこと）。
+_MAIL_BG = "#08080D"        # --space
+_MAIL_CARD = "#0D0D14"      # 闇より一段だけ持ち上げた面
+_MAIL_RULE = "#57463A"      # --rule（罫）を闇の上に重ねた色
+_MAIL_INK = "#F3F1EC"       # --ink-1
+_MAIL_INK_FAINT = "#81807E"  # --ink-4
+_MAIL_THREAD = "#B38F6F"    # --thread（封の糸＝リンクの色）
+
+
 def _html_email(body, unsubscribe_url=None):
     """プレーン本文から、素朴で清潔なHTML版を作る（URLはリンク化）。到達率と見た目のため。"""
     safe = html.escape(body)
     safe = re.sub(r'https?://[^\s<]+',
-                  lambda m: f'<a href="{m.group(0)}" style="color:#B5543A;text-decoration:underline">{m.group(0)}</a>',
+                  lambda m: f'<a href="{m.group(0)}" style="color:{_MAIL_THREAD};'
+                            f'text-decoration:underline">{m.group(0)}</a>',
                   safe).replace("\n", "<br>")
     foot = ""
     if unsubscribe_url:
-        foot = (f'<div style="margin-top:24px;font-size:12px;color:#9c8f7c">'
-                f'このお知らせを止める：<a href="{unsubscribe_url}" style="color:#9c8f7c">配信を停止</a></div>')
+        foot = (f'<div style="margin-top:24px;font-size:12px;color:{_MAIL_INK_FAINT}">'
+                f'このお知らせを止める：'
+                f'<a href="{unsubscribe_url}" style="color:{_MAIL_INK_FAINT}">配信を停止</a></div>')
     return (
-        '<div style="background:#F2EBDD;padding:30px 16px;'
-        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#3A2E25\">"
-        '<div style="max-width:480px;margin:0 auto;background:#EDE3D1;border:1px solid #CBBBA0;'
-        'border-radius:4px;padding:30px 26px">'
+        f'<div style="background:{_MAIL_BG};padding:30px 16px;'
+        f"font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:{_MAIL_INK}\">"
+        f'<div style="max-width:480px;margin:0 auto;background:{_MAIL_CARD};'
+        f'border:1px solid {_MAIL_RULE};border-radius:4px;padding:30px 26px">'
         '<div style="font-size:25px;letter-spacing:0.14em;margin-bottom:16px">tayori-たより-</div>'
         f'<div style="font-size:15px;line-height:2.0">{safe}</div>'
         f'{foot}'
