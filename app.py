@@ -2564,7 +2564,11 @@ def verify_email(token):
     with _WRITE_LOCK:
         db.execute("UPDATE users SET email_verified=1, email_token=NULL, email_token_at=NULL WHERE id=?", (row["id"],))
         db.commit()
-    return _landing_page("確認完了", "メールアドレスを確認しました。<br>便りが届く頃に、そっとお知らせが届きます。")
+    # 「便りが届く頃に」は手紙モード時代の言い回し（2026-07-28 に改めた）。
+    # いま届くのは、放ったことばが帰ってきたという知らせ。
+    return _landing_page("確認完了",
+                         "メールアドレスを確認しました。<br>"
+                         "あなたのことばが帰ってくる頃に、そっとお知らせが届きます。")
 
 
 @app.route("/unsubscribe/<token>")
