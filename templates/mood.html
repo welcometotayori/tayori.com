@@ -1413,7 +1413,21 @@
      ・奇数リングは半コマずらす（放射状の格子に見せない）
      ・R（表示スケール）は格子に入れない。格子は角度で決まるので
        **R を変えても席は動かない**＝「球をでかくする」は実質ズーム
-     ・揺らぎ（旧±8px）は入れない。球面の格子は角度が全てで、緯度経度で固定 */
+     ・揺らぎ（旧±8px）は入れない。球面の格子は角度が全てで、緯度経度で固定
+
+     ── 2026-07-28 夜：席を「詰める」のをやめ、輪ごと割り直す（Kosei 確定）──
+     格子の席へ番号順に詰めていくと、部屋が満席に満たないあいだ **輪の一部だけが
+     埋まった帯**になる（14部屋なら φ=0〜195° が連なり、残り165° が空く）。
+     その空きが手前に回った瞬間が「弧が途中でキレる」の正体で、赤道が満席（24室）に
+     なるまで構造的に必ず出る。
+
+     そこで、置き方を変える：**いま在る N 室を、使うリングへ配り、どのリングも
+     まるごと均等割りする**（φ = 2π·j/n_k）。リングの途中に穴が開かないので、
+     何室であっても輪は途切れない。N が増えるとリングが増え、やがて球になる。
+
+     代償：部屋が一つ増えるたび、全部屋の φ がずれる。**「席は動かない」という
+     これまでの線を、ここで意図して降ろした**（§9 の一項目の撤回）。順序は
+     作られた順のまま保つので、隣り合わせの関係は変わらない。 */
   function fnv(s){let h=2166136261;s=String(s);
     for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
     return h>>>0;}
@@ -1437,22 +1451,47 @@
     return order;
   }
   function skyCapacity(gen){ return skyLattice(gen).reduce((a,r)=>a+r.n,0); }
-  /* index → (θ,φ)。決定的：同じ index・同じ世代なら永久に同じ席。
-     容量を超えたら投げる（黙って重ねない——呼ぶ側が世代を上げる）。 */
-  function roomSeat(index,gen){
-    let n=Math.max(0,Math.floor(index)||0);
-    const rings=skyLattice(gen);
-    const order=skyRingOrder(rings.length);
-    for(const k of order){
-      const ring=rings[k];
-      if(n<ring.n){
-        const offset=(k%2)?Math.PI/ring.n:0;               // 奇数リングは半コマずらす
-        return {theta:ring.theta, phi:offset+2*Math.PI*n/ring.n,
-                ring:k, slot:n, gen:gen||0};
-      }
-      n-=ring.n;
+  /* N室を、どのリングに何室ずつ置くか。合計はちょうど N で、**どのリングも
+     まるごと均等割り**＝リングの途中に穴が開かない（輪が途切れない根拠）。
+     使うリングは赤道から順に、格子の容量で足りるところまで。配分はその容量に
+     比例させ、端数は「取り分の小数が大きい順」に一つずつ配る（合計を必ず N に合わせる）。 */
+  function skyRingPlan(count,gen){
+    const N=Math.max(0,Math.floor(count)||0);
+    if(!N)return [];
+    const base=skyLattice(gen), order=skyRingOrder(base.length);
+    const used=[];
+    let room=0;
+    for(const k of order){ if(room>=N)break; used.push(k); room+=base[k].n; }
+    const w=used.map(k=>base[k].n), sum=w.reduce((a,b)=>a+b,0);
+    const raw=w.map(x=>N*x/sum);
+    const n=raw.map(x=>Math.max(1,Math.floor(x)));
+    let rest=N-n.reduce((a,b)=>a+b,0);
+    // 小数の大きい順。同じなら赤道に近い（＝used の先頭）ほうを先に厚くする
+    const byFrac=raw.map((x,i)=>i)
+      .sort((a,b)=>(raw[b]-Math.floor(raw[b]))-(raw[a]-Math.floor(raw[a]))||a-b);
+    for(let i=0;rest>0;i=(i+1)%byFrac.length){ n[byFrac[i]]++; rest--; }
+    // 端数の切り上げ（最低1室）で溢れたぶんは、厚いリングから返す。空にはしない
+    for(let i=byFrac.length-1;i>=0&&rest<0;i--){
+      while(rest<0&&n[byFrac[i]]>1){ n[byFrac[i]]--; rest++; }
     }
-    throw new RangeError('capacity exceeded: increment generation');
+    return used.map((k,i)=>({theta:base[k].theta, n:n[i], ring:k}));
+  }
+  /* index（0…count-1）→ (θ,φ)。決定的：同じ index・同じ総数なら必ず同じ席。
+     総数が変われば席も変わる——それが「輪を割り直す」ということ。 */
+  function roomSeat(index,count){
+    let n=Math.max(0,Math.floor(index)||0);
+    const total=Math.max(n+1,Math.floor(count)||0);
+    let gen=0;
+    while(skyCapacity(gen)<total) gen++;          // 入りきる最小の世代
+    for(const r of skyRingPlan(total,gen)){
+      if(n<r.n){
+        const offset=(r.ring%2)?Math.PI/r.n:0;    // 奇数リングは半コマずらす
+        return {theta:r.theta, phi:offset+2*Math.PI*n/r.n,
+                ring:r.ring, slot:n, count:total, gen:gen};
+      }
+      n-=r.n;
+    }
+    throw new RangeError('seat index out of range');
   }
   /* 球面座標 → 正射影（透視ではない：奥の部屋も同じ大きさ＝「字を小さくしない」が
      投影レベルで守られる）。rot は自転の位相、alpha は視線 z 軸まわりの傾き（ロール）、
@@ -1677,7 +1716,7 @@
     });
   }
 
-  /* 部屋を席に置く。座標は roomSeat（純関数）だけが決め、置いたあとは二度と書き換えない
+  /* 部屋を席に置く。座標は roomSeat（純関数）だけが決める
      ——画面に収めるのは camera の仕事で、部屋の側は自分がどこに映っているかを知らない。 */
   function placeRooms(list){
     roomCanvas.innerHTML='';
@@ -1688,12 +1727,14 @@
        同じ導線が栞メニューの一番上にもあり二重だった上に、文学・恋愛・仕事…と
        並ぶ雲の中に性質の違うもの（ナビゲーション）が一つ混ざって、コンテンツと
        同一平面になっていた。栞側に一本化。中央が空くことで雲の求心力が上がる。 */
-    /* 世代：いま要る最大の席番号が容量に収まる最小の g。世代が上がる＝全席が
-       一度だけ座り直す大域イベント（§2.4。補間演出は世代が実際に動く時に入れる）。
-       閾値を8割にするかは §8 未確定——いまは容量ちょうどで判定。 */
-    let gen=0;
-    const maxSeat=list.reduce((m,r,i)=>Math.max(m, r.seat==null?i:r.seat), 0);
-    while(skyCapacity(gen)<=maxSeat) gen++;
+    /* 席は「いま何室あるか」で決まる（roomSeat の第2引数）。渡すのは席番号ではなく
+       **並びの順位**——サーバの席番号は欠番を含むので、そのまま使うと輪に穴が開く。
+       順位は作られた順（席番号順）なので、隣り合わせの関係は増えても変わらない。 */
+    const rank=new Map();
+    [...list].map((r,i)=>({id:r.id, k:(r.seat==null?i:r.seat)}))
+             .sort((a,b)=>a.k-b.k)
+             .forEach((x,i)=>rank.set(x.id,i));
+    const total=list.length;
     list.forEach((r,i)=>{
       const el=document.createElement('button');
       el.type='button';
@@ -1708,8 +1749,7 @@
       // 灯は色だけの気配なので、読み上げには出さない（aria-label に混ぜない）
       el.setAttribute('aria-label',r.name+' へ入る');
       el._room=r;
-      // 席番号はサーバが持つ。まだ持っていない部屋（古いDB）は、末尾の空いた席に座らせる
-      el._sph=roomSeat(r.seat==null?i:r.seat, gen);
+      el._sph=roomSeat(rank.has(r.id)?rank.get(r.id):i, total);
       el.addEventListener('click',()=>{ if(!camDragged) enterRoom(r,true); });
       // Tab で回ってきた部屋は、画面の中へ連れてくる（球は transform で動くので、
       // ブラウザ既定のスクロール追従が効かない＝ここを欠くとキーボードでは辿り着けない）

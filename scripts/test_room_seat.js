@@ -10,12 +10,18 @@ function ok(cond, name, extra) {
 }
 function approx(a, b, eps, name) { ok(Math.abs(a - b) <= eps, name, '(' + a + ' vs ' + b + ')'); }
 var DEG = Math.PI / 180;
+var TAU = Math.PI * 2;
 
 /* 球面上の角距離。cos d = cosθa·cosθb + sinθa·sinθb·cos(φa−φb) */
 function angDist(a, b) {
   var c = Math.cos(a.theta) * Math.cos(b.theta)
         + Math.sin(a.theta) * Math.sin(b.theta) * Math.cos(a.phi - b.phi);
   return Math.acos(Math.max(-1, Math.min(1, c)));
+}
+function seatsOf(N) {
+  var out = [];
+  for (var i = 0; i < N; i++) out.push(roomSeat(i, N));
+  return out;
 }
 
 /* ── ⓪ 格子の諸元：K・Δθ・N₀・容量が仕様の表と一致する ──────────
@@ -31,65 +37,112 @@ ok(skyCapacity(0) === 184, 'g=0 の容量は 184', '→ ' + skyCapacity(0));
 ok(skyCapacity(1) === 732, 'g=1 の容量は 732', '→ ' + skyCapacity(1));
 ok(skyCapacity(2) === 2938, 'g=2 の容量は 2938', '→ ' + skyCapacity(2));
 
-/* ── ① 決定性：同じ入力なら、いつ呼んでも同じ席 ─────────────── */
-var d1 = roomSeat(7, 0), d2 = roomSeat(7, 0);
-ok(d1.theta === d2.theta && d1.phi === d2.phi, '同じ index・同じ世代なら同じ (θ,φ)');
+/* ── ① 決定性：同じ index・同じ総数なら、いつ呼んでも同じ席 ─────── */
+var d1 = roomSeat(7, 14), d2 = roomSeat(7, 14);
+ok(d1.theta === d2.theta && d1.phi === d2.phi, '同じ index・同じ総数なら同じ (θ,φ)');
 
-/* ── ②③ 一意性と均一性：容量いっぱい置いて、どの二席も 0.80·Δθ 以上 ──
-   仕様の実測値は最小角距離 12.98°（= 0.865·Δθ）。 */
-var seats = [];
-for (var i = 0; i < 184; i++) seats.push(roomSeat(i, 0));
-var minD = Infinity, minPair = '';
-for (var a = 0; a < seats.length; a++) {
-  for (var b = a + 1; b < seats.length; b++) {
-    var d = angDist(seats[a], seats[b]);
+/* ── ② 輪が途切れない（本題・2026-07-28 夜）─────────────────────
+   どの総数 N でも、席を置いたリングは **まるごと均等割り** になっていること。
+   ＝リングの席を φ で並べたとき、隣り合う間隔が（一周を跨ぐ所も含めて）全部同じ。
+   ここが崩れると「弧が途中でキレる」が再発する。 */
+function ringGapReport(N) {
+  var seats = seatsOf(N), byRing = {};
+  seats.forEach(function (s) { (byRing[s.ring] = byRing[s.ring] || []).push(s.phi); });
+  var worst = 0, detail = '', count = 0;
+  Object.keys(byRing).forEach(function (r) {
+    var ph = byRing[r].slice().sort(function (a, b) { return a - b; });
+    count += ph.length;
+    var want = TAU / ph.length, lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < ph.length; i++) {
+      var g = (i + 1 < ph.length) ? ph[i + 1] - ph[i] : TAU - (ph[ph.length - 1] - ph[0]);
+      if (g < lo) lo = g;
+      if (g > hi) hi = g;
+    }
+    var err = Math.max(Math.abs(hi - want), Math.abs(lo - want));
+    if (err > worst) { worst = err; detail = 'N=' + N + ' ring' + r + ' n=' + ph.length; }
+  });
+  return { worst: worst, detail: detail, count: count };
+}
+var gapWorst = 0, gapWhere = '', sumBad = '';
+[1, 2, 3, 5, 8, 13, 14, 15, 20, 23, 24, 25, 30, 40, 60, 90, 120, 184].forEach(function (N) {
+  var r = ringGapReport(N);
+  if (r.worst > gapWorst) { gapWorst = r.worst; gapWhere = r.detail; }
+  if (r.count !== N) sumBad += ' N=' + N + '→' + r.count;
+});
+ok(gapWorst < 1e-12, 'どの総数でも、置いたリングは一周まるごと均等割り（＝輪が途切れない）',
+   'worst=' + gapWorst.toExponential(2) + ' @' + gapWhere);
+ok(sumBad === '', '配ったぶんの合計は必ず総数と一致する（欠けも溢れもない）', sumBad);
+
+/* 14室（いま本番にある数）は赤道の一本の輪に、360/14=25.714° 等間隔で並ぶ */
+var s14 = seatsOf(14);
+var rings14 = {};
+s14.forEach(function (s) { rings14[s.ring] = 1; });
+ok(Object.keys(rings14).length === 1, '14室は一本のリングに収まる', '→ ' + Object.keys(rings14));
+approx(s14[1].phi - s14[0].phi, TAU / 14, 1e-12, '14室の間隔は 360/14（＝25.714°）');
+
+/* ── ③ 一意性：どの総数でも席が重ならない ─────────────────────── */
+var dupBad = '';
+[7, 14, 25, 40, 90, 184].forEach(function (N) {
+  var seats = seatsOf(N), seen = {};
+  seats.forEach(function (s) {
+    var key = s.theta.toFixed(9) + '/' + (s.phi % TAU).toFixed(9);
+    if (seen[key]) dupBad += ' N=' + N;
+    seen[key] = 1;
+  });
+});
+ok(dupBad === '', 'どの総数でも (θ,φ) が重複しない', dupBad);
+
+/* ── ④ 均一性：満席（184）では最小角距離 ≥ 0.80·Δθ ─────────────
+   仕様の実測値は 12.98°（= 0.865·Δθ）。 */
+var full = seatsOf(184), minD = Infinity, minPair = '';
+for (var a = 0; a < full.length; a++) {
+  for (var b = a + 1; b < full.length; b++) {
+    var d = angDist(full[a], full[b]);
     if (d < minD) { minD = d; minPair = a + '/' + b; }
   }
 }
 var dth0 = Math.PI / 12;
-ok(minD > 1e-9, '容量内の全席で (θ,φ) が重複しない', 'pair=' + minPair);
-ok(minD >= 0.80 * dth0, '最小角距離 ≥ 0.80·Δθ',
+ok(minD >= 0.80 * dth0, '満席の最小角距離 ≥ 0.80·Δθ',
    'min=' + (minD / DEG).toFixed(2) + '° (' + (minD / dth0).toFixed(3) + '·Δθ, ' + minPair + ')');
 
-/* ── ④ 容量：超えたら黙って重ねずに投げる ───────────────────── */
-var threw = false;
-try { roomSeat(184, 0); } catch (e) { threw = true; }
-ok(threw, '席184（容量超え）は例外を投げる');
-threw = false;
-try { roomSeat(183, 0); } catch (e) { threw = true; }
-ok(!threw, '席183（容量ちょうど最後）は座れる');
+/* ── ⑤ 充填順：赤道から。最初の部屋は正面（φ=0）に立つ ─────────── */
+ok(roomSeat(0, 14).ring === 6, '席0 は赤道リング（k=6）', '→ ' + roomSeat(0, 14).ring);
+approx(roomSeat(0, 14).theta, 97.5 * DEG, 1e-12, '席0 の θ は 97.5°（赤道のすぐ南）');
+approx(roomSeat(0, 14).phi, 0, 1e-12, '席0 は正面中央（φ=0）');
+ok(seatsOf(30).some(function (s) { return s.ring !== 6; }),
+   '30室では赤道の外側のリングも使う（球へ育つ）');
 
-/* ── ⑤ 充填順：赤道から両極へ交互。index 0 は赤道リング（k=K/2=6）──
-   順は [6,5,7,4,…] で、リングの席数は 24,24,22,22,… と減っていく。 */
-ok(roomSeat(0, 0).ring === 6, '席0 は赤道リング（k=6）', '→ ' + roomSeat(0, 0).ring);
-approx(roomSeat(0, 0).theta, 97.5 * DEG, 1e-12, '席0 の θ は 97.5°（赤道のすぐ南）');
-approx(roomSeat(0, 0).phi, 0, 1e-12, '席0 は正面中央（φ=0）');
-ok(roomSeat(23, 0).ring === 6, '席23 まではリング6', '→ ' + roomSeat(23, 0).ring);
-ok(roomSeat(24, 0).ring === 5, '席24 からリング5（赤道の北隣）', '→ ' + roomSeat(24, 0).ring);
-ok(roomSeat(48, 0).ring === 7, '席48 からリング7（南へ一つ）', '→ ' + roomSeat(48, 0).ring);
-ok(roomSeat(70, 0).ring === 4, '席70 からリング4', '→ ' + roomSeat(70, 0).ring);
-ok(roomSeat(183, 0).ring === 0, '最後の席は北極リング（k=0）', '→ ' + roomSeat(183, 0).ring);
+/* ── ⑥ 半コマずらし：奇数リングは φ が π/n だけずれて始まる ───────
+   放射状に揃うと格子に見えて、球である意味が消える。 */
+var s30 = seatsOf(30);
+var odd = s30.filter(function (s) { return s.ring % 2 === 1; });
+ok(odd.length > 0, '30室では奇数リングが使われている');
+var oddN = odd.length ? odd.filter(function (s) { return s.ring === odd[0].ring; }).length : 0;
+if (oddN) {
+  var oddMin = Math.min.apply(null, odd.filter(function (s) { return s.ring === odd[0].ring; })
+                                       .map(function (s) { return s.phi; }));
+  approx(oddMin, Math.PI / oddN, 1e-12, '奇数リングは π/n ずれて始まる');
+}
+var evenMin = Math.min.apply(null, s30.filter(function (s) { return s.ring % 2 === 0; })
+                                      .map(function (s) { return s.phi; }));
+approx(evenMin, 0, 1e-12, '偶数リングはずらさない');
 
-/* ── ⑥ 半コマずらし：奇数リングは φ が π/n_k から始まる ─────────── */
-approx(roomSeat(24, 0).phi, Math.PI / 24, 1e-12, 'リング5（奇数）は π/24 ずれて始まる');
-approx(roomSeat(48, 0).phi, Math.PI / 22, 1e-12, 'リング7（奇数）は π/22 ずれて始まる');
-approx(roomSeat(0, 0).phi, 0, 1e-12, 'リング6（偶数）はずらさない');
+/* ── ⑦ 総数が変わると席は動く（2026-07-28 夜に意図して降ろした線）──
+   これは仕様である。「席は動かない」を守ったままでは、満席に満たない輪が
+   必ずどこかで途切れる——両立しないので、途切れないほうを採った。 */
+var before = roomSeat(3, 14), after = roomSeat(3, 15);
+ok(before.phi !== after.phi, '部屋が増えると全室の φ が割り直される（輪を保つための代償）');
+approx(roomSeat(0, 14).phi, roomSeat(0, 15).phi, 1e-12, 'ただし先頭は正面に居続ける（基準は動かない）');
 
-/* ── ⑦ 世代非互換：g を上げると席が変わる（＝大域再配置は仕様である）── */
-var g0 = roomSeat(5, 0), g1 = roomSeat(5, 1);
-ok(g0.theta !== g1.theta || g0.phi !== g1.phi,
-   '世代をまたぐと席が変わる（roomSeat(i,0) ≠ roomSeat(i,1)）');
-
-/* ── ⑧ 穴が空いても、他の席は動かない ─────────────────────────
-   席は番号で決まる。隣が消えても引数が同じなら座標は不変（繰り上げない設計の裏づけ）。 */
-var h1 = roomSeat(9, 0), h2 = roomSeat(9, 0);
-ok(h1.theta === h2.theta && h1.phi === h2.phi, '席8 が空いても席9 は動かない');
+/* ── ⑧ 世代：入りきらなくなったら、より細かい格子へ ──────────── */
+ok(roomSeat(0, 184).gen === 0, '184室までは g=0', '→ ' + roomSeat(0, 184).gen);
+ok(roomSeat(0, 185).gen === 1, '185室からは g=1', '→ ' + roomSeat(0, 185).gen);
 
 /* ── ⑨ 変な入力で落ちない ──────────────────────────────────── */
-[[-5, 0], [0.7, 0], [NaN, 0], [null, 0]].forEach(function (arg) {
+[[-5, 14], [0.7, 14], [NaN, 14], [null, 14], [3, 0], [0, null]].forEach(function (arg) {
   var p = roomSeat(arg[0], arg[1]);
   ok(isFinite(p.theta) && isFinite(p.phi),
-     '壊れた席番号 ' + String(arg[0]) + ' でも有限の (θ,φ) を返す');
+     '壊れた入力 (' + String(arg[0]) + ',' + String(arg[1]) + ') でも有限の (θ,φ) を返す');
 });
 
 /* ── ⑩ 正射影：向きと不変量 ─────────────────────────────────
@@ -134,6 +187,7 @@ ok(p0.y < 0, '平面版：席0 は真上（y が負）');
 ok(roomSeatPlanar(6, 'x').ring === 1, '平面版：リング割りも当時のまま');
 
 if (fails) { print(fails + ' 件 失敗'); throw new Error('test_room_seat failed'); }
-print('ok: 格子の諸元(184/732/2938)／決定性／184席で重複なし・最小角距離 '
-      + (minD / DEG).toFixed(2) + '°(≥0.80Δθ)／容量超えは例外／赤道から充填(席0=正面)／'
-      + '半コマずれ／世代非互換／穴で動かない／変な入力／正射影の向き／平面版ロールバック可');
+print('ok: 格子(184/732/2938)／決定性／**どの総数でもリングは均等割り＝輪が途切れない**／'
+      + '合計一致／14室は一本の輪(25.714°)／重複なし／満席の最小角距離 '
+      + (minD / DEG).toFixed(2) + '°／赤道から充填(席0=正面)／半コマずれ／'
+      + '増えたら割り直す／世代／変な入力／正射影／ピッチ／平面版ロールバック可');
