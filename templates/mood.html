@@ -2862,7 +2862,6 @@
     if(!LOGGED_IN){
       holdBox.innerHTML='<p class="hold-note">このことばを、<wbr>'+
         '自分の<wbr>棚に<wbr>とっておけます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
-      holdExtras();   // 辿るだけは、はじめる前のひとにも開いておく
       return;
     }
     /* ことばへの行いは「棚にとっておく」ひとつだけ（2026-07-27）。
@@ -2873,24 +2872,13 @@
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
         IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>';
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
-    holdExtras();
   }
-  /* 辿るの入口（v2 §4.3）。未登録の人にも開く。
-     v2.2：付箋はここに出さない——付箋は読み手が自分の棚に貼る私物になったので、
-     宙を漂うことばには、そもそも貼られていない。 */
-  function holdExtras(){
-    if(!held||!held._sid)return;
-    const id=held._sid;
-    /* 灯と棚は「このことばへの行い」、辿るは「別の場所へ行く行い」。
-       同じ列に同じ姿で三つ並ぶと、どれも同じ重さに見える——罫を一本引いて分ける。 */
-    const hr=document.createElement('div');hr.className='hold-sep';
-    holdBox.appendChild(hr);
-    const tb=document.createElement('button');
-    tb.type='button';tb.className='hold-act sub';
-    tb.innerHTML='<span class="txt">この空気に、近いことば</span>';
-    tb.addEventListener('click',()=>openTrace('near',id,'この空気に、近いことば'));
-    holdBox.appendChild(tb);
-  }
+  /* 辿るの入口（「この空気に、近いことば」）は 2026-07-28 に外した（Kosei 指示）。
+     受け止めたことばに添う行いは「保存する」ひとつだけ——ここから別の面へ連れて行くと、
+     いま手のうちにある一筆から目が離れる。宙は探す場所ではない。
+     辿るの面（.trace / openTrace / /api/sky/trace）はコードとしては残っているが、
+     いま画面から入る道は無い。畳むなら規約・プライバシーの「空気の近さ」による探索の
+     条項まで一緒に直す必要があるので、そこは別の判断として置いてある。 */
   function paintAct(sel,on,onTxt,offTxt){
     const b=holdBox.querySelector(sel); if(!b) return;
     b.classList.toggle('on',on);
