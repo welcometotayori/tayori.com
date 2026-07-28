@@ -2780,6 +2780,11 @@ def _check_and_notify():
                FROM letters l JOIN users u ON u.id = l.user_id
                WHERE COALESCE(l.notified,0)=0
                  AND COALESCE(l.notify_failed,0)=0
+                 -- 「たより — 便りが、届きました」の配信は 2026-07-28 に止めた（Kosei 指示）。
+                 -- 手紙モードは v11 で廃止済みで、残っているのはその頃に封をされた行だけ。
+                 -- いま届いても、受け取る側にはもう存在しない機能の通知になる。
+                 -- 行は消さない（/open/<id> でひらける）。送るのをやめるだけ。
+                 AND l.mode='sky'
                  AND u.email IS NOT NULL AND u.email<>''
                  AND COALESCE(u.email_verified,0)=1
                  AND COALESCE(u.notify_enabled,1)=1"""
@@ -2836,16 +2841,10 @@ def _check_and_notify():
                     + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
                 )
             else:
-                subject = "たより — 便りが、届きました"
-                body = (
-                    f"{r['username']} さんへ。\n"
-                    "過去のあなたが封をしたたよりが、いま届きました。\n"
-                    "封の中身は、まだあなたも見ていません。\n"
-                    "下のリンクをひらいて、封蝋をそっとほどいてください。\n"
-                    f"{open_url}\n\n"
-                    "tayori ーたより\n"
-                    + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
-                )
+                # 手紙モード（mode<>'sky'）の「便りが、届きました」は 2026-07-28 に配信停止。
+                # SELECT で弾いているのでここへは来ないが、分岐は残す——将来また手紙を
+                # 配るなら、文面はここに在ったほうがいい（消すと二度目は書き直しになる）。
+                continue
             if send_email(r["email"], subject, body, unsubscribe_url=unsub_url):
                 returned = r["returned"] + 1
                 with _WRITE_LOCK:
