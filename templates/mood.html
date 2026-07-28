@@ -771,8 +771,9 @@
      トップに出るのは、ことばではなく部屋の名前。
      ・漂わせるのはやめた。1.5〜4px/秒まで落としても「自然に漂う」には見えず、
        読もうとした名前がわずかに逃げるだけだった（2026-07-26 Kosei）。
-     ・席は 12時から時計回りに、同心円で外へ（roomSeat・純関数）。位置は席番号で
-       決まっていて動かない＝「あの部屋はここ」と体が覚えられ、灯の移ろいも同じ場所で追える。
+     ・席は球面の格子（roomSeat・純関数／2026-07-28 同心円から置き換え）。位置は
+       席番号で決まっていて動かない＝「あの部屋はここ」と体が覚えられ、灯の移ろいも
+       同じ場所で追える。画面には正射影で置く（奥も同じ大きさ・奥行きは濃さで）。
      ・部屋が増えても字は小さくしない・数の上限も設けない。画面に入らなくなったぶんは
        **ズームで解く**（＝camera）。座標を触るのは canvas ひとつの transform だけで、
        部屋そのものの座標は一度置いたら二度と書き換えない。
@@ -799,9 +800,11 @@
         /* 席の座標は --sx/--sy。-50% で名前の中心を席の点に合わせる */
         transform:translate(calc(-50% + var(--sx,0px)),calc(-50% + var(--sy,0px)));
         opacity:0;transition:opacity 1.6s var(--ease,ease),color .4s ease}
-  .room.on{opacity:.82}
+  /* --do は奥行き（正射影の depth）から来る不透明度。裏面の名前は薄く沈み、
+     回ってくれば（自転は後段）また読める——情報が段階的に開く。 */
+  .room.on{opacity:calc(.82*var(--do,1))}
   .room:hover{color:var(--paper,#efe9dc);opacity:1}
-  /* キーボードで巡る人にも、いまどこに居るかが見えること（円は Tab の順が見えにくい） */
+  /* キーボードで巡る人にも、いまどこに居るかが見えること（球は Tab の順が見えにくい） */
   .room:focus-visible{color:var(--paper,#efe9dc);opacity:1;
                       outline:1px solid var(--rule-act);outline-offset:6px}
   .room:active{opacity:1;color:var(--chalk)}
@@ -1387,33 +1390,96 @@
      scripts/test_room_seat.py がこの区画を **そのまま切り出して** jsc で動かすので、
      マーカーの内側に副作用のあるものを入れないこと。
 
-     ・12時から時計回り。x=sin(t), y=-cos(t) の組でその向きになる
-       （x=cos, y=sin にすると3時始まりの反時計回りになる＝必ずテストで向きを見る）
-     ・リングは 6・12・18・24… と**無限に**増える（slots(ring)=6*(ring+1)）。
-       上限を作ると、そこを超えた部屋が既存の席に重なって座る。数の上限は設けず、
-       画面に入らないぶんはズームで解く（部屋数は制限しない）。
-     ・半径は 105 + 70*ring。奇数リングは半コマずらす——真っ直ぐ放射状に揃うと
-       格子に見えて、円である意味が消える。
-     ・±8px の揺らぎは room_id のハッシュから引く。Math.random は使わない：
-       リロードのたびに位置が変わると、覚えた「自分の部屋の場所」が壊れる。 */
+     2026-07-28：同心円（平面）から球面へ。平面の式は球面に投影できない
+     ——等距離投影は極で円周方向に詰まり、等積投影は極でセルが短冊になる。
+     だから球面ネイティブな格子を新しく定義する。
+
+     球面では「密度一定・席不動・部屋数無限」の三つは同時に成立しない（面積が有限）。
+     採るのは **密度一定＋席不動**。容量は「世代」で段階的に増やす：
+       世代 g → リング数 K=12·2^g・Δθ=π/K・赤道の席数 N₀=2K
+       容量は g=0:184 / g=1:732 / g=2:2938
+     N₀=2K は偶然ではない——半径方向と円周方向の弧長が一致し（どちらも約R·Δθ）、
+     セルが正方形に近くなって密度が全方向で均一になる。
+
+     ・座標系は y が上・+z が視点方向。θ=90°,φ=0 が画面正面中央
+     ・θ_k=(k+0.5)·Δθ、n_k=max(1,round(N₀·sinθ_k))
+     ・充填は赤道から両極へ交互（最初の部屋が正面中央に来る）
+     ・奇数リングは半コマずらす（放射状の格子に見せない）
+     ・R（表示スケール）は格子に入れない。格子は角度で決まるので
+       **R を変えても席は動かない**＝「球をでかくする」は実質ズーム
+     ・揺らぎ（旧±8px）は入れない。球面の格子は角度が全てで、緯度経度で固定 */
   function fnv(s){let h=2166136261;s=String(s);
     for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
     return h>>>0;}
+  function skyLattice(gen){
+    const K=12*Math.pow(2,gen||0), dth=Math.PI/K, N0=2*K;
+    const rings=[];
+    for(let k=0;k<K;k++){
+      const th=(k+0.5)*dth;
+      rings.push({theta:th, n:Math.max(1,Math.round(N0*Math.sin(th)))});
+    }
+    return rings;
+  }
+  /* 赤道（k=K/2）から両極へ交互に広げる充填順。K=12 なら [6,5,7,4,8,3,9,2,10,1,11,0] */
+  function skyRingOrder(K){
+    const order=[]; let lo=K/2-1, hi=K/2;
+    while(order.length<K){
+      if(hi<K)order.push(hi);
+      if(lo>=0&&order.length<K)order.push(lo);
+      hi++; lo--;
+    }
+    return order;
+  }
+  function skyCapacity(gen){ return skyLattice(gen).reduce((a,r)=>a+r.n,0); }
+  /* index → (θ,φ)。決定的：同じ index・同じ世代なら永久に同じ席。
+     容量を超えたら投げる（黙って重ねない——呼ぶ側が世代を上げる）。 */
+  function roomSeat(index,gen){
+    let n=Math.max(0,Math.floor(index)||0);
+    const rings=skyLattice(gen);
+    const order=skyRingOrder(rings.length);
+    for(const k of order){
+      const ring=rings[k];
+      if(n<ring.n){
+        const offset=(k%2)?Math.PI/ring.n:0;               // 奇数リングは半コマずらす
+        return {theta:ring.theta, phi:offset+2*Math.PI*n/ring.n,
+                ring:k, slot:n, gen:gen||0};
+      }
+      n-=ring.n;
+    }
+    throw new RangeError('capacity exceeded: increment generation');
+  }
+  /* 球面座標 → 正射影（透視ではない：奥の部屋も同じ大きさ＝「字を小さくしない」が
+     投影レベルで守られる）。rot は自転の位相、alpha は視線 z 軸まわりの傾き。
+     返すのは単位球上の値——R を掛けるのは描画側の仕事。
+     y は数学の向き（上が正）。画面に置くときに符号を返すこと。 */
+  function seatProject(seat,rot,alpha){
+    const th=seat.theta, ph=seat.phi+(rot||0);
+    const x=Math.sin(th)*Math.sin(ph), y=Math.cos(th), z=Math.sin(th)*Math.cos(ph);
+    const ca=Math.cos(alpha||0), sa=Math.sin(alpha||0);
+    return {x:x*ca-y*sa, y:x*sa+y*ca, depth:z};
+  }
+  /* ── 旧・同心円版（ロールバック用に残す。新規の呼び出しは禁止）───────
+     半径 105+70·ring、リング席数 6·(ring+1)、±8px の揺らぎ。 */
   const SEAT_R0=105, SEAT_DR=70, SEAT_SLOTS0=6, SEAT_JITTER=8;
   function seatSlots(ring){ return SEAT_SLOTS0*(ring+1); }     // 6,12,18,24…
   function seatRadius(ring){ return SEAT_R0+SEAT_DR*ring; }    // 105,175,245,315…
-  /* seed（部屋id）から ±SEAT_JITTER px。seed 無しなら席番号で引く */
   function seatJitter(seed){ return ((fnv('seat:'+seed)%2001)/2000)*2*SEAT_JITTER-SEAT_JITTER; }
-  function roomSeat(index,seed){
+  function roomSeatPlanar(index,seed){
     let n=Math.max(0,Math.floor(index)||0), ring=0;
     while(n>=seatSlots(ring)){ n-=seatSlots(ring); ring++; }
     const slots=seatSlots(ring);
-    const offset=(ring%2)?Math.PI/slots:0;                     // 奇数リングは半コマずらす
+    const offset=(ring%2)?Math.PI/slots:0;
     const t=offset+n*(2*Math.PI/slots);
     const r=seatRadius(ring)+seatJitter(seed==null?index:seed);
     return {x:Math.sin(t)*r, y:-Math.cos(t)*r, ring:ring, slot:n, angle:t, radius:r};
   }
   /* ══ /pure:room-seat ═════════════════════════════════════════════ */
+
+  /* 球の表示パラメータ（純関数の外＝描画の都合）。
+     SKY_ALPHA=23.4°（2026-07-28 Kosei 確定）。地球の地軸の傾きと同じ——
+     仕様の候補は 15〜20° だったが、実物を見てこの値に決めた。 */
+  const SKY_ALPHA=23.4*Math.PI/180;
+  const SKY_R=420;
 
   /* 画面の寸法。innerWidth は文脈によって 0 を返すことがあり、そのまま ||360 に
      落ちると「360pxの端末」として面を組んでしまう（画面外のつもりで置いた座標が、
@@ -1599,6 +1665,12 @@
        同じ導線が栞メニューの一番上にもあり二重だった上に、文学・恋愛・仕事…と
        並ぶ雲の中に性質の違うもの（ナビゲーション）が一つ混ざって、コンテンツと
        同一平面になっていた。栞側に一本化。中央が空くことで雲の求心力が上がる。 */
+    /* 世代：いま要る最大の席番号が容量に収まる最小の g。世代が上がる＝全席が
+       一度だけ座り直す大域イベント（§2.4。補間演出は世代が実際に動く時に入れる）。
+       閾値を8割にするかは §8 未確定——いまは容量ちょうどで判定。 */
+    let gen=0;
+    const maxSeat=list.reduce((m,r,i)=>Math.max(m, r.seat==null?i:r.seat), 0);
+    while(skyCapacity(gen)<=maxSeat) gen++;
     list.forEach((r,i)=>{
       const el=document.createElement('button');
       el.type='button';
@@ -1609,10 +1681,19 @@
       el.setAttribute('aria-label',r.name+' へ入る');
       el._room=r;
       // 席番号はサーバが持つ。まだ持っていない部屋（古いDB）は、末尾の空いた席に座らせる
-      const seat=roomSeat(r.seat==null?i:r.seat, r.id);
-      el._seat=seat;
-      el.style.setProperty('--sx',seat.x.toFixed(1)+'px');
-      el.style.setProperty('--sy',seat.y.toFixed(1)+'px');
+      const seat=roomSeat(r.seat==null?i:r.seat, gen);
+      // 正射影＋傾き。自転はまだ入れない（§7-3：まず正しく並ぶことを確認する段階）
+      const p=seatProject(seat,0,SKY_ALPHA);
+      el._seat={x:p.x*SKY_R, y:-p.y*SKY_R, depth:p.depth,
+                theta:seat.theta, phi:seat.phi};
+      el.style.setProperty('--sx',(p.x*SKY_R).toFixed(1)+'px');
+      el.style.setProperty('--sy',(-p.y*SKY_R).toFixed(1)+'px');
+      /* 奥行きは不透明度で（§4.3 の先取り・最小限）。これが無いと裏面の名前が
+         表と同じ濃さで重なり、密度が倍に見えて配置の確認ができない。
+         ボケ・名前の別カーブは step4 で入れる。 */
+      const dt2=(p.depth+1)/2;
+      el.style.setProperty('--do',(0.16+0.84*Math.pow(dt2,1.4)).toFixed(3));
+      el.style.zIndex=String(100+Math.round(p.depth*100));
       el.addEventListener('click',()=>{ if(!camDragged) enterRoom(r,true); });
       // Tab で回ってきた部屋は、画面の中へ連れてくる（円は transform で動くので、
       // ブラウザ既定のスクロール追従が効かない＝ここを欠くとキーボードでは辿り着けない）
