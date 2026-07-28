@@ -475,10 +475,11 @@
      低い画面では字面と列幅だけを詰め、20字×4列の関係は絶対に崩さない。 */
   /* 2026-07-28：題・色・向きを「任意の三つ」の一行へ沈めたぶん柱が縮んだので、
      しきい値も同じだけ下げた（実測：題57 + 色167 + 旧向きボタン56 − 行68 ≒ 200px）。
-     出口は sticky で常に届くから、便箋の字面はできるだけ大きいまま保つ。 */
-  @media (max-height:600px){ .cast{--cw:32px;--fs:15px} }
-  @media (max-height:550px){ .cast{--cw:28px;--fs:13px} }
-  @media (max-height:500px){ .cast{--cw:26px;--fs:12px} }
+     出口は sticky で常に届くから、便箋の字面はできるだけ大きいまま保つ。
+     同日夜、色（帯二本＋色名 ≒ 140px）だけを畳むのをやめたので、その分だけ戻す。 */
+  @media (max-height:740px){ .cast{--cw:32px;--fs:15px} }
+  @media (max-height:690px){ .cast{--cw:28px;--fs:13px} }
+  @media (max-height:640px){ .cast{--cw:26px;--fs:12px} }
   /* v16：textarea → contenteditable。vertical-rl の <textarea> は Chrome/Safari とも
      IME変換中の文字（プレビュー・候補）を正しく描けない実装上の穴があり、宙で漢字変換が
      効かなかった（textareaは専用の内部エディタで、日本語縦書き＋IMEの対応が薄い）。
@@ -549,6 +550,10 @@
      v14：帯の見た目は11pxのまま、指の的だけ上下パディングで44pxに広げた
      （background-clip:content-box なので、色は細い帯にしか乗らない）。 */
   .picker{display:flex;flex-direction:column;gap:2px;align-items:center}
+  /* 畳まずに置く色の器（2026-07-28 夜）。開閉を持たないので .cast-opt とは別の名前にする
+     ——同じ姿でも、片方は「開く箱」、片方は「ずっとそこにある帯」で、役目が違う。 */
+  .cast-color{display:flex;flex-direction:column;align-items:center;
+              width:100%;margin:var(--s1) 0 0}
   /* 何をするところかを一行。命令ではなく、置いてあるだけの声で */
   .picker-lead{margin:var(--s2) 0 0;font-size:11.5px;letter-spacing:var(--tr-body);
                color:var(--ink-3);text-align:center}
@@ -1255,14 +1260,31 @@
       <p class="picker-lead" id="whereLead">どこへ</p>
       <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
 
-      {# ── 任意の三つ（2026-07-28）──
-         題も色も向きも、無いまま放ってよい。色には既定値（淡い青）が入っているので、
-         触らないことが欠けにならない。それを画面の形で言う＝一行に沈める。 #}
+      {# ── 色（2026-07-28 夜に畳むのをやめた）────────────────────
+         同日昼に「色をえらぶ」の一行へ畳んだが、押さないかぎり帯そのものが無いので、
+         色は**在ることに気づかれないまま**になった（利用者の指摘）。任意であることと、
+         隠れていることは別物だ——既定値が入っているのは「触らなくてよい」であって
+         「見えなくてよい」ではない。帯は書く面に出したままにする。
+         位置は「どこへ」の下＝必須の二つ（書く→どこへ）は割らない（同日昼の線を守る）。
+         帯を動かすと、いま書いた字の色がその場で変わる＝何のための帯かは、
+         見出しではなく便箋自身が言う。 #}
+      <div class="cast-color" id="castOptColor">
+        <div class="picker">
+          <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
+               aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
+          <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
+               aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
+          {# いま選んでいる色の名。見出し（「このことばの色。」）は畳んでいた頃の
+             名残なので落とした——帯の下に結果の名が一つ出ていれば、役目は伝わる。 #}
+          <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
+        </div>
+      </div>
+
+      {# ── 任意の二つ（2026-07-28）──
+         題も向きも、無いまま放ってよい。だから一行に沈めて、触れたときだけ開く。 #}
       <div class="cast-opt-row" id="castOptRow">
         <button type="button" data-opt="castOptTitle" aria-expanded="false"
                 aria-controls="castOptTitle">題をつける</button>
-        <button type="button" data-opt="castOptColor" aria-expanded="false"
-                aria-controls="castOptColor">色をえらぶ</button>
         {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
            向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。
            2026-07-28（4-6）：中身は paintDir が描く（罫のミニアイコン＋現在地「縦／横」）。 #}
@@ -1274,24 +1296,6 @@
         <input id="castTitle" type="text" maxlength="10" autocomplete="off"
                placeholder="題をつける（10字まで・なくても）"
                aria-label="このことばの題（10字まで・任意）">
-      </div>
-
-      {# 2026-07-27：帯が二本、無言で並んでいた。何のための色かも、上下の違いも
-         画面に出ていない＝初見では触る理由が無い（Apple §16 mapping／§16 feedback:status）。
-         ・上に一行、何をするところかを置く
-         ・下に、いま選んでいる色の名を出す。静的なラベル（色相／彩度）ではなく
-           **結果**を返す：触るたびに「淡い　あお」が変わるので、二本の役目も自ずと分かる
-         2026-07-28：既定値が入っている以上これは任意なので、畳んだ側へ移した。
-         見出しは命令形（「つけてください」）をやめ、任意だと分かる言い方にした。 #}
-      <div class="cast-opt" id="castOptColor" hidden>
-        <p class="picker-lead">このことばの色。</p>
-        <div class="picker">
-          <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
-               aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
-          <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
-               aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
-          <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
-        </div>
       </div>
       <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
            付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
