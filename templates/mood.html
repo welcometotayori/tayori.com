@@ -3500,6 +3500,12 @@
                   // 部屋の中から開いたなら、そこが置き場所。外から開いたなら、まだ決めない
                   castRoom=(inRoom()&&!ROOM.archived)?ROOM.id:null;
                   renderWhere();
+                  /* 名前は取り直してから並べる（2026-07-28）。ROOMS を最後に取ったのは
+                     宙を開いた時で、部屋の中に居るあいだ（＝書く柱を開くいちばん多い場面）は
+                     90秒の掛け直しも走らない——**この画面を開いたままの間に増えたジャンルが、
+                     書く柱にだけ出てこない**。開いた形はもう立っているので、
+                     届いたら静かに並べ直す（castRoom は触らない＝選んだ所は動かさない）。 */
+                  fetchRooms().then(()=>{ if(pane.classList.contains('on'))renderWhere(); });
                   paintCast();
                   requestAnimationFrame(drawCaret);}   // 柱が立った直後から筆先を置く
   function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');
