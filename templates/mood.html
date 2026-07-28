@@ -799,15 +799,21 @@
         text-shadow:0 0 9px rgba(8,8,13,.92),0 0 3px rgba(8,8,13,.8);
         /* 席の座標は --sx/--sy。-50% で名前の中心を席の点に合わせる */
         transform:translate(calc(-50% + var(--sx,0px)),calc(-50% + var(--sy,0px)));
+        /* --db は奥行きのボケ（§4.3: 3.2px·(1-t)^1.2）。手前では 0 に消える */
+        filter:blur(var(--db,0px));
         opacity:0;transition:opacity 1.6s var(--ease,ease),color .4s ease}
-  /* --do は奥行き（正射影の depth）から来る不透明度。裏面の名前は薄く沈み、
-     回ってくれば（自転は後段）また読める——情報が段階的に開く。 */
+  /* --do はプレート（要素まるごと）の奥行き不透明度（§4.3: 0.16+0.84·t^1.4）。
+     床が 0.16 で 0 にならない＝裏に回った灯は、名前が読めなくても色だけ透けて見える。
+     「あそこに青が3つ」が遠くから伝わり、回ってくれば名前も読める——情報が段階的に開く。 */
   .room.on{opacity:calc(.82*var(--do,1))}
-  .room:hover{color:var(--paper,#efe9dc);opacity:1}
+  /* --dn は名前だけの奥行き（§4.3: smoothstep(-0.05,0.35,depth)）。
+     プレートより先に名前が消える＝裏面は「色の気配」だけが残る。 */
+  .room .nm{opacity:var(--dn,1)}
+  .room:hover{color:var(--paper,#efe9dc);opacity:var(--do,1)}
   /* キーボードで巡る人にも、いまどこに居るかが見えること（球は Tab の順が見えにくい） */
-  .room:focus-visible{color:var(--paper,#efe9dc);opacity:1;
+  .room:focus-visible{color:var(--paper,#efe9dc);opacity:var(--do,1);
                       outline:1px solid var(--rule-act);outline-offset:6px}
-  .room:active{opacity:1;color:var(--chalk)}
+  .room:active{opacity:var(--do,1);color:var(--chalk)}
   /* 罫を一本だけ引く（カードやピルにしない＝物質のメタファーを保つ） */
   .room::after{content:'';display:block;height:1px;margin-top:9px;
                background:var(--rule);opacity:.5}
@@ -1661,6 +1667,9 @@
      ——画面に収めるのは camera の仕事で、部屋の側は自分がどこに映っているかを知らない。 */
   function placeRooms(list){
     roomCanvas.innerHTML='';
+    // 面を作り直したら「触れられている数」も御破算。消えた要素は pointerleave を
+    // 撃たないので、ここで拭かないと skyHeld が浮いて自転が二度と戻らない
+    skyHeld=0;
     /* 2026-07-28（4-2）：円の中心にあった「自分のページ」（.room-hub）を外した。
        同じ導線が栞メニューの一番上にもあり二重だった上に、文学・恋愛・仕事…と
        並ぶ雲の中に性質の違うもの（ナビゲーション）が一つ混ざって、コンテンツと
@@ -1675,34 +1684,58 @@
       const el=document.createElement('button');
       el.type='button';
       el.className='room'+(r.archived?' archived':'');
-      el.textContent=r.name;                      // 灯より先に。textContent は子を総取っ替えする
+      /* 名前は span（.nm）に。プレート（要素）と名前で奥行きの蛇口が別
+         ——裏面は名前が先に消え、灯の色だけが透ける（§4.3）。 */
+      const nm=document.createElement('span');
+      nm.className='nm';
+      nm.textContent=r.name;
+      el.appendChild(nm);                         // 灯より先に（relight は .fire だけ抜き差しする）
       addFires(el,r);
       // 灯は色だけの気配なので、読み上げには出さない（aria-label に混ぜない）
       el.setAttribute('aria-label',r.name+' へ入る');
       el._room=r;
       // 席番号はサーバが持つ。まだ持っていない部屋（古いDB）は、末尾の空いた席に座らせる
-      const seat=roomSeat(r.seat==null?i:r.seat, gen);
-      // 正射影＋傾き。自転はまだ入れない（§7-3：まず正しく並ぶことを確認する段階）
-      const p=seatProject(seat,0,SKY_ALPHA);
-      el._seat={x:p.x*SKY_R, y:-p.y*SKY_R, depth:p.depth,
-                theta:seat.theta, phi:seat.phi};
-      el.style.setProperty('--sx',(p.x*SKY_R).toFixed(1)+'px');
-      el.style.setProperty('--sy',(-p.y*SKY_R).toFixed(1)+'px');
-      /* 奥行きは不透明度で（§4.3 の先取り・最小限）。これが無いと裏面の名前が
-         表と同じ濃さで重なり、密度が倍に見えて配置の確認ができない。
-         ボケ・名前の別カーブは step4 で入れる。 */
-      const dt2=(p.depth+1)/2;
-      el.style.setProperty('--do',(0.16+0.84*Math.pow(dt2,1.4)).toFixed(3));
-      el.style.zIndex=String(100+Math.round(p.depth*100));
+      el._sph=roomSeat(r.seat==null?i:r.seat, gen);
       el.addEventListener('click',()=>{ if(!camDragged) enterRoom(r,true); });
-      // Tab で回ってきた部屋は、画面の中へ連れてくる（円は transform で動くので、
+      // Tab で回ってきた部屋は、画面の中へ連れてくる（球は transform で動くので、
       // ブラウザ既定のスクロール追従が効かない＝ここを欠くとキーボードでは辿り着けない）
       el.addEventListener('focus',()=>camReveal(el));
+      /* 読もうとしたら止まる（§5）。「読もうとしたら逃げる」は速度ではなく
+         **止まるか**で解く——読もうとする＝触れる、なので構造的に消える。 */
+      el.addEventListener('pointerenter',skyHold);
+      el.addEventListener('pointerleave',skyRelease);
+      el.addEventListener('focus',skyHold);
+      el.addEventListener('blur',skyRelease);
       roomCanvas.appendChild(el);
       // 順に灯していく。席は固定だが、点き方には順番がある（面がいちどに出ない）
       setTimeout(()=>el.classList.add('on'),120+i*70);
     });
+    skyPlace();
     camFit(false);
+    skyStart();
+  }
+
+  /* 席（θ,φ）→ 画面。自転の位相 skyRot を足して正射影し、奥行きを §4.3 の式で
+     濃さ・ボケに落とす。座標を書くのはここだけ（部屋は自分の映り方を知らない）。 */
+  function smoothstep(a,b,x){
+    const u=Math.max(0,Math.min(1,(x-a)/(b-a)));
+    return u*u*(3-2*u);
+  }
+  function skyPlace(){
+    for(const el of roomEls()){
+      const s=el._sph; if(!s)continue;
+      const p=seatProject(s,skyRot,SKY_ALPHA);
+      el._seat={x:p.x*SKY_R, y:-p.y*SKY_R, depth:p.depth};
+      el.style.setProperty('--sx',(p.x*SKY_R).toFixed(1)+'px');
+      el.style.setProperty('--sy',(-p.y*SKY_R).toFixed(1)+'px');
+      const t=(p.depth+1)/2;
+      el.style.setProperty('--do',(0.16+0.84*Math.pow(t,1.4)).toFixed(3));
+      el.style.setProperty('--db',(3.2*Math.pow(1-t,1.2)).toFixed(2)+'px');
+      el.style.setProperty('--dn',smoothstep(-0.05,0.35,p.depth).toFixed(3));
+      el.style.zIndex=String(100+Math.round(p.depth*100));
+      // ヒットは depth>-0.2 まで（§5）。沈んで読めないものは押せもしない
+      el.style.pointerEvents=(p.depth>-0.2)?'':'none';
+    }
   }
 
   /* 並びが同じなら、置き直さずに灯だけ掛け替える。置き直すと名前のフェードが
@@ -1729,16 +1762,16 @@
      見る側が寄ったり引いたりして解く。動かすのは canvas 一枚の transform だけで、
      部屋の座標（席）は一度置いたら二度と書き換えない。
 
-     ・倍率は 0.4〜2.0 でクランプ。数字もスライダーも出さない
-     ・初期表示は自動フィット：**実際に使われている**いちばん外側まで、余白24pxで収める
-       ＝部屋が3つなら第1リングにぴたりと寄る／外側のリングに届いた瞬間、次に見た時は
-       少し引いた絵で始まる
+     ・下限は**球全体が画面に収まる倍率**（それ以上は引けない）・上限は2.0＝名前が
+       読める距離で自然に止まる。数字もスライダーも出さない（§4.4）
+     ・初期表示は下限＝全体が見える状態。部屋が5つでも球は球のまま
+       ——ほぼ空の球は「まだ静かです」として肯定する（2026-07-28 Kosei 確定）
      ・掴んだら1:1で追う。離したら指の速さのまま滑って、縁で静かに止まる
        （跳ね返しは付けない——ゴムの手触りは、この宙の静けさに合わない）
      ・寄る中心はいつも指／カーソルの位置。画面中央に寄せると、狙った所からズレていく
      ・走っているアニメは、いつでも掴んで止められる（現在値から始める・Apple §3）
      ・減モーションでは滑走と補間を切る。ズームそのものは残す（移動手段なので） */
-  const CAM_MIN=0.4, CAM_MAX=2.0, CAM_PAD=24;
+  const CAM_MAX=2.0, CAM_PAD=24;
   const cam={x:0,y:0,s:1};
   let camRaf=0, camAnim=0, camGlideRaf=0, camSafety=0;
   let camFrom=null, camTo=null, camT0=0, camDur=400;
@@ -1755,18 +1788,11 @@
     const b=chromeBand();
     return {w:viewW()/2, h:Math.max(60,(b.low-b.top)/2)};
   }
-  /* いま置いてある部屋が要る広さ（canvas座標・等倍）。空のリングは数に入らない
-     ——実際に置かれた席だけを見るので、外側が空いていれば勝手に寄る。 */
-  function camExtent(){
-    let mx=60,my=40;
-    for(const el of roomEls()){
-      const s=el._seat; if(!s)continue;
-      const w=el.offsetWidth||120, h=el.offsetHeight||44;
-      mx=Math.max(mx,Math.abs(s.x)+w/2);
-      my=Math.max(my,Math.abs(s.y)+h/2);
-    }
-    return {x:mx,y:my};
-  }
+  /* 要る広さ（canvas座標・等倍）＝**球そのもの**。置かれた席ではなく球を測る
+     ——部屋が5つでも球は球のまま（初期の疎さの肯定・§8）。旧・平面時代は
+     「実際に置かれた席だけを見て勝手に寄る」だったが、球では縁の席が
+     いつ回ってきてもいいように、器の大きさで構える。足し分は名前の板のはみ出し。 */
+  function camExtent(){ return {x:SKY_R+110, y:SKY_R+56}; }
   function camWrite(){
     camRaf=0;
     roomCanvas.style.transform='translate('+cam.x.toFixed(2)+'px,'
@@ -1782,10 +1808,11 @@
     cam.x=Math.max(-ox,Math.min(ox,cam.x));
     cam.y=Math.max(-oy,Math.min(oy,cam.y));
   }
+  /* 全体が収まる倍率＝ズームの下限そのもの（下限側のクランプは持たない）。 */
   function camFitScale(){
     const e=camExtent(), h=camHalf();
-    return Math.max(CAM_MIN,Math.min(CAM_MAX,
-      Math.min((h.w-CAM_PAD)/e.x,(h.h-CAM_PAD)/e.y)));
+    return Math.min(CAM_MAX,
+      Math.min((h.w-CAM_PAD)/e.x,(h.h-CAM_PAD)/e.y));
   }
   function camStop(){
     if(camAnim)cancelAnimationFrame(camAnim); camAnim=0; camTo=null;
@@ -1821,7 +1848,7 @@
   }
   /* 画面のある一点を掴んだまま、倍率だけを変える（寄る中心＝指の位置） */
   function camZoomAt(px,py,factor){
-    const s0=cam.s, s1=Math.max(CAM_MIN,Math.min(CAM_MAX,s0*factor));
+    const s0=cam.s, s1=Math.max(camFitScale(),Math.min(CAM_MAX,s0*factor));
     if(Math.abs(s1-s0)<1e-6)return;
     const cx=viewW()/2, cy=viewH()/2+camBase();
     const gx=(px-cx-cam.x)/s0, gy=(py-cy-cam.y)/s0;
@@ -1845,13 +1872,68 @@
     if(x!==cam.x||y!==cam.y) camTween({x:x,y:y,s:cam.s},320);
   }
 
+  /* ══ 自転（§4.2・§4.5・§5）═══════════════════════════════════
+     一周4分・等速。イージングもゆらぎも入れない——呼吸するのは灯だけ。
+     ・寄るほど自転が落ちる（ω_eff=ω/zoom）。名前が読める倍率では実質停止
+     ・触れたら 400ms で完全停止（ease-out）、離れたら 2400ms で元の角速度へ（ease-in-out）
+       ——skySpin は 0〜1 の倍率で、止まる/戻るはこれだけを撫でる
+     ・ドラッグは手動回転。慣性あり、必ず完全停止まで減衰し、死んでから自転が戻る
+     ・prefers-reduced-motion では自転オフ（傾きと配置はそのまま。手動回転は生きる） */
+  const SKY_T=240;                      // 一周の秒数（§8: 速く感じたら300まで伸ばす）
+  const SKY_W=2*Math.PI/SKY_T;
+  let skyRot=0, skyRaf=0, skyLast=0;
+  let skyVel=0;                         // 手動回転の慣性（rad/s）
+  let skyHeld=0;                        // いま触れられている席の数
+  let skySpin=REDUCED?0:1, spinFrom=1, spinTo=1, spinT0=0, spinDur=0, spinOut=false;
+  function skySpinTween(to,dur,out){
+    if(REDUCED){ skySpin=0; return; }
+    spinFrom=skySpin; spinTo=to; spinT0=performance.now(); spinDur=dur; spinOut=out;
+  }
+  function skyHold(){ skyHeld++; skySpinTween(0,400,true); }
+  function skyRelease(){
+    skyHeld=Math.max(0,skyHeld-1);
+    if(!skyHeld&&!camDrag&&!skyVel) skySpinTween(1,2400,false);
+  }
+  function skyStart(){
+    if(REDUCED||inRoom())return;        // 減モーションは自転そのものを持たない
+    skyLast=performance.now();
+    if(!skyRaf) skyRaf=requestAnimationFrame(skyStep);
+  }
+  function skyStop(){ if(skyRaf)cancelAnimationFrame(skyRaf); skyRaf=0; }
+  function skyStep(now){
+    skyRaf=0;
+    if(inRoom())return;
+    // 伏せられていた画面から戻っても、大きく飛ばない（フレーム間は最大50ms として数える）
+    const dt=Math.min(50,now-skyLast)/1000; skyLast=now;
+    if(spinDur){
+      const p=Math.min(1,(now-spinT0)/spinDur);
+      const k=spinOut?1-Math.pow(1-p,3)
+                     :(p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2);
+      skySpin=spinFrom+(spinTo-spinFrom)*k;
+      if(p>=1)spinDur=0;
+    }
+    let w=0;
+    if(!camDrag){
+      if(skyVel){
+        w+=skyVel;
+        skyVel*=Math.pow(0.995,dt*1000);          // 指数減衰（滑走と同じ止まり方）
+        if(Math.abs(skyVel)<0.004){ skyVel=0; if(!skyHeld)skySpinTween(1,2400,false); }
+      }
+      // 寄るほど落ちる。zoom は「全体が見える倍率」を 1 とする（§4.5）
+      w+=SKY_W*skySpin/Math.max(1,cam.s/camFitScale());
+    }
+    if(w){ skyRot+=w*dt; skyPlace(); }
+    skyRaf=requestAnimationFrame(skyStep);
+  }
+
   /* ── 掴んで動かす ── */
   roomLayer.addEventListener('pointerdown',e=>{
     if(inRoom()||camPinch)return;
     if(e.button)return;                       // 右クリック等は取らない
     camStop();                                // 走っている動きは、掴んだ所で止まる
-    camDrag={x:e.clientX,y:e.clientY,ox:cam.x,oy:cam.y,id:e.pointerId};
-    camDragged=false; camVel={x:0,y:0}; camLast=e.timeStamp;
+    skyVel=0; skySpinTween(0,400,true);       // 掴んだら自転も 400ms で止まる（§5）
+    camDrag={x:e.clientX,y:e.clientY,ox:cam.x,oy:cam.y,rot:skyRot,id:e.pointerId};
+    camDragged=false; camVel={x:0,y:0,r:0}; camLast=e.timeStamp;
     roomCanvas.style.willChange='transform';  // 触っている間だけ（付けっぱなしは端末の負担）
   });
   roomLayer.addEventListener('pointermove',e=>{
@@ -1868,16 +1950,23 @@
       try{roomLayer.setPointerCapture(e.pointerId);}catch(_){}
     }
     const dt=Math.max(1,e.timeStamp-camLast); camLast=e.timeStamp;
-    const nx=camDrag.ox+dx, ny=camDrag.oy+dy;
-    camVel.x=(nx-cam.x)/dt*1000; camVel.y=(ny-cam.y)/dt*1000;
-    cam.x=nx; cam.y=ny; camClamp(); camPaint();
+    /* 横＝球の手動回転（§5 ドラッグ）。指の下の点がついてくる換算は dx/(s·R)。
+       縦＝寄っている時の見上げ・見下ろし（引き切った絵では clamp が 0 に畳む）。 */
+    const nr=camDrag.rot+dx/(cam.s*SKY_R), ny=camDrag.oy+dy;
+    camVel.r=(nr-skyRot)/dt*1000; camVel.y=(ny-cam.y)/dt*1000; camVel.x=0;
+    skyRot=nr; cam.y=ny; camClamp(); camPaint(); skyPlace();
   });
   function camEndDrag(){
     if(!camDrag)return;
     camDrag=null;
     roomLayer.classList.remove('grabbing');
     roomCanvas.style.willChange='';
-    // 指の速さのまま滑る。縁に着いたらその軸だけ静かに止める（返さない）
+    /* 回転の慣性：指の角速度のまま回り、必ず完全停止まで減衰する（§5）。
+       死んでから自転が戻る（skyStep が看取って skySpinTween を呼ぶ）。
+       弾みが無ければ、離れた今から 2400ms かけて自転へ帰る。 */
+    if(!REDUCED&&Math.abs(camVel.r)>0.15) skyVel=camVel.r;
+    else if(!skyHeld) skySpinTween(1,2400,false);
+    // 縦は従来どおり滑る。縁に着いたらその軸だけ静かに止める（返さない）
     if(!REDUCED&&Math.hypot(camVel.x,camVel.y)>80) camGlide();
   }
   roomLayer.addEventListener('pointerup',camEndDrag);
@@ -1934,7 +2023,8 @@
     if(t-camTapAt<320){ camTapAt=0; camFit(true); } else camTapAt=t;
   });
 
-  /* ── 鍵盤 ── 矢印で動かし、＋−で寄り引き、0 で戻る。倍率は画面に出さない */
+  /* ── 鍵盤 ── 左右で球を回し、上下で見上げ・見下ろし、＋−で寄り引き、0 で戻る。
+     倍率は画面に出さない */
   document.addEventListener('keydown',e=>{
     if(inRoom()||!ROOMS.length)return;
     if(e.metaKey||e.ctrlKey||e.altKey)return;
@@ -1943,8 +2033,8 @@
     const step=Math.round(Math.min(viewW(),viewH())*0.18);
     let hit=true;
     switch(e.key){
-      case 'ArrowLeft':  cam.x+=step; break;
-      case 'ArrowRight': cam.x-=step; break;
+      case 'ArrowLeft':  skyRot+=step/(cam.s*SKY_R); skyPlace(); break;
+      case 'ArrowRight': skyRot-=step/(cam.s*SKY_R); skyPlace(); break;
       case 'ArrowUp':    cam.y+=step; break;
       case 'ArrowDown':  cam.y-=step; break;
       case '+': case ';': case '=': camZoomAt(viewW()/2,viewH()/2+camBase(),1.18); return e.preventDefault();
@@ -1988,6 +2078,7 @@
 
   function enterRoom(r,push){
     ROOM=r;
+    skyStop();                       // 畳んだ面を回し続けない
     roomLayer.classList.add('off');
     roomBar.classList.remove('off');
     roomNew.classList.add('off');
@@ -2019,6 +2110,9 @@
     // 部屋の中に居るあいだの画面の変化（回転・窓の大きさ）は camera に届いていない
     // ——面が畳まれている間は測っても無意味なので、戻ってきた今、組み直す。
     camSettle();
+    // 触れられたままの数字・慣性は持ち越さない。戻った宙は、ただ自転している
+    skyHeld=0; skyVel=0; spinDur=0; skySpin=REDUCED?0:1;
+    skyStart();
     fetchRooms();
   }
 
