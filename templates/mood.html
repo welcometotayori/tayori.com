@@ -2331,16 +2331,72 @@
     l.classList.add('deep');
     setTimeout(()=>l.classList.remove('deep'),4200);
   }
+  /* ── 合成の打鍵（2026-07-28 作り直し）───────────────────────
+     打鍵を持たないことば（種として置いた分・明示の前に放たれた分）は、ここが
+     その人の手つきの代わりになる。旧版は一字 48〜114ms をただ並べていたので、
+     **漢字まで一字ずつ現れた**——日本語をIMEで打つ手つきには絶対にならない
+     （変換した語は、まとめて一度に置かれる）。速さもほぼ一定で、機械が書いていた。
+     ここで写すのは四つだけ：
+       ・漢字の連なりは、読みを打つ「無音の間」のあとに**まとめて**現れる（変換）
+       ・かな・英数は一字ずつ。速い連なり（burst）と、その谷が交互に来る
+       ・読点で息を継ぎ、句点と改行ではもっと長く置く
+       ・ときどき一二字を消して、打ち直す（迷いの手つき。ことばに一度まで）
+     乱数の種は本文（fnv）＝同じことばは何度浮かんでも同じ筆致で書かれる。
+     ——毎回ちがう打ち方に見えたら、それは誰かが打った跡ではなく、その場の乱数だ。 */
+  function rndFrom(seed){
+    let s=(seed>>>0)||0x9E3779B9;
+    return function(){s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};
+  }
+  const RE_KANJI=/[々㐀-䶿一-鿿豈-﫿]/;
+  const RE_HIRA=/[ぁ-ゟ]/;
   function synthTrace(text){
     const chars=[...String(text||'')];
-    const out=[];let acc=0,v='';
-    chars.forEach((c,i)=>{
-      let d=48+Math.random()*66;
-      if(/[、。！？…]/.test(c)) d+=240+Math.random()*260;        // 句読点のあとは息をつく
-      else if(c==='\n') d+=340+Math.random()*280;
-      else if(i&&Math.random()<0.055) d+=220+Math.random()*400;  // ふと止まる
-      acc+=d; v+=c; out.push({at:acc,v:v});
-    });
+    if(chars.length<2) return [{at:0,v:chars.join('')}];
+    const rnd=rndFrom(fnv(text));
+    const cur=[], out=[{at:0,v:''}];   // 白紙に筆先が立っているところから始める
+    let acc=0,wait=0;
+    const put=d=>{acc+=Math.max(0,d)+wait;wait=0;out.push({at:acc,v:cur.join('')});};
+    let burst=0, doubt=chars.length>=10?1:0, i=0;
+    while(i<chars.length){
+      const c=chars[i];
+      if(RE_KANJI.test(c)){
+        // 漢字の連なり＋送りがな一字までを、ひとつの変換として置く（「研ぐ」「歩いた」）
+        let j=i+1;
+        while(j<chars.length&&RE_KANJI.test(chars[j]))j++;
+        if(j<chars.length&&RE_HIRA.test(chars[j])&&
+           (j+1>=chars.length||!RE_HIRA.test(chars[j+1]))) j++;
+        const kana=Math.max(2,Math.round((j-i)*1.8));       // 読みのかな数の見当
+        for(let k=i;k<j;k++) cur.push(chars[k]);
+        put(kana*(56+rnd()*44)+130+rnd()*250);              // 読みを打つ間 ＋ 候補を選ぶ間
+        i=j; continue;
+      }
+      cur.push(c);
+      if(burst>0){ burst--; put(44+rnd()*30); }             // 速い連なりの途中
+      else if(rnd()<0.34){ burst=1+Math.floor(rnd()*3); put(58+rnd()*46); }
+      else put(86+rnd()*104);                                // 谷
+      if(c==='\n') wait+=360+rnd()*420;                      // 息継ぎは次の一字の前に置く
+      else if(/[。！？…]/.test(c)) wait+=300+rnd()*400;
+      else if(/[、，]/.test(c)) wait+=150+rnd()*260;
+      else if(rnd()<0.05) wait+=200+rnd()*420;               // ふと止まる
+      i++;
+      /* 打ち直し。かなの並びの後ろでだけ起こす——変換で置かれた漢字を一字ずつ
+         消して一字ずつ戻すと、それこそIMEの手つきから外れる。 */
+      if(doubt&&i>=6&&i<chars.length-2&&rnd()<0.1){
+        const n=1+Math.floor(rnd()*2), back=cur.slice(-n);
+        if(back.length===n&&back.every(ch=>!RE_KANJI.test(ch)&&ch!=='\n')){
+          doubt--;
+          wait+=180+rnd()*380;                               // 手が止まる
+          for(let k=0;k<n;k++){ cur.pop(); put(70+rnd()*66); }
+          wait+=200+rnd()*430;                               // 考えている
+          for(const ch of back){ cur.push(ch); put(66+rnd()*80); }
+        }
+      }
+    }
+    const total=out[out.length-1].at;
+    if(total>9000){const k=9000/total;out.forEach(o=>o.at*=k);}   // 全体は9秒に収める
+    // 漢字ばかりの短いことば（「透明な林檎」など）は変換二回で終わってしまい、
+    // 書かれたというより点いたように見える。手が遅い人の速さまで引き伸ばす（最大2倍）。
+    else if(total<1900){const k=Math.min(2,1900/Math.max(1,total));out.forEach(o=>o.at*=k);}
     return out;
   }
   function playType(el,text,steps,done){
@@ -2348,22 +2404,34 @@
     const norm=traceFrames(text,steps);
     if(REDUCED||norm.length<2){el.textContent=text;if(done)done();return;}
     const caret='<span class="tcaret"></span>';
-    /* 時計は「最初のフレームが来た時」に合わせる（2026-07-27）。
-       ここは performance.now() を呼んだ瞬間を 0 にしていたが、その時刻と最初の
-       requestAnimationFrame が来る時刻は同じではない。時計だけは止まらず進むのに
-       フレームは止まる場面が携帯にはいくつもある——画面が伏せられている・別のアプリに
-       行っている・低電力・指でスクロールしている間。spawnDrift は rAF を二段重ねた
-       中から、しかも setTimeout の連なりから呼ばれる（＝フレームが止まっていても
-       呼ばれ続ける）ので、戻ってきた最初の一フレームで now-t0 が再生の全長を越え、
-       while が全フレームを一度に食べてしまう＝**打鍵の再生が起きず、ことばが
-       いきなり書き上がった姿で出る**。机の上ではフレームが止まらないので、これは
-       携帯でだけ起きていた。緩急（clampGap・normEvents）は一切触っていない。 */
-    let i=0,t0=null;
+    /* 再生の時計は「壁の時計」ではなく**フレームの差分を積んだ時計**（2026-07-28）。
+       2026-07-27 に始まりを最初のフレームへ合わせたが、直したのは始まりだけで、
+       途中で止まる場合が残っていた——iOS はフレームを平気で止める：指でスクロール
+       している間・アドレスバーが伸び縮みする間・別のアプリへ行っている間・低電力。
+       止まっているあいだも壁の時計は進むので、戻ってきた一フレームで now-t0 が
+       再生の全長を越え、while が残り全部を一度に食べる＝**打鍵が再生されず、
+       ことばがいきなり書き上がった姿で出る**。iPhone は開いた直後がいちばん詰まる
+       （読み込み・霞・物理）ので、初出の一回目がまるごと消えていた。
+       差分を 100ms で頭打ちにして積めば、止まっていた間は「無かったこと」になり、
+       戻ってきた続きから書かれる。ふつうの一フレーム（16ms）は素通りするので、
+       緩急（clampGap・normEvents・synthTrace）には一切触れない。 */
+    let i=0,last=null,e=0,fin=false;
+    const finish=()=>{
+      if(fin)return; fin=true;
+      el.textContent=text; el.classList.remove('nijimi');
+      if(done)done();
+    };
     el.innerHTML=esc(norm[0].v)+caret;
+    /* フレームが一枚も来ない場（裏に回ったまま帰ってこない・自動化されたブラウザ）では、
+       ことばが空のまま宙に残ってしまう。12秒待って一枚も描かれていなければ、
+       再生は諦めて書き上がった姿だけを置く——読めないより、読めるほうがいい。 */
+    setTimeout(()=>{ if(el._run===run&&el.isConnected&&last===null) finish(); },12000);
     requestAnimationFrame(function frame(now){
       if(el._run!==run||!el.isConnected){el.classList.remove('nijimi');return;}   // 閉じた・差し替わった
-      if(t0===null)t0=now;
-      const e=now-t0;
+      if(fin)return;
+      if(last===null)last=now;
+      e+=Math.min(Math.max(0,now-last),100);
+      last=now;
       while(i<norm.length&&norm[i].at<=e){
         el.innerHTML=esc(norm[i].v)+caret;
         el.classList.remove('nijimi');el._nij=false;   // 間が明けた＝滲みは引く
@@ -2374,7 +2442,7 @@
         if(norm[i].pause&&!el._nij){el._nij=true;el.classList.add('nijimi');deepBreath();}
         requestAnimationFrame(frame);
       }
-      else{ el.textContent=text; el.classList.remove('nijimi'); if(done)done(); }
+      else finish();
     });
   }
 
