@@ -2427,6 +2427,7 @@ _MAIL_RULE = "#57463A"      # --rule（罫）を闇の上に重ねた色
 _MAIL_INK = "#F3F1EC"       # --ink-1
 _MAIL_INK_FAINT = "#81807E"  # --ink-4
 _MAIL_THREAD = "#B38F6F"    # --thread（封の糸＝リンクの色）
+_MAIL_WARN = "#C7A88D"      # --ink-care（うまくいかなかった時の一文。赤で叱らない）
 
 
 def _html_email(body, unsubscribe_url=None):
@@ -2517,19 +2518,27 @@ def _issue_email_verification(db, user_id, email, username):
 
 
 def _landing_page(title, message, ok=True):
-    color = "#6B8478" if ok else "#B5543A"
+    """メールから踏んで着く紙（/verify・/unsubscribe）。2026-07-28、宙の色へ。
+    暗いお知らせのリンクを踏んで、着いた先だけが白く光るのは、道が切れて見える。
+    色は _MAIL_* と同じ（＝_sky_tokens.html の写し）。
+    うまくいかなかった時の一文だけ、墨を暖色（--ink-care）へ寄せる——赤で叱らない。
+    大きくも太くもせず、種類が違うことだけを言う（4-1 でケアの墨に決めた作法と同じ）。"""
+    color = _MAIL_INK if ok else _MAIL_WARN
     safe_msg = html.escape(message).replace("&lt;br&gt;", "<br>")
     return (
         "<!doctype html><html lang=ja><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<meta name=color-scheme content=dark>"
         f"<title>{title} — tayori-たより-</title><style>"
-        "body{background:#F2EBDD;color:#3A2E25;font-family:'Hiragino Mincho ProN',serif;"
+        f"html{{background:{_MAIL_BG}}}"
+        f"body{{background:{_MAIL_BG};color:{_MAIL_INK};"
+        "font-family:'Hiragino Mincho ProN','Yu Mincho',serif;"
         "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}"
-        ".card{max-width:380px;text-align:center;background:#EDE3D1;border:1px solid #CBBBA0;"
-        "border-radius:4px;padding:36px 28px;box-shadow:0 10px 30px -18px rgba(58,46,37,.5)}"
+        f".card{{max-width:380px;text-align:center;background:{_MAIL_CARD};"
+        f"border:1px solid {_MAIL_RULE};border-radius:4px;padding:36px 28px}}"
         "h1{font-size:34px;letter-spacing:.18em;margin:0 0 6px}"
         f".m{{color:{color};font-size:15px;letter-spacing:.05em;line-height:1.95;margin-top:14px}}"
-        "a{color:#B5543A}</style></head><body><div class=card><h1>たより</h1>"
+        f"a{{color:{_MAIL_THREAD}}}</style></head><body><div class=card><h1>たより</h1>"
         f"<div class=m>{safe_msg}</div>"
         f"<p style='margin-top:22px'><a href='{BASE_URL}/'>戻る →</a></p>"
         "</div></body></html>"
