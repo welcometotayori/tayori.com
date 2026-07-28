@@ -109,6 +109,24 @@ approx(Math.hypot(tilted.x, tilted.y), Math.hypot(flat.x, flat.y), 1e-12,
 var rot = seatProject({theta: Math.PI / 2, phi: -30 * DEG}, 30 * DEG, 0);
 approx(rot.depth, 1, 1e-12, '自転の位相 rot は φ に足される（φ+rot=0 で正面）');
 
+/* ── ⑩' ピッチ：赤道を線から楕円へ開く ─────────────────────────
+   ピッチ 0 では赤道リング（θ=90°）は y が一定＝画面上で一本の線に潰れる。
+   ピッチを入れると赤道の各点が y 方向にばらけ、手前（depth>0）と奥（depth<0）が
+   上下に分かれる（＝楕円が開く）＝回しても輪に繋がる根拠。 */
+function equatorY(phi, beta) { return seatProject({theta: Math.PI / 2, phi: phi * DEG}, 0, 0, beta).y; }
+var flatYs = [0, 45, 90, 135].map(function (p) { return equatorY(p, 0); });
+ok(Math.max.apply(null, flatYs) - Math.min.apply(null, flatYs) < 1e-9,
+   'ピッチ0：赤道は y 一定（一本の線に潰れる）');
+var pitchYs = [0, 45, 90, 135].map(function (p) { return equatorY(p, 25 * DEG); });
+ok(Math.max.apply(null, pitchYs) - Math.min.apply(null, pitchYs) > 0.3,
+   'ピッチ有り：赤道が y 方向に開く（楕円になる）');
+var near = seatProject({theta: Math.PI / 2, phi: 20 * DEG}, 0, 0, 25 * DEG);   // 手前
+var far = seatProject({theta: Math.PI / 2, phi: 160 * DEG}, 0, 0, 25 * DEG);   // 奥
+ok(near.depth > 0 && far.depth < 0, 'ピッチ後も手前/奥（depth の符号）は保たれる');
+ok((near.y < 0) !== (far.y < 0), '手前と奥は上下の別の弧に分かれる（線でなく輪）');
+var frontPitch = seatProject({theta: Math.PI / 2, phi: 0}, 0, 0, 25 * DEG);
+approx(frontPitch.depth, Math.cos(25 * DEG), 1e-12, 'ピッチは正面の depth を cosβ に寝かせる');
+
 /* ── ⑪ 旧・同心円版（roomSeatPlanar）はロールバック用に生きている ── */
 var p0 = roomSeatPlanar(0, 'x');
 approx(p0.x, 0, 1e-9, '平面版：席0 は真上（x=0）');

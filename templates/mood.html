@@ -1455,12 +1455,22 @@
     throw new RangeError('capacity exceeded: increment generation');
   }
   /* 球面座標 → 正射影（透視ではない：奥の部屋も同じ大きさ＝「字を小さくしない」が
-     投影レベルで守られる）。rot は自転の位相、alpha は視線 z 軸まわりの傾き。
+     投影レベルで守られる）。rot は自転の位相、alpha は視線 z 軸まわりの傾き（ロール）、
+     beta は視軸を赤道面から起こす角（ピッチ＝少し上から見下ろす）。
      返すのは単位球上の値——R を掛けるのは描画側の仕事。
-     y は数学の向き（上が正）。画面に置くときに符号を返すこと。 */
-  function seatProject(seat,rot,alpha){
+     y は数学の向き（上が正）。画面に置くときに符号を返すこと。
+
+     ピッチが要る理由：全部屋が赤道リングに載ると、赤道は正射影で「ほぼ一本の線」に
+     潰れる（θ≒90° で y≒一定）。線の上では部屋が端まで滑って引き返すだけで、回しても
+     輪に繋がらない＝「途中でキレる」。視軸を少し起こす（beta）と赤道が開いた楕円になり、
+     手前が下の弧・奥が上の弧に分かれて、部屋が輪をぐるりと巡る。線は引かない（§9）。 */
+  function seatProject(seat,rot,alpha,beta){
     const th=seat.theta, ph=seat.phi+(rot||0);
-    const x=Math.sin(th)*Math.sin(ph), y=Math.cos(th), z=Math.sin(th)*Math.cos(ph);
+    let x=Math.sin(th)*Math.sin(ph), y=Math.cos(th), z=Math.sin(th)*Math.cos(ph);
+    // ピッチ：画面の横軸まわりに回す。北極が手前へ倒れ、赤道が楕円に開く
+    const cb=Math.cos(beta||0), sb=Math.sin(beta||0);
+    const y1=y*cb-z*sb, z1=y*sb+z*cb; y=y1; z=z1;
+    // ロール：画面の中で傾ける（見かけの姿勢だけ・depth は変えない）
     const ca=Math.cos(alpha||0), sa=Math.sin(alpha||0);
     return {x:x*ca-y*sa, y:x*sa+y*ca, depth:z};
   }
@@ -1485,6 +1495,10 @@
      SKY_ALPHA=23.4°（2026-07-28 Kosei 確定）。地球の地軸の傾きと同じ——
      仕様の候補は 15〜20° だったが、実物を見てこの値に決めた。 */
   const SKY_ALPHA=23.4*Math.PI/180;
+  /* ピッチ：視軸を赤道面から起こす角。0 だと赤道が線に潰れて回しても輪に繋がらない
+     （途中でキレる）。少し起こすと赤道が開いた楕円になり、部屋が輪を巡る。
+     浅すぎると線のまま・深すぎると全球儀になって弧の趣が消える。§8 未確定＝実物で詰める。 */
+  const SKY_BETA=22*Math.PI/180;
   const SKY_R=420;
 
   /* 画面の寸法。innerWidth は文脈によって 0 を返すことがあり、そのまま ||360 に
@@ -1724,7 +1738,7 @@
   function skyPlace(){
     for(const el of roomEls()){
       const s=el._sph; if(!s)continue;
-      const p=seatProject(s,skyRot,SKY_ALPHA);
+      const p=seatProject(s,skyRot,SKY_ALPHA,SKY_BETA);
       el._seat={x:p.x*SKY_R, y:-p.y*SKY_R, depth:p.depth};
       el.style.setProperty('--sx',(p.x*SKY_R).toFixed(1)+'px');
       el.style.setProperty('--sy',(-p.y*SKY_R).toFixed(1)+'px');
