@@ -1974,6 +1974,7 @@
   /* ── 掴んで動かす ── */
   roomLayer.addEventListener('pointerdown',e=>{
     if(inRoom()||camPinch)return;
+    if(camDrag)return;                        // 二本目の指は、一本目の掴みを奪わない
     if(e.button)return;                       // 右クリック等は取らない
     camStop();                                // 走っている動きは、掴んだ所で止まる
     skyVel=0; skySpinTween(0,400,true);       // 掴んだら自転も 400ms で止まる（§5）
@@ -2045,25 +2046,53 @@
     return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1;}
   function tmid(e){const a=e.touches[0],b=e.touches[1];
     return {x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
+  /* 二本指が居た時刻（2026-07-28）。ピンチを終えて指を二本上げると pointerup が
+     続けて二つ届き、下の「二度叩き＝はじめの絵に戻る」に化けていた——**寄せた絵が、
+     指を離した瞬間に必ず引き戻る**＝携帯で寄り引きが効かないと言われていたものの正体。
+     二本指に触れていた間と、その直後しばらくは、叩きとして数えない。 */
+  let camMulti=0, camMany=false;   // camMany＝いま触れている手が、二本以上だった一続きか
   roomLayer.addEventListener('touchstart',e=>{
-    if(inRoom()||e.touches.length!==2)return;
+    if(inRoom())return;
+    if(e.touches.length>=2){ camMany=true; camMulti=e.timeStamp; camTapAt=0; }
+    if(e.touches.length!==2)return;
     camStop(); camEndDrag();
     camPinch={d:tdist(e),s:cam.s};
   },{passive:true});
   roomLayer.addEventListener('touchmove',e=>{
     if(!camPinch||e.touches.length!==2)return;
     e.preventDefault();
+    camMulti=e.timeStamp;
     const m=tmid(e), want=camPinch.s*tdist(e)/camPinch.d;
     camZoomAt(m.x,m.y,want/cam.s);
   },{passive:false});
-  roomLayer.addEventListener('touchend',e=>{ if(camPinch&&e.touches.length<2)camPinch=null; });
-  roomLayer.addEventListener('touchcancel',()=>{camPinch=null;});
+  roomLayer.addEventListener('touchend',e=>{
+    /* 印を更新するのは、二本以上だった一続きの時だけ。ここを無条件にすると、
+       一度ピンチした後は**どの一本指の叩きも「ピンチの後始末」に見えて**、
+       二度叩きで戻れなくなる（＝別の入口をひとつ潰す）。 */
+    if(camMany) camMulti=e.timeStamp;
+    if(!e.touches.length) camMany=false;
+    if(!camPinch||e.touches.length>=2)return;
+    camPinch=null;
+    /* 一本だけ指が残っているなら、そのまま掴みを渡す——寄ったあと指を一本残して
+       動かしたいのに何も起きない、を作らない（ピンチと移動は同じひと続きの手つき）。 */
+    if(e.touches.length===1){
+      const t=e.touches[0];
+      camDrag={x:t.clientX,y:t.clientY,ox:cam.x,oy:cam.y,rot:skyRot,id:null};
+      camDragged=true; camVel={x:0,y:0,r:0}; camLast=e.timeStamp;
+    }
+  });
+  roomLayer.addEventListener('touchcancel',e=>{
+    camPinch=null;
+    if(camMany){camMulti=e.timeStamp;camMany=false;}
+  });
 
   /* 二度叩いたら、はじめの絵に戻る（迷子になっても必ず帰れる／Apple §16 wayfinding） */
   roomLayer.addEventListener('dblclick',e=>{ if(!inRoom()){e.preventDefault();camFit(true);} });
   let camTapAt=0;
   roomLayer.addEventListener('pointerup',e=>{
     if(inRoom()||e.pointerType==='mouse'||camDragged)return;
+    // ピンチの後始末（二本の指が上がる）は、叩きではない
+    if(camPinch||e.timeStamp-camMulti<600){ camTapAt=0; return; }
     const t=e.timeStamp;
     if(t-camTapAt<320){ camTapAt=0; camFit(true); } else camTapAt=t;
   });
