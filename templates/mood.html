@@ -872,7 +872,7 @@
   .room-new{position:fixed;left:50%;transform:translateX(-50%);
             bottom:calc(96px + var(--safe-b));z-index:8;
             display:flex;flex-direction:column;align-items:center;gap:var(--s1)}
-  .room-new::before,.care-link::before,.ttl::before,.shiori::before,.arrivals::before{
+  .room-new::before,.ttl::before,.shiori::before,.arrivals::before{
             content:'';position:absolute;z-index:-1;
             inset:-14px -30px;pointer-events:none;
             background:radial-gradient(62% 60% at 50% 50%,
@@ -881,13 +881,13 @@
             -webkit-mask-image:radial-gradient(60% 58% at 50% 50%,#000 0%,#000 58%,transparent 94%);
                     mask-image:radial-gradient(60% 58% at 50% 50%,#000 0%,#000 58%,transparent 94%)}
   @media (prefers-reduced-transparency: reduce){
-    .room-new::before,.care-link::before,.ttl::before,.shiori::before,.arrivals::before{
+    .room-new::before,.ttl::before,.shiori::before,.arrivals::before{
             backdrop-filter:none;-webkit-backdrop-filter:none;
             background:radial-gradient(66% 62% at 50% 50%,
                        rgba(8,8,13,.99) 0%,rgba(8,8,13,.97) 60%,rgba(8,8,13,0) 95%)}
   }
   /* 題字と栞は position を持っていない（header の flex の子）ので、霞を敷く土台を作る。
-     .arrivals / .care-link / .room-new は既に fixed なので触らない（上書きすると位置が壊れる）。 */
+     .arrivals / .room-new は既に fixed なので触らない（上書きすると位置が壊れる）。 */
   .ttl,.shiori{position:relative}
   /* 4-9（2026-07-28）：栞の初回だけの手引き。粒の真下に一行、出て、消える */
   .shiori-hint{position:absolute;top:calc(100% + 2px);right:0;white-space:nowrap;
@@ -956,23 +956,9 @@
     .room{transition:opacity .3s ease,color .4s ease}
   }
 
-  /* 相談窓口の常時導線（宙v1 §12）。宙の右下に、闇より一段だけ明るく置く。
-     2026-07-28（4-1）：墨を --ink-care（暖）に。「放つ」「新しいジャンルを作る」と
-     同じ白い墨だと、装飾と見分けがつかない——しんどい状態の人ほど薄い文字は
-     読み飛ばす。大きくも太くもしない：目立たせるのではなく、種類が違うと分かる
-     ようにする（「そっと」と「見えない」は違う）。薬箱がそこにある、程度の重さ。 */
-  /* z は 12：z9 のままだと .cast-btn（z11）の霞（::before 300×180px）がこの文字の
-     上に描かれ、375px 幅では「ひとりで」の四字が文字どおり塗り消されていた
-     （2026-07-28 実測。elementFromPoint は care-link を返す＝触れるのに読めない状態）。
-     書く柱（.cast z12）は DOM で後ろにいるので、柱が立てば今までどおりこの上に被さる。 */
-  .care-link{position:fixed;right:calc(20px + var(--safe-r));bottom:calc(22px + var(--safe-b));
-             z-index:12;min-height:var(--touch);display:inline-flex;align-items:center;
-             font-size:11.5px;letter-spacing:0.18em;color:var(--ink-care);
-             text-decoration:none;border-bottom:1px solid var(--rule);
-             padding:10px 2px;text-shadow:0 0 12px rgba(8,8,13,.9);
-             transition:color .22s var(--ease),opacity .22s var(--ease)}
-  .care-link:hover{color:color-mix(in srgb,var(--ink-care) 55%,var(--chalk))}
-  .care-link:active{opacity:.62}
+  /* .care-link の一式は 2026-07-28 に削除（右下の常時導線ごと外した）。
+     相談窓口そのものは残っている：放ったあとに本人にだけ立つ .care-note と /contact。
+     ケアの墨（--ink-care）はどこにも掛からなくなったが、トークンには残してある。 */
 
   /* 灯がすでにともっていることば（宙v1 §4.1）。ボタンではなく、状態の一文 */
 
@@ -1118,7 +1104,7 @@
   {# 2026-07-26：9項目を4つへ。同じ重さの行が並ぶほど壁に見えて、どれも読まれなくなる。
      ・棚／自分の書架 → 自分のページ（/me）の中のタブ
      ・理念／運営者   → tayori について（/about）の章
-     ・相談窓口       → 宙の右下の常設導線（「ひとりで抱えているとき」）へ。問い合わせとは完全に分ける。
+     ・相談窓口       → 放ったあとに本人にだけ添える紙片と /contact へ（右下の常設導線は 2026-07-28 に撤去）。
      ・利用規約／プライバシー → 行から外し、下に一行の細い字で
      細線のしるしを添えるのは「自分のページ」と「設定」だけ。全部に付けると、印は印でなくなる。
      2026-07-27：「tayori-たより-について」と「お問い合わせ」の2行を「このサイトについて」1行へ統合。
@@ -1194,12 +1180,11 @@
   </div>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
   <div class="lantern" id="lantern" aria-hidden="true"></div>
-  <!-- 相談窓口の常時導線（宙v1 §12）：宙のすみに、いつでもある。
-       2026-07-27：文言を「相談窓口」から状態の記述へ。「窓口」は機能名で、押すには
-       自分を当事者だと認める要る——「ひとりで抱えているとき」は状態だけを置き、
-       つらいかどうかの判定を相手に委ねない。条件出し分けはしない（見張られている感が出る）。 -->
-  <a class="care-link" href="https://www.mhlw.go.jp/mamorouyokokoro/"
-     target="_blank" rel="noopener">ひとりで抱えているとき</a>
+  {# 宙の右下にあった常時導線（「ひとりで抱えているとき」）は 2026-07-28 に外した。
+     宙のどの面にも常に一つだけ外へ出ていく行き先が貼りついている状態で、
+     いつも同じ隅に同じ字があること自体が、この場の姿を決めてしまっていた。
+     相談窓口そのものは無くしていない——**書いた本人にだけ**添える紙片（app.py の
+     ケア判定 → 放ったあとの一文）と、お問い合わせ（/contact）に残してある。 #}
 
   {% if not logged_in %}
   {# 2026-07-27：上の二行を落とした。下の一句とほぼ同じことを、より多い字数で
@@ -1569,12 +1554,12 @@
 
   /* 漂える面。縁は画面の四辺だが、上下は「動かないUIの下」まで詰める。
      ——漂うようになると、ことばは画面のどこへでも行く。据え置きの文字（題字・部屋の名前・
-     はじめる・放つ・相談窓口）の下をくぐると、両方とも読めなくなる。据え置きのものは
+     はじめる・放つ）の下をくぐると、両方とも読めなくなる。据え置きのものは
      動かないので、ぶつかる壁にするのではなく、漂える面をその手前で閉じるほうが素直
      （壁にすると、狭い隙間に挟まったものが毎フレーム押し合って震える）。
      v3 の pickSpot は「置く瞬間だけ」これを避けていた。いまは在るあいだ避け続ける。 */
   const TOP_CHROME='header,.room-bar,.about,.arrivals';
-  const LOW_CHROME='.lp,.room-new,.cast-btn,.care-link';
+  const LOW_CHROME='.lp,.room-new,.cast-btn';
   function chromeBand(){
     const H=viewH();
     let top=EDGE,low=H-EDGE;
@@ -1832,7 +1817,7 @@
   let camDrag=null, camDragged=false, camPinch=null, camTouchedByUser=false;
   let camVel={x:0,y:0}, camLast=0;
 
-  /* 円の中心を、据え置きのUI（題字・部屋をつくる・相談窓口）の間の真ん中に置く。
+  /* 円の中心を、据え置きのUI（題字・部屋をつくる・書く）の間の真ん中に置く。
      画面の中央に固定すると、下の導線のぶんだけ絵が下に沈んで見える。 */
   function camBase(){
     const b=chromeBand();
