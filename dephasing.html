@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dephasing — 位相のずれ</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* Anthropic Brand Colors */
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar h1 {
+            font-family: 'Lora', serif;
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--anthropic-dark);
+            margin-bottom: 8px;
+        }
+
+        .sidebar .subtitle {
+            color: var(--anthropic-mid-gray);
+            font-size: 14px;
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        /* Control Sections */
+        .control-section {
+            margin-bottom: 32px;
+        }
+
+        .control-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--anthropic-dark);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-section h3::before {
+            content: '•';
+            color: var(--anthropic-orange);
+            font-weight: bold;
+        }
+
+        /* Seed Controls */
+        .seed-input {
+            width: 100%;
+            background: var(--anthropic-light);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 12px;
+            border: 1px solid var(--anthropic-light-gray);
+            text-align: center;
+        }
+
+        .seed-input:focus {
+            outline: none;
+            border-color: var(--anthropic-orange);
+            box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
+            background: white;
+        }
+
+        .seed-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .regen-button {
+            margin-bottom: 0;
+        }
+
+        /* Parameter Controls */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--anthropic-dark);
+            margin-bottom: 8px;
+        }
+
+        .control-group .hint {
+            display: block;
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--anthropic-mid-gray);
+            margin-top: -4px;
+            margin-bottom: 8px;
+            line-height: 1.35;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+            height: 4px;
+            background: var(--anthropic-light-gray);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--anthropic-orange);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            background: #c86641;
+        }
+
+        .slider-container input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--anthropic-orange);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .value-display {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* Readout */
+        .readout {
+            background: var(--anthropic-light);
+            border: 1px solid var(--anthropic-light-gray);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--anthropic-dark);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .readout .bar {
+            flex: 1;
+            height: 4px;
+            margin: 0 10px;
+            background: var(--anthropic-light-gray);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .readout .bar i {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: var(--anthropic-orange);
+            transition: width 0.25s ease;
+        }
+
+        /* Color Pickers */
+        .color-group {
+            margin-bottom: 16px;
+        }
+
+        .color-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+            margin-bottom: 4px;
+        }
+
+        .color-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-picker-container input[type="color"] {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: none;
+            padding: 0;
+        }
+
+        .color-value {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+        }
+
+        /* Buttons */
+        .button {
+            background: var(--anthropic-orange);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+
+        .button:hover {
+            background: #c86641;
+            transform: translateY(-1px);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.secondary {
+            background: var(--anthropic-blue);
+        }
+
+        .button.secondary:hover {
+            background: #5a8bb8;
+        }
+
+        .button.tertiary {
+            background: var(--anthropic-green);
+        }
+
+        .button.tertiary:hover {
+            background: #6b7b52;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .button-row .button {
+            flex: 1;
+        }
+
+        /* Canvas Area */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        #canvas-container {
+            width: 100%;
+            max-width: 1000px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1);
+            background: white;
+        }
+
+        #canvas-container canvas {
+            display: block;
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--anthropic-mid-gray);
+        }
+
+        /* Responsive - Stack on mobile */
+        @media (max-width: 600px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            .canvas-area {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Control Sidebar -->
+        <div class="sidebar">
+            <h1>Dephasing</h1>
+            <div class="subtitle">位相のずれ — motion as a reading of one shared field, sampled at each element's own phase. Coherence comes from similarity, never from proximity.</div>
+
+            <!-- Seed Section -->
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="12345" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next →</button>
+                </div>
+                <button class="button tertiary regen-button" onclick="randomSeedAndUpdate()">↻ Random</button>
+            </div>
+
+            <!-- Readout -->
+            <div class="control-section">
+                <h3 id="readout-title">灯 / Coherence</h3>
+                <div class="readout">
+                    <span id="coh-label">R</span>
+                    <span class="bar"><i id="coh-bar"></i></span>
+                    <span id="coh-value">0.00</span>
+                </div>
+                <div class="readout">
+                    <span>breath</span>
+                    <span class="bar"><i id="breath-bar"></i></span>
+                    <span id="breath-value">0.00</span>
+                </div>
+            </div>
+
+            <!-- Parameters Section -->
+            <div class="control-section">
+                <h3>Parameters</h3>
+
+                <div class="control-group">
+                    <label>Element</label>
+                    <span class="hint">what is actually drifting</span>
+                    <div class="button-row">
+                        <button class="button" id="mode-marks" onclick="setMode('marks')">Marks</button>
+                        <button class="button secondary" id="mode-words" onclick="setMode('words')">文字</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Word size</label>
+                    <span class="hint">文字 mode only</span>
+                    <div class="slider-container">
+                        <input type="range" id="wordSize" min="9" max="34" step="1" value="18" oninput="updateParam('wordSize', this.value)">
+                        <span class="value-display" id="wordSize-value">18</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Motion window</label>
+                    <span class="hint">1呼吸のうち動く割合。残りは静止</span>
+                    <div class="slider-container">
+                        <input type="range" id="motionWindow" min="0.05" max="0.6" step="0.01" value="0.28"
+                               oninput="updateParam('motionWindow', this.value)">
+                        <span class="value-display" id="motionWindow-value">0.28</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Crowding relief</label>
+                    <span class="hint">how hard words refuse to overlap</span>
+                    <div class="slider-container">
+                        <input type="range" id="crowding" min="0" max="1.6" step="0.05" value="0.55" oninput="updateParam('crowding', this.value)">
+                        <span class="value-display" id="crowding-value">0.55</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Letters</label>
+                    <span class="hint">how much is in the air at once</span>
+                    <div class="slider-container">
+                        <input type="range" id="letterCount" min="0" max="2400" step="50" value="900" oninput="updateParam('letterCount', this.value)">
+                        <span class="value-display" id="letterCount-value">900</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Breath period (s)</label>
+                    <span class="hint">the room's single clock — everything rides this</span>
+                    <div class="slider-container">
+                        <input type="range" id="breathPeriod" min="4" max="15" step="0.5" value="9" oninput="updateParam('breathPeriod', this.value)">
+                        <span class="value-display" id="breathPeriod-value">9</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Breath asymmetry</label>
+                    <span class="hint">0.5 = mechanical. higher = slow in, quick out</span>
+                    <div class="slider-container">
+                        <input type="range" id="breathAsymmetry" min="0.15" max="0.85" step="0.01" value="0.64" oninput="updateParam('breathAsymmetry', this.value)">
+                        <span class="value-display" id="breathAsymmetry-value">0.64</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Phase spread</label>
+                    <span class="hint">0 = everything moves as one. high = private weather each</span>
+                    <div class="slider-container">
+                        <input type="range" id="phaseSpread" min="0" max="4" step="0.05" value="1.15" oninput="updateParam('phaseSpread', this.value)">
+                        <span class="value-display" id="phaseSpread-value">1.15</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Drift speed</label>
+                    <div class="slider-container">
+                        <input type="range" id="driftSpeed" min="0.05" max="2.5" step="0.05" value="0.65" oninput="updateParam('driftSpeed', this.value)">
+                        <span class="value-display" id="driftSpeed-value">0.65</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Field scale</label>
+                    <span class="hint">small = wide slow currents. large = eddies</span>
+                    <div class="slider-container">
+                        <input type="range" id="fieldScale" min="0.0006" max="0.0075" step="0.0001" value="0.0022" oninput="updateParam('fieldScale', this.value)">
+                        <span class="value-display" id="fieldScale-value">0.0022</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Inertia</label>
+                    <span class="hint">low = mass, lag, spring. high = instant, weightless</span>
+                    <div class="slider-container">
+                        <input type="range" id="inertia" min="0.01" max="0.4" step="0.005" value="0.07" oninput="updateParam('inertia', this.value)">
+                        <span class="value-display" id="inertia-value">0.07</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Return pull</label>
+                    <span class="hint">strength of recall to the point of release</span>
+                    <div class="slider-container">
+                        <input type="range" id="returnPull" min="0" max="1" step="0.01" value="0.26" oninput="updateParam('returnPull', this.value)">
+                        <span class="value-display" id="returnPull-value">0.26</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Return rarity</label>
+                    <span class="hint">higher = returns almost never happen</span>
+                    <div class="slider-container">
+                        <input type="range" id="returnRarity" min="1" max="14" step="0.5" value="12" oninput="updateParam('returnRarity', this.value)">
+                        <span class="value-display" id="returnRarity-value">12</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Trace persistence</label>
+                    <span class="hint">how long the air keeps evidence of passage</span>
+                    <div class="slider-container">
+                        <input type="range" id="persistence" min="0.80" max="0.995" step="0.005" value="0.955" oninput="updateParam('persistence', this.value)">
+                        <span class="value-display" id="persistence-value">0.955</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Lamp response</label>
+                    <span class="hint">how much the room answers its own coherence</span>
+                    <div class="slider-container">
+                        <input type="range" id="lamp" min="0" max="1" step="0.01" value="0.62" oninput="updateParam('lamp', this.value)">
+                        <span class="value-display" id="lamp-value">0.62</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colors Section -->
+            <div class="control-section">
+                <h3>Colors</h3>
+
+                <div class="color-group">
+                    <label>宙 — ground</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color1" value="#0c0f14" onchange="updateColor('color1', this.value)">
+                        <span class="color-value" id="color1-value">#0c0f14</span>
+                    </div>
+                </div>
+
+                <div class="color-group">
+                    <label>言 — mark</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color2" value="#e6e0d2" onchange="updateColor('color2', this.value)">
+                        <span class="color-value" id="color2-value">#e6e0d2</span>
+                    </div>
+                </div>
+
+                <div class="color-group">
+                    <label>灯 — lamp</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color3" value="#d97757" onchange="updateColor('color3', this.value)">
+                        <span class="color-value" id="color3-value">#d97757</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Section -->
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row">
+                    <button class="button" onclick="regenerate()">Regenerate</button>
+                    <button class="button" id="pause-btn" onclick="togglePause()">Pause</button>
+                </div>
+                <div class="button-row">
+                    <button class="button secondary" onclick="downloadPNG()">Download PNG</button>
+                </div>
+                <div class="button-row" style="margin-bottom:0">
+                    <button class="button tertiary" onclick="resetParameters()">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Canvas Area -->
+        <div class="canvas-area">
+            <div id="canvas-container">
+                <div class="loading">Initializing generative art...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════
+        // DESIGN TOKENS — 文字モードの運動・字面・密度はすべてここから引く
+        // （params の初期値が参照するため、定義は params より前に置く必要がある）
+        // ═══════════════════════════════════════════════════════════════════════
+
+        const DS = {
+            motionWindow:  0.28,   // 1呼吸のうち運動に充てる割合（既定値、スライダーで可変）
+            alphaRest:     0.62,   // 静止時の下限 alpha
+            alphaRecall:   0.92,   // recall 中の alpha
+            typeBase:      18,     // 本文 px
+            typeRecall:    20,     // recall 中 px
+            roomCapacity:  40,     // 1200px の部屋 / 18px 明朝 での上限語数
+            baselineGrid:  32      // 静止語が載る罫の行送り px（typeBase の約1.8倍）
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // PARAMETERS
+        // ═══════════════════════════════════════════════════════════════════════
+
+        let params = {
+            seed: 12345,
+            mode: 'marks',
+            letterCount: 900,
+            wordSize: DS.typeBase,
+            motionWindow: DS.motionWindow,
+            crowding: 0.55,
+            breathPeriod: 9,
+            breathAsymmetry: 0.64,
+            phaseSpread: 1.15,
+            driftSpeed: 0.65,
+            fieldScale: 0.0022,
+            inertia: 0.07,
+            returnPull: 0.26,
+            returnRarity: 12,
+            persistence: 0.955,
+            lamp: 0.62,
+            colorPalette: ['#0c0f14', '#e6e0d2', '#d97757']
+        };
+
+        let defaultParams = JSON.parse(JSON.stringify(params));
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // DEPHASING — one field, one clock, many phases
+        // ═══════════════════════════════════════════════════════════════════════
+
+        let letters = [];
+        let cGround, cMark, cLamp;
+        let roomRadius;
+        let coherence = 0;
+        let breathValue = 0;
+        let paused = false;
+        let wasMoving = false;
+        let reducedMotion = false;
+        let stillness = 0;
+        let clock = 0;          // seconds of room time, advanced manually so pause is clean
+        let fadeGradient = null;
+
+        const GRID = 12;
+        const gx = new Float64Array(GRID * GRID);
+        const gy = new Float64Array(GRID * GRID);
+        const gn = new Int32Array(GRID * GRID);
+
+        const WORDS = ['またね', 'げんき?', 'ごめん', 'わすれた', 'あのとき',
+                       'まだ言えない', 'ありがとう', 'かえりたい', 'おやすみ',
+                       'もういいよ', 'たぶん平気', '聞こえてる?', 'そのうち',
+                       'ここにいる', 'なんでもない', 'またあした'];
+        const JP_FONT = '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif';
+
+        function setup() {
+            const canvas = createCanvas(1200, 1200);
+            canvas.parent('canvas-container');
+            pixelDensity(1);
+            noiseDetail(2, 0.45);   // smooth air, not nervous air
+            textFont(JP_FONT);
+            textAlign(CENTER, CENTER);
+            initializeSystem();
+
+            const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+            applyMotionPreference(mq);
+            mq.addEventListener('change', applyMotionPreference);
+
+            const l = document.querySelector('.loading');
+            if (l) l.style.display = 'none';
+        }
+
+        // 動きを減らす設定は、部屋の作りそのものを変える。設定は途中で切り替わりうるので、
+        // 切り替わった時点で語を罫に座らせ直す。
+        function applyMotionPreference(mq) {
+            reducedMotion = mq.matches;
+            seatAllIfStatic();
+        }
+
+        // 語が二度と動かないなら、初期位置がそのまま最終レイアウトになる。
+        function seatAllIfStatic() {
+            if (reducedMotion && params.mode === 'words' && letters.length) resolveLayout();
+        }
+
+        function initializeSystem() {
+            randomSeed(params.seed);
+            noiseSeed(params.seed);
+
+            cGround = color(params.colorPalette[0]);
+            cMark   = color(params.colorPalette[1]);
+            cLamp   = color(params.colorPalette[2]);
+
+            roomRadius = width * 0.435;
+            clock = 0;
+            coherence = 0;
+
+            letters = [];
+            for (let i = 0; i < params.letterCount; i++) letters.push(new Letter());
+
+            buildFadeGradient();
+            background(cGround);
+            seatAllIfStatic();
+        }
+
+        // The fade overlay doubles as the vignette: edges forget faster than the centre.
+        function buildFadeGradient() {
+            const ctx = drawingContext;
+            const g = ctx.createRadialGradient(
+                width / 2, height / 2, width * 0.05,
+                width / 2, height / 2, width * 0.72
+            );
+            g.addColorStop(0.0, 'rgba(0,0,0,0)');
+            g.addColorStop(0.62, 'rgba(0,0,0,0)');
+            g.addColorStop(1.0, 'rgba(0,0,0,1)');
+            fadeGradient = g;
+        }
+
+        // ── the room's breath: phase-warped, deliberately not a sine ──────────
+        function breath(t01) {
+            const a = constrain(params.breathAsymmetry, 0.05, 0.95);
+            const u = t01 < a ? (t01 / a) * 0.5 : 0.5 + ((t01 - a) / (1 - a)) * 0.5;
+            return 0.5 - 0.5 * Math.cos(TWO_PI * u);
+        }
+
+        // ── divergence-free field: curl of a scalar potential, forward-differenced ──
+        // no sinks, so nothing ever drains into a channel and knots up
+        function fieldAt(x, y, z, out) {
+            const s = params.fieldScale;
+            const e = 6;
+            const p0 = noise(x * s, y * s, z);
+            const px = noise((x + e) * s, y * s, z);
+            const py = noise(x * s, (y + e) * s, z);
+            const dpdx = px - p0;
+            const dpdy = py - p0;
+            out.set(dpdy, -dpdx);
+            return out;
+        }
+
+        class Letter {
+            constructor() {
+                // conditions of the letter — these, and only these, set its phase
+                this.hue     = random();
+                this.band    = floor(random(4)) / 4;      // time-of-day band
+                this.season  = floor(random(4)) / 4;
+                this.weather = random();
+
+                this.phase = this.hue * 0.44 + this.band * 0.26
+                           + this.season * 0.20 + this.weather * 0.10;
+
+                // released somewhere in the room
+                const a = random(TWO_PI);
+                const r = Math.sqrt(random()) * roomRadius * 0.94;
+                this.origin = createVector(width / 2 + Math.cos(a) * r,
+                                           height / 2 + Math.sin(a) * r);
+                this.pos  = this.origin.copy();
+                this.prev = this.pos.copy();
+                this.vel  = createVector(0, 0);
+
+                this.amp = 0.6 + this.phase * 0.8;   // 0.6〜1.4、位相から決定論的
+                this.settled = false;
+                this.restUntil = 0;
+                this.text    = WORDS[floor(random(WORDS.length))];
+                this.age     = random(400);
+                this.recallAt = this.nextRecall();
+                this.recall  = 0;
+                this.arrive  = 0;
+            }
+
+            nextRecall() {
+                return random(240, 240 + 900 * params.returnRarity);
+            }
+
+            // 帰着してから一呼吸のあいだ。この間は発たないし、押されもしない。
+            isResting() {
+                return params.mode === 'words' && clock < this.restUntil;
+            }
+
+            update(bAmp, z0, f, envelope, recallGate) {
+                this.prev.set(this.pos.x, this.pos.y);
+                this.age++;
+
+                // prefers-reduced-motion: 位置は一切動かさない。
+                // 帰還は距離ではなく heat の満ち引きで表す——色と alpha だけが遷移する。
+                if (reducedMotion) {
+                    if (this.age > this.recallAt && (this.recall > 0 || recallGate)) {
+                        this.recall = Math.min(1, this.recall + 0.006);
+                        if (this.recall >= 1) {        // 満ちたら帰着とみなす
+                            this.recall = 0;
+                            this.age = 0;
+                            this.arrive = 1;
+                            this.recallAt = this.nextRecall();
+                        }
+                    }
+                    if (this.arrive > 0) this.arrive *= 0.955;
+                    this.vel.set(0, 0);
+                    this.settled = true;
+                    return;
+                }
+
+                const resting = this.isResting();
+
+                // 1. the shared field, read at this letter's own phase
+                fieldAt(this.pos.x, this.pos.y, z0 + this.phase * params.phaseSpread, f);
+                const m = f.mag();
+                if (m > 1e-9) f.mult(1 / m);
+                f.mult(params.driftSpeed * (0.45 + bAmp * 0.85) * this.amp * envelope);
+
+                // 2. recall — the only place a private history overrides the weather.
+                //    立ち上がりだけを呼吸に合わせる。一度始まった帰還は静止フェーズも進む。
+                //    休んでいる間は発たない。帰り着いた語がすぐ発ち直しては休息にならない。
+                if (this.age > this.recallAt && !resting && (this.recall > 0 || recallGate)) {
+                    this.recall = Math.min(1, this.recall + 0.006);
+                }
+                if (this.recall > 0) {
+                    const dx = this.origin.x - this.pos.x;
+                    const dy = this.origin.y - this.pos.y;
+                    const d  = Math.sqrt(dx * dx + dy * dy) + 1e-6;
+                    const k  = params.returnPull * this.recall * 2.6;
+                    f.x += (dx / d) * k;
+                    f.y += (dy / d) * k;
+                    if (d < 7) {                       // arrived. rest, then release again
+                        this.recall = 0;
+                        this.age = 0;
+                        this.arrive = 1;
+                        this.recallAt = this.nextRecall();
+                        // 帰ってきた語は一呼吸ぶん席に着いたままでいる。
+                        // 着いた次の呼気でまた発つのでは、帰ってきた意味が読めない。
+                        if (params.mode === 'words') this.restUntil = clock + params.breathPeriod;
+                    }
+                }
+
+                // 3. the room is a room — soft containment, never a hard wall
+                const ox = this.pos.x - width / 2;
+                const oy = this.pos.y - height / 2;
+                const dr = Math.sqrt(ox * ox + oy * oy);
+                if (dr > roomRadius) {
+                    const over = (dr - roomRadius) / 90;
+                    const k = Math.min(2.4, over * over * 1.9 + over * 0.5);
+                    f.x -= (ox / dr) * k;
+                    f.y -= (oy / dr) * k;
+                }
+
+                // 静止フェーズ、および帰着後の一呼吸。動くのは帰還中の語だけ。
+                if ((envelope === 0 || resting) && this.recall === 0) {
+                    this.vel.set(0, 0);
+                    if (!this.settled) {
+                        seatLetter(this);      // 罫に載せ、空いた席へ寄せる
+                        this.settled = true;
+                    }
+                    if (this.arrive > 0) this.arrive *= 0.955;
+                    this.prev.set(this.pos.x, this.pos.y);
+                    return;
+                }
+                this.settled = false;
+
+                // 4. inertia — mass, not teleportation
+                this.vel.x += (f.x - this.vel.x) * params.inertia;
+                this.vel.y += (f.y - this.vel.y) * params.inertia;
+
+                this.pos.add(this.vel);
+
+                if (this.arrive > 0) this.arrive *= 0.955;
+            }
+
+            render(bAmp) {
+                const sp = this.vel.mag();
+                const base = 26 + Math.min(120, sp * 78) + bAmp * 28;
+
+                if (this.recall > 0.02 || this.arrive > 0.02) {
+                    const heat = Math.max(this.recall, this.arrive);
+                    stroke(lerpColor(cMark, cLamp, Math.min(1, heat * 1.3)));
+                    strokeWeight(0.75 + this.amp * 0.7 + this.arrive * 2.2);
+                    drawingContext.globalAlpha = Math.min(1, (base + 70 * heat) / 255);
+                } else {
+                    stroke(cMark);
+                    strokeWeight(0.45 + this.amp * 0.55);
+                    drawingContext.globalAlpha = base / 255;
+                }
+                line(this.prev.x, this.prev.y, this.pos.x, this.pos.y);
+            }
+
+            // A glyph is not a particle. It has an upright, an area, and a
+            // reading time — so rotation is off, density collapses, and the
+            // trail becomes a smear instead of evidence.
+            renderWord(bAmp) {
+                const heat = Math.max(this.recall, this.arrive);
+                noStroke();
+
+                // 動きを減らす設定では、寸法も段階も動かさない。
+                // 字の大きさが跳ぶのは運動のうち。残すのは色と alpha の連続した遷移だけ。
+                if (reducedMotion) {
+                    const h = Math.min(1, heat * 1.3);
+                    textSize(DS.typeBase);
+                    fill(lerpColor(cMark, cLamp, h));
+                    drawingContext.globalAlpha = DS.alphaRest + (DS.alphaRecall - DS.alphaRest) * h;
+                    text(this.text, this.pos.x, this.pos.y);
+                    return;
+                }
+
+                if (heat > 0.02) {
+                    textSize(DS.typeRecall);
+                    fill(lerpColor(cMark, cLamp, Math.min(1, heat * 1.3)));
+                    drawingContext.globalAlpha = DS.alphaRecall;
+                } else {
+                    textSize(DS.typeBase);
+                    fill(cMark);
+                    drawingContext.globalAlpha = DS.alphaRest;
+                }
+                text(this.text, this.pos.x, this.pos.y);
+            }
+        }
+
+        // Overlapping dots read as density. Overlapping words read as broken.
+        function relieveCrowding() {
+            const n = letters.length;
+            const k = params.crowding * 2.2;
+            if (k <= 0) return;
+            for (let i = 0; i < n; i++) {
+                const A = letters[i];
+                const ra = params.wordSize * (A.text.length * 0.44 + 0.7);
+                for (let j = i + 1; j < n; j++) {
+                    const B = letters[j];
+                    const dx = B.pos.x - A.pos.x;
+                    const dy = B.pos.y - A.pos.y;
+                    const rb = params.wordSize * (B.text.length * 0.44 + 0.7);
+                    const r = (ra + rb) * 0.5;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 > r * r || d2 < 1e-6) continue;
+                    const d = Math.sqrt(d2);
+                    const ux = dx / d, uy = dy / d;
+                    // 休んでいる語は動かない。動ける側が二人分よけて通る。
+                    const af = A._fixed === true, bf = B._fixed === true;
+                    if (af && bf) continue;
+                    const push = (r - d) / r * k * (af || bf ? 2 : 1);
+                    if (!af) { A.pos.x -= ux * push; A.pos.y -= uy * push; }
+                    if (!bf) { B.pos.x += ux * push; B.pos.y += uy * push; }
+                }
+            }
+        }
+
+        // 静止位置は罫に載る。部屋の中心を通る一本を基準に行送りを取る。
+        function baselineOf(y) {
+            const c = height / 2;
+            return c + Math.round((y - c) / DS.baselineGrid) * DS.baselineGrid;
+        }
+
+        // textAlign(CENTER) なので、語の張り出しは中心からの半幅で足りる。
+        function halfWidth(L) {
+            return params.wordSize * L.text.length * 0.5;
+        }
+
+        // 運動 → 静止の遷移で一度だけ走る、レイアウトの解決。
+        // 粗く二次元でほどく → 罫に載せる → 同じ罫の上だけ横にほどく、の順。
+        // 罫に載せた時点で縦の自由度は捨てているので、以後は横しか動かさない。
+        function resolveLayout() {
+            // 帰着して休んでいる語は席から動かさない。他の語の都合で休息は崩れない。
+            for (const L of letters) L._fixed = L.isResting();
+
+            for (let i = 0; i < 6; i++) relieveCrowding();
+
+            // 帰還中の語は静止レイアウトの一員ではない。飛んでいる途中を掴まない。
+            const rest = letters.filter(L => L.recall === 0);
+
+            for (const L of rest) {
+                if (L._fixed) continue;
+                L.pos.x = Math.round(L.pos.x);
+                L.pos.y = baselineOf(L.pos.y);
+            }
+
+            const gutter = params.wordSize * 0.5;
+            for (let pass = 0; pass < 12; pass++) {
+                let moved = false;
+                for (let i = 0; i < rest.length; i++) {
+                    const A = rest[i];
+                    for (let j = i + 1; j < rest.length; j++) {
+                        const B = rest[j];
+                        if (A.pos.y !== B.pos.y) continue;   // 別の罫なら干渉しない
+                        if (A._fixed && B._fixed) continue;
+                        const need = halfWidth(A) + halfWidth(B) + gutter;
+                        const dx = B.pos.x - A.pos.x;
+                        const d = Math.abs(dx);
+                        if (d >= need) continue;
+                        const s = dx >= 0 ? 1 : -1;
+                        const push = (need - d) * (A._fixed || B._fixed ? 1 : 0.5);
+                        if (!A._fixed) A.pos.x -= s * push;
+                        if (!B._fixed) B.pos.x += s * push;
+                        moved = true;
+                    }
+                }
+                // 部屋の外へは押し出さない。罫の上で使える幅は弦の長さで決まる。
+                for (const L of rest) {
+                    if (L._fixed) continue;
+                    const dy = L.pos.y - height / 2;
+                    const half = Math.sqrt(Math.max(0, roomRadius * roomRadius - dy * dy));
+                    const lim = Math.max(0, half - halfWidth(L));
+                    L.pos.x = constrain(L.pos.x, width / 2 - lim, width / 2 + lim);
+                }
+                if (!moved) break;
+            }
+
+            for (const L of rest) {
+                if (!L._fixed) L.pos.x = Math.round(L.pos.x);
+                L.vel.set(0, 0);
+                L.prev.set(L.pos.x, L.pos.y);
+                L.settled = true;
+            }
+        }
+
+        // 帰還した語が静止フェーズの途中で降りるときの席決め。
+        // 既に座っている語は動かさない——静止しているものは静止したままでなければ、
+        // 一語の到着が部屋じゅうを揺らしてしまう。動くのは降りてきた語だけ。
+        function seatLetter(L) {
+            const gutter = params.wordSize * 0.5;
+            const x0 = Math.round(L.pos.x);
+            const y0 = baselineOf(L.pos.y);
+            const hw = halfWidth(L);
+
+            for (let ring = 0; ring < 4; ring++) {
+                for (const dir of (ring === 0 ? [0] : [-1, 1])) {
+                    const y = y0 + dir * ring * DS.baselineGrid;
+                    const dy = y - height / 2;
+                    const lim = Math.sqrt(Math.max(0, roomRadius * roomRadius - dy * dy)) - hw;
+                    if (lim <= 0) continue;
+
+                    const seated = letters.filter(o =>
+                        o !== L && o.settled && o.recall === 0 && o.pos.y === y);
+                    const free = (x) => x >= width / 2 - lim && x <= width / 2 + lim &&
+                        seated.every(o => Math.abs(o.pos.x - x) >= halfWidth(o) + hw + gutter);
+
+                    // 今の位置か、既に座っている語のすぐ隣か。そのうち一番近い席を取る。
+                    const cands = [x0];
+                    for (const o of seated) {
+                        const gap = halfWidth(o) + hw + gutter;
+                        cands.push(Math.floor(o.pos.x - gap), Math.ceil(o.pos.x + gap));
+                    }
+                    let best = null;
+                    for (const x of cands) {
+                        if (!free(x)) continue;
+                        if (best === null || Math.abs(x - x0) < Math.abs(best - x0)) best = x;
+                    }
+                    if (best !== null) { L.pos.x = best; L.pos.y = y; return; }
+                }
+            }
+            L.pos.x = x0;   // 空きがなければ元の罫に置く。次の遷移が解決する。
+            L.pos.y = y0;
+        }
+
+        // 空室。語がないことを言葉で説明しない——「まだ何もありません」と書いた時点で、
+        // 部屋ではなく空状態の通知になる。残すのは書くための罫を一本だけ。
+        // 線が一本あれば、ここが何かを載せる場所だとわかる。
+        function renderEmptyRoom(bAmp) {
+            // 罫は整数の y に引くと画素の境目に落ち、二行に半分ずつ乗って濃さが半減する。
+            // 0.5 ずらして画素の中心に載せる——見た目の位置は変わらず、線だけが締まる。
+            const y = baselineOf(height / 2) + 0.5;
+            const half = roomRadius * 0.42;
+            drawingContext.globalAlpha = 0.20 + bAmp * 0.10;   // 呼吸だけがまだ続いている
+            stroke(cMark);
+            strokeWeight(1);
+            line(width / 2 - half, y, width / 2 + half, y);
+            noStroke();
+        }
+
+        const _f = { set(a, b) { this.x = a; this.y = b; },
+                     mag() { return Math.sqrt(this.x * this.x + this.y * this.y); },
+                     mult(k) { this.x *= k; this.y *= k; },
+                     x: 0, y: 0 };
+
+        function draw() {
+            if (paused) return;
+
+            clock += 1 / 60;
+            const t01 = (clock % params.breathPeriod) / params.breathPeriod;
+            const bAmp = breath(t01);
+            breathValue = bAmp;
+
+            // one clock for the whole room; phase is the only thing that differs
+            const z0 = (clock / params.breathPeriod) * 0.55;
+
+            const wordMode = params.mode === 'words';
+
+            // 呼気の立ち上がりから motionWindow ぶんだけ運動する。残りは完全静止。
+            const exhaleStart = params.breathAsymmetry;
+            let prog = (t01 - exhaleStart) / params.motionWindow;
+            if (prog < 0) prog += 1 / params.motionWindow;   // 周回のラップ
+            const moving = !wordMode || (prog >= 0 && prog < 1);
+            const envelope = !wordMode ? 1 : (moving ? Math.sin(Math.PI * prog) : 0);
+
+            // 帰還は運動窓の頭で始まる。静止した部屋から語が一つだけ動き出すのではなく、
+            // 部屋が動き出す呼気に紛れて発つ。継続は gate の外でも進む。
+            const recallGate = !wordMode || (moving && prog < 0.3);
+
+            // fade + vignette in a single pass.
+            // In word mode the trail is a smear, not evidence — so it's cut short.
+            drawingContext.globalAlpha = 1;
+            noStroke();
+            // 空室には残す通過の跡がない。溜めれば描いたものが焼き付くだけなので必ず消す。
+            const fa = (wordMode || letters.length === 0) ? 1 : (1 - params.persistence);
+            fill(red(cGround), green(cGround), blue(cGround), fa * 255);
+            rect(0, 0, width, height);
+            drawingContext.save();
+            drawingContext.globalAlpha = fa * 5.5;
+            drawingContext.fillStyle = fadeGradient;
+            drawingContext.globalCompositeOperation = 'source-over';
+            drawingContext.fillRect(0, 0, width, height);
+            drawingContext.restore();
+
+            // 灯は部屋が自分に答えるもの。ただし何に答えるかは、何が浮いているかで変わる。
+            // marks では「揃っているか」（coherence）。文字では「静まっているか」（静止率）——
+            // 読める部屋かどうかを決めるのは向きの一致ではなく、停まっていることだから。
+            const lampDrive = wordMode ? stillness : coherence;
+            if (params.lamp > 0.001 && lampDrive > 0.02) {
+                drawingContext.save();
+                const g = drawingContext.createRadialGradient(
+                    width / 2, height / 2, 0, width / 2, height / 2, roomRadius * 1.15);
+                const a = lampDrive * params.lamp * 0.10;
+                g.addColorStop(0, `rgba(${red(cLamp)},${green(cLamp)},${blue(cLamp)},${a})`);
+                g.addColorStop(1, `rgba(${red(cLamp)},${green(cLamp)},${blue(cLamp)},0)`);
+                drawingContext.globalCompositeOperation = 'lighter';
+                drawingContext.fillStyle = g;
+                drawingContext.fillRect(0, 0, width, height);
+                drawingContext.restore();
+            }
+
+            // レイアウト解決は運動→静止の遷移フレームで一度だけ。
+            // 解決の中で罫へのスナップまで済ませるので、update() 側の settle は素通りする。
+            // 動きを減らす設定では席は最初に決めたきり——解き直すこと自体が位置の移動になる。
+            if (wordMode && !reducedMotion && wasMoving && !moving) resolveLayout();
+            wasMoving = moving;
+
+            // update + render.
+            // Coherence is measured LOCALLY: do letters sharing a patch of the room
+            // agree on where to go? Phase spread is the only thing that can break it.
+            gx.fill(0); gy.fill(0); gn.fill(0);
+            const cs = width / GRID;
+            for (let i = 0; i < letters.length; i++) {
+                const L = letters[i];
+                L.update(bAmp, z0, _f, envelope, recallGate);
+                const m = L.vel.mag();
+                if (m > 1e-6) {
+                    const cx = Math.floor(L.pos.x / cs), cy = Math.floor(L.pos.y / cs);
+                    if (cx >= 0 && cx < GRID && cy >= 0 && cy < GRID) {
+                        const k = cy * GRID + cx;
+                        gx[k] += L.vel.x / m; gy[k] += L.vel.y / m; gn[k]++;
+                    }
+                }
+            }
+
+            for (let i = 0; i < letters.length; i++) {
+                if (wordMode) letters[i].renderWord(bAmp);
+                else letters[i].render(bAmp);
+            }
+            if (letters.length === 0) renderEmptyRoom(bAmp);
+            drawingContext.globalAlpha = 1;
+
+            let acc = 0, cells = 0;
+            for (let k = 0; k < GRID * GRID; k++) {
+                if (gn[k] >= 3) { acc += Math.sqrt(gx[k] * gx[k] + gy[k] * gy[k]) / gn[k]; cells++; }
+            }
+            if (cells > 0) coherence += (acc / cells - coherence) * 0.06;
+            else if (letters.length === 0) coherence += (0 - coherence) * 0.06;
+
+            // 静止率: 席に着いている語の割合。空室は「すべて静まっている」で 1。
+            let atRest = 0;
+            for (let i = 0; i < letters.length; i++) if (letters[i].settled) atRest++;
+            const restTarget = letters.length ? atRest / letters.length : 1;
+            stillness += (restTarget - stillness) * 0.06;
+
+            if (frameCount % 10 === 0) updateReadout();
+        }
+
+        function updateReadout() {
+            // 計器も灯と同じものを指す。文字モードで coherence を出したままだと、
+            // 部屋が答えている値と読み手が見る値が食い違う。
+            const wordMode = params.mode === 'words';
+            const v = wordMode ? stillness : coherence;
+            const title = document.getElementById('readout-title');
+            const label = document.getElementById('coh-label');
+            if (title) title.textContent = wordMode ? '灯 / Stillness' : '灯 / Coherence';
+            if (label) label.textContent = wordMode ? '静' : 'R';
+
+            const c = document.getElementById('coh-value');
+            const cb = document.getElementById('coh-bar');
+            const b = document.getElementById('breath-value');
+            const bb = document.getElementById('breath-bar');
+            if (c) c.textContent = v.toFixed(2);
+            if (cb) cb.style.width = (v * 100).toFixed(0) + '%';
+            if (b) b.textContent = breathValue.toFixed(2);
+            if (bb) bb.style.width = (breathValue * 100).toFixed(0) + '%';
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // UI CONTROL HANDLERS
+        // ═══════════════════════════════════════════════════════════════════════
+
+        function setMode(m) {
+            params.mode = m;
+            document.getElementById('mode-marks').className =
+                'button' + (m === 'marks' ? '' : ' secondary');
+            document.getElementById('mode-words').className =
+                'button' + (m === 'words' ? '' : ' secondary');
+
+            // 900 marks is air. 900 words is soup. At size 18 the room's
+            // exclusion area saturates around DS.roomCapacity — density has to
+            // collapse by more than an order of magnitude the moment the
+            // element gains area.
+            if (m === 'words' && params.letterCount > DS.roomCapacity) {
+                updateParam('letterCount', DS.roomCapacity);
+                document.getElementById('letterCount').value = DS.roomCapacity;
+            }
+            background(cGround);
+            seatAllIfStatic();
+            updateReadout();   // 一時停止中でも計器の名前はすぐ切り替わる
+        }
+
+        const INT_PARAMS = ['letterCount', 'wordSize'];
+
+        function updateParam(name, value) {
+            const v = INT_PARAMS.includes(name) ? parseInt(value) : parseFloat(value);
+            params[name] = v;
+            const disp = document.getElementById(name + '-value');
+            if (disp) disp.textContent = value;
+
+            if (name === 'letterCount') {
+                while (letters.length > v) letters.pop();
+                while (letters.length < v) letters.push(new Letter());
+            }
+            if (name === 'returnRarity') {
+                for (const L of letters) if (L.recall === 0) L.recallAt = L.nextRecall();
+            }
+        }
+
+        function updateColor(id, value) {
+            const idx = { color1: 0, color2: 1, color3: 2 }[id];
+            params.colorPalette[idx] = value;
+            const disp = document.getElementById(id + '-value');
+            if (disp) disp.textContent = value;
+            cGround = color(params.colorPalette[0]);
+            cMark   = color(params.colorPalette[1]);
+            cLamp   = color(params.colorPalette[2]);
+        }
+
+        function togglePause() {
+            paused = !paused;
+            const btn = document.getElementById('pause-btn');
+            if (btn) btn.textContent = paused ? 'Play' : 'Pause';
+        }
+
+        function regenerate() {
+            initializeSystem();
+        }
+
+        function downloadPNG() {
+            saveCanvas('dephasing-' + params.seed, 'png');
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // SEED CONTROL FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════
+
+        function updateSeedDisplay() {
+            document.getElementById('seed-input').value = params.seed;
+        }
+
+        function updateSeed() {
+            const input = document.getElementById('seed-input');
+            const newSeed = parseInt(input.value);
+            if (newSeed && newSeed > 0) {
+                params.seed = newSeed;
+                initializeSystem();
+            } else {
+                updateSeedDisplay();
+            }
+        }
+
+        function previousSeed() {
+            params.seed = Math.max(1, params.seed - 1);
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        function nextSeed() {
+            params.seed = params.seed + 1;
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        function randomSeedAndUpdate() {
+            params.seed = Math.floor(Math.random() * 999999) + 1;
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        function resetParameters() {
+            const seed = params.seed;
+            params = JSON.parse(JSON.stringify(defaultParams));
+            params.seed = seed;
+
+            const sliders = ['letterCount', 'wordSize', 'motionWindow', 'crowding',
+                             'breathPeriod', 'breathAsymmetry', 'phaseSpread',
+                             'driftSpeed', 'fieldScale', 'inertia', 'returnPull',
+                             'returnRarity', 'persistence', 'lamp'];
+            for (const s of sliders) {
+                const el = document.getElementById(s);
+                const dv = document.getElementById(s + '-value');
+                if (el) el.value = params[s];
+                if (dv) dv.textContent = params[s];
+            }
+            ['color1', 'color2', 'color3'].forEach((id, i) => {
+                const el = document.getElementById(id);
+                const dv = document.getElementById(id + '-value');
+                if (el) el.value = params.colorPalette[i];
+                if (dv) dv.textContent = params.colorPalette[i];
+            });
+
+            updateSeedDisplay();
+            setMode(params.mode);
+            initializeSystem();
+        }
+
+        window.addEventListener('load', function () {
+            updateSeedDisplay();
+            setMode(params.mode);
+        });
+    </script>
+</body>
+</html>
