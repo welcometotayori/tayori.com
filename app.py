@@ -762,6 +762,10 @@ def init_db():
             # 全員同じ既定は「まだ何も言っていない」と読める無標のしるし）。
             # 既存の手紙は DEFAULT 1＝選択済み扱い（帯が常時見えていた頃の挙動を変えない）。
             "ALTER TABLE letters ADD COLUMN seal_color_chosen INTEGER DEFAULT 1",
+            # 意味の索引の出どころ（v3 §6・2026-07-29）。'user'＝人が放ったことば /
+            # 'public_domain'＝著作権の切れた本から拾った一節。索引は一枚で持つが、
+            # 作り直すときに片方だけ捨てられるようにこの列で分ける。
+            "ALTER TABLE letter_vectors ADD COLUMN source_type TEXT DEFAULT 'user'",
         ):
             try:
                 db.execute(stmt)
@@ -791,6 +795,30 @@ def init_db():
                 v         BLOB NOT NULL,
                 made_at   TEXT NOT NULL
             )""")
+
+        # ── 言葉の漂流物（v3 §4.4・2026-07-29）───────────────────────
+        # 著作権の切れた本から拾った一節。人が放ったことばと同じ宙に漂うが、
+        # **letters には入れない**。理由は除外の書き忘れを構造で潰すため——書架も、
+        # 取り消しも、棚に残された報せも、季節の返却も、宙からの配達も、すべて
+        # letters.user_id で人を引いている。別の表に置けば、それらは一行も書き足さずに
+        # 最初から届かない（種のことばで is_seed の除外を4か所に足して回ったのの反省）。
+        #
+        # 持たないもの：URL（外へ出る導線を作らない・§4.4）、打鍵（trace_z。書いた人が
+        # 居ないので再生する過程が無い）、気分の色（本人の主観指標なので、本の一節には
+        # 無い）、季節・時刻・天気（放たれた「いま」を持たない＝空気の距離では中立）。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS external_texts (
+                id            TEXT PRIMARY KEY,
+                body          TEXT NOT NULL,
+                source_author TEXT NOT NULL,
+                source_title  TEXT NOT NULL,
+                license       TEXT NOT NULL DEFAULT 'public_domain',
+                room_id       INTEGER,
+                sky_status    TEXT NOT NULL DEFAULT 'live',
+                created_at    TEXT NOT NULL
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_external_room"
+                   " ON external_texts (room_id)")
 
         # ── 自分の宙から消す（2026-07-29 フェーズ5）─────────────────
         # 読み手の側にだけ持つ。書き手には一切伝わらない（非対称の原則）。
@@ -3534,18 +3562,20 @@ def sem_embed(text):
     return (v / n).astype(np.float32)
 
 
-def sem_store(db, letter_id, text):
+def sem_store(db, letter_id, text, source_type="user"):
     """ことばのベクトルを letter_vectors に入れる（同じidは差し替え）。
     呼ぶ側で commit する。ベクトルが作れなければ何もしない＝行が無い＝意味を持たない
-    ことばとして扱われる（air_distance は成分ごと外して残りで正規化する）。"""
+    ことばとして扱われる（air_distance は成分ごと外して残りで正規化する）。
+    source_type は 'user'／'public_domain'（v3 §6）。索引は一枚だが、片方だけ
+    作り直せるように出どころを持たせておく。"""
     v = sem_embed(text)
     if v is None:
         return False
     db.execute(
-        "INSERT OR REPLACE INTO letter_vectors (letter_id, model, dim, v, made_at)"
-        " VALUES (?,?,?,?,?)",
+        "INSERT OR REPLACE INTO letter_vectors"
+        " (letter_id, model, dim, v, made_at, source_type) VALUES (?,?,?,?,?,?)",
         (letter_id, _SEM_MODEL, int(v.shape[0]), v.tobytes(),
-         datetime.now().isoformat(timespec="seconds")))
+         datetime.now().isoformat(timespec="seconds"), source_type))
     return True
 
 
