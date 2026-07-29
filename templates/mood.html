@@ -782,6 +782,16 @@
            box-shadow:0 0 16px 4px rgba(222,205,160,.35);
            transition:opacity 2.6s var(--ease,ease)}
   .lantern.on{opacity:.6}
+  /* 「いま、この部屋にだれか居る」（2026-07-29 フェーズ7）。
+     触れた合図（.on = .6・7秒で引く）より弱く、そして引かない。誰も居なくなれば
+     次の周回で静かに消える。数は出さない——一人でも五人でも、この明るさは同じ。
+     部屋の灯（.room.lit .fire）と同じ 6.5s の呼吸に合わせて、宙ぜんぶで
+     ひとつの息づかいに見えるようにする。 */
+  .lantern.near{opacity:.30;animation:lanternNear 6.5s var(--ease,ease-in-out) infinite}
+  .lantern.near.on{opacity:.6}          /* 触れた合図が来たら、そちらが勝つ */
+  @keyframes lanternNear{0%,100%{transform:scale(1);opacity:.24}
+                         50%{transform:scale(1.18);opacity:.38}}
+  @media (prefers-reduced-motion: reduce){ .lantern.near{animation:none;opacity:.30} }
   /* 3秒を超える「間」のもうひとつの表現（v2追補 §1）：一度だけの深い呼吸。
      書き手がそこで長く止まった、ということだけが、時間を使わずに伝わる */
   .lantern.deep{opacity:.55;animation:lanternDeep 4.2s var(--ease,ease-in-out) 1}
@@ -2789,20 +2799,34 @@
       body:JSON.stringify({room:inRoom()?ROOM.id:null})}).catch(()=>{});
   }
 
-  /* ── 灯のあかり ── 直近30秒に、自分以外の誰かが触れたか。それだけを聞く */
+  /* ── 灯のあかり ──────────────────────────────────────────
+     二種類の気配を聞く。混ぜない：
+       lit  … 直近30秒に、自分以外の誰かがことばに触れた。まれで、強い。ひととき灯る
+       here … いまこの部屋に、自分以外の誰かが居る。ありふれていて、弱い。静かに点る
+     部屋にいる間は here=<部屋id> を付ける。それが「わたしも居ます」の心拍になる
+     （2026-07-29 フェーズ7）。この呼び出しは元から30秒ごとに走っていたので、
+     **通信は一本も増えていない**——気配のために別の線を引かない。 */
   const lantern=document.getElementById('lantern');
   function pollLantern(){
-    // トップでは「どの部屋に気配があるか」も聞く（数は聞かない・返らない）
-    fetch('/api/sky/lantern'+(inRoom()?'':'?rooms=1')).then(r=>r.ok?r.json():null).then(d=>{
+    // トップでは「どの部屋に気配があるか」を、部屋の中では「ここに誰か居るか」を聞く。
+    // どちらも数は聞かないし、返ってこない。
+    const q=inRoom()?('?here='+ROOM.id):'?rooms=1';
+    fetch('/api/sky/lantern'+q).then(r=>r.ok?r.json():null).then(d=>{
       if(!(d&&lantern))return;
       if(d.lit&&inRoom()){
         lantern.classList.add('on');
         setTimeout(()=>lantern.classList.remove('on'),7000);
       }
-      if(!inRoom()&&d.rooms){
-        const on=new Set(d.rooms);
-        for(const el of roomEls()){
-          if(el._room) el.classList.toggle('lit',on.has(el._room.id));
+      // 居る気配は消さずに保つ（触れた合図のように7秒で引かない）。
+      // 誰も居なくなれば、次の周回で静かに消える。
+      lantern.classList.toggle('near',!!(inRoom()&&d.here));
+      if(!inRoom()){
+        lantern.classList.remove('near');
+        if(d.rooms){
+          const on=new Set(d.rooms);
+          for(const el of roomEls()){
+            if(el._room) el.classList.toggle('lit',on.has(el._room.id));
+          }
         }
       }
     }).catch(()=>{});

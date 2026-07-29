@@ -4589,9 +4589,18 @@ def api_sky_seen():
 # 「誰かがそこにいた」という事実だけを運ぶ。保存しない・数えない・誰かは言わない。
 # メモリ上のリングだけで持つ（プロセスが落ちれば消える——それでいい）。
 # 自分が触れた灯は自分に見せない：自分の反射だと気づいた瞬間、灯は一生嘘になる。
-_LANTERN_WINDOW = 30.0     # 粒度30秒。「いま誰かいる」が伝われば成立する
+# 灯が運ぶ気配は二種類ある。混ぜると、弱いほうが強いほうを塗りつぶす。
+#   触れた（touch）… だれかがことばを開いた。まれで、強い。個人の灯がひととき灯る
+#   居る　（here） … だれかがその部屋を見ている。ありふれていて、弱い。部屋の灯が呼吸する
+# 2026-07-29（フェーズ7）：もとは touch しか無く、「居る」は誰にも見えていなかった。
+# ここで here を足すが、窓は別にする——同じ窓にすると、誰かがタブを開いているだけで
+# 個人の灯が点きっぱなしになり、「いま読まれた」という一度きりの合図が消える。
+_LANTERN_WINDOW = 30.0      # 触れた：粒度30秒。「いま誰かが読んだ」が伝われば成立する
+# 居る：客席の心拍は30秒ごとに来るので、窓は2回ぶんより広く取る。同じ長さにすると
+# 心拍と心拍の隙間で気配が切れ、灯がまたたいて「人が出入りしている」ように見える。
+_LANTERN_HERE_WINDOW = _env_num("TAYORI_LANTERN_HERE_WINDOW", 75.0, 20.0, 600.0)
 _lantern_lock = threading.Lock()
-_lantern_touches = deque()  # (time.time(), 触れた人の鍵, 部屋id or None)
+_lantern_touches = deque()  # (time.time(), 人の鍵, 部屋id or None, 種類)
 
 
 def _lantern_key():
@@ -4600,28 +4609,56 @@ def _lantern_key():
     return "a:" + hashlib.sha256(("lt:" + _client_ip()).encode()).hexdigest()[:12]
 
 
-def _lantern_touch(room_id=None):
+def _lantern_sweep(now):
+    """古い気配を落とす。呼ぶ側が _lantern_lock を持っていること。
+    窓が二つあるので、長いほうで掃いてから、読むときに短いほうで絞る。"""
+    while _lantern_touches and now - _lantern_touches[0][0] > max(
+            _LANTERN_WINDOW, _LANTERN_HERE_WINDOW):
+        _lantern_touches.popleft()
+
+
+def _lantern_touch(room_id=None, kind="touch"):
     now = time.time()
     try:
         key = _lantern_key()
     except RuntimeError:          # リクエスト文脈の外から呼ばれた時は気配だけ灯す
         key = "s:"
     with _lantern_lock:
-        while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
-            _lantern_touches.popleft()
-        _lantern_touches.append((now, key, room_id))
+        _lantern_sweep(now)
+        # 同じ人の同じ気配は一つに畳む。心拍は30秒ごとに来るので、畳まないと
+        # ひとりが窓のあいだに何個も居座り、上限400が「人数」ではなく「回数」で
+        # 埋まる（先に来た本物の気配が押し出される）。
+        if kind == "here":
+            for e in [e for e in _lantern_touches
+                      if e[1] == key and e[3] == "here" and e[2] == room_id]:
+                _lantern_touches.remove(e)
+        _lantern_touches.append((now, key, room_id, kind))
         while len(_lantern_touches) > 400:
             _lantern_touches.popleft()
 
 
 def _lantern_rooms(me):
     """いま気配のある部屋の id 集合（自分の反射は除く）。数は返さない——
-    「何人いるか」を出した瞬間に、静かな部屋が『人気のない部屋』になる。"""
+    「何人いるか」を出した瞬間に、静かな部屋が『人気のない部屋』になる。
+    触れた気配も、ただ居る気配も、ここでは同じ一つの「気配」に均す。"""
     now = time.time()
     with _lantern_lock:
-        while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
-            _lantern_touches.popleft()
-        return {r for _, k, r in _lantern_touches if k != me and r is not None}
+        _lantern_sweep(now)
+        return {r for t, k, r, kind in _lantern_touches
+                if k != me and r is not None
+                and now - t <= (_LANTERN_HERE_WINDOW if kind == "here" else _LANTERN_WINDOW)}
+
+
+def _lantern_here(me, room_id):
+    """いまこの部屋に、自分以外のだれかが居るか。真偽値だけ——人数は数えない。"""
+    if room_id is None:
+        return False
+    now = time.time()
+    with _lantern_lock:
+        _lantern_sweep(now)
+        return any(k != me and r == room_id
+                   and now - t <= (_LANTERN_HERE_WINDOW if kind == "here" else _LANTERN_WINDOW)
+                   for t, k, r, kind in _lantern_touches)
 
 
 @app.route("/api/sky/touch", methods=["POST"])
@@ -4638,17 +4675,34 @@ def api_sky_touch():
 
 @app.route("/api/sky/lantern")
 def api_sky_lantern():
-    """直近30秒に、自分以外の誰かが宙のことばに触れたか。boolean をひとつだけ返す。
-    ?rooms=1 なら、気配のある部屋の id も返す（トップの部屋ごとの灯・B-7）。"""
+    """気配を聞きにくる口。ついでに、聞きにきたこと自体を気配として置く。
+
+    ?here=<部屋id> を付けると、その部屋に「居る」を一つ灯す。客席は元々30秒ごとに
+    ここを叩いていたので、**新しい通信は一本も増えない**——WebSocket も専用の心拍も
+    要らない。Render の一プロセスで足りる。
+    返すのは真偽値だけ：
+      lit   … 直近30秒に、自分以外の誰かがことばに触れた（まれで、強い合図）
+      here  … いまこの部屋に、自分以外の誰かが居る（ありふれていて、弱い合図）
+      rooms … 気配のある部屋の id（トップの部屋ごとの灯・B-7）
+    人数は数えない・誰かは言わない・どこから来たかは見ない。"""
     me = _lantern_key()
+    try:
+        here_room = int(request.args.get("here"))
+    except (TypeError, ValueError):
+        here_room = None
+    if here_room is not None:
+        _lantern_touch(here_room, kind="here")
     now = time.time()
     with _lantern_lock:
-        while _lantern_touches and now - _lantern_touches[0][0] > _LANTERN_WINDOW:
-            _lantern_touches.popleft()
-        lit = any(k != me for _, k, _r in _lantern_touches)
+        _lantern_sweep(now)
+        lit = any(k != me and kind == "touch" and now - t <= _LANTERN_WINDOW
+                  for t, k, _r, kind in _lantern_touches)
+    out = {"lit": lit}
+    if here_room is not None:
+        out["here"] = _lantern_here(me, here_room)
     if request.args.get("rooms"):
-        return jsonify(lit=lit, rooms=sorted(_lantern_rooms(me)))
-    return jsonify(lit=lit)
+        out["rooms"] = sorted(_lantern_rooms(me))
+    return jsonify(**out)
 
 
 # ══ 辿る（v2仕様書 §4）は 2026-07-28 に畳んだ ═══════════════════════
