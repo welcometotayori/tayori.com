@@ -5148,10 +5148,22 @@ def api_mine():
     """自分の書架のことば。季節（年つき）ごとの塊で返す。数は返さない。
     ケア分岐で宙に出なかったことば（mode='letter' の宙由来）も本人の書架には並ぶ。"""
     db = get_db()
-    rows = db.execute(
-        "SELECT id, poem, title, seal_color, vertical, sent_date, shelved_at"
-        "  FROM letters WHERE user_id=? AND COALESCE(demo_mode,0)=0"
-        "   AND COALESCE(poem,'')<>'' ORDER BY sent_date DESC", (uid(),)).fetchall()
+    # 全文検索（フェーズ3-4・2026-07-29）。**自分が放ったことばの中だけ**。
+    # 宙や他人のことばには全文検索の経路を作らない（プライバシー第4項）。
+    q = (request.args.get("q") or "").strip()[:80]
+    if q:
+        like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        rows = db.execute(
+            "SELECT id, poem, title, seal_color, vertical, sent_date, shelved_at"
+            "  FROM letters WHERE user_id=? AND COALESCE(demo_mode,0)=0"
+            "   AND COALESCE(poem,'')<>''"
+            "   AND (poem LIKE ? ESCAPE '\\' OR COALESCE(title,'') LIKE ? ESCAPE '\\')"
+            " ORDER BY sent_date DESC", (uid(), like, like)).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT id, poem, title, seal_color, vertical, sent_date, shelved_at"
+            "  FROM letters WHERE user_id=? AND COALESCE(demo_mode,0)=0"
+            "   AND COALESCE(poem,'')<>'' ORDER BY sent_date DESC", (uid(),)).fetchall()
     # 付箋は書架に出さない（v2.2 §3）。書き手が自分のことばに付けるのは題だけで、
     # 付箋は読み手が自分の棚に貼るもの——だから自分の書架には、そもそも存在しない。
     groups, order = {}, []
@@ -5202,9 +5214,21 @@ def api_shelf():
     shelf_rows = db.execute(
         "SELECT id, name, created_at FROM shelves WHERE owner_id=?"
         " ORDER BY created_at, id", (uid(),)).fetchall()
-    word_rows = db.execute(
-        "SELECT id, src, ref_id, poem, title, color, vertical, saved_at FROM saved_words"
-        " WHERE user_id=? ORDER BY saved_at DESC", (uid(),)).fetchall()
+    # 全文検索（フェーズ3-4・2026-07-29）。**自分の棚の中だけ**。ここは制約なし——
+    # 自分が自分の控えを探すのに、意味の近さも偶然も要らない。文字がそのまま当たればいい。
+    # 数百件の規模なので LIKE で足りる（FTS5 の索引を持つほうが、維持の手間に見合わない）。
+    q = (request.args.get("q") or "").strip()[:80]
+    if q:
+        like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        word_rows = db.execute(
+            "SELECT id, src, ref_id, poem, title, color, vertical, saved_at FROM saved_words"
+            " WHERE user_id=? AND (COALESCE(poem,'') LIKE ? ESCAPE '\\'"
+            "                   OR COALESCE(title,'') LIKE ? ESCAPE '\\')"
+            " ORDER BY saved_at DESC", (uid(), like, like)).fetchall()
+    else:
+        word_rows = db.execute(
+            "SELECT id, src, ref_id, poem, title, color, vertical, saved_at FROM saved_words"
+            " WHERE user_id=? ORDER BY saved_at DESC", (uid(),)).fetchall()
     # どの棚に置いてあるか（同じことばが複数の棚にあってよい・§5）
     on_shelves = {}
     for r in db.execute(
