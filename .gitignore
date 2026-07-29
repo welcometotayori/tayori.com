@@ -11,6 +11,7 @@ venv/
 .secret_key
 .env
 *.db
+*.db.bak-*
 
 # ローカルのツール設定
 .claude/

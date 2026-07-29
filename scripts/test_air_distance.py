@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import (air_distance, _parse_hsl, _hue_distance, _hour_band,
-                 _ring_distance, _area_distance, _AIR_SEASONS, _AIR_BANDS)
+                 _ring_distance, _AIR_SEASONS, _AIR_BANDS)
 
 
 def approx(a, b, eps=1e-9):
@@ -54,32 +54,33 @@ assert _hour_band(19.0) == "night"
 assert _hour_band(3.5) == "night"    # 深夜は夜
 assert _hour_band(None) is None
 
-# ── 地名（§2.3）──────────────────────────────────────────────
-approx(_area_distance("東京都新宿区", "東京都新宿区"), 0.0)
-approx(_area_distance("東京都新宿区", "東京都台東区"), 0.5)   # 同一都道府県
-approx(_area_distance("東京都新宿区", "大阪府北区"), 1.0)
-approx(_area_distance("北海道札幌市", "北海道函館市"), 0.5)
-assert _area_distance(None, "東京都新宿区") is None
+# ── 地名（§2.3）は 2026-07-29 に成分ごと外した（地図を畳んで位置を書く経路が消えた）。
+#    "area" を渡しても air_distance は見ない＝結果が変わらないことを、下で確かめる。
 
 # ── air_distance 全体（§2.1）────────────────────────────────
 FULL_A = {"color": "hsl(220, 60%, 40%)", "season": "winter",
-          "hour": 2.0, "weather": "snow", "area": "東京都新宿区"}
+          "hour": 2.0, "weather": "snow"}
 
 # 同じ空気は距離0
 approx(air_distance(FULL_A, dict(FULL_A)), 0.0)
 
 # 全成分が最遠のとき。色の距離は補色でも 0.70（S/L が同じ分は近い）なので、
-# 全体は 0.40*0.70 + 0.20 + 0.20 + 0.15 + 0.05 = 0.88 が上限近く。
+# 全体は (0.421*0.70 + 0.211 + 0.211 + 0.157) / 1.0 = 0.8737。
 FAR = {"color": "hsl(40, 60%, 40%)", "season": "summer",
-       "hour": 13.0, "weather": "clear", "area": "沖縄県那覇市"}
-approx(air_distance(FULL_A, FAR), 0.88)
+       "hour": 13.0, "weather": "clear"}
+approx(air_distance(FULL_A, FAR), 0.8737)
 
-# 閲覧者の「いま」（色・地名なし）→ 残り3成分（0.20+0.20+0.15）で正規化
+# 地名は見ない：渡しても渡さなくても同じ距離になる（成分を外した証拠）
+approx(air_distance(dict(FULL_A, area="東京都新宿区"),
+                    dict(FAR, area="沖縄県那覇市")),
+       air_distance(FULL_A, FAR))
+
+# 閲覧者の「いま」（色なし）→ 残り3成分（0.211+0.211+0.157）で正規化
 NOW = {"season": "winter", "hour": 2.0, "weather": "snow"}
 approx(air_distance(NOW, FULL_A), 0.0)
 approx(air_distance(NOW, FAR), 1.0)
 NOW_HALF = {"season": "spring", "hour": 2.0, "weather": "snow"}   # 季節だけ隣
-approx(air_distance(NOW_HALF, FULL_A), (0.20 * 0.5) / 0.55)
+approx(air_distance(NOW_HALF, FULL_A), (0.211 * 0.5) / 0.579)
 
 # 対称性：a→b と b→a は同じ
 approx(air_distance(FULL_A, FAR), air_distance(FAR, FULL_A))
@@ -87,10 +88,10 @@ approx(air_distance(FULL_A, FAR), air_distance(FAR, FULL_A))
 # 何も比べられなければ中立0.5
 approx(air_distance({}, FULL_A), 0.5)
 
-# 色（40%）が主役：色だけ遠い vs 地名だけ遠い なら色の方が遠い
+# 色（約42%）が主役：色だけ遠い vs 天気だけ遠い なら色の方が遠い
 COLOR_FAR = dict(FULL_A, color="hsl(40, 60%, 40%)")
-AREA_FAR = dict(FULL_A, area="沖縄県那覇市")
-assert air_distance(FULL_A, COLOR_FAR) > air_distance(FULL_A, AREA_FAR)
+WEATHER_FAR = dict(FULL_A, weather="clear")
+assert air_distance(FULL_A, COLOR_FAR) > air_distance(FULL_A, WEATHER_FAR)
 
 # 値域は常に 0.0–1.0
 import itertools
@@ -98,10 +99,9 @@ opts_color = [None, "hsl(0, 60%, 50%)", "hsl(200, 5%, 90%)"]
 opts_season = [None, "spring", "autumn"]
 opts_hour = [None, 5.0, 22.0]
 opts_weather = [None, "clear", "snow"]
-opts_area = [None, "東京都新宿区", "大阪府北区"]
-for c, s, h, w, ar in itertools.product(opts_color, opts_season, opts_hour,
-                                        opts_weather, opts_area):
-    b = {"color": c, "season": s, "hour": h, "weather": w, "area": ar}
+for c, s, h, w in itertools.product(opts_color, opts_season, opts_hour,
+                                    opts_weather):
+    b = {"color": c, "season": s, "hour": h, "weather": w}
     d = air_distance(FULL_A, b)
     assert 0.0 <= d <= 1.0, (b, d)
 

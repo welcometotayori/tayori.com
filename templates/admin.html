@@ -177,7 +177,7 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* ── 季節・時間帯・天候・エリアの分布 ─────────────── */
+        /* ── 季節・時間帯・天候の分布 ───────────────────── */
         .dist-row {
             display: flex;
             gap: 16px;
@@ -751,18 +751,7 @@
         </div>
         <div class="trend-note">封をした瞬間の記録から集計しています（本文には触れていません）。</div>
 
-        {% if metrics.areas %}
-        <div class="section-title">エリアの分布（上位 {{ metrics.areas | length }} / 全 {{ metrics.areas_total }} エリア）</div>
-        <div class="dist-box wide">
-            {% for a in metrics.areas %}
-            <div class="dist-line">
-                <span class="dist-key wide">{{ a.name }}</span>
-                <span class="dist-track"><span class="dist-fill" data-h="{{ (a.n * 100 / metrics.areas[0].n) | round | int }}"></span></span>
-                <span class="dist-n">{{ a.n }}</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
+        {# エリアの分布は 2026-07-29 に地図ごと畳んだ（位置を書き込む経路が無くなった）。 #}
 
         <div class="section-title">部屋（{{ metrics.rooms | length }}）</div>
         <div class="trend-note">

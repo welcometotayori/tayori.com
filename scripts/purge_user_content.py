@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""指定ユーザーの「手紙・気分・地図」データだけを消す。アカウント（users行）は残す。
+"""指定ユーザーの「手紙・気分」データだけを消す。アカウント（users行）は残す。
 
 消す対象テーブル:
-    - letters        手紙本体（seal_color/open_color=気分色、area_lat/lng=地図座標を含む）
+    - letters        手紙本体（seal_color/open_color=気分色を含む）
     - thread         手紙に紐づくやりとり（letter_id 経由）
     - answers        一筆箋の回答（letter_id 経由）
     - notes          気分メモ（色つきノート）

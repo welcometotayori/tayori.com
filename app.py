@@ -373,28 +373,8 @@ def _seed_questions(db):
 
 _init_db_done = False
 
-def _compute_grid_id(lat, lng):
-    """area_lat/lng を0.1度セルへ丸めた識別子 "{lat}_{lng}"（約11km四方）。
-    位置なし手紙は None。丸めは新規付与とバックフィルで同一式を使う（文字列一致が命）。"""
-    if lat is None or lng is None:
-        return None
-    try:
-        return f"{round(float(lat), 1)}_{round(float(lng), 1)}"
-    except (TypeError, ValueError):
-        return None
-
-
-def _backfill_grid_ids(db):
-    """既存の手紙に grid_id を一度だけ付与する。丸めは Python 側で行い、
-    compute_grid_id と完全一致させる（SQLite の ROUND→TEXT 変換の桁化けを避ける）。"""
-    rows = db.execute(
-        "SELECT id, area_lat, area_lng FROM letters "
-        "WHERE grid_id IS NULL AND area_lat IS NOT NULL AND area_lng IS NOT NULL"
-    ).fetchall()
-    for r in rows:
-        gid = _compute_grid_id(r["area_lat"], r["area_lng"])
-        if gid:
-            db.execute("UPDATE letters SET grid_id=? WHERE id=?", (gid, r["id"]))
+# 2026-07-29：_compute_grid_id / _backfill_grid_ids（気分の地図の0.1度セル）は
+# 地図ごと畳んだ。mood_grid テーブルも位置カラムも消えたので、寄る辺が無い。
 
 
 def _hex_to_hsl_str(hex_str):
@@ -683,11 +663,8 @@ def init_db():
             "ALTER TABLE letters ADD COLUMN seal_q TEXT",
             # リテンション：初めて封をした時に一度だけ「ブックマークに」を出す。表示した瞬間にこの列を立てる。
             "ALTER TABLE users ADD COLUMN bookmark_prompt_shown INTEGER DEFAULT 0",
-            # 封じた場所の「エリア」。生の現在地座標は入れない（逆ジオコーディング結果の
-            # エリア名とその代表座標のみ）。位置なし手紙はすべてNULLで正常系。
-            "ALTER TABLE letters ADD COLUMN area_name TEXT",
-            "ALTER TABLE letters ADD COLUMN area_lat REAL",
-            "ALTER TABLE letters ADD COLUMN area_lng REAL",
+            # 封じた場所の「エリア」（area_name / area_lat / area_lng）は 2026-07-29 に drop。
+            # 地図を畳んだ時点で、位置を書き込む経路がひとつも残っていなかった。
             "ALTER TABLE letters ADD COLUMN time_bucket TEXT",
             # 縦書きの手紙。書いた時の姿（縦/横）ごと封入し、開封時も同じ姿で届く。
             "ALTER TABLE letters ADD COLUMN vertical INTEGER DEFAULT 0",
@@ -696,11 +673,7 @@ def init_db():
             # コメント（今の自分→過去の手紙への一方通行）の「その時」：時間帯と気象スナップショット
             "ALTER TABLE thread ADD COLUMN time_bucket TEXT",
             "ALTER TABLE thread ADD COLUMN env TEXT",
-            # 開封した場所の「エリア」。封緘時と同じ流儀：生座標は入れず、
-            # 逆ジオコーディング結果のエリア名と代表座標（小数第3位丸め）のみ。取れなければNULLで正常系。
-            "ALTER TABLE letters ADD COLUMN open_area_name TEXT",
-            "ALTER TABLE letters ADD COLUMN open_area_lat REAL",
-            "ALTER TABLE letters ADD COLUMN open_area_lng REAL",
+            # 開封した場所の「エリア」（open_area_*）も 2026-07-29 に drop（同上）。
             # デモ用の手紙（scripts/seed_demo_data.py で投入）。demo_mode=1 の手紙だけ
             # demo_arrive_at（上書きの開封予定日時）を自由に動かせる。本来の arrive_at は
             # 温存し、上書きはこの列にだけ持つ（NULL に戻せば元の予定に戻る）。
@@ -711,16 +684,10 @@ def init_db():
             # ほどける日時（2026-07-22「ほどけるまで」）。この日時を過ぎた紙玉は
             # 色片(woven_scraps)へ溶け、本文と筆跡は物理的に消える（不可逆）。
             "ALTER TABLE unemptyable_trash ADD COLUMN unravel_at TEXT",
-            # 気分の地図（Mood Night Map / 2026-07-23）。A(気分の宙)・B(地図)で共通の集計基盤。
-            #   grid_id                  … area_lat/lng を0.1度に丸めたセル識別子 "{lat}_{lng}"（約11km四方）
-            #   excluded_from_aggregate  … A・B共通のオプトアウト。0=集計に含める(既定) / 1=外す
-            "ALTER TABLE letters ADD COLUMN grid_id TEXT",
-            "ALTER TABLE letters ADD COLUMN excluded_from_aggregate INTEGER DEFAULT 0",
-            # ユーザー単位のオプトアウト意思。ONにすると既存・今後すべての手紙を集計から外す。
-            # letters.excluded_from_aggregate は投函時にこの値から写す（集計クエリは手紙側だけ見ればよい）。
-            "ALTER TABLE users ADD COLUMN aggregate_opt_out INTEGER DEFAULT 0",
-            # 気分の地図のリリース告知（事後同意）。一度出したらこの時刻を立てて再表示しない。
-            "ALTER TABLE users ADD COLUMN night_map_notice_seen_at TEXT",
+            # 気分の地図（Mood Night Map / 2026-07-23）の集計基盤——grid_id・
+            # excluded_from_aggregate・aggregate_opt_out・night_map_notice_seen_at と
+            # mood_grid テーブル——は 2026-07-29 に drop した。集計は一度も
+            # 公開の面に出ないまま（mood_grid は本番でも0行）だった。
             # 宙モード（2026-07-25）。mode='sky' は宛先も日時も選ばず「宙へ放った」ことば。
             # 降ってくる日時（arrive_at）はサーバが3日〜1年の対数乱数で内部生成し、本人には一切見せない
             # （sealed_meta からも落とす）。mode='letter'（既定）は従来の「未来の自分へ」。
@@ -805,23 +772,6 @@ def init_db():
         # ピッカーがスウォッチ→HSLになったのに合わせ、既存のHEX値を "hsl(H, S%, L%)" へ
         # 一括変換する。冪等（HEXで始まる行だけ変換）。読む側は両対応なので取りこぼしても壊れない。
         _migrate_colors_to_hsl(db)
-
-        # ── 気分の地図（Mood Night Map）の集計テーブル ────────────────
-        # Postgres なら MATERIALIZED VIEW だが、たよりは SQLite なので普通のテーブルとして持ち、
-        # 日次で作り直す（_refresh_mood_grid）。しきい値10通未満のセルはそもそも入れない。
-        db.execute(
-            """CREATE TABLE IF NOT EXISTS mood_grid (
-                grid_id TEXT NOT NULL,
-                mood    INTEGER NOT NULL,
-                n       INTEGER NOT NULL,
-                latest  TEXT,
-                lat     REAL,
-                lng     REAL,
-                PRIMARY KEY (grid_id, mood)
-            )""")
-        # grid_id バックフィル: 丸めは Python の compute_grid_id と完全一致させる必要がある
-        # （SQLite の CAST(ROUND(x,1) AS TEXT) は "33.600000000000001" 等の桁化けを起こすため使わない）。
-        _backfill_grid_ids(db)
 
         # ── 宙の配達（2026-07-25 宙モードv2）─────────────────────────
         # 放たれたことばは、自分にいつか降る（letters.arrive_at）のに加えて、他のだれか一人にも届く。
@@ -1173,8 +1123,7 @@ def current_user():
     if not u:
         return None
     return get_db().execute(
-        "SELECT id,username,email,email_verified,onboarded,"
-        "aggregate_opt_out,night_map_notice_seen_at,is_admin,suspended_at"
+        "SELECT id,username,email,email_verified,onboarded,is_admin,suspended_at"
         " FROM users WHERE id=? AND suspended_at IS NULL", (u,)
     ).fetchone()
 
@@ -1596,7 +1545,6 @@ def robots_txt():
         "Disallow: /me\n"
         "Disallow: /shelf\n"
         "Disallow: /mine\n"
-        "Disallow: /map\n"
         "Disallow: /api/\n"
         "Disallow: /admin.welcometotayori\n"
         "Disallow: /verify/\n"
@@ -1836,9 +1784,6 @@ def api_me():
                    email=u["email"] if "email" in keys else None,
                    email_verified=bool(u["email_verified"]) if "email_verified" in keys else False,
                    onboarded=bool(u["onboarded"]) if "onboarded" in keys else True,
-                   # 気分の地図: 集計オプトアウトの状態と、リリース告知を出すべきか
-                   aggregate_opt_out=bool(u["aggregate_opt_out"]) if "aggregate_opt_out" in keys else False,
-                   night_map_notice=not bool(u["night_map_notice_seen_at"]) if "night_map_notice_seen_at" in keys else True,
                    weather_enabled=NETWORK_ENABLED)
 
 
@@ -1973,39 +1918,6 @@ def api_account_delete():
         return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
     _sky_cache_bust()             # 放っていたことばを、いま宙から降ろす
     session.clear()
-    return jsonify(ok=True)
-
-
-@app.route("/api/settings/aggregate-opt-out", methods=["GET", "POST"])
-@login_required
-def api_aggregate_opt_out():
-    """気分の地図（A・B共通）の集計から自分の手紙を外す/戻す。
-    ONにするとユーザーの既存・今後すべての手紙が対象（今後ぶんは投函時に写す）。
-    集計テーブルは日次更新なので、地図への反映は即時ではない（意図的）。"""
-    db = get_db()
-    if request.method == "POST":
-        out = 1 if request.get_json(force=True).get("opt_out") else 0
-        with _WRITE_LOCK:
-            db.execute("UPDATE users SET aggregate_opt_out=? WHERE id=?", (out, uid()))
-            db.execute("UPDATE letters SET excluded_from_aggregate=? WHERE user_id=?", (out, uid()))
-            db.commit()
-        return jsonify(ok=True, opt_out=bool(out))
-    row = db.execute(
-        "SELECT COALESCE(aggregate_opt_out,0) AS o FROM users WHERE id=?", (uid(),)).fetchone()
-    return jsonify(opt_out=bool(row and row["o"]))
-
-
-@app.route("/api/settings/night-map-notice-seen", methods=["POST"])
-@login_required
-def api_night_map_notice_seen():
-    """気分の地図リリース告知を一度出したら既読にする（再表示しない）。"""
-    db = get_db()
-    with _WRITE_LOCK:
-        db.execute(
-            "UPDATE users SET night_map_notice_seen_at=? "
-            "WHERE id=? AND night_map_notice_seen_at IS NULL",
-            (datetime.now().isoformat(timespec="seconds"), uid()))
-        db.commit()
     return jsonify(ok=True)
 
 
@@ -2337,7 +2249,6 @@ def _sealed_card_fields(row):
         "vertical": bool(row["vertical"]) if "vertical" in keys else False,
         "seal_color": row["seal_color"] if "seal_color" in keys else None,
         "seal_env": env,
-        "area_name": row["area_name"] if "area_name" in keys else None,
         "time_bucket": row["time_bucket"] if "time_bucket" in keys else None,
     }
 
@@ -3021,7 +2932,6 @@ def start_notifier(interval=None):
         # 起動直後の登録とDBで競合する温床だった）。初回は起動から約5分後にずらす。
         last_backup = time.time() - backup_hours * 3600 + 300
         last_dissolve = 0.0
-        last_mood_grid = 0.0    # 気分の地図の集計。0.0 起点で起動直後に一度作る
         last_seen_gc = 0.0      # sky_seen の掃除（宙v1 §2.1）。起動直後に一度、以後は日次
         last_room_gc = 0.0      # 誰も入らなかった空き部屋の掃除（B-5）。日次
         time.sleep(grace + 8)   # persist は notifier より少し後ろにずらす
@@ -3087,18 +2997,6 @@ def start_notifier(interval=None):
             except Exception as e:
                 print(f"[たより] 空部屋の掃除でエラー（継続）: {e}", flush=True)
             try:
-                # 気分の地図: 集計テーブルを日次で作り直す（即時反映しないのが設計）
-                if time.time() - last_mood_grid >= 86400:
-                    last_mood_grid = time.time()
-                    _db = _connect()
-                    try:
-                        c = _refresh_mood_grid(_db)
-                        print(f"[たより] 気分の地図: {c}セルを更新", flush=True)
-                    finally:
-                        _db.close()
-            except Exception as e:
-                print(f"[たより] 気分の地図の更新でエラー（継続）: {e}", flush=True)
-            try:
                 if _backup_s3_config() and (time.time() - last_backup) >= backup_hours * 3600:
                     ok = _run_backup_to_s3()
                     last_backup = time.time() if ok else (time.time() - backup_hours * 3600 + 3600)
@@ -3147,61 +3045,12 @@ def api_weather():
                    approx=approx, city=city)
 
 
-# ── 封じた場所のエリア変換（Nominatim逆ジオコーディングのプロキシ）──
-# 受け取った生座標は変換にだけ使い、保存もログも一切しない。
-# 返すのはエリア名と、その「エリアの代表座標」（＝ユーザーの実座標ではない）。
-_NOMINATIM_LOCK = threading.Lock()
-_nominatim_last = 0.0
-# 日本ではsuburbに町名が入ることが多いが保証はないため、狭い順にフォールバックする。
-_AREA_KEYS = ("neighbourhood", "quarter", "suburb", "city_district",
-              "town", "village", "city")
-
-
-@app.route("/api/reverse-geocode", methods=["POST"])
-@login_required
-def api_reverse_geocode():
-    data = request.get_json(force=True, silent=True) or {}
-    try:
-        lat, lng = float(data.get("lat")), float(data.get("lng"))
-    except (TypeError, ValueError):
-        return jsonify(area_name=None)
-    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
-        return jsonify(area_name=None)
-    if not NETWORK_ENABLED:
-        return jsonify(area_name=None)
-
-    # Nominatim利用規約（1req/秒）: 直前の呼び出しから1秒未満なら待ってから叩く。
-    global _nominatim_last
-    with _NOMINATIM_LOCK:
-        wait = 1.0 - (time.monotonic() - _nominatim_last)
-        if wait > 0:
-            time.sleep(wait)
-        _nominatim_last = time.monotonic()
-
-    url = ("https://nominatim.openstreetmap.org/reverse"
-           f"?format=jsonv2&lat={lat}&lon={lng}&accept-language=ja")
-    req = urllib.request.Request(
-        url, headers={"User-Agent": "tayori/1.0 (https://www.tayori-letter.com)"})
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            d = json.loads(r.read().decode())
-    except Exception:
-        # 失敗しても封緘フローは止めない。座標が残るためエラー詳細もログに出さない。
-        return jsonify(area_name=None)
-
-    addr = d.get("address") or {}
-    area = next((addr[k] for k in _AREA_KEYS if addr.get(k)), None)
-    try:
-        # 結果オブジェクト側の座標＝エリアの代表点。念のため約100m（小数第3位）に丸める。
-        area_lat = round(float(d.get("lat")), 3)
-        area_lng = round(float(d.get("lon")), 3)
-    except (TypeError, ValueError):
-        area_lat = area_lng = None
-    if not area or area_lat is None or area_lng is None:
-        return jsonify(area_name=None)
-    return jsonify(area_name=str(area)[:80], area_lat=area_lat, area_lng=area_lng)
-
-
+# ── いまの位置（天気の判定のためだけ）───────────────────────────
+# 2026-07-29：Nominatim の逆ジオコーディング（/api/reverse-geocode）と「封じた場所の
+# 地図」（/map・/api/map・/api/map/moods）は畳んだ。地図を消した時点で、位置を
+# letters へ書き込む経路はひとつも残っていなかった（本番でも宙のことばは1件も
+# エリアを持っていない）。ここに残るのは users.last_lat/lon だけで、これは
+# 天気（雨の日に届く便り・封緘時の気象）が使う——地図とは別の系統。
 @app.route("/api/locate", methods=["POST"])
 @login_required
 def api_locate():
@@ -3214,121 +3063,6 @@ def api_locate():
                          (str(lat), str(lon), uid()))
         get_db().commit()
     return jsonify(ok=True)
-
-
-# ── 封じた場所の地図 ─────────────────────────────────────────────
-# 手紙を封じた場所が、事後的に点になるだけの地図。
-# 出すのはエリア名・時間帯・点の存在のみ。本文・日付・開封状態には一切つながない。
-
-@app.route("/map")
-def map_page():
-    guard = _page_login_guard()
-    if guard:
-        return guard
-    # ShadeMap（日照シミュレーション）のAPIキー。無ければ地図は素のOSMのまま成立する。
-    return render_template("map.html",
-                           shademap_key=os.environ.get("TAYORI_SHADEMAP_KEY", ""))
-
-
-@app.route("/api/map")
-@login_required
-def api_map():
-    # 手紙のidは返さない（地図から本文へたどる経路を持たせない）。
-    # 非対称表示：未開封の点は「場所名」だけ（封の中の時間・空気は開封まで明かさない）。
-    # 開封済みの点は「封をした日時・時間帯・その時の天気」＝時間と空気が主役になる。
-    # 天気は表示の有無に関わらず封緘時に seal_env として必ず記録済み（表示と記録は分離）。
-    #
-    # ?until=<ISO日時> を渡すと「その日時点の地図」を返す（開封時の「あの日と今日」の見比べ用）。
-    # 当時まだ無かった点は返さず、当時まだ開封されていなかった点は未開封の姿（場所名のみ）で返す。
-    # 日付の絞り込みはサーバ側で行い、未開封の点の封緘日時をクライアントへ渡さない原則は崩さない。
-    until = (request.args.get("until") or "").strip()[:32] or None
-    rows = get_db().execute(
-        """SELECT area_name, area_lat, area_lng, time_bucket, opened, opened_at, sent_date, seal_env,
-                  open_area_name, open_area_lat, open_area_lng
-           FROM letters
-           WHERE user_id=? AND area_name IS NOT NULL
-             AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
-        (uid(),)).fetchall()
-    points = []
-    for r in rows:
-        if until:
-            # sent_date / opened_at はどちらもISO文字列なので文字列比較で時系列になる
-            if (r["sent_date"] or "") > until:
-                continue  # その日にはまだ封をしていなかった点
-            opened_then = bool(r["opened"]) and bool(r["opened_at"]) and r["opened_at"] <= until
-        else:
-            opened_then = bool(r["opened"])
-        p = {"area_name": r["area_name"], "area_lat": r["area_lat"],
-             "area_lng": r["area_lng"], "opened": opened_then}
-        if opened_then:
-            p["sent_at"] = r["sent_date"]
-            p["time_bucket"] = r["time_bucket"]
-            # 開いた場所（エリア名＋丸め座標のみ）。開封の弧（封をした場所⇔開いた場所）の材料。
-            # 未開封の点には付けない＝非対称表示の原則そのまま。
-            p["open_area_name"] = r["open_area_name"]
-            p["open_area_lat"] = r["open_area_lat"]
-            p["open_area_lng"] = r["open_area_lng"]
-            try:
-                env = json.loads(r["seal_env"]) if r["seal_env"] else None
-            except (TypeError, ValueError):
-                env = None
-            if env:
-                p["weather"] = {"condition": env.get("condition"), "temp": env.get("temp")}
-        points.append(p)
-    return jsonify(points=points)
-
-
-@app.route("/api/map/moods")
-@login_required
-def api_map_moods():
-    # 気分の地図（エリア単位 aura）。サーバから返すのはエリアに集約済みのものだけ：
-    #   ・座標の生値・手紙id・本文は載せない（center/bbox はエリア内の丸め済み座標から出す）
-    #   ・moods は開封済みの手紙のみ。封をしたままの気分色はサーバから出さない（開封で初めて色が出る）
-    #   ・件数は返さない。moods の配列長がそのまま件数になるため、返す前にシャッフルし
-    #     8件を超えたら8件に切る（色の混ざり具合は8件あれば十分収束する）
-    #   ・has_sealed は真偽値のみ。数は出さない
-    # ?until=<ISO日時> は /api/map と同じ「あの日の地図」用（開封状態も当時の姿で判定）。
-    until = (request.args.get("until") or "").strip()[:32] or None
-    rows = get_db().execute(
-        """SELECT area_name, area_lat, area_lng, opened, opened_at, sent_date, seal_color,
-                  COALESCE(seal_color_chosen,1) AS seal_color_chosen
-           FROM letters
-           WHERE user_id=? AND area_name IS NOT NULL
-             AND area_lat IS NOT NULL AND area_lng IS NOT NULL""",
-        (uid(),)).fetchall()
-    areas = {}
-    for r in rows:
-        if until and (r["sent_date"] or "") > until:
-            continue   # その日にはまだ封をしていなかった
-        if until:
-            opened = bool(r["opened"]) and bool(r["opened_at"]) and r["opened_at"] <= until
-        else:
-            opened = bool(r["opened"])
-        a = areas.setdefault(r["area_name"], {"lats": [], "lngs": [], "moods": [], "sealed": False})
-        a["lats"].append(r["area_lat"])
-        a["lngs"].append(r["area_lng"])
-        if opened:
-            # 選ばれた色だけが気分として立つ（2026-07-28）。自分の地図でも同じ——
-            # 触られなかった既定色を「あの日の気分」として見せない。手紙そのものは
-            # 位置と封の気配（lats/lngs/sealed）には残る＝消えるのは色の主張だけ。
-            if r["seal_color_chosen"]:
-                m = _mood_index(r["seal_color"])
-                if m is not None:
-                    a["moods"].append(_MOOD_SLUGS[m])
-        else:
-            a["sealed"] = True
-    out = []
-    for name, a in areas.items():
-        random.shuffle(a["moods"])
-        out.append({
-            "id": name, "label": name,
-            "center": [round(sum(a["lats"]) / len(a["lats"]), 3),
-                       round(sum(a["lngs"]) / len(a["lngs"]), 3)],
-            "bbox": [[min(a["lats"]), min(a["lngs"])], [max(a["lats"]), max(a["lngs"])]],
-            "moods": a["moods"][:8],
-            "has_sealed": a["sealed"],
-        })
-    return jsonify(areas=out)
 
 
 # ──「言葉の編み物」（/archive・全レター横断のパッチワーク）と「地の糸」（他者moodの気配）は
@@ -3560,11 +3294,14 @@ def _sky_public_id(letter_id):
 # 色（40%）が主役：気分の色は本人が選んだ唯一の主観指標なので、いちばん信用できる。
 # 言語はこの計算に一切入らない（§2.4）＝ことばが多言語化してもここは1行も変えない。
 # 重みは実データで調整できるよう環境変数に出しておく（§17）。
-_AIR_W_COLOR = _env_num("TAYORI_AIR_W_COLOR", 0.40, 0.0, 1.0)
-_AIR_W_SEASON = _env_num("TAYORI_AIR_W_SEASON", 0.20, 0.0, 1.0)
-_AIR_W_HOUR = _env_num("TAYORI_AIR_W_HOUR", 0.20, 0.0, 1.0)
-_AIR_W_WEATHER = _env_num("TAYORI_AIR_W_WEATHER", 0.15, 0.0, 1.0)
-_AIR_W_AREA = _env_num("TAYORI_AIR_W_AREA", 0.05, 0.0, 1.0)
+# 2026-07-29：地名(5%)を落とした。地図を畳んで位置を書き込む経路が消えたので、
+# この成分は永久に None＝比べられないまま、重みだけが式に残っていた。
+# 残り4成分は比率を保って 1.0 へ引き伸ばす（0.40:0.20:0.20:0.15 を 0.95 で割る）。
+# air_distance は無い成分を外して残りの重みで正規化するので、実効の比は前と変わらない。
+_AIR_W_COLOR = _env_num("TAYORI_AIR_W_COLOR", 0.421, 0.0, 1.0)
+_AIR_W_SEASON = _env_num("TAYORI_AIR_W_SEASON", 0.211, 0.0, 1.0)
+_AIR_W_HOUR = _env_num("TAYORI_AIR_W_HOUR", 0.211, 0.0, 1.0)
+_AIR_W_WEATHER = _env_num("TAYORI_AIR_W_WEATHER", 0.157, 0.0, 1.0)
 
 _HSL_RE = re.compile(
     r"hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%\s*\)")
@@ -3631,27 +3368,11 @@ _AIR_WEATHER = {
     frozenset(("rain", "snow")): 0.5,
 }
 
-_AIR_PREF_RE = re.compile(r"^(.+?[都道府県])")
-
-
-def _area_distance(a1, a2):
-    """同一エリア=0 / 同一都道府県=0.5 / それ以外=1.0（§2.3）。重みは最小（5%）：
-    「近所の人のことば」が集まるのは tayori の狙いではない。"""
-    if not a1 or not a2:
-        return None
-    if a1 == a2:
-        return 0.0
-    m1, m2 = _AIR_PREF_RE.match(a1), _AIR_PREF_RE.match(a2)
-    if m1 and m2 and m1.group(1) == m2.group(1):
-        return 0.5
-    return 1.0
-
-
 def air_distance(a, b):
-    """空気の近さ（§2.1）。a, b は {"color","season","hour","weather","area"} の辞書
+    """空気の近さ（§2.1）。a, b は {"color","season","hour","weather"} の辞書
     （hour は 0.0–24.0 の連続値）。どちらかに無い成分は比べずに外し、残りの重みで
-    正規化する——閲覧者の「いま」には色が無く、位置なし手紙には地名が無い、の
-    どちらでも式を変えずに済む。意味には一切触れない。"""
+    正規化する——閲覧者の「いま」には色が無い、というだけで式を変えずに済む。
+    意味には一切触れない。"""
     parts = []
     d = _hue_distance(a.get("color"), b.get("color"))
     if d is not None:
@@ -3666,9 +3387,6 @@ def air_distance(a, b):
     if w1 and w2:
         parts.append((_AIR_W_WEATHER,
                       0.0 if w1 == w2 else _AIR_WEATHER.get(frozenset((w1, w2)), 1.0)))
-    d = _area_distance(a.get("area"), b.get("area"))
-    if d is not None:
-        parts.append((_AIR_W_AREA, d))
     total = sum(w for w, _ in parts)
     if total <= 0:
         return 0.5   # 何も比べられない時は中立（同じ空気とも遠いとも言わない）
@@ -3885,7 +3603,7 @@ def _sky_index():
 def _sky_rebuild():
     db = get_db()
     rows = db.execute(
-        "SELECT id, user_id, poem, title, seal_color, COALESCE(seal_color_chosen,1) AS seal_color_chosen, vertical, sent_date, time_bucket, seal_env, weather_event, area_name, room_id "
+        "SELECT id, user_id, poem, title, seal_color, COALESCE(seal_color_chosen,1) AS seal_color_chosen, vertical, sent_date, time_bucket, seal_env, weather_event, room_id "
         "FROM letters "
         "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>'' "
         # 掲載の門番（§8）。承認待ち・掲載しないことばは宙に出さない。
@@ -3918,7 +3636,6 @@ def _sky_rebuild():
                 "season": _mood_season(r["sent_date"]),
                 "hour": _mood_hour(r),
                 "weather": _mood_weather(r),
-                "area": r["area_name"],
             },
             r["id"],                      # 読み手ごとの除外（§3.2）にだけ使う。クライアントへは出さない
             _sky_decay(r["sent_date"]),   # 沈降（§3.3）。キャッシュは15秒なので鮮度は問題にならない
@@ -4577,58 +4294,6 @@ def api_tags_suggest():
     return jsonify(tags=tags[:8])
 
 
-# ── 気分の地図（Mood Night Map / B）の集計テーブル ─────────────────
-# Postgres なら MATERIALIZED VIEW + REFRESH だが、たよりは SQLite なので普通のテーブルを
-# 日次で作り直す（maintenance_loop から呼ぶ）。個票・本文・ID・生座標には一切触れない。
-MOOD_GRID_THRESHOLD = 10   # 匿名性のしきい値。下げないこと（母数が小さいと色が個人を指す）
-
-
-def _refresh_mood_grid(db):
-    """0.1度セル×気分ごとに10通以上まとまった分だけを mood_grid に残す。
-    近傍量子化(_mood_index)が要るので集計は Python 側で行う。lat/lng はセル内平均
-    （セル中心ではなく平均にすることで境界のグリッド感が緩む）。返り値は残ったセル数。"""
-    agg = {}   # (grid_id, mood) -> [n, latest, lat_sum, lng_sum]
-    rows = db.execute(
-        "SELECT grid_id, seal_color, sent_date, area_lat, area_lng FROM letters "
-        "WHERE grid_id IS NOT NULL AND COALESCE(demo_mode,0)=0 "
-        "AND COALESCE(excluded_from_aggregate,0)=0 "
-        # 選ばれた色だけを集計する（2026-07-28）。集計は「この土地の人はいまこんな気分」
-        # という主張であり、触られなかった既定色が母数の大半を占める土地では文字通り
-        # 嘘の表示になる。日次で作り直すので既存行はこの条件だけで自動的に治る。
-        # 注意：閾値(MOOD_GRID_THRESHOLD=10)は k-匿名性の担保なので、これで地図が
-        # 疎になっても下げないこと。「無色」を8色目にもしないこと（データの不在は
-        # データ点ではない）。
-        "AND COALESCE(seal_color_chosen,1)=1 "
-        "AND seal_color IS NOT NULL AND seal_color<>''").fetchall()
-    for r in rows:
-        if r["area_lat"] is None or r["area_lng"] is None:
-            continue
-        m = _mood_index(r["seal_color"])
-        if m is None:
-            continue
-        a = agg.get((r["grid_id"], m))
-        if a is None:
-            agg[(r["grid_id"], m)] = [1, r["sent_date"], r["area_lat"], r["area_lng"]]
-        else:
-            a[0] += 1
-            if r["sent_date"] and (a[1] is None or r["sent_date"] > a[1]):
-                a[1] = r["sent_date"]
-            a[2] += r["area_lat"]
-            a[3] += r["area_lng"]
-    with _WRITE_LOCK:
-        db.execute("DELETE FROM mood_grid")
-        kept = 0
-        for (gid, m), (n, latest, lat_s, lng_s) in agg.items():
-            if n < MOOD_GRID_THRESHOLD:      # しきい値未満はそもそも入れない
-                continue
-            db.execute(
-                "INSERT INTO mood_grid (grid_id,mood,n,latest,lat,lng) VALUES (?,?,?,?,?,?)",
-                (gid, m, n, latest, lat_s / n, lng_s / n))
-            kept += 1
-        db.commit()
-    return kept
-
-
 @app.route("/api/letters")
 @login_required
 def api_letters():
@@ -4813,20 +4478,10 @@ def api_create_letter():
     if trace and len(trace) > 600_000:
         trace = None
 
-    # 封じた場所のエリア（逆ジオコーディング済みの名前と代表座標のみ。生座標は受けない前提）。
-    # 名前・座標・時間帯が揃っていなければ、すべてNULLの「位置なし手紙」として扱う。
-    area_name = (str(data.get("area_name") or "")).strip()[:80] or None
-    time_bucket = data.get("time_bucket")
-    if time_bucket not in ("morning", "day", "evening", "night"):
-        time_bucket = None
-    try:
-        area_lat = round(float(data.get("area_lat")), 3)
-        area_lng = round(float(data.get("area_lng")), 3)
-    except (TypeError, ValueError):
-        area_lat = area_lng = None
-    if not (area_name and area_lat is not None and area_lng is not None
-            and -90.0 <= area_lat <= 90.0 and -180.0 <= area_lng <= 180.0):
-        area_name = area_lat = area_lng = time_bucket = None
+    # 時間帯（朝・昼・夕・夜）。以前はクライアントが送る値を受け、位置が揃わない時は
+    # 一緒に NULL へ落としていた——位置を送る経路が消えたので、封をした時刻から
+    # サーバが決める。_hour_band と同じ切り方でなければ、この列は嘘をつく。
+    time_bucket = None
 
     # 縦書きで書かれた手紙かどうか（書いた時の姿ごと封入する）
     vertical = 1 if data.get("vertical") else 0
@@ -4836,6 +4491,8 @@ def api_create_letter():
     # 書体は明朝のみ（書体選択は撤去。letters.font 列は過去データ互換のため残置し、新規は書かない）
 
     sent_iso = datetime.now().isoformat(timespec="seconds")
+    _now = datetime.now()
+    time_bucket = _hour_band(_now.hour + _now.minute / 60.0)
     db = get_db()
     # 気分の宙(v7)の語ネットワーク用タグを、投函時に本文から生成して保存しておく。
     # 抽出は本人環境で行い保存するのは「語」だけなので本文秘匿の鉄則に反せず、以後は
@@ -4843,18 +4500,11 @@ def api_create_letter():
     emos_json = json.dumps(
         _mood_words_from_poem(poem, _mood_name_block_for_user(db, uid())),
         ensure_ascii=False)
-    # 気分の地図（A・B）用: エリア座標を0.1度セルへ丸めた grid_id を、位置を保存するのと同じ
-    # トランザクションで入れる。集計から抜けている人の手紙は、投函時点で excluded を立てておく
-    # （後で一括UPDATEしなくても集計クエリは letters 側だけ見ればよい）。
-    grid_id = _compute_grid_id(area_lat, area_lng)
-    _optout = db.execute(
-        "SELECT COALESCE(aggregate_opt_out,0) AS o FROM users WHERE id=?", (uid(),)).fetchone()
-    excluded = 1 if (_optout and _optout["o"]) else 0
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,trace_z,seal_color,seal_color_chosen,seal_q,area_name,area_lat,area_lng,time_bucket,vertical,grid_id,excluded_from_aggregate,mode,sky_status,room_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,trace_z,seal_color,seal_color_chosen,seal_q,time_bucket,vertical,mode,sky_status,room_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
              # notified は常に 0。ここに care を書くと「ケアと判定した」という痕跡が
@@ -4862,8 +4512,8 @@ def api_create_letter():
              0,
              emos_json,
              1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace, trace_z,
-             seal_color, seal_color_chosen, seal_q, area_name, area_lat, area_lng, time_bucket, vertical,
-             grid_id, excluded, mode, sky_status, room_id),
+             seal_color, seal_color_chosen, seal_q, time_bucket, vertical,
+             mode, sky_status, room_id),
         )
         # 他人のことばが初めて入った瞬間に、その部屋へ鍵をかける（B-5）。
         _room_lock_if_needed(db, room_id, uid())
@@ -4969,28 +4619,14 @@ def api_open_letter(lid):
     open_env = json.dumps(data.get("open_env")) if data.get("open_env") else None
     open_mood = (data.get("open_mood") or "").strip()[:40] or None
 
-    # 開封した場所のエリア（封緘時と同じ流儀：逆ジオコーディング済みの名前と丸め座標のみ）。
-    # 揃っていなければすべてNULL＝場所なし開封として正常に続行する。
-    o_name = (str(data.get("open_area_name") or "")).strip()[:80] or None
-    try:
-        o_lat = round(float(data.get("open_area_lat")), 3)
-        o_lng = round(float(data.get("open_area_lng")), 3)
-    except (TypeError, ValueError):
-        o_lat = o_lng = None
-    if not (o_name and o_lat is not None and o_lng is not None
-            and -90.0 <= o_lat <= 90.0 and -180.0 <= o_lng <= 180.0):
-        o_name = o_lat = o_lng = None
-
     with _WRITE_LOCK:
         already = row["opened_at"] if "opened_at" in row.keys() else None
         if not already:
             now_iso = datetime.now().isoformat(timespec="seconds")
-            # 「開けた日の場所」は最初の開封の時だけ記録する（opened_at と同じく、後から動かさない）
             get_db().execute(
                 "UPDATE letters SET opened=1, open_env=?, open_mood=?, opened_at=?, "
-                "open_area_name=?, open_area_lat=?, open_area_lng=?, "
                 "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
-                (open_env, open_mood, now_iso, o_name, o_lat, o_lng, lid, uid()))
+                (open_env, open_mood, now_iso, lid, uid()))
         else:
             if open_mood:
                 get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
@@ -5570,7 +5206,6 @@ def api_export():
             "title": r["title"],                       # 題（v2.2 §2.1）
             "sent_date": r["sent_date"],
             "seal_env": env,
-            "area_name": r["area_name"],
             "seal_color": r["seal_color"],
             "vertical": bool(r["vertical"]),
             "has_trace": bool(r["trace"]),
@@ -6834,16 +6469,15 @@ def _admin_metrics(db):
     m["delivered"] = db.execute("SELECT COUNT(*) c FROM sky_deliveries").fetchone()["c"]
     m["lanterns"] = db.execute("SELECT COUNT(*) c FROM sky_reaction").fetchone()["c"]
 
-    # ── 分布（封の色・季節・時間帯・天候・エリア）────────────────
+    # ── 分布（封の色・季節・時間帯・天候）──────────────────────
     rows = db.execute(
-        "SELECT sent_date, seal_color, seal_env, weather_event, time_bucket, area_name"
+        "SELECT sent_date, seal_color, seal_env, weather_event, time_bucket"
         "  FROM letters WHERE COALESCE(demo_mode,0)=0").fetchall()
     hue_buckets = [{"deg": d, "n": 0} for d in range(0, 360, 30)]
     gray = 0
     seasons = {k: 0 for k in _AIR_SEASONS}
     bands = {k: 0 for k in _AIR_BANDS}
     weathers = {k: 0 for k in ("clear", "cloud", "rain", "snow")}
-    areas = Counter()
     for row in rows:
         hsl = _parse_hsl(row["seal_color"])
         if hsl:
@@ -6857,18 +6491,12 @@ def _admin_metrics(db):
         if band in bands:
             bands[band] += 1
         weathers[_mood_weather(row)] += 1
-        if row["area_name"]:
-            areas[row["area_name"]] += 1
     m["hue_buckets"], m["hue_gray"] = hue_buckets, gray
     m["hue_max"] = max([b["n"] for b in hue_buckets] + [gray, 1])
     m["seasons"] = [{"key": k, "ja": _SEASON_JA[k], "n": seasons[k]} for k in _AIR_SEASONS]
     m["bands"] = [{"key": k, "ja": _DAYPART_JA.get(k, k), "n": bands[k]} for k in _AIR_BANDS]
     m["weathers"] = [{"key": k, "ja": ja, "n": weathers[k]} for k, ja in
                      (("clear", "晴"), ("cloud", "曇"), ("rain", "雨"), ("snow", "雪"))]
-    # エリアは上位20だけ。これは運営が地域の偏りを見るためのもので、ユーザー側の
-    # 地図は既存どおりセル単位のしきい値（10通未満は出さない）を守る。
-    m["areas"] = [{"name": n, "n": c} for n, c in areas.most_common(20)]
-    m["areas_total"] = len(areas)
     m["dist_max"] = max([s["n"] for s in m["seasons"]] + [b["n"] for b in m["bands"]] +
                         [w["n"] for w in m["weathers"]] + [1])
 
