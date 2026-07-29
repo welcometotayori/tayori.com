@@ -78,9 +78,11 @@
      ——並んだ紙片の中からもう一度見つけるための手がかり（辿る・書架と同じ姿） */
   .slip-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
               word-break:keep-all;overflow-wrap:anywhere}
+  /* 本文に keep-all は掛けない——文節折返しは UI 文言の作法で、人のことばには介入しない
+     （tayori の恒久方針）。overflow-wrap は箱を破らないための安全網なので残す。 */
   .slip-poem{margin:0 0 var(--s2);font-size:var(--t-lead);line-height:2.4;
              letter-spacing:var(--tr-word);white-space:pre-wrap;
-             word-break:keep-all;overflow-wrap:anywhere;color:var(--ink-1)}
+             overflow-wrap:anywhere;color:var(--ink-1)}
   /* 付箋（v2.2 §3）：残した本人が、自分の控えに貼る紙片。あとから貼っても剥がしてもいい。
      書き手には届かない・宙にも出ない。棚に並べたことばを、自分の言葉で仕分けるためだけのもの。 */
   .slip-fusen-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 var(--s2)}
@@ -142,8 +144,9 @@
   /* 題（v2.2 §3）。書架でも、ことばの上に小さく立つ（棚・辿ると同じ姿） */
   .m-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
            word-break:keep-all;overflow-wrap:anywhere}
+  /* 本文に keep-all は掛けない（.slip-poem と同じ理由） */
   .m-poem{margin:0;font-size:var(--t-lead);line-height:2.3;letter-spacing:var(--tr-word);
-          white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;color:var(--ink-1)}
+          white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink-1)}
   /* 「だれかの手元にあります」＝出来事ではなく状態。現在形の一行（v2 §9） */
   .m-hands{margin:6px 0 0;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
            word-break:keep-all}

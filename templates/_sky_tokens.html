@@ -54,7 +54,11 @@
   *{box-sizing:border-box}
   body{background:var(--space);color:var(--ink-1);
        font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-       -webkit-font-smoothing:antialiased;line-break:strict}
+       -webkit-font-smoothing:antialiased;line-break:strict;
+       /* 闇は時刻でごく僅かに移ろう（下の script が --space を書き換える）。
+          60秒かけて渡る＝変わる瞬間は誰にも見えない */
+       transition:background-color 60s linear}
+  @media (prefers-reduced-motion: reduce){ body{transition:none} }
   /* 触れるものの共通作法：指の即応・押した瞬間に応える・焦点が見える */
   /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
      ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
@@ -73,3 +77,39 @@
   /* 日本語の折り返しは文節で。ユーザーの本文には介入しない */
   .jp{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
 </style>
+<script>
+/* ── 宙の闇は、時刻でごく僅かに移ろう（2026-07-29）────────────────────
+   朝は青灰へ、夕は暖色へ、夜は素の闇へ。変化はどれも数%以内＝「気配」だけ。
+   上限は #12141A 相当——これを越えると --ink-4（AA下限 4.5:1）と --rule-act
+   （非文字 3:1）の校正が割れる（このファイル冒頭の設計コメント参照）。
+   時刻帯の切れ目はサーバの _hour_band と同じ 4/11/16/19 時で、帯の中心どうしを
+   線形に渡る。判定は端末時刻（「今夜の問い」の21時ゲートと同じ作法）。
+   rAF は使わない（自動化ペインで止まる既知の地雷）。60秒ごとに一歩。 */
+(function(){
+  var A=[[7.5,12,16,21],   /* 朝の中心 7:30  #0C1015（夜明けの青灰） */
+         [13.5,10,12,17],  /* 昼の中心 13:30 #0A0C11 */
+         [17.5,16,11,16],  /* 夕の中心 17:30 #100B10（灯ともし頃の暖） */
+         [23.5,8,8,13]];   /* 夜の中心 23:30 #08080D（素の闇） */
+  function ground(){
+    var d=new Date(),h=d.getHours()+d.getMinutes()/60;
+    var a,b,i;
+    for(i=0;i<A.length;i++){
+      a=A[i]; b=A[(i+1)%A.length];
+      var s=a[0], e=b[0]+(b[0]<=a[0]?24:0), x=h+(h<s?24:0);
+      if(x>=s&&x<e){
+        var k=(x-s)/(e-s);
+        var r=Math.round(a[1]+(b[1]-a[1])*k),
+            g=Math.round(a[2]+(b[2]-a[2])*k),
+            u=Math.round(a[3]+(b[3]-a[3])*k);
+        var c='rgb('+r+','+g+','+u+')';
+        document.documentElement.style.setProperty('--space',c);
+        var m=document.querySelector('meta[name="theme-color"]');
+        if(m)m.setAttribute('content',c);
+        return;
+      }
+    }
+  }
+  ground();                 /* head 内で最初の描画より前に走る＝初回は遷移なしで即時 */
+  setInterval(ground,60000);
+})();
+</script>
