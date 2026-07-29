@@ -4645,21 +4645,31 @@ def api_sky_search():
         return jsonify(words=[])
 
     # 重み付き抽選（近いほど選ばれやすいが、決まってはいない）
-    chosen, rest = [], list(scored)
-    for _ in range(min(_SKY_N, len(rest))):
-        ws = [math.exp(-d / _SKY_SEARCH_T) for d, _e, _a in rest]
-        tot = sum(ws)
-        if tot <= 0:
-            chosen.append(rest.pop(random.randrange(len(rest))))
-            continue
-        r, acc = random.random() * tot, 0.0
-        for i, w in enumerate(ws):
-            acc += w
-            if acc >= r:
-                chosen.append(rest.pop(i))
-                break
-        else:
-            chosen.append(rest.pop())
+    def draw(rest, n):
+        out = []
+        for _ in range(min(n, len(rest))):
+            ws = [math.exp(-d / _SKY_SEARCH_T) for d, _e, _a in rest]
+            tot = sum(ws)
+            if tot <= 0:
+                out.append(rest.pop(random.randrange(len(rest))))
+                continue
+            r, acc = random.random() * tot, 0.0
+            for i, w in enumerate(ws):
+                acc += w
+                if acc >= r:
+                    out.append(rest.pop(i))
+                    break
+            else:
+                out.append(rest.pop())
+        return out
+
+    # 漂う側と同じ足し算にする（§4.4）。一つの山から引くと、漂流物が人のことばを
+    # 押し出す——部屋の人のことばは数十なのに、漂流物は部屋を持たない全1500片が
+    # どの部屋でも候補に入るため。実測で「雨」が9件中9件とも本からの一節になった。
+    # 探しているのは人のことばで、本の一節はその傍らに流れ着くもの。順序を守る。
+    h_scored = [t for t in scored if not t[1][0].get("pd")]
+    d_scored = [t for t in scored if t[1][0].get("pd")]
+    chosen = draw(h_scored, _SKY_N) + draw(d_scored, _SKY_PD_K)
 
     words = [_sky_word(e, now_air, air=air, mode="search") for _d, e, air in chosen]
     random.shuffle(words)   # 並び順からは何も推測させない（順位に読めないように）
