@@ -408,6 +408,15 @@
             border-bottom-width:1.5px;
             padding:12px 18px 13px 23px}
   @supports not (height:1dvh){ .cast-btn{bottom:calc(7vh + var(--safe-b))} }
+  /* 部屋の中では「書く」を一段上げ、空いた高さへ探す行を据える（2026-07-29）。
+     同じ帯に二つ置いていたので、罫一行の当たり判定の上半分が「書く」のそれと
+     重なっていた（実測：1280×720 で 11px・窓が低いほど広がり、500px 高では 21px＝
+     入力欄の半分）。おまけに探す行の下は 18px しか無く、スマホでは画面のいちばん下の
+     帯＝ブラウザが自分のために取っている場所に沈んでいた——押しても、何も起きない。
+     探す行は「書く」が居た高さ（7dvh）へ移す。ここは指が届くと分かっている位置。
+     部屋の外の「書く」は動かさない＝いつもの場所のまま。 */
+  body.in-room .cast-btn{bottom:calc(7dvh + var(--safe-b) + 58px)}
+  @supports not (height:1dvh){ body.in-room .cast-btn{bottom:calc(7vh + var(--safe-b) + 58px)} }
   /* 書く柱が立っている間は、下の「放つ」は退く。
      柱の背景が半透明なので、放つ／宙 へ 放 つ が二つ並んで見えていた（v12.1） */
   .cast-btn.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
@@ -415,9 +424,9 @@
      「書く」の真下に、罫だけの一行。部屋にいる時しか出さない（探す先が決まらない
      ままの経路は作らない）。虫めがねの丸い箱は置かない——v3.10 で汎用コンポーネントの
      原型（カード・丸い錠剤・ベタ塗り）を物質のメタファーへ倒したので、ここも罫一本。 */
-  .seek{position:fixed;left:50%;bottom:calc(2.4dvh + var(--safe-b));transform:translateX(-50%);
+  .seek{position:fixed;left:50%;bottom:calc(7dvh + var(--safe-b));transform:translateX(-50%);
         z-index:11;display:none;align-items:center;gap:10px}
-  @supports not (height:1dvh){ .seek{bottom:calc(2.4vh + var(--safe-b))} }
+  @supports not (height:1dvh){ .seek{bottom:calc(7vh + var(--safe-b))} }
   body.in-room .seek{display:flex}
   .seek.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
   .seek input{background:none;border:none;border-bottom:1px solid var(--rule-2);
@@ -2487,7 +2496,9 @@
     if(!inRoom())return;      // 部屋の外ではことばを取りにいかない（B-8）
     if(seeking)return;        // 寄せているあいだは、普段の宙で上書きしない
     const rid=ROOM.id;
-    fetch('/api/sky?room='+rid).then(r=>r.ok?r.json():null)
+    // 呼んだ側が「取り終わってから」置きはじめられるように、この鎖をそのまま返す
+    // （もどした直後は、次の漂い＝4.5〜10秒 を待たずに宙を戻したい）。
+    return fetch('/api/sky?room='+rid).then(r=>r.ok?r.json():null)
       .then(d=>{
         if(!d||!d.words) throw new Error('sky');
         if(!inRoom()||ROOM.id!==rid) return;   // 待っているあいだに部屋を出ていた
@@ -2542,7 +2553,35 @@
     seekEl.classList.remove('seeking');
     seekBack.hidden=true;
     seekQ.value='';
-    if(!quiet){ watermark(''); fetchWords(); }
+    if(!quiet){
+      watermark(''); sweepDrift();
+      // 寄せたものを引き上げたら、ふだんの宙をすぐ置き直す。取り終わるのを待たずに
+      // 引き上げると、次の漂い（4.5〜10秒）まで宙が空になる（v3-4で踏んだ）。
+      Promise.resolve(fetchWords()).then(()=>{
+        [0,320,720].forEach(ms=>setTimeout(()=>driftOne(true),ms));
+      });
+    }
+  }
+  /* 寄せた（もどした）瞬間に、宙が組み変わって見えるようにする（2026-07-29）。
+     ここが無いあいだ、探すは「効いていても効いて見えない」だった——定員（liveCap）が
+     埋まっていると driftOne は空振りし、いま浮かんでいることばの寿命（26〜46秒）が
+     尽きるまで画面が一文字も変わらなかった。押した手が、宙のどこにも触れていない。
+     ・いま浮かんでいるものは端から引き上げる。消し飛ばすと暗転して「作り直した」に
+       見えるので、消えぎわの薄れ方はそのまま借りて、時間だけ縮める
+     ・新しいことばは定員を待たずに置く（driftOne(true)）。すれ違う数秒だけ密度が
+       上がるが、その重なりこそが「寄った」の見え方になる */
+  function sweepDrift(){
+    let i=0;
+    [...liveEls].forEach(el=>{
+      if(el===held)return;              // 手の中にある紙は、こちらから取り上げない
+      disarmDrift(el);
+      const wait=140*i++;               // 一斉にではなく、端から順に
+      el._t1=setTimeout(()=>{
+        el.style.setProperty('--in','1.5s');
+        el.classList.add('out');
+        el._t2=setTimeout(()=>removeDrift(el),1700);
+      },wait);
+    });
   }
   function seekRun(){
     const q=(seekQ.value||'').trim();
@@ -2559,16 +2598,20 @@
           watermark((d&&d.error)||'いまは、<wbr>寄せられません。',5200);
           return;
         }
+        if(!d.words.length){
+          /* 近いものが無かった。宙は寄せず、ふだんの漂いをそのまま続ける
+             （寄せた状態にして空の宙を見せると、それは0件の検索結果の画面になる）。 */
+          watermark('この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>ここに<wbr>ありません。',6000);
+          return;
+        }
         seeking=true;
         seekEl.classList.add('seeking');
         seekBack.hidden=false;
         pool=d.words;
-        /* いま漂っているものは消さない（消すと画面が一度暗転して、寄ったのではなく
-           作り直したように見える）。次に昇るものから、寄った宙になる。 */
-        watermark(pool.length
-          ? 'この<wbr>ことばに<wbr>近い<wbr>空気を、<wbr>寄せています。'
-          : 'この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>ここに<wbr>ありません。', 6000);
-        if(pool.length){ [0,900,2000].forEach(ms=>setTimeout(driftOne,ms)); }
+        shown.clear();     // 寄せた宙は、ふだんの周回の「もう見た」を引き継がない
+        watermark('この<wbr>ことばに<wbr>近い<wbr>空気を、<wbr>寄せています。',6000);
+        sweepDrift();
+        [0,320,720,1200].forEach(ms=>setTimeout(()=>driftOne(true),ms));
       })
       .catch(()=>{ watermark('いまは、<wbr>寄せられません。',5200); });
   }
@@ -2686,9 +2729,10 @@
     if(el._sid)live.delete(el._sid);
     if(held===el) release();
   }
-  function driftOne(){
-    // 定員は「いま実際に浮かんでいる枚数」で見る（自分で放った一筆も数に入る）
-    if(!pool.length||liveEls.size>=liveCap()) return;
+  function driftOne(force){
+    // 定員は「いま実際に浮かんでいる枚数」で見る（自分で放った一筆も数に入る）。
+    // force＝寄せた直後の置き直しだけ。引き上げ中のことばが席を空けるのを待たない。
+    if(!pool.length||(!force&&liveEls.size>=liveCap())) return;
     // 画面に浮かんでいる一筆は選ばない。未出のものを優先し、出尽くしたら再演を許す
     const busy=w=>live.has(w.id)||liveText.has(w.poem);
     const fresh=pool.filter(w=>!busy(w)&&!shown.has(w.id));
@@ -2706,7 +2750,7 @@
        ことばが現れる間隔はもともと4.5〜10秒なので、一往復ぶんの遅れは沈む。 */
     getTrace(pick.id).then(tr=>{
       // 待っているあいだに部屋を出た／定員が埋まった／同じことばが浮かんだ、を見直す
-      if(!inRoom()||liveEls.size>=liveCap()||live.has(pick.id)||liveText.has(pick.poem))return;
+      if(!inRoom()||(!force&&liveEls.size>=liveCap())||live.has(pick.id)||liveText.has(pick.poem))return;
       spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,tr,pick.scale,pick.alpha);
     });
   }
