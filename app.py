@@ -3321,7 +3321,10 @@ def mood_page():
     room = request.args.get("room") or ""
     if not (room.isdigit() and _room_row(get_db(), int(room))):
         room = ""
-    return render_template("mood.html", logged_in=logged_in, open_letter_id=open_id,
+    # 一枚の宙（無限キャンバス・canvas.html）だけが宙（2026-07-30 切替・Kosei判断）。
+    # 旧い宙（mood.html＝球面・自転・漂い物理）は同日、読む柱・降りてきました・灯を
+    # canvas へ移し終えたうえで畳んだ。戻すなら git（コミット de3d198 以前の系譜）。
+    return render_template("canvas.html", logged_in=logged_in, open_letter_id=open_id,
                            start_room=room)
 
 
