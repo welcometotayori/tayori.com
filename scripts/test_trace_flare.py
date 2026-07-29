@@ -7,7 +7,10 @@ pytest には依存しない（requirements を増やさない）。plain assert
   ・_pack_trace / _unpack_trace の往復と、壊れた入力の拒否（§1・§6）
   ・_flare_state の決定性・発生率 1/100 前後・値域（倍率0.9〜1.4、継続2〜6h）（§4）
   ・_sky_decay が調和減衰（1年50%・3年25%）のままであること（§3）
-  ・_flare_air_factor が flare 中だけ 0.6 になること（§5）
+
+§5 の _flare_air_factor（flare 中のことばを探索で拾われやすくする補正）を見ていた節は
+外した。辿るを畳んだ 2026-07-28 に関数ごと消えていて、それ以来このテストは
+import で落ちたまま動いていなかった（2026-07-29 に気づいて直した）。
 """
 import os
 import sys
@@ -15,8 +18,8 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app import (_pack_trace, _unpack_trace, _flare_state, _flare_air_factor,
-                 _sky_decay, _sky_age_days, _SKY_FLARE_AIR, JST)
+from app import (_pack_trace, _unpack_trace, _flare_state,
+                 _sky_decay, _sky_age_days, JST)
 
 
 def approx(a, b, eps=1e-6):
@@ -87,11 +90,4 @@ a = _sky_age_days((now - timedelta(days=10)).isoformat(timespec="seconds"))
 assert 9.9 < a < 10.1, a
 assert _sky_age_days(None) == 0.0
 
-# ── _flare_air_factor（§5）───────────────────────────────────
-# pool エントリの形：(pub, air, id, decay, uid, title, room, flare, age)
-e_on = (None, None, "x", 1.0, None, None, None, (1.2, 100, 7200), 5.0)
-e_off = (None, None, "x", 1.0, None, None, None, None, 5.0)
-approx(_flare_air_factor(e_on), _SKY_FLARE_AIR)
-approx(_flare_air_factor(e_off), 1.0)
-
-print("ok: trace pack/unpack, flare determinism/rate/range, decay, air factor")
+print("ok: trace pack/unpack, flare determinism/rate/range, decay")

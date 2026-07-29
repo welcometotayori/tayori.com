@@ -651,7 +651,8 @@ def init_db():
             "ALTER TABLE users ADD COLUMN onboarding TEXT",
             "ALTER TABLE users ADD COLUMN portrait TEXT",
             "ALTER TABLE users ADD COLUMN portrait_at TEXT",
-            "ALTER TABLE letters ADD COLUMN trace TEXT",
+            # 旧 trace（開封再生のためだけに預かった全文スナップショット列）は
+            # 2026-07-29 に drop した。公開経路に出るのは trace_z だけ。
             "ALTER TABLE users ADD COLUMN persona TEXT",
             "ALTER TABLE users ADD COLUMN persona_at TEXT",
             "ALTER TABLE users ADD COLUMN persona_src TEXT",
@@ -740,9 +741,9 @@ def init_db():
             # （SQLite は後付けで NOT NULL にできない）＝投函経路の側で必須にする。
             "ALTER TABLE letters ADD COLUMN room_id INTEGER",
             # 打鍵イベント列（v2追補 §1・§6）。{dt,op,ch} を圧縮した BLOB。
-            # 旧 trace（全文スナップショットのJSON）は「開封のときの再生のためだけ」という
-            # 約束の下で記録されたので、公開経路には決して載せない。宙に流してよいのは、
-            # 「打った過程がそのまま宙に流れます」を書く前に見た人のことば＝この列だけ。
+            # 宙に流してよいのは、「打った過程がそのまま宙に流れます」を書く前に見た
+            # 人のことば＝この列だけ。旧 trace（開封の再生のためだけという約束で
+            # 預かった全文スナップショット）は 2026-07-29 に列ごと drop した。
             "ALTER TABLE letters ADD COLUMN trace_z BLOB",
             # 部屋の席順（2026-07-26）。トップの円配置で、12時から時計回りに座る番号。
             # 0 が真上。作った順に空いている最小の番号を取り、部屋が消えても**繰り上げない**
@@ -2191,10 +2192,12 @@ def _letter_opened(row):
 def letter_to_dict(row, include_thread=True):
     d = dict(row)
     d.pop("user_id", None)
-    # タイプ再生のデータ(trace)は重いので一覧では本体を送らず、有無のフラグだけにする。
+    # タイプ再生のデータ(trace_z)は重いので一覧では本体を送らず、有無のフラグだけにする。
     # 本体は GET /api/letters/<id>/trace で再生時に取りにいく。
-    _trace = d.pop("trace", None)
-    d["has_trace"] = bool(_trace)
+    # pop は必須：trace_z は圧縮バイト列で、残したまま jsonify すると
+    # 「bytes は JSON にできない」で一覧そのものが落ちる（旧 trace 列があった頃は
+    # そちらだけを pop していたので、trace_z を持つ手紙が開かれた瞬間に壊れる状態だった）。
+    d["has_trace"] = bool(d.pop("trace_z", None))
     d["emos"] = json.loads(d.get("emos") or "[]")
     d["arrive_hidden"] = bool(d["arrive_hidden"])
     d["opened"] = bool(d["opened"])
@@ -4464,19 +4467,14 @@ def api_create_letter():
     # ＝air_distance の色項から外れる（_sky_rebuild 側）。色そのものは常に保存する。
     seal_color_chosen = 1 if data.get("color_chosen") else 0
 
-    # タイプ再生（TypeTrace）。二つの形式を受ける：
-    #   ・ev1（{fmt:'ev1',ev:[[dt,op,ch],...]}）＝v2追補 §1。宙に流してよい打鍵イベント。
-    #     書く前に「打った過程がそのまま宙に流れます」を見た人のことばだけがこの形で届く。
-    #   ・旧スナップショット列（[{t,v},...]）＝本人の開封再生のためだけの列。公開しない。
+    # タイプ再生（TypeTrace）。受けるのは ev1（{fmt:'ev1',ev:[[dt,op,ch],...]}）＝
+    # v2追補 §1 の、宙に流してよい打鍵イベントだけ。書く前に「打った過程がそのまま
+    # 宙に流れます」を見た人のことばだけがこの形で届く。
+    # 旧スナップショット列（[{t,v},...]／letters.trace）は 2026-07-29 に列ごと畳んだ。
+    # 「開封の再生のためだけに預かる」という約束の器は、約束を守り続けるより、
+    # 持たないほうが確かだった。dict 以外で届いたものは黙って捨てる。
     trace = data.get("trace")
-    trace_z = None
-    if isinstance(trace, dict):
-        trace_z = _pack_trace(trace)   # 形式が壊れていれば None＝再生の材料だけ諦める
-        trace = None
-    elif trace is not None and not isinstance(trace, str):
-        trace = json.dumps(trace, ensure_ascii=False)
-    if trace and len(trace) > 600_000:
-        trace = None
+    trace_z = _pack_trace(trace) if isinstance(trace, dict) else None
 
     # 時間帯（朝・昼・夕・夜）。以前はクライアントが送る値を受け、位置が揃わない時は
     # 一緒に NULL へ落としていた——位置を送る経路が消えたので、封をした時刻から
@@ -4503,15 +4501,15 @@ def api_create_letter():
     with _WRITE_LOCK:
         db.execute(
             """INSERT INTO letters
-               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace,trace_z,seal_color,seal_color_chosen,seal_q,time_bucket,vertical,mode,sky_status,room_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               (id,user_id,poem,title,photo,voice,sent_date,arrive_date,arrive_at,arrive_label,arrive_hidden,opened,notified,emos,from_reply,weather_event,seal_env,stamp,trace_z,seal_color,seal_color_chosen,seal_q,time_bucket,vertical,mode,sky_status,room_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (lid, uid(), poem, title, photo, voice, sent_iso, arrive_date, arrive_at,
              "", 1,
              # notified は常に 0。ここに care を書くと「ケアと判定した」という痕跡が
              # 列として残り、後から誰でも読めてしまう（2026-07-27：判定は保存しない）。
              0,
              emos_json,
-             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace, trace_z,
+             1 if data.get("from_reply") else 0, weather_event, seal_env, stamp, trace_z,
              seal_color, seal_color_chosen, seal_q, time_bucket, vertical,
              mode, sky_status, room_id),
         )
@@ -4595,14 +4593,10 @@ def api_get_trace(lid):
     # 打鍵スナップショットは本文そのもの。到着だけでなく「開封済み」まで出さない（チラ見せ禁止）。
     if not _is_arrived(row) or not _letter_opened(row):
         return jsonify(error="まだ封の中です。"), 403
-    raw = row["trace"] if "trace" in row.keys() else None
-    try:
-        steps = json.loads(raw) if raw else None
-    except (TypeError, ValueError):
-        steps = None
-    # 新形式（イベント列）はべつの鍵で。旧クライアントは trace しか見ないので壊れない
+    # 旧スナップショット列（trace）は 2026-07-29 に drop した。trace は互換のため
+    # 鍵だけ残して常に null を返す（古い画面がこの鍵を読んでも壊れないように）。
     ev = _unpack_trace(row["trace_z"] if "trace_z" in row.keys() else None)
-    return jsonify(trace=steps, trace_ev=ev)
+    return jsonify(trace=None, trace_ev=ev)
 
 
 @app.route("/api/letters/<lid>/open", methods=["POST"])
@@ -5208,7 +5202,7 @@ def api_export():
             "seal_env": env,
             "seal_color": r["seal_color"],
             "vertical": bool(r["vertical"]),
-            "has_trace": bool(r["trace"]),
+            "has_trace": bool(r["trace_z"]),
             "opened_at": r["opened_at"],
             "mode": r["mode"],
         })
