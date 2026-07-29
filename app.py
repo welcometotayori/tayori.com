@@ -3498,7 +3498,14 @@ _AIR_W_WEATHER = _env_num("TAYORI_AIR_W_WEATHER", 0.157, 0.0, 1.0)
 # 既定の漂い（drift）はこれまでどおり色・季節・時刻・天気の偶然だけで、意味を一切見ない
 # ——宙に流れてくるものが「自分の関心の反射」になった瞬間、ここは宙でなくなる。
 # 上の4つの合計が 1.0 なので、取り分 p を実現する重みは p/(1-p)。
-_AIR_SEM_SHARE = _env_num("TAYORI_AIR_SEM_SHARE", 0.35, 0.0, 0.9)
+#
+# 【0.35 ではなく 0.5 にした理由】名目の重みと実効の効きが一致しない。意味の距離は
+# 順位で均すので幅が必ず 1.0 になるのに対し、空気の距離は実データで 0.14〜0.68＝幅0.55
+# しかない。0.35 だと寄与の幅が 空気0.36 vs 意味0.35 でほぼ拮抗し、探しても意味の
+# 近いことばが上位3に入るのは5回中2回だった（部屋『心』19通で実測）。0.5 にすると
+# 5回中5回入る。0.8 まで上げると意味が1位を独占するが、それは順位表であって
+# 「宙が寄る」ではないので採らない——狙いは「いちばん近い一通」ではなく「近いほうの層」。
+_AIR_SEM_SHARE = _env_num("TAYORI_AIR_SEM_SHARE", 0.5, 0.0, 0.9)
 _AIR_W_SEM = _AIR_SEM_SHARE / max(1e-9, 1.0 - _AIR_SEM_SHARE)
 
 _HSL_RE = re.compile(
@@ -4264,14 +4271,16 @@ def _anon_deal(pool):
     return fresh + rest[:_SKY_N - len(fresh)]
 
 
-def _sky_word(entry, now_air):
+def _sky_word(entry, now_air, air=None, mode="drift"):
     """公開dict に表示変数を足して返す。air_distance はここ（サイズ）だけに効く。
       ・size … air_distance（近い＝大きい）を log 圧縮した --t-word 倍率
       ・alpha … 投函からの経過日数の風化（τ=90日＝季節1周）。距離とは別テンポ（§2.4）
     サイズ＝距離／濃さ＝時間に分けるのは、両方が距離由来だと効果が乗算になり、
     遠いことばが薄い残像ですら無くなるため。"""
     w = dict(entry[0])
-    d = max(0.0, min(1.0, air_distance(now_air, entry[1])))       # 0=近い 1=遠い
+    # 探すときは、意味を混ぜた距離がそのまま大きさになる（近い＝大きい）。
+    d = max(0.0, min(1.0, air_distance(now_air, air if air is not None else entry[1],
+                                       mode=mode)))               # 0=近い 1=遠い
     w["scale"] = round(
         _SKY_SCALE_MIN + (_SKY_SCALE_MAX - _SKY_SCALE_MIN)
         * math.log1p(9 * (1 - d)) / math.log(10), 3)
@@ -4315,6 +4324,79 @@ def api_sky():
         chosen = _anon_deal(pool)
     words = [_sky_word(e, now_air) for e in chosen]
     random.shuffle(words)   # 並び順からは何も推測させない（新着を画面上で固めない）
+    return jsonify(words=words)
+
+
+# ══ 探す（フェーズ3-3）═══════════════════════════════════════════
+# 「この言葉に近い空気」で宙が寄って組み変わる。それだけ。
+#   ・リストを返さない。順位も件数もスコアも出さない（数を見せない原則）
+#   ・返す形は /api/sky と同じ words。画面も同じ漂い方をする
+#   ・いまいる部屋の中だけ。部屋を跨いで探す経路は作らない
+#     （宙は一つの広場ではなく、いくつもの小さな閉じた宙）
+#
+# 【厳密な上位N件にしない理由】距離の小さい順に切ると、それは順位表そのもので、
+# 画面に数字が無いだけの検索結果になる。exp(-d/T) の重み付き抽選にすると、近い層が
+# 濃く出つつ毎回すこし違う顔ぶれになる——「寄ってくる」と「並べられる」の差はここ。
+_SKY_SEARCH_T = _env_num("TAYORI_SKY_SEARCH_T", 0.18, 0.01, 2.0)
+_SEARCH_Q_MAX = 80          # 放てることばと同じ長さまで
+
+
+@app.route("/api/sky/search")
+def api_sky_search():
+    """探す。q（近い言葉・雰囲気）を受け、いまいる部屋の宙を寄せて返す。"""
+    room_id, err = _room_scope()
+    if err:
+        return err
+    q = (request.args.get("q") or "").strip()[:_SEARCH_Q_MAX]
+    if not q:
+        return jsonify(error="ことばをひとつ。"), 400
+    if not sem_ready():
+        # 索引が眠っている環境。探せないことだけを伝え、宙はそのまま漂わせる。
+        return jsonify(error="いまは探せません。"), 503
+    qv = sem_embed(q)
+    if qv is None:
+        # 表に無い語だけの入力（絵文字だけ等）。「見つからない」ではなく
+        # 「測れない」なので、件数0の顔ではなくこの言い方にする。
+        return jsonify(error="そのことばでは、まだ測れません。"), 422
+
+    pool = _in_room(_sky_pool(), room_id)
+    reader = session.get("uid")
+    if reader and pool:
+        # 探すときも「自分のことば」は出さない（自分の空に自分は出ない）。
+        # 棚に入れたものは除かない——探しているのだから、自分が残したものに
+        # もう一度会えたほうがいい。
+        pool = [e for e in pool if e[4] != reader]
+    if not pool:
+        return jsonify(words=[])
+
+    ds = sem_rank_distance(qv, [e[9] for e in pool])
+    now_air = _viewer_air()
+    scored = []
+    for e, sd in zip(pool, ds):
+        air = dict(e[1])
+        if sd is not None:
+            air["sem_d"] = sd
+        scored.append((air_distance(now_air, air, mode="search"), e, air))
+
+    # 重み付き抽選（近いほど選ばれやすいが、決まってはいない）
+    chosen, rest = [], list(scored)
+    for _ in range(min(_SKY_N, len(rest))):
+        ws = [math.exp(-d / _SKY_SEARCH_T) for d, _e, _a in rest]
+        tot = sum(ws)
+        if tot <= 0:
+            chosen.append(rest.pop(random.randrange(len(rest))))
+            continue
+        r, acc = random.random() * tot, 0.0
+        for i, w in enumerate(ws):
+            acc += w
+            if acc >= r:
+                chosen.append(rest.pop(i))
+                break
+        else:
+            chosen.append(rest.pop())
+
+    words = [_sky_word(e, now_air, air=air, mode="search") for _d, e, air in chosen]
+    random.shuffle(words)   # 並び順からは何も推測させない（順位に読めないように）
     return jsonify(words=words)
 
 

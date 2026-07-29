@@ -406,6 +406,28 @@
   /* 書く柱が立っている間は、下の「放つ」は退く。
      柱の背景が半透明なので、放つ／宙 へ 放 つ が二つ並んで見えていた（v12.1） */
   .cast-btn.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
+  /* ── 探す（フェーズ3-3・2026-07-29）────────────────────────
+     「書く」の真下に、罫だけの一行。部屋にいる時しか出さない（探す先が決まらない
+     ままの経路は作らない）。虫めがねの丸い箱は置かない——v3.10 で汎用コンポーネントの
+     原型（カード・丸い錠剤・ベタ塗り）を物質のメタファーへ倒したので、ここも罫一本。 */
+  .seek{position:fixed;left:50%;bottom:calc(2.4dvh + var(--safe-b));transform:translateX(-50%);
+        z-index:11;display:none;align-items:center;gap:10px}
+  @supports not (height:1dvh){ .seek{bottom:calc(2.4vh + var(--safe-b))} }
+  body.in-room .seek{display:flex}
+  .seek.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
+  .seek input{background:none;border:none;border-bottom:1px solid var(--rule-2);
+              font-family:inherit;font-size:var(--t-meta);letter-spacing:0.12em;
+              color:var(--ink-2);padding:9px 4px 8px;width:9.5em;min-height:var(--touch);
+              text-align:center;transition:border-color .22s var(--ease)}
+  .seek input::placeholder{color:var(--ink-5);letter-spacing:0.18em}
+  .seek input:focus{outline:none;border-bottom-color:var(--ink-4)}
+  .seek button{background:none;border:none;font-family:inherit;font-size:var(--t-meta);
+               letter-spacing:0.14em;color:var(--ink-4);min-height:var(--touch);padding:9px 4px;
+               white-space:nowrap;      /* 「もど／す」と折り返していた（v3-3で踏んだ） */
+               border-bottom:1px solid transparent;transition:color .22s var(--ease)}
+  .seek button:hover{color:var(--ink-2)}
+  .seek button:active{opacity:.62}
+  .seek.seeking input{border-bottom-color:var(--ink-4)}
   /* 2026-07-27：部屋の外からも放てるようにした（B-8 の「必ず部屋に入ってから」を解く）。
      理由は順序の矛盾——説明は「行き先を決めずにことばを放つ場所」と言うのに、実装は
      書く前に14部屋から行き先を決めさせていた。「なんのことを書くか選ぶところから
@@ -1175,6 +1197,14 @@
      送信する不可逆の決定（castSend）がどちらも「放つ」で、可逆な行為と不可逆な
      行為が同じ名前だった。「放つ」は決定にだけ残す——書くのはいつでもやめられる。 #}
   <button class="cast-btn ruled" id="castBtn" type="button">書く</button>
+  {# 探す（2026-07-29）。件数もスコアも順位も出さない——入れたことばに近い空気へ、
+     宙が寄って組み変わるだけ。もどす＝ふだんの偶然の漂いへ戻る。 #}
+  <div class="seek" id="seek">
+    <input id="seekQ" type="text" maxlength="80" autocomplete="off"
+           enterkeyhint="search" aria-label="近いことばで、宙を寄せる"
+           placeholder="ことばで寄せる">
+    <button id="seekBack" type="button" hidden>もどす</button>
+  </div>
   <div class="cast" id="castPane" role="dialog" aria-modal="true"
        aria-label="tayori-たより- へ、ことばを放つ" aria-hidden="true">
     <div class="cast-inner">
@@ -2088,7 +2118,8 @@
     whisper(r.archived
       ? 'ここは、<wbr>名前が<wbr>つく<wbr>前に<wbr>放たれた<wbr>ことばです。<br>新しく<wbr>放つことは<wbr>できません。'
       : '');
-    // 部屋が変わったら、前の部屋のことばは持ち越さない
+    // 部屋が変わったら、前の部屋のことばも寄せも持ち越さない
+    seekReset(true);
     pool=[];shown.clear();live.clear();liveText.clear();seeded=false;
     [...liveEls].forEach(el=>{el.remove();liveEls.delete(el);});
     if(push) history.pushState({room:r.id},'','/mood?room='+r.id);
@@ -2102,6 +2133,7 @@
     roomLayer.classList.remove('off');
     document.body.classList.remove('in-room','in-room-archived');
     whisper('');watermark('');   // 部屋を出たら、その部屋の透かしも畳む
+    seekReset(true);
     pool=[];shown.clear();live.clear();liveText.clear();seeded=false;
     [...liveEls].forEach(el=>{el.remove();liveEls.delete(el);});
     if(push) history.pushState({},'','/mood');
@@ -2438,6 +2470,7 @@
   }
   function fetchWords(){
     if(!inRoom())return;      // 部屋の外ではことばを取りにいかない（B-8）
+    if(seeking)return;        // 寄せているあいだは、普段の宙で上書きしない
     const rid=ROOM.id;
     fetch('/api/sky?room='+rid).then(r=>r.ok?r.json():null)
       .then(d=>{
@@ -2478,6 +2511,58 @@
         if(!pool.length) whisper('tayori-たより- が<wbr>遠いようです。<br>すこし<wbr>待ってから、<wbr>もう一度。',9000);
       });
   }
+  /* ── 探す（フェーズ3-3・2026-07-29）─────────────────────
+     入れたことばに近い空気へ、宙が寄って組み変わる。それだけ。
+     ・件数もスコアも順位も出さない（数を見せない原則）
+     ・返ってくる形は /api/sky と同じなので、漂い方も見え方も普段どおり
+     ・寄せている間は自動の取り直し（20秒ごと）を止める。止めないと、
+       寄せた宙がひとりでに普段の宙へ戻ってしまう */
+  const seekEl=document.getElementById('seek');
+  const seekQ=document.getElementById('seekQ');
+  const seekBack=document.getElementById('seekBack');
+  let seeking=false;
+  function seekReset(quiet){
+    if(!seeking&&!quiet)return;
+    seeking=false;
+    seekEl.classList.remove('seeking');
+    seekBack.hidden=true;
+    seekQ.value='';
+    if(!quiet){ watermark(''); fetchWords(); }
+  }
+  function seekRun(){
+    const q=(seekQ.value||'').trim();
+    if(!q||!inRoom())return;
+    const rid=ROOM.id;
+    seekQ.blur();
+    fetch('/api/sky/search?room='+rid+'&q='+encodeURIComponent(q))
+      .then(r=>r.json().then(d=>({ok:r.ok,d})))
+      .then(({ok,d})=>{
+        if(!inRoom()||ROOM.id!==rid)return;
+        if(!ok||!d.words){
+          /* 「見つかりません」とは言わない。0件の顔を見せた瞬間、ここは検索結果の
+             画面になる。測れない・いま探せない、という状態だけを一行で置く。 */
+          watermark((d&&d.error)||'いまは、<wbr>寄せられません。',5200);
+          return;
+        }
+        seeking=true;
+        seekEl.classList.add('seeking');
+        seekBack.hidden=false;
+        pool=d.words;
+        /* いま漂っているものは消さない（消すと画面が一度暗転して、寄ったのではなく
+           作り直したように見える）。次に昇るものから、寄った宙になる。 */
+        watermark(pool.length
+          ? 'この<wbr>ことばに<wbr>近い<wbr>空気を、<wbr>寄せています。'
+          : 'この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>ここに<wbr>ありません。', 6000);
+        if(pool.length){ [0,900,2000].forEach(ms=>setTimeout(driftOne,ms)); }
+      })
+      .catch(()=>{ watermark('いまは、<wbr>寄せられません。',5200); });
+  }
+  seekQ.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); seekRun(); }
+    if(e.key==='Escape'){ seekReset(); }
+  });
+  seekBack.addEventListener('click',()=>seekReset());
+
   /* ── 置き場所をえらぶ（v12.1）───────────────────────────
      完全ランダムだったので、説明の真上や他のことばの上に平気で降りていた。
      宙は広いのだから、空いているところへ置けばいい。厳密な衝突判定はせず、
