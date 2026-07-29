@@ -147,6 +147,20 @@
   /* 「だれかの手元にあります」＝出来事ではなく状態。現在形の一行（v2 §9） */
   .m-hands{margin:6px 0 0;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
            word-break:keep-all}
+  /* 取り消し（v3 §4.1）。放ってから48時間のあいだだけ、この行が出る。
+     窓を過ぎたことばには何も出ない——できないことは、見せない。 */
+  .m-undo{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3);margin:2px 0 0}
+  .m-undo button{background:none;border:none;border-bottom:1px solid transparent;
+                 font-family:inherit;font-size:11px;letter-spacing:0.18em;color:var(--ink-4);
+                 padding:11px 2px;min-height:var(--touch);cursor:pointer;
+                 transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .m-undo button:hover{color:var(--ink-2);border-bottom-color:var(--rule-act)}
+  .m-undo button:active{opacity:.62}
+  .m-undo button[disabled]{opacity:.45}
+  /* 問いは、効く対象のそばに開く（別の面へ連れ出さない）。行いのほうだけ一段強い字 */
+  .m-undo .q{width:100%;margin:2px 0 0;font-size:11px;line-height:2.2;letter-spacing:0.16em;
+             color:var(--ink-3);word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .m-undo .go{color:var(--ink-2)}
   @media (prefers-reduced-motion: no-preference){
     .m-slip{opacity:0;animation:mIn .6s var(--ease) both;
             animation-delay:calc(var(--i,0) * 50ms)}
@@ -459,11 +473,59 @@
     if(/^#[0-9a-f]{3,8}$/i.test(color||'')) return {text:color,solid:color};
     return null;
   }
+  const EMPTY='まだ、<wbr>何も<wbr>放っていません。<br>'+
+              '最初の<wbr>ひとことを、<wbr>tayori-たより- へ<wbr>放って<wbr>みてください。';
+
+  /* ── 取り消し（v3 §4.1）──
+     放ってから48時間のあいだだけ出る一行。問いは別の面へ連れ出さず、そのことばの
+     真下に開く（操作は、効く対象のそばに）。安全な側（やめる）に先に立たせるので、
+     続けて押しても戻せない行いは起きない。 */
+  function undoRow(li,w){
+    const row=document.createElement('div');row.className='m-undo';
+    function btn(label,cls,fn){
+      const b=document.createElement('button');
+      b.type='button';b.textContent=label;if(cls)b.className=cls;
+      b.addEventListener('click',fn);row.appendChild(b);return b;
+    }
+    function note(html){
+      const p=document.createElement('p');p.className='q';p.innerHTML=html;
+      row.appendChild(p);return p;
+    }
+    function rest(){ row.innerHTML=''; btn('取り消す',null,asked); }
+    function asked(){
+      row.innerHTML='';
+      note('この<wbr>ことばを、<wbr>取り消しますか。<wbr>戻せません。'+
+           (w.in_someones_hands
+             ? '<br>だれかの<wbr>棚に<wbr>残った<wbr>控えは、<wbr>そのままです。' : ''));
+      const no=btn('やめる',null,rest);
+      const go=btn('取り消す','go',async()=>{
+        go.disabled=no.disabled=true;
+        try{
+          const r=await fetch('/api/mine/'+encodeURIComponent(w.id)+'/delete',
+            {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+          const d=await r.json().catch(()=>null);
+          if(!r.ok||!d||!d.ok)throw new Error((d&&d.error)||'');
+          // 消えたことばは、その場から静かに退く。季節ごと空になったら季節も畳む
+          const sec=li.closest('.season'), ul=li.parentNode;
+          li.remove();
+          if(sec&&ul&&!ul.children.length)sec.remove();
+          if(!boxAll.children.length)say(EMPTY);
+        }catch(err){
+          row.innerHTML='';
+          note('').textContent=err.message||'いま、取り消せませんでした。';
+          btn('もう一度',null,asked);
+        }
+      });
+      no.focus();
+    }
+    rest();
+    return row;
+  }
+
   function render(seasons){
     boxAll.innerHTML='';
     if(!seasons.length){
-      say('まだ、<wbr>何も<wbr>放っていません。<br>'+
-          '最初の<wbr>ひとことを、<wbr>tayori-たより- へ<wbr>放って<wbr>みてください。');
+      say(EMPTY);
       return;
     }
     say('');
@@ -490,6 +552,7 @@
           p.innerHTML='このことばは、<wbr>だれかの手元に<wbr>あります。';
           li.appendChild(p);
         }
+        if(w.can_undo)li.appendChild(undoRow(li,w));
         // 付箋はここに出ない（v2.2 §3）：付箋は読み手が自分の棚に貼るもので、
         // 書き手が自分のことばに付けるのは題だけ。書架には、そもそも存在しない。
         ul.appendChild(li);

@@ -5380,13 +5380,77 @@ def api_mine():
             order.append(key)
         p = _parse_hsl(r["seal_color"])
         groups[key]["words"].append({
+            "id": r["id"],                        # 取り消し（§4.1）にだけ使う
             "poem": r["poem"],
             "title": r["title"],                  # 題は書架でも立つ（v2.2 §3）
             "color": r["seal_color"],
             "hue": p[0] if p else None,           # 並び替え（色相順）はクライアントで
             "in_someones_hands": bool(r["shelved_at"]),   # 該当時のみ添える（§11）
+            "can_undo": _within_unsend_window(r["sent_date"]),   # 48時間の窓（§4.1）
         })
     return jsonify(seasons=[groups[k] for k in order])
+
+
+# ══ 取り消し（v3 §4.1）═══════════════════════════════════════════
+# 放ってから48時間だけ開いている窓。過ぎたら閉じる——「あとから無かったことに
+# できる」が恒久に続くと、放つことが下書きになる。窓の中でだけ、手が届く。
+#
+# 窓を過ぎたことばに用意するのは「自分の宙から消す」（ミュート）ではない。あれは
+# 読み手の道具で、書き手のものではない。書き手には、48時間のあとは何も無い。
+SKY_UNSEND_HOURS = _env_num("TAYORI_SKY_UNSEND_HOURS", 48.0, 0.0, 8760.0)
+
+
+def _within_unsend_window(sent_date):
+    """まだ取り消せるか。日付の読めないことばは False＝触らせない（安全な側に倒す）。"""
+    try:
+        sent = datetime.fromisoformat(sent_date)
+    except (TypeError, ValueError):
+        return False
+    return datetime.now() - sent < timedelta(hours=SKY_UNSEND_HOURS)
+
+
+@app.route("/api/mine/<lid>/delete", methods=["POST"])
+@login_required
+def api_mine_delete(lid):
+    """自分が放ったことばを取り消す（§4.1）。宙から降り、意味の索引も、灯も、
+    配達も、読まれた記録も一緒に消える。戻せない。
+
+    残るものが二つある。
+      ・部屋の鍵：他人のことばが入って掛かった鍵は外さない（自作自演で部屋を
+        消す抜け道になる。_room_lock_if_needed の注釈と対）。
+      ・だれかの棚の控え：saved_words は読み手のもので、書き手の持ち物ではない
+        （退会と同じ扱い）。だから問いにも、そのことを書いておく。"""
+    db = get_db()
+    row = db.execute("SELECT id, sent_date FROM letters WHERE id=? AND user_id=?",
+                     (str(lid)[:64], uid())).fetchone()
+    if not row:
+        return jsonify(error="そのことばは、見つかりませんでした。"), 404
+    if not _within_unsend_window(row["sent_date"]):
+        return jsonify(error="放ってから48時間を過ぎたことばは、取り消せません。"), 409
+    lid = row["id"]
+    try:
+        with _WRITE_LOCK:
+            # ことばより先にベクトルを落とす（letters を消した後では、どれだったか引けない）
+            sem_forget(db, [lid])
+            for stmt in ("DELETE FROM thread WHERE letter_id=?",
+                         "DELETE FROM letter_tags WHERE letter_id=?",
+                         "DELETE FROM sky_deliveries WHERE letter_id=?",
+                         "DELETE FROM sky_marks WHERE letter_id=?",
+                         "DELETE FROM sky_seen WHERE letter_id=?",
+                         "DELETE FROM sky_reaction WHERE letter_id=?",
+                         "DELETE FROM sky_cycle_seen WHERE letter_id=?",
+                         "DELETE FROM muted WHERE letter_id=?"):
+                try:
+                    db.execute(stmt, (lid,))
+                except sqlite3.OperationalError:
+                    pass          # 古いDBに無いテーブルは、無いままでよい
+            db.execute("DELETE FROM letters WHERE id=? AND user_id=?", (lid, uid()))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] 取り消し 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
+    _sky_cache_bust()             # いま、宙から降ろす（15秒の共有キャッシュを待たせない）
+    return jsonify(ok=True)
 
 
 # 棚の数の上限（v2 §5.3・2026-07-26 Kosei確定＝10前後）。無制限だと整理そのものが作業になる。
