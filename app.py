@@ -787,6 +787,19 @@ def init_db():
                 made_at   TEXT NOT NULL
             )""")
 
+        # ── 自分の宙から消す（2026-07-29 フェーズ5）─────────────────
+        # 読み手の側にだけ持つ。書き手には一切伝わらない（非対称の原則）。
+        # 「悪い」の記録ではなく「わたしの宙には要らない」の記録なので、理由も
+        # 種類も持たない——訊けば重くなるし、訊いたものは必ずどこかに残る。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS muted (
+                reader_id TEXT NOT NULL,
+                letter_id TEXT NOT NULL,
+                at        TEXT NOT NULL,
+                PRIMARY KEY (reader_id, letter_id)
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_muted_letter ON muted (letter_id)")
+
         # ── 宙の配達（2026-07-25 宙モードv2）─────────────────────────
         # 放たれたことばは、自分にいつか降る（letters.arrive_at）のに加えて、他のだれか一人にも届く。
         # その配達だけをこのテーブルに持ち、作者側の letters には何も書き戻さない
@@ -1907,6 +1920,10 @@ def api_account_delete():
             # ことばより先にベクトルを落とす（letters を消した後では、どれがこの人の
             # ものだったか引けなくなる）。プライバシー 4の2 の最後の一行。
             sem_forget_user(db, me)
+            # 自分が消した記録も、自分が消されていた記録も持ち去る
+            db.execute("DELETE FROM muted WHERE reader_id=?", (me,))
+            for lid in lids:
+                db.execute("DELETE FROM muted WHERE letter_id=?", (lid,))
             for stmt, args in (
                 ("DELETE FROM letters WHERE user_id=?", (me,)),
                 ("DELETE FROM drafts WHERE user_id=?", (me,)),
@@ -2179,6 +2196,15 @@ def _is_lewd(poem):
     if v is None:
         return False
     return float(v @ c) >= _LEWD_TH
+
+
+# ══ 静かに上がってくる数（フェーズ5）═══════════════════════════
+# 別々の人が同じ一筆を「自分の宙から消す」と、この数で管理画面に並ぶ。
+# 通報のボタンは作らない——押させると、押すこと自体が行いになって重くなる。
+# いま利用者は数人・ことばは400通ほどなので 2 から始める。独立した2人が同じ一筆を
+# 外したなら、それだけで見るに足る。**利用者が増えたら上げること**——母数が増えれば
+# 2人はただの偶然になる。
+MUTE_REPORT_N = _env_num("TAYORI_MUTE_REPORT_N", 2, 1, 1000, cast=int)
 
 
 # AI一次検知の再有効化フラグ（既定OFF＝キーワードだけ）。AI撤去（2026-07-16）の作法に倣い、
@@ -4401,6 +4427,7 @@ def api_sky():
         # 漂いから直接棚へ載せた分（src='drift'）は公開idで控えているので、そのまま突き合わせる
         excl_pub = {r["ref_id"] for r in db.execute(
             "SELECT ref_id FROM saved_words WHERE user_id=? AND src='drift'", (reader,))}
+        excl |= _muted_ids(db, reader)   # 自分の宙から消したもの（フェーズ5）
         pool = [e for e in pool if e[2] not in excl and e[0]["id"] not in excl_pub]
 
     now_air = _viewer_air()
@@ -4453,7 +4480,9 @@ def api_sky_search():
         # 探すときも「自分のことば」は出さない（自分の空に自分は出ない）。
         # 棚に入れたものは除かない——探しているのだから、自分が残したものに
         # もう一度会えたほうがいい。
-        pool = [e for e in pool if e[4] != reader]
+        # 自分の宙から消したものは、探しても出さない（「二度と漂着しない」）。
+        muted = _muted_ids(get_db(), reader)
+        pool = [e for e in pool if e[4] != reader and e[2] not in muted]
     if not pool:
         return jsonify(words=[])
 
@@ -5583,6 +5612,49 @@ def api_sky_word_mark(h):
     return jsonify(error="この行いは、いまはありません。"), 410
 
 
+# ══ 自分の宙から消す（フェーズ5）═══════════════════════════════
+# 門番では受けきれないものが残る。人名・店名（「吹奏楽部の佐藤さん」「サイゼリヤ」）は
+# 正規表現でも意味の索引でも取れないことが実測で確定した（分離 -0.331）。
+# 下ネタのしきい値も漏れる。それを「もっと賢い門番」で塞ごうとすると、必ず
+# 正当なことばを撃つ側に倒れる——だから、読み手が自分の手で外せるようにする。
+#
+# 書き手には何も伝わらない。消されたことは、消した人以外の誰も知らない。
+@app.route("/api/sky/word/<h>/mute", methods=["POST"])
+@login_required
+def api_sky_word_mute(h):
+    """このことばを、自分の宙から消す（戻すこともできる）。"""
+    ent = _sky_index().get(h)
+    if not ent:
+        return jsonify(error="それは見つかりません。"), 404
+    letter_id = ent[0]
+    on = bool((request.get_json(silent=True) or {}).get("on", True))
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _WRITE_LOCK:
+            db = get_db()
+            if on:
+                db.execute(
+                    "INSERT OR IGNORE INTO muted (reader_id, letter_id, at) VALUES (?,?,?)",
+                    (uid(), letter_id, now))
+            else:
+                db.execute("DELETE FROM muted WHERE reader_id=? AND letter_id=?",
+                           (uid(), letter_id))
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[たより] ミュート 書き込み失敗（再試行可）: {e}", flush=True)
+        return jsonify(error="いま混み合っています。数秒おいて、もう一度お試しください。"), 503
+    # 何人が消したかは返さない。自分の記録以外は、本人にも書き手にも見せない。
+    return jsonify(ok=True, muted=on)
+
+
+def _muted_ids(db, reader):
+    """その人が自分の宙から消したことばの id。漂いにも探すにも二度と出さない。"""
+    if not reader:
+        return set()
+    return {r["letter_id"] for r in db.execute(
+        "SELECT letter_id FROM muted WHERE reader_id=?", (reader,))}
+
+
 @app.route("/api/export")
 @login_required
 def api_export():
@@ -5889,6 +5961,7 @@ def api_letters_bulk_discard():
                      (_now + UNRAVEL_AFTER).isoformat(timespec="seconds")))
                 db.execute("DELETE FROM thread WHERE letter_id=?", (lid,))
                 sem_forget(db, [lid])
+                db.execute("DELETE FROM muted WHERE letter_id=?", (lid,))
                 db.execute("DELETE FROM letters WHERE id=? AND user_id=?", (lid, uid()))
                 moved += 1
             db.commit()
@@ -6914,6 +6987,22 @@ def _admin_metrics(db):
             ORDER BY rm.deleted_at IS NOT NULL, rm.is_default DESC, rm.id""",
         ((date.today() - timedelta(days=30)).isoformat(),))]
     m["rooms_max"] = max([r["letters"] for r in m["rooms"]] + [1])
+
+    # ── 静かに上がってきたことば（フェーズ5）─────────────────────
+    # 通報という行いは作らない。利用者にさせるのは「自分の宙から消す」だけで、
+    # 同じ一筆を **別々の人** が消したときにだけ、ここへ静かに並ぶ。
+    # 自動では下げない（2026-07-29 Kosei 確定）。ミュートは「わたしの宙には要らない」で
+    # あって「悪い」ではないので、少数の好みが全体の掲載可否になってはいけない。
+    # 下げるかどうかは、ここに並んだものを人が読んで決める。
+    m["muted_n"] = MUTE_REPORT_N
+    m["muted"] = [dict(r) for r in db.execute(
+        """SELECT l.id, l.poem, l.title, COALESCE(l.sky_status,'live') AS sky_status,
+                  l.sent_date, rm.name AS room,
+                  COUNT(*) AS n, MAX(mt.at) AS latest
+             FROM muted mt JOIN letters l ON l.id = mt.letter_id
+             LEFT JOIN rooms rm ON rm.id = l.room_id
+            GROUP BY l.id HAVING COUNT(*) >= ?
+            ORDER BY n DESC, latest DESC LIMIT 50""", (MUTE_REPORT_N,))]
     return m
 
 
@@ -7268,6 +7357,10 @@ def api_admin_delete_user(uid_):
             # 作者の手がかりだけを外す。SQLite は既定で外部キーを見ないのでアプリ側で行う。
             db.execute("UPDATE rooms SET created_by=NULL WHERE created_by=?", (uid_,))
             sem_forget_user(db, uid_)          # ことばより先に（上と同じ理由）
+            db.execute("DELETE FROM muted WHERE reader_id=?", (uid_,))
+            db.execute(
+                "DELETE FROM muted WHERE letter_id IN"
+                " (SELECT id FROM letters WHERE user_id=?)", (uid_,))
             db.execute("DELETE FROM letters WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM drafts  WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM users   WHERE id=?",      (uid_,))

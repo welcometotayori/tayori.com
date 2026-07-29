@@ -753,6 +753,31 @@
 
         {# エリアの分布は 2026-07-29 に地図ごと畳んだ（位置を書き込む経路が無くなった）。 #}
 
+        {# 静かに上がってきたことば（フェーズ5・2026-07-29）。
+           通報のボタンは無い。別々の人が「自分の宙から消す」を選んだ一筆だけが、
+           しきい値に達したときにここへ並ぶ。自動では下げていない——下げるかどうかは
+           これを読んで人が決める（ミュートは「わたしの宙には要らない」であって
+           「悪い」ではないので、少数の好みが全体の掲載可否になってはいけない）。 #}
+        {% if metrics.muted %}
+        <div class="section-title">静かに上がってきたことば（{{ metrics.muted_n }}人以上が自分の宙から消した）</div>
+        <div class="trend-note">
+            自動では宙から下げていません。書き手には何も伝わっていません。<br>
+            下げる場合は、そのことばの掲載状態を変えてください。
+        </div>
+        <table>
+            <tr><th>人数</th><th>状態</th><th>部屋</th><th>ことば</th><th>最後に消された</th></tr>
+            {% for w in metrics.muted %}
+            <tr>
+                <td class="date">{{ w.n }}</td>
+                <td>{{ w.sky_status }}</td>
+                <td>{{ w.room or '—' }}</td>
+                <td>{{ w.poem }}{% if w.title %}<br><span class="protected">題：{{ w.title }}</span>{% endif %}</td>
+                <td class="date">{{ w.latest }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
         <div class="section-title">部屋（{{ metrics.rooms | length }}）</div>
         <div class="trend-note">
             部屋ごとの活動量は<strong>この画面だけのもの</strong>です。ユーザー側には件数を一切出しません（出した瞬間に、部屋の選び方が人気投票になります）。<br>

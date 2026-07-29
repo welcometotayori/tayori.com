@@ -199,7 +199,12 @@
   .hold-act.on{color:var(--ink-1)}
   /* 「近いことば」は別の場所へ行く行い。この語への行いとは罫で分ける */
   .hold-sep{height:1px;background:var(--rule-faint);margin:6px 0 2px}
-  .hold-act.sub{color:var(--ink-3)}
+  /* 従の行い（もう見ない）。絵を持たせず、字も一段落として主従をはっきりさせる。
+     2026-07-29：ここに二つ並べるのは二度目なので、前回の失敗（印と棚がどちらも
+     「とっておく」側で見分けがつかなかった）を繰り返さない形にした。 */
+  .hold-act.sub{color:var(--ink-3);font-size:var(--t-meta);letter-spacing:0.1em;
+                padding-left:2px}
+  .hold-act.sub.on{color:var(--ink-2)}
 
   /* ── 棚の絵。宙でも読む柱でも同じ姿（Apple §16 familiarity）──
      紙片が棚板へ降りて収まる。16px枠なのは、7pxでは形が目に入らないため。
@@ -2828,6 +2833,11 @@
      Pinterest の Save/Board と同じ分け方——行いの名は誰にでも分かる語で、
      場所の名はこの世界の語で。規約・プライバシー・通知メールの「棚」は触らずに済む。 */
   const T_KEEP_OFF='保存する', T_KEEP_ON='保存をやめる';
+  /* 「自分の宙から消す」（2026-07-29）。書き手には何も伝わらない。
+     理由も種類も訊かない——訊けば重くなるし、訊いたものは必ずどこかに残る。
+     手のうちにある間は戻せる（放したら、その人の宙から静かに居なくなる）。 */
+  const T_MUTE_OFF='もう見ない', T_MUTE_ON='もう見ないのをやめる';
+  const muted=new Set();
 
   /* v4：止め方は「その一歩を進めない」だけ（hold）。位置は毎フレーム rAF が書いているので、
      掴んだ瞬間の値がそのまま現在値＝どこにも飛ばない（Apple §3）。
@@ -2908,11 +2918,20 @@
     /* ことばへの行いは「棚にとっておく」ひとつだけ（2026-07-27）。
        反応（いいな＝灯）は撤去した——二つ並べた結果「どちらが何なのか分からない」
        と言われ、絵を分けても文言を変えても解けなかった。行いが一つなら、迷いようがない。 */
-    const s=kept.has('drift:'+held._sid);
+    const s=kept.has('drift:'+held._sid), mu=muted.has(held._sid);
+    /* 2026-07-29（フェーズ5）：二つめの行いを足した。以前ここに二つ並べて
+       「どちらが何なのか分からない」と言われた経験があるので、同じ轍を踏まないよう、
+       前とは違う作りにする——あのときの二つ（印と棚）はどちらも「とっておく」側で
+       見分けがつかなかった。今度の二つは向きが逆（とっておく／もう見ない）なので
+       混ざりようがない。そのうえで、消すほうは絵を持たせず一段弱い字にして、
+       主従をはっきりさせる。 */
     holdBox.innerHTML=
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
-        IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>';
+        IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>'+
+      '<button type="button" class="hold-act sub mute'+(mu?' on':'')+'" aria-pressed="'+(mu?'true':'false')+'">'+
+        '<span class="txt">'+(mu?T_MUTE_ON:T_MUTE_OFF)+'</span></button>';
     holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
+    holdBox.querySelector('.mute').addEventListener('click',()=>toggleMute(held));
   }
   /* 辿るの入口（「この空気に、近いことば」）は 2026-07-28 に外し、同日、面もサーバも
      規約の条項も含めて丸ごと畳んだ（Kosei 指示）。受け止めたことばに添う行いは
@@ -2943,6 +2962,25 @@
       if(on)kept.delete(key); else kept.add(key);
       paintAct('.keep',!on,T_KEEP_ON,T_KEEP_OFF);
       whisper('いま、<wbr>棚に<wbr>届きませんでした。',6000);
+    }
+  }
+  async function toggleMute(el){
+    if(!el||!el._sid) return;
+    const on=!muted.has(el._sid);
+    if(on)muted.add(el._sid); else muted.delete(el._sid);
+    paintAct('.mute',on,T_MUTE_ON,T_MUTE_OFF);
+    if(on)dropPad(holdBox);        // 消すと決めた紙に、付箋を貼らせない
+    try{
+      const r=await fetch('/api/sky/word/'+encodeURIComponent(el._sid)+'/mute',
+        {method:'POST',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({on:on})});
+      if(!r.ok)throw new Error('mute');
+      /* 「消えました」とは言わない。消えたことは、次に宙を見たときに分かる。
+         ここで知らせを出すと、消すことが出来事になってしまう。 */
+    }catch(e){
+      if(on)muted.delete(el._sid); else muted.add(el._sid);
+      paintAct('.mute',!on,T_MUTE_ON,T_MUTE_OFF);
+      whisper('いま、<wbr>届きませんでした。',6000);
     }
   }
   // 宙の何もない所を触ったら放す（Escでも）
