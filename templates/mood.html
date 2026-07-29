@@ -2615,7 +2615,14 @@
       })
       .catch(()=>{ watermark('いまは、<wbr>寄せられません。',5200); });
   }
+  /* IME変換中（isComposing）の Enter・Escape は横取りしない（2026-07-29）。
+     ここだけ、この作法が抜けていた——書く柱（3561行）も付箋も栞も守っているのに。
+     日本語で「あめ」と打って変換を確定する Enter が、確定ではなく探すに化け、
+     しかも e.preventDefault() が確定そのものを取り消し、seekQ.blur() が変換中の
+     ことばを引き剥がしていた。**日本語で打つかぎり、まともに探せない。**
+     keyCode 229 は、古い Android の IME が isComposing を立てない時の逃げ道。 */
   seekQ.addEventListener('keydown',e=>{
+    if(e.isComposing||e.keyCode===229)return;
     if(e.key==='Enter'){ e.preventDefault(); seekRun(); }
     if(e.key==='Escape'){ seekReset(); }
   });
