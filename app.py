@@ -813,6 +813,9 @@ def init_db():
                 source_author TEXT NOT NULL,
                 source_title  TEXT NOT NULL,
                 license       TEXT NOT NULL DEFAULT 'public_domain',
+                -- 部屋は持たない（常に NULL）。本から拾った一節は「何について書かれた
+                -- か」を持たず、推定させると雨の庭の一文が『いじめ』へ寄った。列は
+                -- 残す：いつか人が選んで置くとき、その一片だけ部屋を持てるように。
                 room_id       INTEGER,
                 sky_status    TEXT NOT NULL DEFAULT 'live',
                 created_at    TEXT NOT NULL
@@ -4026,6 +4029,42 @@ def _sky_rebuild():
             _sem_vec(r["sem_v"]),         # 意味ベクトル（探すときだけ使う。漂いは見ない）
         ))
         index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["title"])
+
+    # ── 言葉の漂流物（v3 §4.4）────────────────────────────────────
+    # 著作権の切れた本から拾った一節。人のことばと同じ宙に、同じタプルの形で並ぶ
+    # ——ここで形を揃えておくと、部屋の絞り込みも、棚も、ミュートも、探すも、
+    # 一行も足さずにそのまま効く。違うのは中身のほうだけ。
+    for r in db.execute(
+            "SELECT x.id, x.body, x.source_author, x.source_title, x.room_id,"
+            "       v.v AS sem_v"
+            "  FROM external_texts x LEFT JOIN letter_vectors v ON v.letter_id = x.id"
+            " WHERE x.sky_status='live' AND COALESCE(x.body,'')<>''").fetchall():
+        h = _sky_public_id(r["id"])
+        pool.append((
+            {
+                "id": h,
+                "poem": r["body"],
+                "color": None,            # 気分の色は本人の主観指標。本の一節には無い
+                "vertical": True,         # 本から来たものは、本の向きで漂う
+                "pd": True,               # 姿を変える印（打鍵を再生しない・出典を刻む）
+                "author": r["source_author"],
+                "work": r["source_title"],
+            },
+            # 空気を持たない＝air_distance は成分ごと外して中立（0.5）を返す。
+            # 漂流物は「いま」を持たないので、誰の今とも等距離にある。これは欠測では
+            # なく仕様——流れ着くものは、こちらの天気に合わせて来たりしない。
+            {"color": None, "season": None, "hour": None, "weather": None},
+            r["id"],
+            1.0,                          # 沈降。いまはどこからも読まれない（2026-07-27に選抜から外れた）
+            None,                         # 書き手が居ない＝「自分のことば」に決してならない
+            None,                         # 題は持たない（あるのは出典で、それは題ではない）
+            r["room_id"],
+            _flare_state(r["id"]),
+            _PD_AGE_DAYS,                 # 新着レーンに決して入らないための大きな齢（§4.4）
+            _sem_vec(r["sem_v"]),
+        ))
+        index[h] = (r["id"], r["body"], None, 1, None)
+
     with _sky_lock:
         _sky_cache["t"] = time.time()
         _sky_cache["pool"] = pool
@@ -4294,8 +4333,48 @@ def _room_scope():
 
 def _in_room(pool, room_id):
     """その部屋のことばだけに絞る。母数が足りなくても他の部屋からは借りてこない（B-6）
-    ——静かな部屋は、静かなまま見せる。"""
-    return [e for e in pool if e[6] == room_id]
+    ——静かな部屋は、静かなまま見せる。
+
+    ただし漂流物（§4.4）はどの部屋にも流れ着く。本から拾った一節は「何について
+    書かれたか」を持たない——実際に部屋を推定させてみると、雨の庭の一文が『いじめ』
+    へ寄った。部屋を当てられないものに部屋を当てるのは、この宙でいちばんやっては
+    いけないことのひとつ（_classify_room の注釈）。だから部屋を持たせない。
+    持たないものは、どこにでも在れる。"""
+    return [e for e in pool if e[6] == room_id or e[0].get("pd")]
+
+
+# ── 言葉の漂流物の枠（v3 §4.4）────────────────────────────────────
+# その日その部屋で出会えるのは「人のことばが _SKY_N、流れ着いたものが _SKY_PD_K」。
+# 人の枠を削って混ぜないのは、漂流物が人のことばの代わりになってはいけないから
+# ——宙は本の抜き書き帳ではない。足すぶんだけ、静かに増える。
+_SKY_PD_K = _env_num("TAYORI_SKY_PD_K", 2, 0, 20, cast=int)
+# 漂流物の齢。新着レーン（e[8] の小さい順）に決して入らないだけの大きさがあればよい。
+_PD_AGE_DAYS = 36500.0
+# 濃さ。齢から引くと最も薄いところ（0.32）に貼り付くが、それでは読めない。
+# 流れ着いたものは、真新しくもなく、消えかけでもない——その中間に置く。
+_SKY_PD_ALPHA = _env_num("TAYORI_SKY_PD_ALPHA", 0.58, 0.05, 1.0)
+
+
+def _split_drift(pool):
+    """人のことばと、流れ着いたことばに分ける。"""
+    return ([e for e in pool if not e[0].get("pd")],
+            [e for e in pool if e[0].get("pd")])
+
+
+def _pd_of_the_day(viewer_id, room_id, drift, k=None):
+    """その日その部屋に流れ着くものを、状態を持たずに選ぶ（flare と同じ考え方）。
+
+    カーソルにも「見た控え」にも入れない。漂流物は山を消化していく対象ではなく、
+    その日たまたま岸に寄っていたもので、明日はまた別のものが寄っている。
+    宙の一日（JST 朝4時）が変われば顔ぶれも変わり、同じ日のうちは何度開いても同じ。"""
+    k = _SKY_PD_K if k is None else k
+    if k <= 0 or not drift:
+        return []
+    day = _sky_day_start().date().isoformat()
+    def order(e):
+        return hashlib.sha256(
+            f"pd:{viewer_id}:{room_id}:{day}:{e[2]}".encode()).hexdigest()
+    return sorted(drift, key=order)[:k]
 
 
 # ══ 宙の選抜＝トランプの山（2026-07-27）════════════════════════════════
@@ -4452,6 +4531,10 @@ def _sky_word(entry, now_air, air=None, mode="drift"):
         * math.log1p(9 * (1 - d)) / math.log(10), 3)
     age = max(0.0, entry[8])
     w["alpha"] = round(0.32 + 0.68 * math.exp(-age / 90.0), 3)
+    # 漂流物は「放たれた日」を持たないので、風化の式に乗せる齢が無い（§4.4）。
+    # 齢から引くと最も薄いところに貼り付いて読めなくなるため、濃さだけ別に置く。
+    if w.get("pd"):
+        w["alpha"] = _SKY_PD_ALPHA
     return w
 
 
@@ -4485,10 +4568,13 @@ def api_sky():
     now_air = _viewer_air()
     # 選抜（どの手紙を出すか）は air_distance を使わない公平なカーソル方式。
     # air_distance は _sky_word の中で表示（サイズ）にだけ効く。
+    # 漂流物は山に混ぜず、横に足す（§4.4）——カーソルも「見た控え」も人のことばのまま。
+    humans, drift = _split_drift(pool)
     if reader:
-        chosen = _build_sky(get_db(), reader, room_id, pool)
+        chosen = _build_sky(get_db(), reader, room_id, humans)
+        chosen += _pd_of_the_day(reader, room_id, drift)
     else:
-        chosen = _anon_deal(pool)
+        chosen = _anon_deal(humans) + _pd_of_the_day("", room_id, drift)
     words = [_sky_word(e, now_air) for e in chosen]
     random.shuffle(words)   # 並び順からは何も推測させない（新着を画面上で固めない）
     return jsonify(words=words)
@@ -4595,6 +4681,12 @@ def api_sky_word_trace(h):
     hit = _sky_index().get(h)
     if not hit:
         return jsonify(error="そのことばは、もう宙にありません。"), 404
+    # 漂流物（§4.4）には打鍵が無い。ここで trace_ev=None を返すと、画面は
+    # 「記録が無いことば」として合成の打鍵（synthTrace）を当ててしまう
+    # ——本から拾った一節に、誰も打っていないためらいが生えることになる。
+    # 画面側も pd を見て呼びに来ないが、経路の側でも塞いでおく。
+    if str(hit[0]).startswith("pd"):
+        return jsonify(error="そのことばに、打鍵はありません。"), 404
     return jsonify(trace_ev=_letter_trace_ev(hit[0]))
 
 
