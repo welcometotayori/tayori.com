@@ -774,6 +774,19 @@ def init_db():
         # 一括変換する。冪等（HEXで始まる行だけ変換）。読む側は両対応なので取りこぼしても壊れない。
         _migrate_colors_to_hsl(db)
 
+        # ── 意味の索引（2026-07-29 フェーズ3）─────────────────────────
+        # letters の列にしないのは、モデルを差し替えたら作り直すものだから。
+        # DROP TABLE ひとつで捨てられる形にしておく（letters は一切触らずに済む）。
+        # 中身はベクトルだけ。本文も、本文から引ける手がかりも持たない。
+        db.execute(
+            """CREATE TABLE IF NOT EXISTS letter_vectors (
+                letter_id TEXT PRIMARY KEY,
+                model     TEXT NOT NULL,
+                dim       INTEGER NOT NULL,
+                v         BLOB NOT NULL,
+                made_at   TEXT NOT NULL
+            )""")
+
         # ── 宙の配達（2026-07-25 宙モードv2）─────────────────────────
         # 放たれたことばは、自分にいつか降る（letters.arrive_at）のに加えて、他のだれか一人にも届く。
         # その配達だけをこのテーブルに持ち、作者側の letters には何も書き戻さない
@@ -1891,6 +1904,9 @@ def api_account_delete():
             for sid in saved:
                 db.execute("DELETE FROM saved_tags WHERE saved_id=?", (sid,))
                 db.execute("DELETE FROM shelf_items WHERE saved_id=?", (sid,))
+            # ことばより先にベクトルを落とす（letters を消した後では、どれがこの人の
+            # ものだったか引けなくなる）。プライバシー 4の2 の最後の一行。
+            sem_forget_user(db, me)
             for stmt, args in (
                 ("DELETE FROM letters WHERE user_id=?", (me,)),
                 ("DELETE FROM drafts WHERE user_id=?", (me,)),
@@ -3292,6 +3308,135 @@ def _sky_public_id(letter_id):
     """宙に出す公開id。手紙のidは絶対に出さない（逆算もできない一方向のハッシュ）。"""
     return hashlib.sha256(("sky:" + letter_id).encode()).hexdigest()[:12]
 
+# ══ 意味の索引（2026-07-29）═══════════════════════════════════════
+# 原則を「AIは読まない」から「近さを測るためにだけ触れる」へ書き換えたうえで入れる
+# （about・規約 第3条第7号・プライバシー 4の2）。ここが守る約束は四つ：
+#   ・使い道は **ことばどうしの近さを測ること だけ**。評価も順位付けも要約も返事もしない
+#   ・ベクトルは利用者に見せない・広告に使わない・学習に出さない・第三者に渡さない
+#   ・本文はこのサーバから一歩も出ない（表を引いて平均するだけ。外部APIを呼ばない）
+#   ・ことばが消えたらベクトルも消える（退会・削除の各経路で必ず道連れにする）
+#
+# 【なぜ Transformer を載せないのか】本番は Render の starter（512MB）。実測で
+# e5-small の int8 ONNX でも RSS 411MB——アプリの50MBと足すと載らなかった
+# （メモリアリーナを切っても変わらない）。代わりに model2vec の静的蒸留表を使う。
+# 「語 → ベクトル」を引いて平均するだけなので numpy だけで 0.07ms/件で動く。
+# 表の作り方と、日本語語彙へ絞った根拠は scripts/build_semantic_table.py に書いた。
+#
+# 表が無い・numpy が無い環境では、意味索引だけが静かに眠る（宙は今までどおり漂う）。
+# 「探す」を出さないだけで、既定の漂いは意味を最初から見ていないので何も変わらない。
+_SEM_DIR = os.path.join(APP_DIR, "semantic")
+_SEM_MODEL = "potion-multilingual-128M-ja"   # 表の版。letter_vectors.model に書く
+_SEM_DIM = 256
+_sem_lock = threading.Lock()
+_sem = {"loaded": False, "ok": False, "why": "まだ読んでいません",
+        "tok": None, "table": None, "empty": frozenset()}
+
+
+def _sem_load():
+    """語ベクトル表を一度だけ読む。失敗しても例外は投げない（意味索引が眠るだけ）。"""
+    with _sem_lock:
+        if _sem["loaded"]:
+            return _sem["ok"]
+        _sem["loaded"] = True
+        npz_path = os.path.join(_SEM_DIR, "potion_ja.npz")
+        tok_path = os.path.join(_SEM_DIR, "tokenizer.json.gz")
+        try:
+            import numpy as np
+            from tokenizers import Tokenizer
+        except ImportError as e:
+            _sem["why"] = f"numpy / tokenizers がありません（{e}）"
+            print(f"[たより] 意味の索引は眠ります: {_sem['why']}", flush=True)
+            return False
+        if not (os.path.exists(npz_path) and os.path.exists(tok_path)):
+            _sem["why"] = f"表がありません（{_SEM_DIR}）"
+            print(f"[たより] 意味の索引は眠ります: {_sem['why']}", flush=True)
+            return False
+        try:
+            t0 = time.time()
+            d = np.load(npz_path, allow_pickle=False)
+            # 行番号がそのままトークンid（表と辞書を同じ刈り込みで作ってある）。
+            # fp16 で配り、引くときだけ fp32 に上げる（表は26MB／引いた後は数KB）。
+            _sem["table"] = d["vecs"]
+            with gzip.open(tok_path, "rt", encoding="utf-8") as f:
+                _sem["tok"] = Tokenizer.from_str(f.read())
+            # 中身の無いトークン（[UNK]・[PAD]・語頭マーカー ▁ だけ、など）の id。
+            # これを外さないと、絵文字だけの一行が「▁ のベクトル」になってしまう
+            # ——意味を持たないことばに、意味があるふりをさせない。
+            _sem["empty"] = frozenset(
+                i for t, i in _sem["tok"].get_vocab().items()
+                if not t.replace("\u2581", "").strip()
+                or (t.startswith("[") and t.endswith("]")))
+            _sem["ok"] = True
+            print(f"[たより] 意味の索引: {_sem['table'].shape[0]}語 × "
+                  f"{_sem['table'].shape[1]}次元 を {time.time() - t0:.1f}秒で読みました",
+                  flush=True)
+        except Exception as e:
+            _sem["why"] = f"表を読めませんでした（{e}）"
+            print(f"[たより] 意味の索引は眠ります: {_sem['why']}", flush=True)
+            return False
+        return True
+
+
+def sem_ready():
+    return _sem_load()
+
+
+def sem_embed(text):
+    """ことば → 意味ベクトル（長さ1のfloat32配列）。測れない時は None。
+
+    語に切って、そのベクトルを平均する。辞書に無い語（外国語・記号）は [UNK] に
+    落ちるので数えない——落とした結果ひとつも残らなければ None を返す
+    （例：絵文字だけの一行）。"""
+    if not _sem_load():
+        return None
+    t = (text or "").strip()
+    if not t:
+        return None
+    import numpy as np
+    try:
+        ids = _sem["tok"].encode(t, add_special_tokens=False).ids
+    except Exception:
+        return None
+    empty = _sem["empty"]
+    rows = [i for i in ids if i not in empty]
+    if not rows:
+        return None
+    v = _sem["table"][rows].astype(np.float32).mean(0)
+    n = float(np.linalg.norm(v))
+    if n <= 0:
+        return None
+    return (v / n).astype(np.float32)
+
+
+def sem_store(db, letter_id, text):
+    """ことばのベクトルを letter_vectors に入れる（同じidは差し替え）。
+    呼ぶ側で commit する。ベクトルが作れなければ何もしない＝行が無い＝意味を持たない
+    ことばとして扱われる（air_distance は成分ごと外して残りで正規化する）。"""
+    v = sem_embed(text)
+    if v is None:
+        return False
+    db.execute(
+        "INSERT OR REPLACE INTO letter_vectors (letter_id, model, dim, v, made_at)"
+        " VALUES (?,?,?,?,?)",
+        (letter_id, _SEM_MODEL, int(v.shape[0]), v.tobytes(),
+         datetime.now().isoformat(timespec="seconds")))
+    return True
+
+
+def sem_forget(db, letter_ids):
+    """ことばが消えたらベクトルも消す。プライバシー 4の2 の最後の一行がこれ。"""
+    for lid in letter_ids:
+        db.execute("DELETE FROM letter_vectors WHERE letter_id=?", (lid,))
+
+
+def sem_forget_user(db, user_id):
+    """退会。その人のことばのベクトルを、ことばより先に落とす（letters を消した後だと
+    どれがその人のものだったか分からなくなる）。"""
+    db.execute(
+        "DELETE FROM letter_vectors WHERE letter_id IN"
+        " (SELECT id FROM letters WHERE user_id=?)", (user_id,))
+
+
 # ── 空気の近さ（v2仕様書 §2・v2の心臓）──────────────────────
 # 意味を読まない。条件で並べる。0.0（同じ空気）〜 1.0（遠い）。
 # 色（40%）が主役：気分の色は本人が選んだ唯一の主観指標なので、いちばん信用できる。
@@ -4515,6 +4660,13 @@ def api_create_letter():
         )
         # 他人のことばが初めて入った瞬間に、その部屋へ鍵をかける（B-5）。
         _room_lock_if_needed(db, room_id, uid())
+        # 意味の索引（2026-07-29）。0.07ms なので投函を待たせない。
+        # 作れなくても投函は成功させる——ベクトルが無いことばは、意味の成分を
+        # 持たないだけで、宙にはこれまでどおり出る。
+        try:
+            sem_store(db, lid, poem)
+        except Exception as e:
+            print(f"[たより] 意味の索引に入れられず（投函は継続）: {e}", flush=True)
         db.commit()
     # 開封のお知らせメールは認証済みアドレスにしか送られない（_check_and_notify の条件と対）。
     # 未設定／確認待ちのまま投函した時は、そのたびに知らせられるよう状態を返す。
@@ -5483,6 +5635,7 @@ def api_letters_bulk_discard():
                      row["trace"] if "trace" in keys else None,
                      (_now + UNRAVEL_AFTER).isoformat(timespec="seconds")))
                 db.execute("DELETE FROM thread WHERE letter_id=?", (lid,))
+                sem_forget(db, [lid])
                 db.execute("DELETE FROM letters WHERE id=? AND user_id=?", (lid, uid()))
                 moved += 1
             db.commit()
@@ -6861,6 +7014,7 @@ def api_admin_delete_user(uid_):
             # 作った部屋は消さない（他人のことばが既に入っている＝もう誰のものでもない）。
             # 作者の手がかりだけを外す。SQLite は既定で外部キーを見ないのでアプリ側で行う。
             db.execute("UPDATE rooms SET created_by=NULL WHERE created_by=?", (uid_,))
+            sem_forget_user(db, uid_)          # ことばより先に（上と同じ理由）
             db.execute("DELETE FROM letters WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM drafts  WHERE user_id=?", (uid_,))
             db.execute("DELETE FROM users   WHERE id=?",      (uid_,))

@@ -3,3 +3,7 @@ Werkzeug>=3.0
 gunicorn>=21.0
 boto3>=1.34           
 anthropic>=0.25.0
+# 意味の索引（2026-07-29）。語ベクトル表を引いて平均するだけなので
+# torch も onnxruntime も要らない。tokenizers は分かち書きのため。
+numpy>=1.26
+tokenizers>=0.15
