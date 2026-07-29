@@ -171,6 +171,21 @@
   /* 受け止めたことば：漂いを止め、はっきりと、少しだけ手前に */
   .drift.held{opacity:1;filter:blur(0);scale:1.03;color:var(--chalk);z-index:2}
 
+  /* ── 言葉の漂流物（v3 §4.4）──────────────────────────────────
+     著作権の切れた本から拾った一節。人のことばと同じ宙に漂うが、書かれ方が違う。
+     人のことばは一字ずつ**書かれる**（打鍵の実時間再生）。こちらは、すでにそこに
+     在ったものが**滲んで見えてくる**——だから初期のぼかしを深く取り（5px→9px）、
+     解けるまでを長くする（--in は JS が 2.8s を差す）。
+     色は持たない：気分の色は書き手が選ぶ唯一の主観指標で、本の一節には無い。
+     代わりに紙の地の色（--thread 寄りの薄い墨）に置いて、人のことばと見分ける。 */
+  .drift.pd{color:var(--ink-3);filter:blur(9px);
+            text-shadow:0 0 22px rgba(179,143,111,.20)}
+  .drift.pd.on{filter:blur(.15px)}   /* 完全には解かない＝紙に染みた字のまま */
+  .drift.pd.held{color:var(--ink-1);filter:blur(0)}
+  /* 出典（§4.4）。触れて開いたときだけ、隅に小さく刻まれる。外へ出る導線は張らない。 */
+  .hold-src{font-size:10.5px;line-height:1.9;letter-spacing:0.14em;color:var(--ink-4);
+            word-break:keep-all;overflow-wrap:anywhere;padding:2px 0 4px}
+
   /* ── 受け止めたことばに添う、二つの行い（v14）────────────────
      ことばの隣にそっと現れる。箱は作らず、罫と霞だけ。
      出どころ（そのことば）から立ち上がるように見せる＝transform-origin は JS が指す。 */
@@ -2673,11 +2688,13 @@
     return best;
   }
 
-  function spawnDrift(poem,color,vertical,id,steps,scale,alpha){
+  function spawnDrift(poem,color,vertical,id,steps,scale,alpha,meta){
     if(!poem) return;
     if(id)live.add(id);
+    const pd=!!(meta&&meta.pd);
     const el=document.createElement('div');
-    el.className='drift'+(vertical?' v':'');
+    el.className='drift'+(vertical?' v':'')+(pd?' pd':'');
+    if(pd){ el._pd=meta; }
     // 表示変数（サーバが決める）：大きさ＝近さ（air_distance）／濃さ＝古さ（経過日数）。
     // トークン --t-word への倍率で受けるので、寸法体系（_sky_tokens）を壊さない。
     if(scale){ el.style.fontSize='calc(var(--t-word) * '+scale+')'; }
@@ -2690,7 +2707,10 @@
     // 触れられることを、要素そのものに持たせる（読み上げも辿れる）
     el.setAttribute('role','button');
     el.setAttribute('tabindex','0');
-    el.setAttribute('aria-label','tayori-たより- のことば：'+poem+'。ひらくと、灯をともす・棚にとっておく ができます。');
+    el.setAttribute('aria-label',(pd
+      ? '流れ着いたことば：'+poem+'（'+meta.author+'『'+meta.work+'』より）。'
+      : 'tayori-たより- のことば：'+poem)
+      +'。ひらくと、灯をともす・棚にとっておく ができます。');
     el._poem=poem; el._sid=id||null; el._color=color||null;
     el._life=life; el._born=performance.now();
     el.addEventListener('click',()=>catchWord(el));
@@ -2709,6 +2729,15 @@
       addFloater(el,spot.x/100*viewW(),spot.y/100*viewH(),1.2+Math.random()*1.4);
     }
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(pd){
+        /* 漂流物は書かれない。すでにそこに在ったものが、紙に滲むように見えてくる
+           （§4.4「インクがじわっと染み出す」）。打鍵の代わりに --in を長く取り、
+           全文を最初から置いたまま、にじみだけを解いていく。 */
+        el.textContent=poem;
+        el.style.setProperty('--in','2.8s');
+        el.classList.add('on');
+        return;
+      }
       el.classList.add('on');
       el._typing=true;                  // ローテーション再生（§2）と重ねない
       playType(el,poem,steps,()=>{el._typing=false;});   // ここで一字ずつ書かれていく
@@ -2755,10 +2784,14 @@
        他人の筆致になっていなかった。控え(traceCache)があるので二度目からは待たない。
        持っていないことば（明示の前に放たれた分・種のことば）は今までどおり合成。
        ことばが現れる間隔はもともと4.5〜10秒なので、一往復ぶんの遅れは沈む。 */
+    /* 漂流物（v3 §4.4）には打鍵が無い。本から拾った一節に、誰も打っていない
+       ためらいの間を生やすわけにはいかないので、取りに行かずにそのまま置く
+       ——姿の差はここから始まる（インクが染み出すように現れ、一字ずつは書かれない）。 */
+    if(pick.pd){ spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,null,pick.scale,pick.alpha,pick); return; }
     getTrace(pick.id).then(tr=>{
       // 待っているあいだに部屋を出た／定員が埋まった／同じことばが浮かんだ、を見直す
       if(!inRoom()||(!force&&liveEls.size>=liveCap())||live.has(pick.id)||liveText.has(pick.poem))return;
-      spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,tr,pick.scale,pick.alpha);
+      spawnDrift(pick.poem,pick.color,pick.vertical,pick.id,tr,pick.scale,pick.alpha,pick);
     });
   }
   // 反映の待ち時間を削る（v11.1）：取得は20秒ごと、流れ込みは4.5〜10秒ごと
@@ -2828,6 +2861,7 @@
     if(REDUCED||document.hidden)return;              // 減モーションでは書き直さない（静けさを守る）
     for(const el of liveEls){
       if(el===held||el.classList.contains('out'))continue;   // 手の中・消えぎわの紙はそのまま
+      if(el._pd)continue;                                    // 漂流物は書き直さない（誰も打っていない）
       if(el._sid&&fnv(el._sid)%4===tick)rotateOne(el);
     }
   },8000);
@@ -2983,10 +3017,18 @@
     // 画面が伏せられている間 rAF は止まるので、「見える」ことを rAF に賭けない。
     setTimeout(()=>{ if(held)holdBox.classList.add('on'); },16);
   }
+  /* 出典の刻印（v3 §4.4）。漂っているあいだは出さない——漂いは本文だけの世界で、
+     誰が書いたかは宙では問われない。触れて開いた、その一度だけ隅に刻む。
+     リンクにはしない：tayori-たより- から外へ出ていく導線は、どこにも作らない。 */
+  function srcMark(){
+    if(!held||!held._pd) return '';
+    return '<p class="hold-src">— '+esc(held._pd.author)+
+           '『'+esc(held._pd.work)+'』より</p>';
+  }
   function renderHold(){
     if(!held) return;
     if(!LOGGED_IN){
-      holdBox.innerHTML='<p class="hold-note">このことばを、<wbr>'+
+      holdBox.innerHTML=srcMark()+'<p class="hold-note">このことばを、<wbr>'+
         '自分の<wbr>棚に<wbr>とっておけます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
       return;
     }
@@ -3000,7 +3042,7 @@
        見分けがつかなかった。今度の二つは向きが逆（とっておく／もう見ない）なので
        混ざりようがない。そのうえで、消すほうは絵を持たせず一段弱い字にして、
        主従をはっきりさせる。 */
-    holdBox.innerHTML=
+    holdBox.innerHTML=srcMark()+
       '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
         IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>'+
       '<button type="button" class="hold-act sub mute'+(mu?' on':'')+'" aria-pressed="'+(mu?'true':'false')+'">'+
