@@ -4580,6 +4580,113 @@ def api_sky():
     return jsonify(words=words)
 
 
+# ══ 一枚の宙（無限キャンバス・2026-07-30）═══════════════════════════
+# 「リストを作らない」の線は 2026-07-30 に Kosei が降ろした。宙全体を一枚の
+# キャンバスにする——部屋は壁から地形（島）になり、全ことばを一望に置き、
+# 沈降 1/(1+months/12) は深さ（薄さ・ぼけ）として描く。
+#   ・配置は決定論＝全員が同じ宙を見る（flare と同じ思想）。乱数は id のハッシュ。
+#   ・座標はサーバで単位円 (x,y) に落とす。空気の生の成分（季節・時刻帯・天気）は
+#     クライアントへ配らない——色相が方位になり、あとはハッシュだけ（生座標の作法）。
+#   ・デッキ（一日9枠）はここでは消化しない。「見た控え」も取らない——一望は
+#     読んだことにならない。触れた時だけ /api/sky/touch が鳴る。
+#   ・自分のことばも出す（自分の空に自分は出ない、は漂いの規則。地図が本人の分だけ
+#     欠けていたら、それは嘘の地形になる）。しるしは付けない（気づきに委ねる）。
+#   ・漂流物は部屋を持たないので v1 では出さない（島の岸に流れ着かせるのはフェーズ2）。
+def _canvas_seed(raw_id, salt):
+    """id と salt から 0..1 の決定的な値。プロセスにも日にも依らない。"""
+    return (zlib.crc32((str(raw_id) + salt).encode("utf-8")) & 0xffffffff) / 0xffffffff
+
+
+# 島の岸に流れ着く漂流物の数（宙の一日・島ごと）。人のことばの枠を削らない足し算。
+_SKY_SHORE_K = int(_env_num("TAYORI_SKY_SHORE_K", 2, 0, 8))
+
+
+@app.route("/api/sky/canvas")
+def api_sky_canvas():
+    reader = session.get("uid")
+    muted = _muted_ids(get_db(), reader) if reader else set()
+    words = []
+    pds = []
+    for e in _sky_pool():
+        pub, air, raw, decay, _uid, _title, room_id, flare, _age, _sem = e
+        if pub.get("pd"):
+            pds.append(e)                 # 漂流物は部屋を持たない。下の「岸」で島へ寄せる
+            continue
+        if room_id is None:
+            continue
+        if raw in muted:
+            continue                      # 「もう見ない」は一枚の宙でも見ない
+        hsl = _parse_hsl(air["color"]) if air["color"] else None
+        if hsl and hsl[1] >= _AIR_GRAY_S:
+            # 色相が島の中の方位になる＝近い色が自然と寄り合う（空気のクラスタ）
+            ang = (hsl[0] + (_canvas_seed(raw, "a") - 0.5) * 28.0) % 360.0
+        else:
+            # 選ばれていない色は空気にしない——方位もハッシュに委ねる
+            ang = _canvas_seed(raw, "a") * 360.0
+        rad = math.sqrt(_canvas_seed(raw, "r"))   # 単位円に一様
+        sink = max(0.06, min(1.0, decay))
+        if flare:
+            sink = max(sink, 0.92)        # 浮上中は表層へ（沈んだ字がまた読める）
+        words.append({
+            "id": pub["id"], "poem": pub["poem"], "color": pub["color"],
+            "vertical": pub["vertical"], "room": room_id,
+            "sink": round(sink, 3),
+            "x": round(math.cos(math.radians(ang)) * rad, 4),
+            "y": round(math.sin(math.radians(ang)) * rad, 4),
+        })
+
+    # ── 島の岸（フェーズ2）──────────────────────────────────
+    # 漂流物は部屋を持たないが、宙の一日（JST 4:00境界）ごとに、島ごと2片まで
+    # 決定論で流れ着く。種は 島×日×id だけ——viewer を入れない＝全員が同じ岸を見る
+    # （漂いの _pd_of_the_day は読み手ごとだったが、一枚の宙は全員で同じ地形を見る面）。
+    # 同じ一節が同じ日に二つの岸へ着かないよう、使った片は控える。
+    day = (datetime.now(JST) - timedelta(hours=4)).date().isoformat()
+    used = set()
+    room_ids = [r["id"] for r in get_db().execute(
+        "SELECT id FROM rooms WHERE deleted_at IS NULL ORDER BY COALESCE(position_index,1000000), id")]
+    for room_id in room_ids:
+        ranked = sorted(
+            pds, key=lambda e: hashlib.sha256(
+                ("shore:%s:%s:%s" % (room_id, day, e[2])).encode("utf-8")).digest())
+        got = 0
+        for e in ranked:
+            if got >= _SKY_SHORE_K:
+                break
+            pub, _air, raw = e[0], e[1], e[2]
+            if raw in used or raw in muted:
+                continue
+            used.add(raw)
+            got += 1
+            ang = _canvas_seed(raw, "sa%s" % room_id) * 360.0
+            rr = 1.0 + 0.12 * _canvas_seed(raw, "sr%s" % room_id)   # 岸＝島の縁のすこし外
+            words.append({
+                "id": pub["id"], "poem": pub["poem"], "color": None,
+                "vertical": True, "room": room_id, "pd": True,
+                "author": pub["author"], "work": pub["work"],
+                "sink": 0.62,             # 紙に染みた濃さ。沈みも浮きもしない（時を持たない）
+                "x": round(math.cos(math.radians(ang)) * rr, 4),
+                "y": round(math.sin(math.radians(ang)) * rr, 4),
+            })
+    return jsonify(words=words)
+
+
+@app.route("/api/sky/near")
+def api_sky_near():
+    """共鳴（受け止めた語へ、空気の近いことばが寄る）。意味は使わない——
+    意味で寄せるのは自分から起こす「探す」だけ、という住み分けを保つ。
+    範囲は同じ島（部屋）の中だけ。距離もスコアも返さない：近い順の id が8つ、それだけ。"""
+    pid = (request.args.get("id") or "").strip()
+    pool = _sky_pool()
+    base = next((e for e in pool if e[0]["id"] == pid), None)
+    if base is None or base[6] is None:
+        return jsonify(ids=[])
+    scored = sorted(
+        (air_distance(base[1], e[1]), e[0]["id"])
+        for e in pool
+        if e is not base and e[6] == base[6] and not e[0].get("pd"))
+    return jsonify(ids=[i for _d, i in scored[:8]])
+
+
 # ══ 探す（フェーズ3-3）═══════════════════════════════════════════
 # 「この言葉に近い空気」で宙が寄って組み変わる。それだけ。
 #   ・リストを返さない。順位も件数もスコアも出さない（数を見せない原則）
