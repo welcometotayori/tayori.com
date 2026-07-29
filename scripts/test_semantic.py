@@ -55,6 +55,26 @@ for a, near, far in near_far:
     dn, df = sim(a, near), sim(a, far)
     assert dn > df, f"「{a}」: 近いはずの「{near}」({dn:.3f}) が「{far}」({df:.3f}) より遠い"
 
+# ── 探すときの下限（フェーズ3-4）──────────────────────────────
+# 「近いものが一つも無い」を言えるようにするための線。ここが無かったあいだ、
+# 順位に均された距離のせいで、部屋に一通も無い語でも *いちばんマシな一通* が
+# 最も近い顔をして返っていた（「母」で寄せると「いろのてすと」が一位に来ていた）。
+docs = ["雨、止まない", "雨に濡れた金木犀", "電車遅延すんなや", "母の日、まだ決めてない、"]
+vs = [app.sem_embed(t) for t in docs]
+for q, expect in (("雨", "雨、止まない"), ("電車", "電車遅延すんなや"), ("母", "母の日、まだ決めてない、")):
+    sims = app.sem_similarity(app.sem_embed(q), vs)
+    hit = [(s, t) for s, t in zip(sims, docs) if app.sem_hit_distance(s) is not None]
+    assert hit, f"「{q}」で一つも通らなかった: {[round(s, 2) for s in sims]}"
+    assert max(hit)[1] == expect, f"「{q}」の最寄りが {max(hit)[1]}"
+# 縁もゆかりも無い語は、一つも通らない＝「まだここにありません」を返せる
+for q in ("経済", "サーバ"):
+    sims = app.sem_similarity(app.sem_embed(q), vs)
+    assert all(app.sem_hit_distance(s) is None for s in sims), \
+        f"「{q}」が通ってしまった: {[round(s, 2) for s in sims]}"
+# 測れないことば・ベクトルの無いことばは、空気だけで寄らない（成分ごと落ちる）
+assert app.sem_similarity(None, vs) == [None] * len(vs)
+assert app.sem_hit_distance(None) is None
+
 # ── 保存と取り出し（DBに入れた形のまま比べられること）────────────
 v = app.sem_embed("夕焼けって、なんで切ないんだろう。")
 assert np.array_equal(np.frombuffer(v.tobytes(), dtype=np.float32), v)

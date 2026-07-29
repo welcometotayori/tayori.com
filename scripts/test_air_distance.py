@@ -128,18 +128,33 @@ for sd in (0.0, 0.25, 0.5, 0.75, 1.0):
         d = air_distance(FULL_A, dict(b, sem_d=sd), mode="search")
         assert 0.0 <= d <= 1.0, (b, sd, d)
 
-# ── sem_rank_distance（順位を 0〜1 に均す）──────────────────────
+# ── sem_similarity / sem_hit_distance（絶対の近さと、下限）───────────
+# 2026-07-29：ここは順位を 0〜1 に均していた。集まりの中の順番しか残らないので、
+# 近いものが一つも無い部屋でも「いちばんマシな一通」が最近の顔をしていた。
 import numpy as np
-from app import sem_rank_distance
+from app import sem_similarity, sem_hit_distance, _SEM_HIT_MIN
 def unit(x):
     v = np.array(x, dtype=np.float32); return v / np.linalg.norm(v)
 q = unit([1, 0, 0])
 vs = [unit([1, 0, 0]), unit([0.6, 0.8, 0]), unit([0, 1, 0]), None]
-d = sem_rank_distance(q, vs)
-approx(d[0], 0.0); approx(d[1], 0.5); approx(d[2], 1.0)
-assert d[3] is None                       # ベクトルなし＝成分ごと外れる
-assert sem_rank_distance(None, vs) == [None] * 4      # クエリが測れない時
-assert sem_rank_distance(q, [None, None]) == [None, None]
-approx(sem_rank_distance(q, [unit([1, 0, 0])])[0], 0.0)   # 1件だけなら最近
+s = sem_similarity(q, vs)
+# float32 の丸めがそのまま出るので、ここだけ緩い目盛りで見る
+approx(s[0], 1.0, 1e-6); approx(s[1], 0.6, 1e-6); approx(s[2], 0.0, 1e-6)
+assert s[3] is None                                   # ベクトルなし＝測れない
+assert sem_similarity(None, vs) == [None] * 4         # クエリが測れない時
+
+# 下限：そのものは 0.0、下限すれすれは 1.0、届かなければ None（＝混ぜない）
+approx(sem_hit_distance(1.0), 0.0)
+approx(sem_hit_distance(_SEM_HIT_MIN), 1.0)
+assert sem_hit_distance(_SEM_HIT_MIN - 0.01) is None
+assert sem_hit_distance(0.0) is None
+assert sem_hit_distance(-1.0) is None
+assert sem_hit_distance(None) is None
+# 同じ近さなら同じ遠さ・近いほど小さい（単調）
+mid = (_SEM_HIT_MIN + 1.0) / 2
+assert 0.0 < sem_hit_distance(mid) < 1.0
+assert sem_hit_distance(0.9) < sem_hit_distance(0.5)
+for sim in (1.0, 0.9, 0.5, mid, _SEM_HIT_MIN):
+    assert 0.0 <= sem_hit_distance(sim) <= 1.0
 
 print("air_distance: 全テスト通過")

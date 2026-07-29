@@ -3570,33 +3570,41 @@ def _sem_vec(blob):
     return v if v.shape == (_SEM_DIM,) else None
 
 
-def sem_rank_distance(query_vec, vecs):
-    """クエリと各ベクトルの「意味の遠さ」を 0.0〜1.0 で返す（vecs と同じ長さ）。
+# 探すときの下限（2026-07-29 フェーズ3-4）。これ未満の近さは「近い」と呼ばない。
+# 実測（部屋『心』49通）：「雨」の最寄りは 0.85、「眠れない」は 0.90（表記ゆれの
+# 「ねむれない夜は」も 0.40 で拾えている）。一方、その部屋に一通も無い「母」は 0.08、
+# 「学校」は 0.07 だった。0.30 はこの二つの山のあいだの谷で、
+# 「無いものは無い」と言えるようにするための線。
+_SEM_HIT_MIN = _env_num("TAYORI_SEM_HIT_MIN", 0.30, -1.0, 1.0)
 
-    生のコサインをそのまま距離にしない。この表のコサインは 0.8〜0.9 の狭い帯に
-    固まっていて、1-cos を取ると意味の成分がほぼ定数になり、足しても足さなくても
-    同じ、という無意味な項になる（実測して分かった）。
 
-    代わりに **いま比べている集まりの中での順位** を 0〜1 に均す。こうすると
-    ・帯の狭さに影響されない
-    ・母数が変わっても効き方が一定（部屋が育っても薄まらない）
-    ・「いちばん近い一通」ではなく「近いほうの層」が浮く
-    ベクトルを持たないことばは None＝成分ごと外れる（残りの重みで正規化される）。"""
-    import numpy as np
+def sem_similarity(query_vec, vecs):
+    """クエリと各ベクトルの生のコサイン（-1.0〜1.0）を返す（vecs と同じ長さ）。
+    ベクトルを持たないことばは None＝測れない。
+
+    【順位に均すのをやめた理由（2026-07-29）】ここは以前、集まりの中での順位を
+    0〜1 に均していた。「この表のコサインは 0.8〜0.9 の狭い帯に固まっている」から、
+    というのが理由だったが、その帯は **文どうし** を測った時の話で、探すときの
+    「短い語 対 文」はまるで違った（上の実測）。順位に均すと絶対の近さが消え、
+    部屋に一通も無い語でも *いちばんマシな一通* に「最も近い」の顔が付く
+    ——「母」で寄せると「いろのてすと」が一位に来ていたのはこれ。
+    近さは絶対値のまま扱い、下限（_SEM_HIT_MIN）を切る側の仕事にする。"""
     n = len(vecs)
     out = [None] * n
-    have = [i for i, v in enumerate(vecs) if v is not None]
-    if not have or query_vec is None:
+    if query_vec is None:
         return out
-    if len(have) == 1:
-        out[have[0]] = 0.0
-        return out
-    sims = np.array([float(query_vec @ vecs[i]) for i in have])
-    order = np.argsort(-sims)              # 近い順
-    denom = float(len(have) - 1)
-    for rank, pos in enumerate(order):
-        out[have[pos]] = rank / denom
+    for i, v in enumerate(vecs):
+        if v is not None:
+            out[i] = float(query_vec @ v)
     return out
+
+
+def sem_hit_distance(sim):
+    """コサイン → 意味の遠さ 0.0（そのもの）〜1.0（下限すれすれ）。下限未満は None。"""
+    if sim is None or sim < _SEM_HIT_MIN:
+        return None
+    span = max(1e-6, 1.0 - _SEM_HIT_MIN)
+    return max(0.0, min(1.0, (1.0 - sim) / span))
 
 
 def sem_forget_user(db, user_id):
@@ -3625,13 +3633,13 @@ _AIR_W_WEATHER = _env_num("TAYORI_AIR_W_WEATHER", 0.157, 0.0, 1.0)
 # ——宙に流れてくるものが「自分の関心の反射」になった瞬間、ここは宙でなくなる。
 # 上の4つの合計が 1.0 なので、取り分 p を実現する重みは p/(1-p)。
 #
-# 【0.35 ではなく 0.5 にした理由】名目の重みと実効の効きが一致しない。意味の距離は
-# 順位で均すので幅が必ず 1.0 になるのに対し、空気の距離は実データで 0.14〜0.68＝幅0.55
-# しかない。0.35 だと寄与の幅が 空気0.36 vs 意味0.35 でほぼ拮抗し、探しても意味の
-# 近いことばが上位3に入るのは5回中2回だった（部屋『心』19通で実測）。0.5 にすると
-# 5回中5回入る。0.8 まで上げると意味が1位を独占するが、それは順位表であって
-# 「宙が寄る」ではないので採らない——狙いは「いちばん近い一通」ではなく「近いほうの層」。
-_AIR_SEM_SHARE = _env_num("TAYORI_AIR_SEM_SHARE", 0.5, 0.0, 0.9)
+# 【0.5 から 0.85 へ（2026-07-29）】0.5 は「意味の距離は順位で均すから幅が必ず1.0、
+# 空気は幅0.55」という前提で決めた値だった。順位を捨てて絶対の近さで測るようにした
+# ので、前提ごと置き直す。探すのは利用者が自分から起こした行いで、そこへ「あなたの
+# いまの天気」を半分ぶつけるのは、頼まれていないことをしている。残す 0.15 は、
+# 同じくらい近いことばが並んだ時にどれが大きく浮かぶかを決めるぶんだけ。
+# 既定の漂い（drift）は今までどおり意味を一切見ない——ここは search でしか効かない。
+_AIR_SEM_SHARE = _env_num("TAYORI_AIR_SEM_SHARE", 0.85, 0.0, 0.99)
 _AIR_W_SEM = _AIR_SEM_SHARE / max(1e-9, 1.0 - _AIR_SEM_SHARE)
 
 _HSL_RE = re.compile(
@@ -3706,8 +3714,10 @@ def air_distance(a, b, mode="drift"):
 
     mode="drift"（既定）は意味に一切触れない。宙をただ眺めているとき、浮かぶものが
     自分の関心の反射であってはならない。
-    mode="search" のときだけ、b["sem_d"]（0.0〜1.0・sem_rank_distance が作る）を
-    取り分 _AIR_SEM_SHARE で混ぜる。b に sem_d が無ければ成分ごと外れる。"""
+    mode="search" のときだけ、b["sem_d"]（0.0〜1.0・sem_hit_distance が作る）を
+    取り分 _AIR_SEM_SHARE で混ぜる。b に sem_d が無ければ成分ごと外れる
+    ——ただし探す側は下限に届かないことばを混ぜる前に落とすので、search で
+    sem_d が欠けることは無い（欠けたら空気だけで寄ることになる）。"""
     parts = []
     d = _hue_distance(a.get("color"), b.get("color"))
     if d is not None:
@@ -4464,6 +4474,8 @@ def api_sky():
 # 【厳密な上位N件にしない理由】距離の小さい順に切ると、それは順位表そのもので、
 # 画面に数字が無いだけの検索結果になる。exp(-d/T) の重み付き抽選にすると、近い層が
 # 濃く出つつ毎回すこし違う顔ぶれになる——「寄ってくる」と「並べられる」の差はここ。
+# ただし抽選に掛けるのは **下限（_SEM_HIT_MIN）を通ったものだけ**。順番を揺らすのと、
+# 近くもないものを混ぜるのは別のことで、後者をやると探せなくなる（2026-07-29）。
 _SKY_SEARCH_T = _env_num("TAYORI_SKY_SEARCH_T", 0.18, 0.01, 2.0)
 _SEARCH_Q_MAX = 80          # 放てることばと同じ長さまで
 
@@ -4498,14 +4510,23 @@ def api_sky_search():
     if not pool:
         return jsonify(words=[])
 
-    ds = sem_rank_distance(qv, [e[9] for e in pool])
+    sims = sem_similarity(qv, [e[9] for e in pool])
     now_air = _viewer_air()
     scored = []
-    for e, sd in zip(pool, ds):
+    for e, sim in zip(pool, sims):
+        # 下限に届かないことばは、混ぜない。落とす。ここで残すと「近くはないが
+        # いちばんマシな一通」に「近い」の顔が付く——それが探せていない正体だった。
+        # 測れないことば（ベクトルを持たない）も同じ扱い。空気だけで寄せない。
+        sd = sem_hit_distance(sim)
+        if sd is None:
+            continue
         air = dict(e[1])
-        if sd is not None:
-            air["sem_d"] = sd
+        air["sem_d"] = sd
         scored.append((air_distance(now_air, air, mode="search"), e, air))
+    if not scored:
+        # 0件。件数の顔は見せず、words=[] だけ返す（画面は「まだここにありません」の
+        # 一行を置いて、ふだんの漂いをそのまま続ける）。
+        return jsonify(words=[])
 
     # 重み付き抽選（近いほど選ばれやすいが、決まってはいない）
     chosen, rest = [], list(scored)
