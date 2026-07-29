@@ -737,6 +737,11 @@ def init_db():
             # 停止（凍結）。NULL=有効 / ISO日時=その時から停止。削除とは別物で、
             # データには一切触れない＝復帰すればそのまま戻る。
             "ALTER TABLE users ADD COLUMN suspended_at TEXT",
+            # 種のことばの著者（2026-07-29 フェーズ6）。宙を最初から静かにしないために
+            # 置いた、書き手のいないことばのためのアカウント。人ではないので、人あての
+            # 仕組み——帰還メール・棚入りの知らせ・宙からの配達——から全部外す。
+            # ここを立て忘れると、300通が運営の受信箱と書架に降ってくる。
+            "ALTER TABLE users ADD COLUMN is_seed INTEGER DEFAULT 0",
             # 部屋（2026-07-26）。どの小さな宙に属することばか。NOT NULL 制約は付けない
             # （SQLite は後付けで NOT NULL にできない）＝投函経路の側で必須にする。
             "ALTER TABLE letters ADD COLUMN room_id INTEGER",
@@ -2277,6 +2282,7 @@ def _assign_sky_delivery(db, letter_id, author_id):
     admin・demo には配らない（システム用アカウントに落ちたことばは誰にも読まれないまま消えるため）。"""
     recs = db.execute(
         "SELECT id FROM users WHERE id<>? AND username NOT IN ('admin','demo') "
+        "AND COALESCE(is_seed,0)=0 AND suspended_at IS NULL "
         "ORDER BY RANDOM() LIMIT ?",
         (author_id, SKY_FANOUT)).fetchall()
     if not recs:
@@ -2842,6 +2848,10 @@ def _check_and_notify():
                  -- いま届いても、受け取る側にはもう存在しない機能の通知になる。
                  -- 行は消さない（/open/<id> でひらける）。送るのをやめるだけ。
                  AND l.mode='sky'
+                 -- 種のことばの著者は人ではない。帰還も棚入りの知らせも要らない
+                 -- （フェーズ6・2026-07-29）。メールを持たないので上の条件でも
+                 -- 落ちるが、あとでメールを付けた時に静かに再開しないよう明示する。
+                 AND COALESCE(u.is_seed,0)=0
                  AND u.email IS NOT NULL AND u.email<>''
                  AND COALESCE(u.email_verified,0)=1
                  AND COALESCE(u.notify_enabled,1)=1"""
@@ -2937,6 +2947,7 @@ def _check_and_notify():
                FROM sky_deliveries d JOIN users u ON u.id = d.recipient
                WHERE COALESCE(d.notified,0)=0
                  AND COALESCE(d.notify_failed,0)=0
+                 AND COALESCE(u.is_seed,0)=0
                  AND u.email IS NOT NULL AND u.email<>''
                  AND COALESCE(u.email_verified,0)=1
                  AND COALESCE(u.notify_enabled,1)=1""").fetchall()
@@ -2981,6 +2992,7 @@ def _check_and_notify():
                FROM letters l JOIN users u ON u.id = l.user_id
                WHERE l.shelved_at IS NOT NULL
                  AND COALESCE(l.shelved_notified,0)=0
+                 AND COALESCE(u.is_seed,0)=0
                  AND u.email IS NOT NULL AND u.email<>''
                  AND COALESCE(u.email_verified,0)=1
                  AND COALESCE(u.notify_enabled,1)=1""").fetchall()
