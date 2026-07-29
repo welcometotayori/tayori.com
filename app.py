@@ -3429,6 +3429,50 @@ def sem_forget(db, letter_ids):
         db.execute("DELETE FROM letter_vectors WHERE letter_id=?", (lid,))
 
 
+def _sem_vec(blob):
+    """DBのBLOB → 意味ベクトル。行が無い／壊れていれば None（意味を持たないことば）。"""
+    if not blob:
+        return None
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    try:
+        v = np.frombuffer(blob, dtype=np.float32)
+    except (TypeError, ValueError):
+        return None
+    return v if v.shape == (_SEM_DIM,) else None
+
+
+def sem_rank_distance(query_vec, vecs):
+    """クエリと各ベクトルの「意味の遠さ」を 0.0〜1.0 で返す（vecs と同じ長さ）。
+
+    生のコサインをそのまま距離にしない。この表のコサインは 0.8〜0.9 の狭い帯に
+    固まっていて、1-cos を取ると意味の成分がほぼ定数になり、足しても足さなくても
+    同じ、という無意味な項になる（実測して分かった）。
+
+    代わりに **いま比べている集まりの中での順位** を 0〜1 に均す。こうすると
+    ・帯の狭さに影響されない
+    ・母数が変わっても効き方が一定（部屋が育っても薄まらない）
+    ・「いちばん近い一通」ではなく「近いほうの層」が浮く
+    ベクトルを持たないことばは None＝成分ごと外れる（残りの重みで正規化される）。"""
+    import numpy as np
+    n = len(vecs)
+    out = [None] * n
+    have = [i for i, v in enumerate(vecs) if v is not None]
+    if not have or query_vec is None:
+        return out
+    if len(have) == 1:
+        out[have[0]] = 0.0
+        return out
+    sims = np.array([float(query_vec @ vecs[i]) for i in have])
+    order = np.argsort(-sims)              # 近い順
+    denom = float(len(have) - 1)
+    for rank, pos in enumerate(order):
+        out[have[pos]] = rank / denom
+    return out
+
+
 def sem_forget_user(db, user_id):
     """退会。その人のことばのベクトルを、ことばより先に落とす（letters を消した後だと
     どれがその人のものだったか分からなくなる）。"""
@@ -3450,6 +3494,12 @@ _AIR_W_COLOR = _env_num("TAYORI_AIR_W_COLOR", 0.421, 0.0, 1.0)
 _AIR_W_SEASON = _env_num("TAYORI_AIR_W_SEASON", 0.211, 0.0, 1.0)
 _AIR_W_HOUR = _env_num("TAYORI_AIR_W_HOUR", 0.211, 0.0, 1.0)
 _AIR_W_WEATHER = _env_num("TAYORI_AIR_W_WEATHER", 0.157, 0.0, 1.0)
+# 意味の取り分（2026-07-29 フェーズ3-2）。**「探す」を自分から起こした時にだけ効く**。
+# 既定の漂い（drift）はこれまでどおり色・季節・時刻・天気の偶然だけで、意味を一切見ない
+# ——宙に流れてくるものが「自分の関心の反射」になった瞬間、ここは宙でなくなる。
+# 上の4つの合計が 1.0 なので、取り分 p を実現する重みは p/(1-p)。
+_AIR_SEM_SHARE = _env_num("TAYORI_AIR_SEM_SHARE", 0.35, 0.0, 0.9)
+_AIR_W_SEM = _AIR_SEM_SHARE / max(1e-9, 1.0 - _AIR_SEM_SHARE)
 
 _HSL_RE = re.compile(
     r"hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%\s*\)")
@@ -3516,11 +3566,15 @@ _AIR_WEATHER = {
     frozenset(("rain", "snow")): 0.5,
 }
 
-def air_distance(a, b):
+def air_distance(a, b, mode="drift"):
     """空気の近さ（§2.1）。a, b は {"color","season","hour","weather"} の辞書
     （hour は 0.0–24.0 の連続値）。どちらかに無い成分は比べずに外し、残りの重みで
     正規化する——閲覧者の「いま」には色が無い、というだけで式を変えずに済む。
-    意味には一切触れない。"""
+
+    mode="drift"（既定）は意味に一切触れない。宙をただ眺めているとき、浮かぶものが
+    自分の関心の反射であってはならない。
+    mode="search" のときだけ、b["sem_d"]（0.0〜1.0・sem_rank_distance が作る）を
+    取り分 _AIR_SEM_SHARE で混ぜる。b に sem_d が無ければ成分ごと外れる。"""
     parts = []
     d = _hue_distance(a.get("color"), b.get("color"))
     if d is not None:
@@ -3535,6 +3589,10 @@ def air_distance(a, b):
     if w1 and w2:
         parts.append((_AIR_W_WEATHER,
                       0.0 if w1 == w2 else _AIR_WEATHER.get(frozenset((w1, w2)), 1.0)))
+    if mode == "search":
+        d = b.get("sem_d")
+        if d is not None:
+            parts.append((_AIR_W_SEM, max(0.0, min(1.0, float(d)))))
     total = sum(w for w, _ in parts)
     if total <= 0:
         return 0.5   # 何も比べられない時は中立（同じ空気とも遠いとも言わない）
@@ -3751,12 +3809,12 @@ def _sky_index():
 def _sky_rebuild():
     db = get_db()
     rows = db.execute(
-        "SELECT id, user_id, poem, title, seal_color, COALESCE(seal_color_chosen,1) AS seal_color_chosen, vertical, sent_date, time_bucket, seal_env, weather_event, room_id "
-        "FROM letters "
-        "WHERE mode='sky' AND COALESCE(demo_mode,0)=0 AND COALESCE(poem,'')<>'' "
+        "SELECT l.id, l.user_id, l.poem, l.title, l.seal_color, COALESCE(l.seal_color_chosen,1) AS seal_color_chosen, l.vertical, l.sent_date, l.time_bucket, l.seal_env, l.weather_event, l.room_id, v.v AS sem_v "
+        "FROM letters l LEFT JOIN letter_vectors v ON v.letter_id = l.id "
+        "WHERE l.mode='sky' AND COALESCE(l.demo_mode,0)=0 AND COALESCE(l.poem,'')<>'' "
         # 掲載の門番（§8）。承認待ち・掲載しないことばは宙に出さない。
         # v13 より前のことばは sky_status を持たない（NULL）＝これまで通り宙にある。
-        "AND COALESCE(sky_status,'live')='live'").fetchall()
+        "AND COALESCE(l.sky_status,'live')='live'").fetchall()
     # 付箋は宙に出さない（v2.2 §3の反転）。付箋は読み手が自分の棚の控えに貼る私的な紙片に
     # なったので、公開の辞書には最初から入れない。letter_tags（旧・書き手の付箋）は
     # 過去データとして残っているが、もう読まない・書かない。
@@ -3792,6 +3850,7 @@ def _sky_rebuild():
             r["room_id"],                 # どの部屋のことばか（B-6）。絞り込みにだけ使う
             _flare_state(r["id"]),        # 浮上（v2追補 §4）。15秒の古さは30分の立ち上がりに沈む
             _sky_age_days(r["sent_date"]),  # 天灯の野のZ軸（v2追補 §3）
+            _sem_vec(r["sem_v"]),         # 意味ベクトル（探すときだけ使う。漂いは見ない）
         ))
         index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["title"])
     with _sky_lock:
@@ -4071,7 +4130,7 @@ def _in_room(pool, room_id):
 #   ・スコアリング／重み付き抽選は使わない（公平に、全部がいつか出る）
 #   ・カーソルと「見た控え」は内部専用。回数・順位・「前に見た」を UI に出さない
 #   ・カーソルは (viewer, room) ごと（宙は部屋ごとに閉じている B-6）
-# entry のタプル位置：0=公開dict 1=空気 2=letter_id 4=user_id 6=room_id 8=経過日数
+# entry のタプル位置：0=公開dict 1=空気 2=letter_id 4=user_id 6=room_id 8=経過日数 9=意味ベクトル
 
 
 def _new_cycle_seed():

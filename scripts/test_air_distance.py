@@ -105,4 +105,41 @@ for c, s, h, w in itertools.product(opts_color, opts_season, opts_hour,
     d = air_distance(FULL_A, b)
     assert 0.0 <= d <= 1.0, (b, d)
 
+# ── 意味の成分（2026-07-29 フェーズ3-2）─────────────────────────
+# 【いちばん大事な確認】既定の漂い(drift)は、意味を渡しても結果が変わらないこと。
+SEM_A = dict(FULL_A, sem_d=0.0)
+SEM_B = dict(FULL_A, sem_d=1.0)
+approx(air_distance(FULL_A, SEM_A), air_distance(FULL_A, FULL_A))
+approx(air_distance(FULL_A, SEM_B), air_distance(FULL_A, FULL_A))
+approx(air_distance(FULL_A, SEM_B, mode="drift"), air_distance(FULL_A, FULL_A))
+
+# search のときだけ効く。取り分は _AIR_SEM_SHARE（既定0.35）
+from app import _AIR_SEM_SHARE
+approx(air_distance(FULL_A, SEM_A, mode="search"), 0.0)          # 空気も意味も同じ
+approx(air_distance(FULL_A, SEM_B, mode="search"), _AIR_SEM_SHARE)  # 意味だけ最遠
+# 空気が最遠・意味が最近 → 空気の取り分だけが残る
+approx(air_distance(FULL_A, dict(FAR, sem_d=0.0), mode="search"),
+       air_distance(FULL_A, FAR) * (1.0 - _AIR_SEM_SHARE))
+# sem_d が無ければ search でも成分ごと外れる（写真/声だけのことば）
+approx(air_distance(FULL_A, FAR, mode="search"), air_distance(FULL_A, FAR))
+# 値域は search でも 0.0–1.0
+for sd in (0.0, 0.25, 0.5, 0.75, 1.0):
+    for b in (FULL_A, FAR, NOW, {}):
+        d = air_distance(FULL_A, dict(b, sem_d=sd), mode="search")
+        assert 0.0 <= d <= 1.0, (b, sd, d)
+
+# ── sem_rank_distance（順位を 0〜1 に均す）──────────────────────
+import numpy as np
+from app import sem_rank_distance
+def unit(x):
+    v = np.array(x, dtype=np.float32); return v / np.linalg.norm(v)
+q = unit([1, 0, 0])
+vs = [unit([1, 0, 0]), unit([0.6, 0.8, 0]), unit([0, 1, 0]), None]
+d = sem_rank_distance(q, vs)
+approx(d[0], 0.0); approx(d[1], 0.5); approx(d[2], 1.0)
+assert d[3] is None                       # ベクトルなし＝成分ごと外れる
+assert sem_rank_distance(None, vs) == [None] * 4      # クエリが測れない時
+assert sem_rank_distance(q, [None, None]) == [None, None]
+approx(sem_rank_distance(q, [unit([1, 0, 0])])[0], 0.0)   # 1件だけなら最近
+
 print("air_distance: 全テスト通過")
