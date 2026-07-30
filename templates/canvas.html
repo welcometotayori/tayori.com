@@ -85,7 +85,9 @@
      max-height:330px;max-width:22em;
      padding:10px;margin:-10px;cursor:pointer;
      opacity:var(--a,.8);filter:blur(var(--b,0px));
-     transition:opacity .8s var(--ease),filter .8s var(--ease),transform 1.1s var(--ease)}
+     transition:opacity .8s var(--ease),filter .8s var(--ease),transform 1.1s var(--ease),
+                background-color .8s var(--ease),color .8s var(--ease),
+                box-shadow .8s var(--ease)}
   .w.h{writing-mode:horizontal-tb}
   /* 受け止め：その一枚だけ鮮明に。まわりは息をひそめる */
   .w.held{opacity:1!important;filter:blur(0)!important;z-index:5;color:var(--chalk)}
@@ -111,6 +113,24 @@
         色を持たず、紙に染みた淡墨。書かれもしない（打鍵の再生から除外） ── */
   .w.pd{color:var(--ink-3);text-shadow:0 0 16px rgba(179,143,111,.20)}
   .w.pd.held{color:var(--ink-1)}
+  /* ── 紙片（2026-07-31 グリッド）────────────────────────────
+     島に降りると、ことばは闇に光る字から**紙片**になり、右から左へ整列する
+     （縦書きの読み順）。遠景は今までの散らばりのまま——位置の意味（色相の方位・
+     沈降の深さ）は遠景のもので、降りた島は「読む面」。紙の色は、選ばれた色なら
+     その手染め（淡く染みる）、無彩なら生成り〜灰白の三種（--pp はJSが書く）。
+     字は墨。沈んだことばは紙の上でも墨が薄い（--a を炊き直す＝時は紙でも見える）。
+     色・影に !important が要るのは、散らばり用の色が style 属性で入っているため。 */
+  .isl.sheet .w{background:var(--pp,#EBE7DE);
+     color:rgba(30,27,33,calc(.52 + .44*var(--a,.8)))!important;
+     text-shadow:none!important;filter:none!important;opacity:1;
+     padding:24px 20px;margin:0;border-radius:var(--edge);
+     box-shadow:0 1px 0 rgba(250,248,243,.05),0 14px 30px -20px rgba(0,0,0,.9)}
+  .isl.sheet .w.pd{color:rgba(30,27,33,.6)!important}
+  .isl.sheet .w.held{color:rgba(30,27,33,.96)!important;
+     box-shadow:0 0 0 1px var(--rule-act),0 18px 34px -18px rgba(0,0,0,.95)}
+  .isl.sheet .w .tcaret{background:rgba(30,27,33,.6)}
+  /* 探すで寄せた時、紙にぼかしは掛けない（沈むのは透明度だけ） */
+  .isl.sheet.gathered .w:not(.lit):not(.held){filter:none!important}
   /* ── 打鍵の実時間再生（mood.html と同じ筆先・同じにじみ） ── */
   .tcaret{display:inline-block;width:2px;height:1em;background:var(--thread);
           vertical-align:-0.12em;animation:tcBlink .9s steps(1) infinite}
@@ -894,6 +914,15 @@ function tintOf(c){
   const h=+m[1],s=+m[2],l=Math.max(+m[3],52);   // 宙の闇でも読める明るさまで持ち上げる
   return {text:'hsl('+h+','+s+'%,'+l+'%)',glow:'hsla('+h+','+s+'%,'+l+'%,.35)'};
 }
+/* 紙片の紙の色（2026-07-31）。選ばれた色は手染めの紙に淡く染み、
+   無彩（サーバの _AIR_GRAY_S=12 と同じ線）は生成り〜灰白の三種から
+   本文のハッシュで一つ——同じことばは、いつ来ても同じ紙。漂流物は灰の紙。 */
+function paperOf(w){
+  const m=/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%/.exec(w.color||'');
+  if(m&&+m[2]>=12)return 'hsl('+(+m[1])+',24%,90%)';
+  if(w.pd)return '#E0DDD6';
+  return ['#EFEBE1','#E9E5DC','#EFE7D9'][fnv(String(w.id||w.poem))%3];
+}
 
 /* ── 島とことばを置く ──────────────────────────────
    座標はサーバの決定論（単位円）。島の位置もことばの押し出しも、順序を
@@ -951,6 +980,7 @@ function build(rooms,words){
     el.style.setProperty('--b',blurOf(w.sink));
     const c=tintOf(w.color);
     if(c){ el.style.color=c.text; el.style.textShadow='0 0 16px '+c.glow; }
+    el.style.setProperty('--pp',paperOf(w));   // 島に降りた時の、紙の色
     el.setAttribute('role','button'); el.setAttribute('tabindex','0');
     el.setAttribute('aria-label',(w.pd
       ? '流れ着いたことば：'+w.poem+'（'+w.author+'『'+w.work+'』より）'
@@ -999,6 +1029,54 @@ function relax(){
   });
 }
 
+/* ── 紙片のグリッド（2026-07-31）──────────────────────
+   島に降りる（＝焦点の島になる）と、そのことばたちは散らばりから紙片の
+   敷き詰めへ並び替わる。新しいものが右上、沈んだものほど左下、漂流物は最後
+   ——縦書きの読み順（右→左）で流す。位置は transform で動かす＝家（_hx/_hy）は
+   保ったまま。離れれば、それぞれの家へ静かに帰る。
+   寸法は紙片の姿（.sheet のpadding込み）で測るので、classを立ててから読む。 */
+let sheetId=null;
+function posOf(isl,el){
+  return (isl&&isl.sheeted&&el._gx!=null)
+    ?'translate('+(el._gx-el._hx)+'px,'+(el._gy-el._hy)+'px)':'';
+}
+function sheetLayout(isl){
+  const gap=26;
+  const maxW=Math.max(540,Math.min(1100,isl.R*2.1));
+  const order=isl.words
+    .filter(el=>!el.classList.contains('mutedout'))
+    .sort((a,b)=>{
+      if(!!a._w.pd!==!!b._w.pd)return a._w.pd?1:-1;          // 漂流物は人のことばの後
+      return (b._w.sink-a._w.sink)||(String(a._w.id)<String(b._w.id)?-1:1);
+    });
+  const sizes=order.map(el=>({el,w:el.offsetWidth,h:el.offsetHeight}));
+  let x=0,y=0,rowH=0;const rows=[];let row=[];
+  sizes.forEach(it=>{
+    if(row.length&&x+it.w>maxW){rows.push({items:row,w:x-gap});row=[];x=0;y+=rowH+gap;rowH=0;}
+    it.x=x;it.y=y;row.push(it);
+    x+=it.w+gap;rowH=Math.max(rowH,it.h);
+  });
+  if(row.length)rows.push({items:row,w:x-gap});
+  const totalH=y+rowH;
+  rows.forEach(r=>{
+    r.items.forEach(it=>{
+      // 右から埋める（vertical-rl の読み順）。行の中では上をそろえる
+      const tx=r.w/2-it.x-it.w, ty=it.y-totalH/2;
+      it.el._gx=tx; it.el._gy=ty;
+      it.el.style.transform=posOf(isl,it.el);
+    });
+  });
+}
+function sheet(isl){
+  isl.sheeted=true;
+  isl.el.classList.add('sheet');
+  sheetLayout(isl);
+}
+function unsheet(isl){
+  isl.sheeted=false;
+  isl.el.classList.remove('sheet');
+  isl.words.forEach(el=>{el.style.transform='';});
+}
 /* ── 寄る・引く・つまむ ─────────────────────────── */
 let K=0.5, PX=0, PY=0;             // 倍率と、世界の原点の画面上の位置
 const KMIN=0.1, KMAX=2.4;
@@ -1081,7 +1159,7 @@ function release(){
   setTimeout(()=>{ if(!held)holdBox.hidden=true; },300);
   const isl=islands.get(el._w.room);
   if(isl){ isl.el.classList.remove('hush');
-           isl.words.forEach(x=>{x.classList.remove('pull');x.style.transform='';}); }
+           isl.words.forEach(x=>{x.classList.remove('pull');x.style.transform=posOf(isl,x);}); }
   el.classList.remove('held');
 }
 /* 出典の刻印（§4.4）。触れて開いた、その一度だけ隅に刻む。外へ出る導線は作らない */
@@ -1182,7 +1260,9 @@ function hold(el){
   noteSeen(el._w.id);                 // 受け止めた時だけ「見た」に数える（一望は数えない）
   if(!REDUCED){
     const r=document.createElement('span'); r.className='ripple';
-    r.style.left=el._hx+'px'; r.style.top=el._hy+'px';
+    // 波紋はことばの今いる場所から（紙片に並んでいる時はその席から）
+    r.style.left=(isl.sheeted&&el._gx!=null?el._gx:el._hx)+'px';
+    r.style.top =(isl.sheeted&&el._gy!=null?el._gy:el._hy)+'px';
     isl.el.appendChild(r); setTimeout(()=>r.remove(),1700);
   }
   noteTouch(el._w.room);              // 触れた気配（部屋の灯が呼吸する）
@@ -1194,9 +1274,11 @@ function hold(el){
       const by=new Map(); isl.words.forEach(x=>by.set(x._w.id,x));
       d.ids.forEach(id=>{
         const t=by.get(id); if(!t||t===el)return;
+        t.classList.add('pull');
+        // 紙片に並んでいる間は席を動かさない（.pull の鮮明さだけで「近い」を言う）
+        if(isl.sheeted)return;
         const dx=t._hx-el._hx, dy=t._hy-el._hy, len=Math.hypot(dx,dy)||1;
         const pull=Math.max(0,len-150)*0.62;            // 150pxまでは寄せ切らない（字は触れ合わない）
-        t.classList.add('pull');
         t.style.transform='translate('+(-dx/len*pull)+'px,'+(-dy/len*pull)+'px)';
       });
     }).catch(()=>{});
@@ -1338,7 +1420,9 @@ async function rotateOne(el){
 }
 function screenPos(el){
   const isl=islands.get(el._w.room);
-  const wx=isl.cx+el._hx, wy=isl.cy+el._hy;
+  const hx=(isl.sheeted&&el._gx!=null)?el._gx:el._hx,
+        hy=(isl.sheeted&&el._gy!=null)?el._gy:el._hy;
+  const wx=isl.cx+hx, wy=isl.cy+hy;
   return {x:vp.clientWidth/2+PX+wx*K, y:vp.clientHeight/2+PY+wy*K};
 }
 /* ── 放ったことばの着地（書く柱から）────────────────────────
@@ -1363,6 +1447,7 @@ function castLand(isl,poem,color,steps){
   el.setAttribute('role','button'); el.setAttribute('tabindex','0');
   el.setAttribute('aria-label','tayori-たより- のことば：'+poem);
   el._w={id:null,poem:poem,color:color,vertical:true,room:isl.room.id,sink:1};
+  el.style.setProperty('--pp',paperOf(el._w));   // 紙片の紙の色（降りた島で使う）
   // 島の心の近く。種は本文＝置き直しても同じ場所（決定論の作法に合わせる）
   const aa=(fnv(poem)%360)*Math.PI/180, rr=40+(fnv(poem+'r')%60);
   el._hx=Math.cos(aa)*rr; el._hy=Math.sin(aa)*rr;
@@ -1370,6 +1455,8 @@ function castLand(isl,poem,color,steps){
   el.style.zIndex=6;
   isl.wordsEl.appendChild(el);
   isl.words.push(el);
+  // 紙片に並んでいる島なら、新しい一枚の席も敷き直す（寸法は本文の丈で測る）
+  if(isl.sheeted){ el.textContent=poem; sheetLayout(isl); }
   playType(el,poem,steps,()=>{});
 }
 setInterval(()=>{
@@ -1407,6 +1494,13 @@ function seekWatch(){
   // 島を離れたら（別の島へ渡ったら）、寄せた宙は静かにほどける
   if(seeking&&(!f||!focusIsl||f.id!==focusIsl.id))seekReset();
   focusIsl=f;
+  // 降りた島は紙片の敷き詰めに、離れた島は散らばりの家へ（2026-07-31）
+  const sid=f?f.id:null;
+  if(sid!==sheetId){
+    if(sheetId!=null&&islands.has(sheetId))unsheet(islands.get(sheetId));
+    sheetId=sid;
+    if(f)sheet(f.isl);
+  }
   seekEl.classList.toggle('here',!!f);
   // 島に居るあいだは「書く」を一段上げ、空いた高さへ探す行を据える（mood と同じ作法）
   document.body.classList.toggle('seekhere',!!f);
@@ -1416,7 +1510,8 @@ function seekReset(){
   seekEl.classList.remove('seeking');
   seekBack.hidden=true;
   seekQ.value='';
-  litEls.forEach(el=>{el.classList.remove('lit');el.style.transform='';});
+  litEls.forEach(el=>{el.classList.remove('lit');
+    el.style.transform=posOf(islands.get(el._w.room),el);});
   litEls=[];
   islands.forEach(isl=>isl.el.classList.remove('gathered'));
   whisper('');
@@ -1446,9 +1541,12 @@ function seekRun(){
       seekBack.hidden=false;
       f.isl.el.classList.add('gathered');
       litEls=hits;
-      // 島の心へ、黄金角の輪になって浮かび上がる（深いところから表層へ）
+      // 島の心へ、黄金角の輪になって浮かび上がる（深いところから表層へ）。
+      // 紙片に並んでいる時は席を動かさない——寄せられた紙だけが明るく残り、
+      // まわりが沈む（グリッドは読む面なので、並びを崩さない）。
       hits.forEach((el,i)=>{
         el.classList.add('lit');
+        if(f.isl.sheeted)return;
         const rr=110+64*Math.sqrt(i), aa=i*2.39996;
         const tx=Math.cos(aa)*rr*1.25, ty=Math.sin(aa)*rr*0.7;
         el.style.transform='translate('+(tx-el._hx)+'px,'+(ty-el._hy)+'px)';
