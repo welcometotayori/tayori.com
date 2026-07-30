@@ -65,6 +65,14 @@
   body.near .isl-nm{opacity:.34}
   body.near .isl-glow{opacity:.25}
   body.far .isl-w{opacity:.3}
+  /* ── 重さの修正（2026-07-31）──────────────────────────
+     ことば一枚ごとの filter:blur は、ブラウザにとって「一枚ごとの描画層」。
+     数百枚が層を持つと、つまむ・ひきずるのたびに全層の再ラスタライズが走り、
+     携帯で目に見えて重かった（一枚の宙 2026-07-30 直後から）。
+     引いた倍率（K<0.7）では 2.4px のぼかしは字の大きさに対してどのみち見えない——
+     見えない深さのために層を払うのはやめる。寄った時だけ、沈降のぼけが戻る。
+     nijimi（打鍵の間のにじみ）より勝つ必要があるので !important。 */
+  body.crisp .w{filter:none!important}
   .isl-w{transition:opacity .8s var(--ease)}
   /* ことば：枠のないタイポグラフィの塊。濃さ＝沈降（--a はJSが書く） */
   /* width/height:max-content は必須。包含ブロック（.isl）は0寸なので、絶対配置の
@@ -1002,7 +1010,26 @@ function apply(){
   // 初期倍率≒0.35〜0.45）が far のままで、探すの一行が出なかった
   document.body.classList.toggle('far',K<0.32);
   document.body.classList.toggle('near',K>=0.32);
+  document.body.classList.toggle('crisp',K<0.7);   // 引いた宙は、ぼかしの層を持たない
+  cull();
   if(typeof seekWatch==='function')seekWatch();   // 焦点の島＝探すの一行の出どころ
+}
+/* 画面の外に出た島は描かない（2026-07-31）。display ではなく visibility：
+   寸法は保ったまま描画だけを畳む＝戻る時に測り直しが走らない。
+   余白は「relax の渦で島の縁の外へ逃げたことば＋岸の漂流物（1.12R）＋字の丈」ぶん。
+   flyTo（1.1sかけて島へ滑る）の間だけは全島を出す——目的地で先に畳むと、
+   通り道の島が滑走の途中でふっと消える。 */
+let cullOn=true;
+function cull(){
+  const vw=vp.clientWidth, vh=vp.clientHeight;
+  islands.forEach(isl=>{
+    let off=false;
+    if(cullOn){
+      const sx=vw/2+PX+isl.cx*K, sy=vh/2+PY+isl.cy*K, r=(isl.R*1.25+560)*K;
+      off=(sx+r<-32)||(sy+r<-32)||(sx-r>vw+32)||(sy-r>vh+32);
+    }
+    if(isl.off!==off){ isl.off=off; isl.el.style.visibility=off?'hidden':''; }
+  });
 }
 function zoomAt(cx,cy,factor){
   const k=Math.max(KMIN,Math.min(KMAX,K*factor));
@@ -1321,9 +1348,10 @@ function flyTo(isl){
   const k=Math.max(0.55,Math.min(1.1,
     Math.min(vp.clientWidth,vp.clientHeight)/(isl.R*1.12*2.15)));
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
+  cullOn=false;                       // 滑走の間は全島を出す（通り道が消えないように）
   K=k; PX=-isl.cx*K; PY=-isl.cy*K;
   apply();
-  setTimeout(()=>{ world.style.transition=''; },1200);
+  setTimeout(()=>{ world.style.transition=''; cullOn=true; cull(); },1200);
 }
 function castLand(isl,poem,color,steps){
   const el=document.createElement('div');
