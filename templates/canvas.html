@@ -1047,7 +1047,9 @@ function posOf(isl,el){
 }
 function sheetLayout(isl){
   const gap=26;
-  const maxW=Math.max(540,Math.min(1100,isl.R*2.1));
+  // 縦長の画面（携帯）は敷き詰めも縦長に：一行2〜3枚で、下へ読み進む
+  const portrait=vp.clientHeight>vp.clientWidth;
+  const maxW=Math.max(portrait?340:540,Math.min(portrait?620:1100,isl.R*2.1));
   const order=isl.words
     .filter(el=>!el.classList.contains('mutedout'))
     .sort((a,b)=>{
