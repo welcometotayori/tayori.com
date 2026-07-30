@@ -4694,8 +4694,9 @@ def api_sky_near():
 # 「この言葉に近い空気」で宙が寄って組み変わる。それだけ。
 #   ・リストを返さない。順位も件数もスコアも出さない（数を見せない原則）
 #   ・返す形は /api/sky と同じ words。画面も同じ漂い方をする
-#   ・いまいる部屋の中だけ。部屋を跨いで探す経路は作らない
-#     （宙は一つの広場ではなく、いくつもの小さな閉じた宙）
+#   ・範囲は ?room=<id>（その部屋の中）か、room 無し＝宙ぜんたい。
+#     部屋横断は 2026-07-31 に規約（プライバシーポリシー第4項）を改訂して開いた
+#     ——島に降りていない時だけ。降りている間は、その部屋の中だけのまま。
 #
 # 【厳密な上位N件にしない理由】距離の小さい順に切ると、それは順位表そのもので、
 # 画面に数字が無いだけの検索結果になる。exp(-d/T) の重み付き抽選にすると、近い層が
@@ -4708,10 +4709,13 @@ _SEARCH_Q_MAX = 80          # 放てることばと同じ長さまで
 
 @app.route("/api/sky/search")
 def api_sky_search():
-    """探す。q（近い言葉・雰囲気）を受け、いまいる部屋の宙を寄せて返す。"""
-    room_id, err = _room_scope()
-    if err:
-        return err
+    """探す。q（近い言葉・雰囲気）を受け、宙を寄せて返す。
+    room があればその部屋の中、無ければ宙ぜんたい（2026-07-31 規約改訂）。"""
+    room_id = None
+    if (request.args.get("room") or "").strip():
+        room_id, err = _room_scope()
+        if err:
+            return err
     q = (request.args.get("q") or "").strip()[:_SEARCH_Q_MAX]
     if not q:
         return jsonify(error="ことばをひとつ。"), 400
@@ -4724,7 +4728,7 @@ def api_sky_search():
         # 「測れない」なので、件数0の顔ではなくこの言い方にする。
         return jsonify(error="そのことばでは、まだ測れません。"), 422
 
-    pool = _in_room(_sky_pool(), room_id)
+    pool = _sky_pool() if room_id is None else _in_room(_sky_pool(), room_id)
     reader = session.get("uid")
     if reader and pool:
         # 探すときも「自分のことば」は出さない（自分の空に自分は出ない）。

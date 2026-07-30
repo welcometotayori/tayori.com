@@ -131,6 +131,10 @@
   .isl.sheet .w .tcaret{background:rgba(30,27,33,.6)}
   /* 探すで寄せた時、紙にぼかしは掛けない（沈むのは透明度だけ） */
   .isl.sheet.gathered .w:not(.lit):not(.held){filter:none!important}
+  /* 宙ぜんたいから寄せた時（2026-07-31）も、引いた宙にぼかしの層は持ち込まない。
+     遠景の字の沈み（.isl-w の 0.3）は少し起こして、灯った先が見えるように */
+  body.crisp .isl.gathered .w:not(.lit):not(.held){filter:none!important}
+  body.far .isl.gathered .isl-w{opacity:.85}
   /* ── 打鍵の実時間再生（mood.html と同じ筆先・同じにじみ） ── */
   .tcaret{display:inline-block;width:2px;height:1em;background:var(--thread);
           vertical-align:-0.12em;animation:tcBlink .9s steps(1) infinite}
@@ -173,7 +177,8 @@
   .seek.here{display:flex}
   .seek input{background:none;border:none;border-bottom:1px solid var(--rule-faint);
               font-family:inherit;font-size:var(--t-meta);letter-spacing:0.12em;
-              color:var(--ink-2);padding:9px 4px 8px;width:9.5em;min-height:var(--touch);
+              /* 9.5em だと遠景の「宙ぜんぶから寄せる」（9字）が一字欠ける */
+              color:var(--ink-2);padding:9px 4px 8px;width:11.5em;min-height:var(--touch);
               text-align:center;transition:border-color .22s var(--ease),box-shadow .22s var(--ease)}
   .seek input::placeholder{color:var(--ink-4);letter-spacing:0.18em}
   .seek input:focus{outline:none;border-bottom-color:var(--rule-act);
@@ -1475,10 +1480,11 @@ setInterval(()=>{
 },8000);
 
 /* ── 探す（Semantic Gravity のキャンバス版）────────────────
-   島に寄っている時だけ、罫の一行が現れる。範囲は**その島の中だけ**
-   （プライバシーポリシー第4項「部屋を越えて探すことはできません」を保つ）。
-   リストは出さない：寄せられた語が深層から表層へ浮かび、島の心へ集まる。 */
-let focusIsl=null, seeking=false, litEls=[];
+   罫の一行はいつも足元にある。島に寄っていればその島の中から、
+   引いた宙（遠景）では**宙ぜんたい**から寄せる（2026-07-31 に
+   プライバシーポリシー第4項を改訂して、部屋横断をここだけ開いた）。
+   リストは出さない：寄せられた語が深層から表層へ浮かび、灯る。 */
+let focusIsl=null, seeking=false, litEls=[], seekScope=null;
 function seekWatch(){
   // 焦点の島＝画面の中心にいちばん近く、その懐（1.6R）に入っている島
   let best=null,bd=1e9;
@@ -1491,8 +1497,8 @@ function seekWatch(){
   // （K のしきい値は画面の広さで破綻する——424px の電話と 1280px の机では別の倍率になる）
   const big=best&&best.isl.R*K>0.32*Math.min(vp.clientWidth,vp.clientHeight);
   const f=(best&&big&&best.d<best.isl.R*1.6)?best:null;
-  // 島を離れたら（別の島へ渡ったら）、寄せた宙は静かにほどける
-  if(seeking&&(!f||!focusIsl||f.id!==focusIsl.id))seekReset();
+  // 寄せた範囲（島／宙ぜんたい）から離れたら、寄せた宙は静かにほどける
+  if(seeking&&(f?f.id:null)!==seekScope)seekReset();
   focusIsl=f;
   // 降りた島は紙片の敷き詰めに、離れた島は散らばりの家へ（2026-07-31）
   const sid=f?f.id:null;
@@ -1501,12 +1507,16 @@ function seekWatch(){
     sheetId=sid;
     if(f)sheet(f.isl);
   }
-  seekEl.classList.toggle('here',!!f);
-  // 島に居るあいだは「書く」を一段上げ、空いた高さへ探す行を据える（mood と同じ作法）
-  document.body.classList.toggle('seekhere',!!f);
+  // 探す行はいつも足元に（2026-07-31）。「書く」はその一段上へ
+  seekEl.classList.add('here');
+  document.body.classList.add('seekhere');
+  // 範囲は行の顔（placeholder）が言う。書きかけの間は触らない
+  if(document.activeElement!==seekQ&&!seekQ.value)
+    seekQ.placeholder=f?'ことばで寄せる':'宙ぜんぶから寄せる';
 }
 function seekReset(){
   seeking=false;
+  seekScope=null;
   seekEl.classList.remove('seeking');
   seekBack.hidden=true;
   seekQ.value='';
@@ -1518,35 +1528,41 @@ function seekReset(){
 }
 function seekRun(){
   const q=(seekQ.value||'').trim();
-  if(!q||!focusIsl)return;
-  const f=focusIsl;
+  if(!q)return;
+  const f=focusIsl;                 // null＝宙ぜんたいから寄せる（2026-07-31）
   seekQ.blur();
-  fetch('/api/sky/search?room='+f.id+'&q='+encodeURIComponent(q))
+  fetch('/api/sky/search?q='+encodeURIComponent(q)+(f?('&room='+f.id):''))
     .then(r=>r.json().then(d=>({ok:r.ok,d})))
     .then(({ok,d})=>{
-      if(!focusIsl||focusIsl.id!==f.id)return;
+      if((focusIsl?focusIsl.id:null)!==(f?f.id:null))return;
       if(!ok||!d.words){
         whisper((d&&d.error)||'いまは、<wbr>寄せられません。',5200);
         return;
       }
-      const by=new Map(); f.isl.words.forEach(x=>by.set(x._w.id,x));
+      const by=new Map();
+      (f?[f.isl]:[...islands.values()]).forEach(isl=>isl.words.forEach(x=>by.set(x._w.id,x)));
       const hits=d.words.map(w=>by.get(w.id)).filter(Boolean);
       if(!hits.length){
-        whisper('この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>この島に<wbr>ありません。',6000);
+        whisper('この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>この'+
+                (f?'島':'宙')+'に<wbr>ありません。',6000);
         return;
       }
       if(held)release();
       seeking=true;
+      seekScope=f?f.id:null;
       seekEl.classList.add('seeking');
       seekBack.hidden=false;
-      f.isl.el.classList.add('gathered');
+      if(f)f.isl.el.classList.add('gathered');
+      else islands.forEach(isl=>isl.el.classList.add('gathered'));
       litEls=hits;
       // 島の心へ、黄金角の輪になって浮かび上がる（深いところから表層へ）。
       // 紙片に並んでいる時は席を動かさない——寄せられた紙だけが明るく残り、
       // まわりが沈む（グリッドは読む面なので、並びを崩さない）。
+      // 宙ぜんたいの時も動かさない：位置は島の地形の意味を持つので、
+      // 灯りだけで「ここに近いことばがある」と言う。
       hits.forEach((el,i)=>{
         el.classList.add('lit');
-        if(f.isl.sheeted)return;
+        if(!f||f.isl.sheeted)return;
         const rr=110+64*Math.sqrt(i), aa=i*2.39996;
         const tx=Math.cos(aa)*rr*1.25, ty=Math.sin(aa)*rr*0.7;
         el.style.transform='translate('+(tx-el._hx)+'px,'+(ty-el._hy)+'px)';
