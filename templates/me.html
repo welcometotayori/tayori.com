@@ -128,11 +128,14 @@
   .slip-put.on{color:rgba(30,27,33,.85);border-color:rgba(30,27,33,.5)}
   .slip-put:active{opacity:.62}
   /* 一枚ずつ、順に置かれる（まとめて点灯させない） */
+  /* 登場のぼかし（filter）は 2026-07-31 に外した：マソンリーで枚数が増え、
+     数十枚のぼかしアニメが同時に走ると読み込み直後が固まる（blur は一枚ごとに
+     GPUの描画層を作る——宙で踏んだのと同じ穴）。薄さと持ち上がりだけで足りる。 */
   @media (prefers-reduced-motion: no-preference){
     .slip{opacity:0;animation:slipIn .6s var(--ease) both;
           animation-delay:calc(var(--i,0) * 70ms)}
-    @keyframes slipIn{from{opacity:0;transform:translateY(8px);filter:blur(3px)}
-                        to{opacity:1;transform:none;filter:blur(0)}}
+    @keyframes slipIn{from{opacity:0;transform:translateY(8px)}
+                        to{opacity:1;transform:none}}
   }
 
   /* ── 自分の書架（v2 §11）──────────────────────────────
@@ -180,8 +183,8 @@
   @media (prefers-reduced-motion: no-preference){
     .m-slip{opacity:0;animation:mIn .6s var(--ease) both;
             animation-delay:calc(var(--i,0) * 50ms)}
-    @keyframes mIn{from{opacity:0;transform:translateY(8px);filter:blur(3px)}
-                     to{opacity:1;transform:none;filter:blur(0)}}
+    @keyframes mIn{from{opacity:0;transform:translateY(8px)}
+                     to{opacity:1;transform:none}}
   }
 
   /* 何も無い時・届かない時の、ひとこと（棚も書架も、空のままで成立する場所） */

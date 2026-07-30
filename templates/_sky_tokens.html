@@ -54,11 +54,13 @@
   *{box-sizing:border-box}
   body{background:var(--space);color:var(--ink-1);
        font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
-       -webkit-font-smoothing:antialiased;line-break:strict;
+       -webkit-font-smoothing:antialiased;line-break:strict}
        /* 闇は時刻でごく僅かに移ろう（下の script が --space を書き換える）。
-          60秒かけて渡る＝変わる瞬間は誰にも見えない */
-       transition:background-color 60s linear}
-  @media (prefers-reduced-motion: reduce){ body{transition:none} }
+          かつては transition:background-color 60s で渡していたが、これは
+          「60秒ごとに、60秒かかる遷移が始まる」＝実質いつも背景色がアニメし続ける
+          ということで、background-color はGPU合成できないため、全ページが
+          常時メインスレッドで塗り直されていた（2026-07-31 重さの調査で判明）。
+          一歩の色差は 1/255 に満たない——段差なしで直接置いても、誰にも見えない。 */
   /* 触れるものの共通作法：指の即応・押した瞬間に応える・焦点が見える */
   /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
      ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
