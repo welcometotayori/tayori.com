@@ -23,26 +23,23 @@
          align-items:center;justify-content:space-between;
          padding:calc(14px + var(--safe-t)) calc(20px + var(--safe-r)) 10px calc(22px + var(--safe-l));
          pointer-events:none}
-  header a{pointer-events:auto}
-  .logo{color:var(--ink-1);text-decoration:none;font-size:var(--t-title);
+  header a,header button{pointer-events:auto}
+  /* ロゴ＝棚・設定への戸（2026-07-31 復活）。栞の一語を右上に置くより、
+     いつも目に入る名前そのものが戸である方が、指が覚える。 */
+  .logo{background:none;border:none;cursor:pointer;font-family:inherit;padding:0;
+        text-align:left;color:var(--ink-1);text-decoration:none;font-size:var(--t-title);
         letter-spacing:var(--tr-title)}
   .logo small{color:var(--thread);font-size:var(--t-mono);letter-spacing:var(--tr-mono);
               margin-left:10px}
-  .back{background:none;border:none;font-family:inherit;cursor:pointer;
-        color:var(--ink-3);text-decoration:none;font-size:var(--t-meta);
-        letter-spacing:var(--tr-meta);border-bottom:1px solid var(--rule-faint);
-        padding:9px 2px;min-height:var(--touch);
-        transition:color .22s var(--ease),border-color .22s var(--ease)}
-  .back:hover{color:var(--ink-1);border-color:var(--thread)}
-  .shiori{position:relative;display:flex;flex-direction:column;align-items:flex-end}
-  .shiori-list{display:flex;flex-direction:column;align-items:flex-end;gap:2px;
-               padding:6px 0 0}
-  .shiori-list[hidden]{display:none}
-  .shiori-list a{color:var(--ink-3);text-decoration:none;font-size:var(--t-meta);
-                 letter-spacing:var(--tr-meta);border-bottom:1px solid transparent;
-                 padding:10px 2px;min-height:var(--touch);
-                 transition:color .22s var(--ease),border-color .22s var(--ease)}
-  .shiori-list a:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
+  .menu{position:relative;display:flex;flex-direction:column;align-items:flex-start}
+  .menu-list{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+             padding:6px 0 0}
+  .menu-list[hidden]{display:none}
+  .menu-list a{color:var(--ink-3);text-decoration:none;font-size:var(--t-meta);
+               letter-spacing:var(--tr-meta);border-bottom:1px solid transparent;
+               padding:10px 2px;min-height:var(--touch);
+               transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .menu-list a:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
   /* ── 足元：この面の名。説明は置かない（宙の作法） ── */
   .foot{position:fixed;left:calc(22px + var(--safe-l));bottom:calc(16px + var(--safe-b));
         z-index:20;color:var(--ink-4);font-size:var(--t-mono);
@@ -57,7 +54,11 @@
   .isl-nm{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(var(--ik,1));
           color:var(--ink-2);font-size:17px;letter-spacing:.22em;white-space:nowrap;
           text-shadow:0 0 9px rgba(8,8,13,.9);pointer-events:none;
-          transition:opacity .8s var(--ease)}
+          transition:opacity .8s var(--ease),color .3s var(--ease)}
+  /* 遠景では、島の名がその島への戸になる（2026-07-31）。近景では紙片が主役なので
+     名は気配に退き、指も受けない（紙のタップを名が横取りしない）。 */
+  body.far .isl-nm{pointer-events:auto;cursor:pointer;padding:10px 14px;margin:-10px -14px}
+  body.far .isl-nm:hover{color:var(--chalk)}
   .isl-glow{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;
             transition:opacity 1.2s var(--ease)}
   .isl-glow span{position:absolute;border-radius:50%;transform:translate(-50%,-50%)}
@@ -103,12 +104,13 @@
   @keyframes rippleGo{
     from{width:12px;height:12px;opacity:.9}
     to{width:340px;height:340px;opacity:0}}
-  /* 寄りの操作（キーボードと、つまめない環境のための罫の語） */
+  /* 寄りの操作（キーボードと、つまめない環境のための一対）。
+     2026-07-31：語（よる／ひく）をやめ、どの地図でも通じる ＋／− に。 */
   .zoom{position:fixed;right:calc(20px + var(--safe-r));bottom:calc(14px + var(--safe-b));
-        z-index:20;display:flex;gap:18px}
-  .zoom button{background:none;border:none;border-bottom:1px solid var(--rule-faint);
-        color:var(--ink-3);font-family:inherit;font-size:var(--t-meta);
-        letter-spacing:var(--tr-meta);min-height:var(--touch);padding:9px 6px;
+        z-index:20;display:flex;gap:10px}
+  .zoom button{background:none;border:none;
+        color:var(--ink-3);font-family:inherit;font-size:19px;line-height:1;
+        width:var(--touch);min-height:var(--touch);padding:0;
         transition:color .22s var(--ease)}
   .zoom button:hover{color:var(--ink-1)}
   .zoom button:active{opacity:.62}
@@ -170,27 +172,37 @@
                border:1px solid var(--thread);background:transparent;
                transition:bottom .38s var(--ease),background .38s var(--ease)}
   .hold-act.on .ic-shelf .p{bottom:4px;background:var(--thread)}
-  /* ── 探す：罫だけの一行。島に寄っている時（body.near ＋ 焦点の島）だけ現れる ── */
+  /* ── 検索（2026-07-31 刷新・Cosmos の作法）────────────────────
+     罫の長い一行をやめ、畳まれた虫眼鏡ひとつに。触れると小さな角丸の器が
+     ひらいて入力になる。楕円（ピル）にはしない——radius は高さの半分未満。 */
   .seek{position:fixed;left:50%;bottom:calc(7dvh + var(--safe-b));transform:translateX(-50%);
-        z-index:22;display:none;align-items:center;gap:10px}
+        z-index:22;display:none;align-items:center;gap:8px}
   @supports not (height:1dvh){ .seek{bottom:calc(7vh + var(--safe-b))} }
   .seek.here{display:flex}
-  .seek input{background:none;border:none;border-bottom:1px solid var(--rule-faint);
-              font-family:inherit;font-size:var(--t-meta);letter-spacing:0.12em;
-              /* 9.5em だと遠景の「宙ぜんぶから寄せる」（9字）が一字欠ける */
-              color:var(--ink-2);padding:9px 4px 8px;width:11.5em;min-height:var(--touch);
-              text-align:center;transition:border-color .22s var(--ease),box-shadow .22s var(--ease)}
+  .seek-bar{display:flex;align-items:center;width:var(--touch);height:var(--touch);
+            border-radius:13px;background:rgba(15,15,22,.9);
+            border:1px solid rgba(250,248,243,.10);overflow:hidden;
+            transition:width .34s var(--ease),border-color .22s var(--ease)}
+  .seek.open .seek-bar{width:min(68vw,260px);border-color:rgba(250,248,243,.18)}
+  .seek-open{flex:none;display:flex;align-items:center;justify-content:center;
+             width:var(--touch);height:var(--touch);background:none;border:none;
+             color:var(--ink-3);cursor:pointer;padding:0;
+             transition:color .22s var(--ease)}
+  .seek-open svg{width:16px;height:16px;fill:none;stroke:currentColor;
+                 stroke-width:1.4;stroke-linecap:round}
+  .seek-open:hover{color:var(--ink-1)}
+  .seek input{flex:1;min-width:0;background:none;border:none;outline:none;
+              font-family:inherit;font-size:13px;letter-spacing:0.12em;
+              color:var(--ink-1);padding:0 14px 0 0;opacity:0;
+              transition:opacity .25s var(--ease)}
+  .seek.open input{opacity:1}
   .seek input::placeholder{color:var(--ink-4);letter-spacing:0.18em}
-  .seek input:focus{outline:none;border-bottom-color:var(--rule-act);
-                    box-shadow:0 8px 14px -10px rgba(179,143,111,.40)}
-  .seek button{background:none;border:none;font-family:inherit;font-size:var(--t-meta);
+  .seek button#seekBack{background:none;border:none;font-family:inherit;font-size:var(--t-meta);
                letter-spacing:0.14em;color:var(--ink-4);min-height:var(--touch);padding:9px 4px;
-               white-space:nowrap;border-bottom:1px solid transparent;
-               transition:color .22s var(--ease)}
-  .seek button:hover{color:var(--ink-2)}
-  .seek button:active{opacity:.62}
-  .seek.seeking input{border-bottom-color:var(--rule);
-                      box-shadow:0 8px 14px -10px rgba(179,143,111,.22)}
+               white-space:nowrap;transition:color .22s var(--ease)}
+  .seek button#seekBack:hover{color:var(--ink-2)}
+  .seek button#seekBack:active{opacity:.62}
+  .seek.seeking .seek-bar{border-color:var(--rule-act)}
   /* 島に居るあいだ、「書く」は探す行の一段上へ（mood.html の body.in-room と同じ寸法） */
   body.seekhere .cast-btn{bottom:calc(7dvh + var(--safe-b) + 58px)}
   @supports not (height:1dvh){ body.seekhere .cast-btn{bottom:calc(7vh + var(--safe-b) + 58px)} }
@@ -652,12 +664,11 @@
 </head>
 <body>
 <header>
-  <a class="logo" href="/">たより <small>TAYORI</small></a>
-  {# 栞：宙の外の紙へ渡る、右上の一語（mood.html と同じ行き先） #}
-  <div class="shiori">
-    <button class="back" id="shioriBtn" type="button" aria-expanded="false"
-            aria-controls="shioriList">栞</button>
-    <div class="shiori-list" id="shioriList" hidden>
+  {# ロゴタップで棚・設定の戸がひらく（2026-07-31 復活）。栞の一語は畳んだ。 #}
+  <div class="menu">
+    <button class="logo" id="logoBtn" type="button" aria-expanded="false"
+            aria-controls="logoMenu">たより <small>TAYORI</small></button>
+    <div class="menu-list" id="logoMenu" hidden>
       {% if logged_in %}
       <a href="/me">手元の棚・書架</a>
       <a href="/settings">設定</a>
@@ -673,9 +684,13 @@
 <div id="vp"><div id="world"></div></div>
 <div class="hold" id="holdBox" hidden></div>
 <div class="seek" id="seek">
-  <input id="seekQ" type="text" maxlength="80" autocomplete="off"
-         enterkeyhint="search" aria-label="近いことばで、この島を寄せる"
-         placeholder="ことばで寄せる">
+  <div class="seek-bar">
+    <button class="seek-open" id="seekOpen" type="button" aria-label="検索" aria-expanded="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.6 10.6L14 14"/></svg>
+    </button>
+    <input id="seekQ" type="text" maxlength="80" autocomplete="off"
+           enterkeyhint="search" aria-label="検索" placeholder="検索" tabindex="-1">
+  </div>
   <button id="seekBack" type="button" hidden>もどす</button>
 </div>
 <p class="whisper" id="whisper" aria-live="polite"></p>
@@ -800,8 +815,8 @@
   </div>
 {% endif %}
 <div class="zoom">
-  <button id="zin" type="button" aria-label="宙に寄る">よる</button>
-  <button id="zout" type="button" aria-label="宙から引く">ひく</button>
+  <button id="zin" type="button" aria-label="宙に寄る">＋</button>
+  <button id="zout" type="button" aria-label="宙から引く">−</button>
 </div>
 <script>
 'use strict';
@@ -809,19 +824,21 @@ const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const START_ROOM={{ start_room|tojson }};
 const LOGGED_IN={{ 'true' if logged_in else 'false' }};
 const vp=document.getElementById('vp'), world=document.getElementById('world');
-// 栞：開け閉めだけ。外を触れば閉じる（mood.html と同じ手つき）
+/* 画面の寸法は測って持っておく（2026-07-31 カクツキ修正）。clientWidth を
+   毎フレーム読むと、そのたびレイアウトの確定を強いることがある——寸法が
+   変わるのは resize の時だけなのだから、その時だけ測り直す。 */
+let VW=vp.clientWidth, VH=vp.clientHeight;
+addEventListener('resize',()=>{VW=vp.clientWidth;VH=vp.clientHeight;});
+// ロゴタップ＝棚・設定の戸（2026-07-31 復活）。開け閉めだけ。外を触れば閉じる
 (function(){
-  const sb=document.getElementById('shioriBtn'), sl=document.getElementById('shioriList');
+  const sb=document.getElementById('logoBtn'), sl=document.getElementById('logoMenu');
   sb.addEventListener('click',()=>{
     const opening=sl.hasAttribute('hidden');
     if(opening)sl.removeAttribute('hidden'); else sl.setAttribute('hidden','');
     sb.setAttribute('aria-expanded',opening?'true':'false');
-    // 栞が開いている間、同じ隅の「降りてきました」は退く（mood と同じ作法）
-    const arr=document.getElementById('arrivals');
-    if(arr)arr.classList.toggle('away',opening);
   });
   document.addEventListener('pointerdown',e=>{
-    if(!sl.hasAttribute('hidden')&&!sl.contains(e.target)&&e.target!==sb){
+    if(!sl.hasAttribute('hidden')&&!sl.contains(e.target)&&!sb.contains(e.target)){
       sl.setAttribute('hidden','');sb.setAttribute('aria-expanded','false');
     }
   },true);
@@ -1043,10 +1060,10 @@ function posOf(isl,el){
   return (isl&&isl.sheeted&&el._gx!=null)
     ?'translate('+(el._gx-el._hx)+'px,'+(el._gy-el._hy)+'px)':'';
 }
-function sheetLayout(isl){
+function sheetLayout(isl,stagger){
   const gap=26;
   // 縦長の画面（携帯）は敷き詰めも縦長に：一行2〜3枚で、下へ読み進む
-  const portrait=vp.clientHeight>vp.clientWidth;
+  const portrait=VH>VW;
   const maxW=Math.max(portrait?340:540,Math.min(portrait?620:1100,isl.R*2.1));
   const order=isl.words
     .filter(el=>!el.classList.contains('mutedout'))
@@ -1063,11 +1080,20 @@ function sheetLayout(isl){
   });
   if(row.length)rows.push({items:row,w:x-gap});
   const totalH=y+rowH;
+  let idx=0;
   rows.forEach(r=>{
     r.items.forEach(it=>{
       // 右から埋める（vertical-rl の読み順）。行の中では上をそろえる
       const tx=r.w/2-it.x-it.w, ty=it.y-totalH/2;
       it.el._gx=tx; it.el._gy=ty;
+      /* 「次々流れてくる」（2026-07-31）：島に降りた瞬間、紙片は一斉に整列するのでは
+         なく、読み順（右上→左下）に少しずつ席へ流れ着く。遅らせるのは transform だけ
+         （.w の transition-property の並び：opacity, transform, background, color, shadow）。
+         薄さや紙の色まで遅らせると、闇に光る字が紙の上に居残って読めない瞬間ができる。 */
+      if(stagger&&!REDUCED){
+        it.el.style.transitionDelay='0s,'+Math.min(idx*0.03,0.5).toFixed(2)+'s,0s,0s,0s';
+        idx++;
+      }
       it.el.style.transform=posOf(isl,it.el);
     });
   });
@@ -1075,27 +1101,48 @@ function sheetLayout(isl){
 function sheet(isl){
   isl.sheeted=true;
   isl.el.classList.add('sheet');
-  sheetLayout(isl);
+  sheetLayout(isl,true);
+  // 流れ着き終わったら遅れは畳む（残すと、受け止めや検索の応答まで遅れて見える）
+  clearTimeout(isl._stgT);
+  isl._stgT=setTimeout(()=>isl.words.forEach(el=>{el.style.transitionDelay='';}),1700);
 }
 function unsheet(isl){
   isl.sheeted=false;
   isl.el.classList.remove('sheet');
-  isl.words.forEach(el=>{el.style.transform='';});
+  clearTimeout(isl._stgT);
+  isl.words.forEach(el=>{el.style.transform='';el.style.transitionDelay='';});
 }
 /* ── 寄る・引く・つまむ ─────────────────────────── */
 let K=0.5, PX=0, PY=0;             // 倍率と、世界の原点の画面上の位置
 const KMIN=0.1, KMAX=2.4;
+/* カクツキ修正（2026-07-31）その1：描き替えは1フレームに1度だけ。
+   wheel も pointermove もフレームより速く飛んでくる——来た数だけ style を
+   書き直すと、指の速さぶんだけ余計に描き直しが積まれてつっかえる。
+   rAF で束ね、最後の値だけを次のフレームで一度書く。 */
+let applyQ=false, ikLast=0;
 function apply(){
+  if(applyQ)return;
+  applyQ=true;
+  requestAnimationFrame(applyNow);
+}
+function applyNow(){
+  applyQ=false;
   world.style.transform='translate('+PX+'px,'+PY+'px) scale('+K+')';
+  /* その2：--ik（島の名の逆スケール）は全島おなじ値なのだから、島ごとに
+     書かない。world に一度だけ書けば、カスタムプロパティは継承で島の名に届く。
+     値がほぼ変わらないフレームでは書きもしない（書くだけで再計算が走る）。 */
   const ik=Math.min(4.5,Math.max(1,0.62/K));
-  islands.forEach(isl=>isl.el.style.setProperty('--ik',ik.toFixed(3)));
+  if(Math.abs(ik-ikLast)>0.004){
+    ikLast=ik;
+    world.style.setProperty('--ik',ik.toFixed(3));
+  }
   // near＝島ひとつが視界に収まる倍率から。0.42だと「島に降りた直後」（?room=の
   // 初期倍率≒0.35〜0.45）が far のままで、探すの一行が出なかった
   document.body.classList.toggle('far',K<0.32);
   document.body.classList.toggle('near',K>=0.32);
   document.body.classList.toggle('crisp',K<0.7);   // 引いた宙は、ぼかしの層を持たない
   cull();
-  if(typeof seekWatch==='function')seekWatch();   // 焦点の島＝探すの一行の出どころ
+  if(typeof seekWatch==='function')seekWatch();   // 焦点の島＝検索の出どころ
 }
 /* 画面の外に出た島は描かない（2026-07-31）。display ではなく visibility：
    寸法は保ったまま描画だけを畳む＝戻る時に測り直しが走らない。
@@ -1104,19 +1151,18 @@ function apply(){
    通り道の島が滑走の途中でふっと消える。 */
 let cullOn=true;
 function cull(){
-  const vw=vp.clientWidth, vh=vp.clientHeight;
   islands.forEach(isl=>{
     let off=false;
     if(cullOn){
-      const sx=vw/2+PX+isl.cx*K, sy=vh/2+PY+isl.cy*K, r=(isl.R*1.25+560)*K;
-      off=(sx+r<-32)||(sy+r<-32)||(sx-r>vw+32)||(sy-r>vh+32);
+      const sx=VW/2+PX+isl.cx*K, sy=VH/2+PY+isl.cy*K, r=(isl.R*1.25+560)*K;
+      off=(sx+r<-32)||(sy+r<-32)||(sx-r>VW+32)||(sy-r>VH+32);
     }
     if(isl.off!==off){ isl.off=off; isl.el.style.visibility=off?'hidden':''; }
   });
 }
 function zoomAt(cx,cy,factor){
   const k=Math.max(KMIN,Math.min(KMAX,K*factor));
-  const vw=vp.clientWidth/2, vh=vp.clientHeight/2;
+  const vw=VW/2, vh=VH/2;
   const wx=(cx-vw-PX)/K, wy=(cy-vh-PY)/K;   // カーソルの下の世界座標を動かさない
   PX=cx-vw-wx*k; PY=cy-vh-wy*k; K=k;
   apply();
@@ -1125,8 +1171,8 @@ vp.addEventListener('wheel',e=>{
   e.preventDefault();
   zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*0.0016));
 },{passive:false});
-document.getElementById('zin').addEventListener('click',()=>zoomAt(vp.clientWidth/2,vp.clientHeight/2,1.45));
-document.getElementById('zout').addEventListener('click',()=>zoomAt(vp.clientWidth/2,vp.clientHeight/2,1/1.45));
+document.getElementById('zin').addEventListener('click',()=>zoomAt(VW/2,VH/2,1.45));
+document.getElementById('zout').addEventListener('click',()=>zoomAt(VW/2,VH/2,1/1.45));
 // つまむ・ひきずる（1本＝パン、2本＝ピンチ。タップ判定は移動6px未満）
 const ptrs=new Map(); let moved=0, pinchD=0;
 vp.addEventListener('pointerdown',e=>{
@@ -1289,8 +1335,16 @@ function hold(el){
     }).catch(()=>{});
 }
 world.addEventListener('click',e=>{
-  const el=e.target.closest('.w');
   if(moved>6)return;               // ひきずった指は受け止めではない
+  /* 遠景では、島の名（ジャンル）がその島への戸（2026-07-31）。
+     押せば、その島へ滑って降りる——降りた先で紙片が敷き詰められる。 */
+  const nm=e.target.closest('.isl-nm');
+  if(nm){
+    for(const isl of islands.values()){
+      if(isl.el.contains(nm)){ release(); flyTo(isl); return; }
+    }
+  }
+  const el=e.target.closest('.w');
   if(el){ hold(el); } else { release(); }
 });
 
@@ -1428,14 +1482,14 @@ function screenPos(el){
   const hx=(isl.sheeted&&el._gx!=null)?el._gx:el._hx,
         hy=(isl.sheeted&&el._gy!=null)?el._gy:el._hy;
   const wx=isl.cx+hx, wy=isl.cy+hy;
-  return {x:vp.clientWidth/2+PX+wx*K, y:vp.clientHeight/2+PY+wy*K};
+  return {x:VW/2+PX+wx*K, y:VH/2+PY+wy*K};
 }
 /* ── 放ったことばの着地（書く柱から）────────────────────────
    置いた島へ滑らかに降り、島の心の近くで自分の打鍵がそのまま再生される。
    まだ宙のidを持たない（サーバの公開idは次の読み込みで付く）＝受け止めても行いは出ない。 */
 function flyTo(isl){
   const k=Math.max(0.55,Math.min(1.1,
-    Math.min(vp.clientWidth,vp.clientHeight)/(isl.R*1.12*2.15)));
+    Math.min(VW,VH)/(isl.R*1.12*2.15)));
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
   cullOn=false;                       // 滑走の間は全島を出す（通り道が消えないように）
   K=k; PX=-isl.cx*K; PY=-isl.cy*K;
@@ -1466,7 +1520,7 @@ function castLand(isl,poem,color,steps){
 setInterval(()=>{
   tick=(tick+1)%4;
   if(REDUCED||document.hidden||K<0.55)return;
-  const W=vp.clientWidth,H=vp.clientHeight;
+  const W=VW,H=VH;
   const due=[];
   islands.forEach(isl=>isl.words.forEach(el=>{
     if(el===held||el._w.pd||el.classList.contains('mutedout'))return;  // 漂流物は書き直さない（誰も打っていない）
@@ -1494,7 +1548,7 @@ function seekWatch(){
   });
   // 「島に居る」の判定は倍率の絶対値ではなく、**島が視界の大半を占めているか**で見る
   // （K のしきい値は画面の広さで破綻する——424px の電話と 1280px の机では別の倍率になる）
-  const big=best&&best.isl.R*K>0.32*Math.min(vp.clientWidth,vp.clientHeight);
+  const big=best&&best.isl.R*K>0.32*Math.min(VW,VH);
   const f=(best&&big&&best.d<best.isl.R*1.6)?best:null;
   // 寄せた範囲（島／宙ぜんたい）から離れたら、寄せた宙は静かにほどける
   if(seeking&&(f?f.id:null)!==seekScope)seekReset();
@@ -1513,13 +1567,9 @@ function seekWatch(){
       if(sheetId!=null&&islands.has(sheetId))sheet(islands.get(sheetId));
     },140);
   }
-  // 探す行はいつも足元に（2026-07-31）。「書く」はその一段上へ
+  // 検索はいつも足元に（2026-07-31）。「書く」はその一段上へ
   seekEl.classList.add('here');
   document.body.classList.add('seekhere');
-  // 範囲は行の顔（placeholder）が言う。書きかけの間は触らない
-  const ph=f?'ことばで寄せる':'宙ぜんぶから寄せる';
-  if(document.activeElement!==seekQ&&!seekQ.value&&seekQ.placeholder!==ph)
-    seekQ.placeholder=ph;
 }
 function seekReset(){
   seeking=false;
@@ -1527,6 +1577,7 @@ function seekReset(){
   seekEl.classList.remove('seeking');
   seekBack.hidden=true;
   seekQ.value='';
+  seekFold();
   litEls.forEach(el=>{el.classList.remove('lit');
     el.style.transform=posOf(islands.get(el._w.room),el);});
   litEls=[];
@@ -1577,6 +1628,34 @@ function seekRun(){
     })
     .catch(()=>{ whisper('いまは、<wbr>寄せられません。',5200); });
 }
+/* ── 検索の開け閉め（2026-07-31・Cosmos の作法）──
+   ふだんは虫眼鏡ひとつ。触れると器がひらいて入力になり、空のまま離れれば
+   ひとりでに畳まれる。寄せている間（seeking）は畳まない——「もどす」が出ている。 */
+const seekOpen=document.getElementById('seekOpen');
+function seekUnfold(){
+  seekEl.classList.add('open');
+  seekOpen.setAttribute('aria-expanded','true');
+  seekQ.tabIndex=0;
+  setTimeout(()=>seekQ.focus(),60);   // 器がひらき始めてから筆先を入れる
+}
+function seekFold(){
+  seekEl.classList.remove('open');
+  seekOpen.setAttribute('aria-expanded','false');
+  seekQ.tabIndex=-1;
+  if(document.activeElement===seekQ)seekQ.blur();
+}
+seekOpen.addEventListener('click',()=>{
+  if(seekEl.classList.contains('open')){
+    if(seekQ.value.trim()){ seekRun(); }   // 開いていて字がある＝虫眼鏡は「検索する」
+    else seekFold();
+  }else seekUnfold();
+});
+seekQ.addEventListener('blur',()=>{
+  // 空のまま離れたら畳む。ひと呼吸おくのは、もどす・虫眼鏡へのタップを先に通すため
+  setTimeout(()=>{
+    if(document.activeElement!==seekQ&&!seekQ.value&&!seeking)seekFold();
+  },140);
+});
 /* IME変換中の Enter・Escape は横取りしない（2026-07-29 に mood.html で踏んだ轍） */
 seekQ.addEventListener('keydown',e=>{
   if(e.isComposing||e.keyCode===229)return;
@@ -2537,15 +2616,24 @@ Promise.all([
   build(ROOMS,wd.words||[]);
   fetchMine();   // 自分の棚の控え（棚にあります の札のため）
   requestAnimationFrame(()=>{ relax();
-    // 全景がひと目に入る倍率から始める（?room= はその島の上へ降りる）
+    /* 2026-07-31：宙はミクロから始まる。全景（マクロ）から入ると、最初に見えるのが
+       「地図」で、ことばそのものに触れるまでが遠かった——降りた島の紙片から始め、
+       引けば（−・つまむ）いつでも全景へ出られる。降りる先は、いちばん新しい
+       ことばが昇った島＝いま息をしている場所（?room= は今までどおりその島へ）。 */
     let fx=0,fy=0,fr=900;
     if(START_ROOM&&islands.has(+START_ROOM)){
       const i=islands.get(+START_ROOM); fx=i.cx; fy=i.cy; fr=i.R*1.12; }
     else{
-      let mx=0; islands.forEach(i=>{mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R);}); fr=mx||900; }
-    K=Math.max(KMIN,Math.min(1.2,Math.min(vp.clientWidth,vp.clientHeight)/(fr*2.15)));
+      let best=null,bs=-1;
+      islands.forEach(isl=>isl.words.forEach(el=>{
+        if(!el._w.pd&&el._w.sink>bs){bs=el._w.sink;best=isl;}
+      }));
+      if(best){ fx=best.cx; fy=best.cy; fr=best.R*1.12; }
+      else{ let mx=0; islands.forEach(i=>{mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R);}); fr=mx||900; }
+    }
+    K=Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/(fr*2.15)));
     PX=-fx*K; PY=-fy*K;
-    apply();
+    applyNow();   // 立ち上がりだけは同じフレームで描く（1フレームの素の宙を見せない）
   });
 }).catch(()=>{
   const p=document.createElement('p');
