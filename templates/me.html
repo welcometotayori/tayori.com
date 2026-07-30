@@ -67,55 +67,65 @@
   .shelf-name-input::placeholder{color:var(--ink-4)}
   .shelf-name-input:focus{border-bottom-color:var(--ink-4)}
 
-  .slips{margin:0;padding:0;list-style:none}
-  .slip{position:relative;padding:var(--s4) 0 var(--s3) var(--s3);
-        border-bottom:1px solid var(--rule-faint)}
-  .slip:last-child{border-bottom:0}
-  /* 付箋の左に一本、そのことばの気分の色（--slip は JS が差す） */
-  .slip::before{content:'';position:absolute;left:0;top:var(--s4);bottom:var(--s3);width:2px;
-                background:var(--slip,var(--rule));border-radius:1px}
+  /* ── 紙片のマソンリー（2026-07-31 グリッド）────────────────
+     宙の「島に降りると紙片になる」と同じ姿をここでも。一枚ずつが生成り〜
+     手染めの紙（--pp はJSが差す・宙の paperOf と同じ決め方）になり、
+     columns で敷き詰まる。字は墨。数は出さない線はそのまま
+     （敷き詰めても件数は書かない・帯の長さも固定のまま）。 */
+  /* 紙片の敷き詰めは 520px の紙（.doc）より広い足場が要る。リストだけ
+     中央のまま横へ張り出す（負のマージン＝.doc の外へ静かにはみ出す）。 */
+  .slips{margin:0;padding:0;list-style:none;columns:15em;column-gap:20px;
+         width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
+  .slip{position:relative;break-inside:avoid;margin:0 0 20px;
+        padding:var(--s3) var(--s3) var(--s2) calc(var(--s3) + 8px);
+        background:var(--pp,#EDE9DF);border-radius:var(--edge);
+        box-shadow:0 1px 0 rgba(250,248,243,.05),0 14px 30px -20px rgba(0,0,0,.9)}
+  /* 紙の左に一本、そのことばの気分の色の糸（--slip は JS が差す） */
+  .slip::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
+                background:var(--slip,rgba(30,27,33,.22));border-radius:1px}
   /* 題（v2.2 §3）。書き手が付けた10字以内の名。棚では、ことばの上に小さく立つ
      ——並んだ紙片の中からもう一度見つけるための手がかり（辿る・書架と同じ姿） */
-  .slip-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
+  .slip-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
               word-break:keep-all;overflow-wrap:anywhere}
   /* 本文に keep-all は掛けない——文節折返しは UI 文言の作法で、人のことばには介入しない
      （tayori の恒久方針）。overflow-wrap は箱を破らないための安全網なので残す。 */
   .slip-poem{margin:0 0 var(--s2);font-size:var(--t-lead);line-height:2.4;
              letter-spacing:var(--tr-word);white-space:pre-wrap;
-             overflow-wrap:anywhere;color:var(--ink-1)}
+             overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
   /* 付箋（v2.2 §3）：残した本人が、自分の控えに貼る紙片。あとから貼っても剥がしてもいい。
      書き手には届かない・宙にも出ない。棚に並べたことばを、自分の言葉で仕分けるためだけのもの。 */
+  /* 紙の上の道具はすべて墨の濃淡で（闇用の --ink-* は紙では読めない） */
   .slip-fusen-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 var(--s2)}
   .slip-fusen{display:inline-flex;align-items:center;gap:6px;max-width:100%;
-              background:rgba(250,248,243,.07);border:1px solid var(--rule);border-radius:1px;
-              font-family:inherit;font-size:11px;letter-spacing:0.14em;color:var(--ink-3);
+              background:rgba(30,27,33,.05);border:1px solid rgba(30,27,33,.28);border-radius:1px;
+              font-family:inherit;font-size:11px;letter-spacing:0.14em;color:rgba(30,27,33,.66);
               padding:7px 10px;min-height:32px;cursor:pointer;
               transition:color .22s var(--ease),background .22s var(--ease)}
-  .slip-fusen:active{color:var(--ink-1);background:rgba(250,248,243,.12)}
-  .slip-fusen .x{color:var(--ink-4);font-size:13px;line-height:1}
-  .slip-fusen.add{background:none;border-style:dashed;color:var(--ink-4)}
-  .slip-fusen-in{background:none;border:none;border-bottom:1px solid var(--rule);
-                 font-family:inherit;font-size:11.5px;letter-spacing:0.1em;color:var(--ink-2);
+  .slip-fusen:active{color:rgba(30,27,33,.9);background:rgba(30,27,33,.1)}
+  .slip-fusen .x{color:rgba(30,27,33,.45);font-size:13px;line-height:1}
+  .slip-fusen.add{background:none;border-style:dashed;color:rgba(30,27,33,.5)}
+  .slip-fusen-in{background:none;border:none;border-bottom:1px solid rgba(30,27,33,.35);
+                 font-family:inherit;font-size:11.5px;letter-spacing:0.1em;color:rgba(30,27,33,.8);
                  padding:9px 2px;min-height:36px;outline:none;max-width:14em}
-  .slip-fusen-in::placeholder{color:var(--ink-4)}
-  .slip-fusen-in:focus{border-bottom-color:var(--ink-4)}
+  .slip-fusen-in::placeholder{color:rgba(30,27,33,.45)}
+  .slip-fusen-in:focus{border-bottom-color:rgba(30,27,33,.6)}
   .slip-foot{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3)}
   .slip-when{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:var(--t-mono);
-             letter-spacing:0.18em;color:var(--ink-4)}
+             letter-spacing:0.18em;color:rgba(30,27,33,.5)}
   /* 外すのは「棚から降ろす」だけ。ことばそのものは宙にも配達にも残る */
   .slip-off{min-height:var(--touch);background:none;border:none;border-bottom:1px solid transparent;
-            color:var(--ink-3);font-family:inherit;font-size:11.5px;letter-spacing:0.18em;
+            color:rgba(30,27,33,.6);font-family:inherit;font-size:11.5px;letter-spacing:0.18em;
             padding:13px 2px;transition:color .22s var(--ease),
             border-color .22s var(--ease),opacity .22s var(--ease)}
-  .slip-off:hover{color:var(--ink-1);border-bottom-color:var(--rule-act)}
+  .slip-off:hover{color:rgba(30,27,33,.9);border-bottom-color:rgba(30,27,33,.45)}
   .slip-off:active{opacity:.62}
   /* ほかの棚にも置く（同じことばを複数の棚に・v2 §5）。小さな付箋のかたち */
   .slip-put{display:inline-flex;align-items:center;min-height:36px;max-width:100%;
-            background:none;border:1px solid var(--rule);border-radius:1px;
-            font-family:inherit;font-size:10.5px;letter-spacing:0.14em;color:var(--ink-4);
+            background:none;border:1px solid rgba(30,27,33,.28);border-radius:1px;
+            font-family:inherit;font-size:10.5px;letter-spacing:0.14em;color:rgba(30,27,33,.55);
             padding:6px 9px;cursor:pointer;
             transition:color .22s var(--ease),border-color .22s var(--ease)}
-  .slip-put.on{color:var(--ink-2);border-color:var(--rule-act)}
+  .slip-put.on{color:rgba(30,27,33,.85);border-color:rgba(30,27,33,.5)}
   .slip-put:active{opacity:.62}
   /* 一枚ずつ、順に置かれる（まとめて点灯させない） */
   @media (prefers-reduced-motion: no-preference){
@@ -134,36 +144,39 @@
   .season-head .yr{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:var(--t-mono);
                    letter-spacing:0.22em;color:var(--ink-4)}
   .season-head .sn{font-size:13.5px;letter-spacing:0.3em}
-  /* ことばは色相の順に緯（よこいと）として並ぶ。左の糸が気分の色 */
-  .shelf-words{margin:0;padding:0;list-style:none}
-  .m-slip{position:relative;padding:var(--s3) 0 var(--s2) var(--s3);
-          border-bottom:1px solid var(--rule-faint)}
-  .m-slip:last-child{border-bottom:0}
-  .m-slip::before{content:'';position:absolute;left:0;top:var(--s3);bottom:var(--s2);width:2px;
-                  background:var(--slip,var(--rule));border-radius:1px}
+  /* ことばは色相の順に緯（よこいと）として並ぶ。左の糸が気分の色。
+     棚と同じ紙片のマソンリー（2026-07-31 グリッド） */
+  .shelf-words{margin:0;padding:0;list-style:none;columns:15em;column-gap:20px;
+               width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
+  .m-slip{position:relative;break-inside:avoid;margin:0 0 20px;
+          padding:var(--s3) var(--s3) var(--s2) calc(var(--s3) + 8px);
+          background:var(--pp,#EDE9DF);border-radius:var(--edge);
+          box-shadow:0 1px 0 rgba(250,248,243,.05),0 14px 30px -20px rgba(0,0,0,.9)}
+  .m-slip::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
+                  background:var(--slip,rgba(30,27,33,.22));border-radius:1px}
   /* 題（v2.2 §3）。書架でも、ことばの上に小さく立つ（棚・辿ると同じ姿） */
-  .m-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
+  .m-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
            word-break:keep-all;overflow-wrap:anywhere}
   /* 本文に keep-all は掛けない（.slip-poem と同じ理由） */
   .m-poem{margin:0;font-size:var(--t-lead);line-height:2.3;letter-spacing:var(--tr-word);
-          white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink-1)}
+          white-space:pre-wrap;overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
   /* 「だれかの手元にあります」＝出来事ではなく状態。現在形の一行（v2 §9） */
-  .m-hands{margin:6px 0 0;font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
+  .m-hands{margin:6px 0 0;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
            word-break:keep-all}
   /* 取り消し（v3 §4.1）。放ってから48時間のあいだだけ、この行が出る。
      窓を過ぎたことばには何も出ない——できないことは、見せない。 */
   .m-undo{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3);margin:2px 0 0}
   .m-undo button{background:none;border:none;border-bottom:1px solid transparent;
-                 font-family:inherit;font-size:11px;letter-spacing:0.18em;color:var(--ink-4);
+                 font-family:inherit;font-size:11px;letter-spacing:0.18em;color:rgba(30,27,33,.55);
                  padding:11px 2px;min-height:var(--touch);cursor:pointer;
                  transition:color .22s var(--ease),border-color .22s var(--ease)}
-  .m-undo button:hover{color:var(--ink-2);border-bottom-color:var(--rule-act)}
+  .m-undo button:hover{color:rgba(30,27,33,.85);border-bottom-color:rgba(30,27,33,.45)}
   .m-undo button:active{opacity:.62}
   .m-undo button[disabled]{opacity:.45}
   /* 問いは、効く対象のそばに開く（別の面へ連れ出さない）。行いのほうだけ一段強い字 */
   .m-undo .q{width:100%;margin:2px 0 0;font-size:11px;line-height:2.2;letter-spacing:0.16em;
-             color:var(--ink-3);word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
-  .m-undo .go{color:var(--ink-2)}
+             color:rgba(30,27,33,.66);word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  .m-undo .go{color:rgba(30,27,33,.85)}
   @media (prefers-reduced-motion: no-preference){
     .m-slip{opacity:0;animation:mIn .6s var(--ease) both;
             animation-delay:calc(var(--i,0) * 50ms)}
@@ -263,6 +276,15 @@
   function whenLabel(iso){
     const p=String(iso||'').slice(0,10).split('-');
     return p.length===3?(p[0]+'.'+p[1]+'.'+p[2]):'';
+  }
+  /* 紙片の紙の色（2026-07-31 グリッド・宙の paperOf と同じ決め方）。
+     選ばれた色は手染めの紙に淡く染み、無彩は生成り〜灰白の三種からハッシュで一つ */
+  function fnv(s){let h=2166136261;s=String(s);
+    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+  function paper(color,seed){
+    const m=/hsl\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%/.exec(color||'');
+    if(m&&+m[2]>=12)return 'hsl('+(+m[1])+',24%,90%)';
+    return ['#EFEBE1','#E9E5DC','#EFE7D9'][fnv(String(seed))%3];
   }
   async function post(url,payload){
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -407,10 +429,9 @@
         '<span class="slip-puts"></span>'+
         '<button type="button" class="slip-off">この棚から、外す</button></div>';
       const c=tint(w.color);
-      if(c){
-        li.style.setProperty('--slip',c.solid);      // 左の糸は、そのことばの気分の色
-        li.querySelector('.slip-poem').style.color=c.text;
-      }
+      if(c)li.style.setProperty('--slip',c.solid);   // 左の糸は、そのことばの気分の色
+      // 紙の色。字は墨のまま（闇用の明るい文字色は紙では読めない）
+      li.style.setProperty('--pp',paper(w.color,w.ref||w.id));
       renderFusen(li.querySelector('.slip-fusen-row'),w);
       // ほかの棚への置き外し。押した棚に置く／すでに置いてあれば降ろす
       const puts=li.querySelector('.slip-puts');
@@ -475,6 +496,14 @@
               solid:'hsl('+h+','+s+'%,'+l+'%)'};}
     if(/^#[0-9a-f]{3,8}$/i.test(color||'')) return {text:color,solid:color};
     return null;
+  }
+  /* 紙片の紙の色（棚と同じ・宙の paperOf と同じ決め方） */
+  function fnv(s){let h=2166136261;s=String(s);
+    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+  function paper(color,seed){
+    const m=/hsl\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%/.exec(color||'');
+    if(m&&+m[2]>=12)return 'hsl('+(+m[1])+',24%,90%)';
+    return ['#EFEBE1','#E9E5DC','#EFE7D9'][fnv(String(seed))%3];
   }
   const EMPTY='まだ、<wbr>何も<wbr>放っていません。<br>'+
               '最初の<wbr>ひとことを、<wbr>tayori-たより- へ<wbr>放って<wbr>みてください。';
@@ -548,8 +577,8 @@
         if(w.title)li.querySelector('.m-title').textContent=w.title;
         li.querySelector('.m-poem').textContent=w.poem;
         const c=tint(w.color);
-        if(c){li.style.setProperty('--slip',c.solid);
-              li.querySelector('.m-poem').style.color=c.text;}
+        if(c)li.style.setProperty('--slip',c.solid);
+        li.style.setProperty('--pp',paper(w.color,w.id));   // 紙の色。字は墨のまま
         if(w.in_someones_hands){
           const p=document.createElement('p');p.className='m-hands';
           p.innerHTML='このことばは、<wbr>だれかの手元に<wbr>あります。';
