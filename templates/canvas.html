@@ -67,7 +67,16 @@
         z-index:20;color:var(--ink-4);font-size:var(--t-mono);
         letter-spacing:var(--tr-mono);pointer-events:none}
   /* ── 宙そのもの ── */
-  #vp{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab}
+  /* 宙は「掴んで動かす面」なので、字は掴めない（2026-07-31 夜）。
+     指を置いて動かすたび、ブラウザは字を選ぼうとして青く塗る——ひきずりは
+     宙を動かす手つきなので、選択が起きること自体が誤り。長押しの拡大鏡と
+     コピーの吹き出し（iOS）も同じ理由で止める。
+     書く柱・読む柱・入力はこの外なので、そちらの選択とコピーは今までどおり。 */
+  #vp,.hold,header,.foot,.zoom{
+        -webkit-user-select:none;user-select:none;
+        -webkit-touch-callout:none}
+  #vp{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab;
+      -webkit-tap-highlight-color:transparent}
   #vp.drag{cursor:grabbing}
   #world{position:absolute;left:50%;top:50%;width:0;height:0;
          transform-origin:0 0;will-change:transform}
