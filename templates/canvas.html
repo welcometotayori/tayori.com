@@ -213,9 +213,18 @@
         padding:var(--s2) var(--s3);opacity:0;scale:.97;pointer-events:none;
         transition:opacity .26s var(--ease),scale .3s var(--ease)}
   .hold.on{opacity:1;scale:1;pointer-events:auto}
-  .hold::before{content:'';position:absolute;inset:-10px -14px;z-index:-1;pointer-events:none;
-        background:radial-gradient(68% 66% at 50% 50%,
-                   rgba(8,8,13,.96) 0%,var(--veil) 54%,rgba(8,8,13,0) 92%)}
+  /* 霞（2026-07-31 夜に作り直し）。この黒い楕円は残す——闇がそこだけ濃くなって
+     行いが立ち上がる、この見え方が宙の作法。作り直したのは**大きさと縁**で、
+     旧実装は霞の箱（inset -10/-14）が中身とほぼ同寸だったので、放射グラデが
+     四角い縁で断ち切られていた。宙が黒いうちは見えなかったが、紙片の面ができて
+     白い紙の上に来た途端、切り口が「灰色の帯」として紙に乗った（受け止めた紙の
+     下端をよぎるにじみの正体）。
+     霞を中身より一回り大きく取り、縁（100%）でちょうど0になる楕円にすれば、
+     どこにも切り口は出ない。中心は濃いまま＝白い紙の上でも字は読める。 */
+  .hold::before{content:'';position:absolute;inset:-34px -46px;z-index:-1;pointer-events:none;
+        background:radial-gradient(50% 50% at 50% 50%,
+                   rgba(8,8,13,.97) 0%,rgba(8,8,13,.95) 46%,
+                   rgba(8,8,13,.80) 70%,rgba(8,8,13,0) 100%)}
   .hold-src{margin:0;font-size:10.5px;line-height:1.9;letter-spacing:0.14em;color:var(--ink-4);
             word-break:keep-all;overflow-wrap:anywhere;padding:2px 0 4px}
   .hold-act{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
@@ -1470,10 +1479,11 @@ function renderHold(){
   holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
   holdBox.querySelector('.mute').addEventListener('click',()=>toggleMute(held));
 }
-/* 行いは、そのことばの隣に置く（出どころから立ち上がる／mood.html と同じ手順）。
-   ただし紙片の面では、一枚が画面より丈の高いことがある——ことばの箱の外へ置こうとすると
-   画面の端まで飛ばされ、触れた場所と行いが遠く離れる（＝「押しても何も出ない」に見える）。
-   触れた場所が分かっている時（指・マウス）は、その真下に置く（2026-07-31 夜）。 */
+/* 行いは、そのことばの**足元**に置く（出どころから立ち上がる／mood.html と同じ手順）。
+   霞が濃いので、ことばの上に重ねると読んでいる字を隠してしまう——まず紙の下に出す。
+   ただし紙片の面では、一枚が画面より丈の高いことがある。その時だけ触れた指の下へ
+   （旧実装はここで画面の端まで飛ばしていて、触れた場所と行いが遠く離れていた
+     ＝「押しても何も出ない」に見えた原因・2026-07-31 夜）。 */
 function placeHold(tx,ty){
   if(!held)return;
   const r=held.getBoundingClientRect(), W=innerWidth, H=innerHeight;
@@ -1481,18 +1491,20 @@ function placeHold(tx,ty){
   holdBox.classList.remove('on');
   void holdBox.offsetHeight;
   const b=holdBox.getBoundingClientRect();
-  let x,y;
-  if(tx!=null&&ty!=null){
-    x=tx-b.width/2; y=ty+20;
-    if(y+b.height>H-12) y=ty-20-b.height;
-  }else{
-    x=r.left+r.width/2-b.width/2; y=r.bottom+6;
-    if(y+b.height>H-12) y=Math.max(12,r.top-b.height-6);
+  let x,y,ax;
+  // 30px は霞の張り出し（::before の -34px）とほぼ同じ＝闇の縁が紙の下端に触れて止まる
+  if(r.bottom+30+b.height<=H-12){          // 紙の足元に置ける（ことばを隠さない）
+    y=r.bottom+30; ax=r.left+r.width/2;
+  }else if(tx!=null&&ty!=null){           // 置けない＝紙が画面より高い。指の下へ
+    y=(ty+20+b.height<=H-12)?ty+20:ty-20-b.height; ax=tx;
+  }else{                                  // 触れた場所が分からない時（鍵盤から）
+    y=Math.max(12,r.top-b.height-6); ax=r.left+r.width/2;
   }
+  x=ax-b.width/2;
   x=Math.min(Math.max(12,x),Math.max(12,W-b.width-12));
   y=Math.min(Math.max(12,y),Math.max(12,H-b.height-12));
   holdBox.style.left=x+'px'; holdBox.style.top=y+'px';
-  holdBox.style.transformOrigin=((tx!=null?tx:r.left+r.width/2)-x)+'px 0px';
+  holdBox.style.transformOrigin=(ax-x)+'px 0px';
   setTimeout(()=>{ if(held)holdBox.classList.add('on'); },16);
 }
 /* 開いたあとで丈が伸びた時に、下へはみ出したぶんだけ静かに上げる（横は動かさない
