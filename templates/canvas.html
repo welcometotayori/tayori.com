@@ -413,6 +413,10 @@
         transition:opacity .6s var(--ease),visibility 0s linear .6s}
   .cast.on{opacity:1;pointer-events:auto;visibility:visible;
            transition:opacity .6s var(--ease),visibility 0s}
+  /* 柱が立っているあいだ、宙の名（ロゴの戸）は退く。柱は画面より高くなることがあり、
+     その時「とじる」（柱の左上・S6）はロゴとちょうど同じ場所に来る——押せるものが
+     二つ重なり、上に居るロゴが必ず勝つ。書いている間だけ、名は引く。 */
+  body.casting header{opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
   @media (prefers-reduced-transparency: reduce){
     .cast.on{background:rgba(8,8,13,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
   }
@@ -609,8 +613,10 @@
      castWhere も）がボタンの字面に透けて重なった。せり上がる感じは border-top 一本で足りる。
      align-self:stretch は .cast-inner が align-items:center のため（伸ばさないと両端から
      下が覗く）。safe-b は iPhone のホームバー分の下余白。 */
+  /* S6：下辺の帯に残すのは「放つ」だけ。その直下に、放とうとしているものの要約を一行。 */
   .cast-row{position:sticky;bottom:0;z-index:2;align-self:stretch;
-            display:flex;gap:var(--s4);align-items:center;justify-content:center;
+            display:flex;flex-direction:column;gap:var(--s1);
+            align-items:center;justify-content:center;
             padding:var(--s2) var(--s3) calc(var(--s2) + var(--safe-b,0px));
             margin:var(--s2) calc(var(--s3) * -1) 0;
             background:var(--space,#08080D);   /* 闇は時刻で移ろう（_sky_tokens）。写しを固定しない */
@@ -618,17 +624,33 @@
   /* 4-3（2026-07-28）：主動作は罫を太く（1.5px）・左右に間を持たせて面積で立たせる。
      色は足さない——階層は面積・字間・罫の太さだけで作る（主／従／危／ケアの4段）。 */
   .cast-send{border-bottom:1.5px solid var(--rule-act);color:var(--ink-1);
-             font-size:14.5px;letter-spacing:0.4em;min-height:var(--touch);
-             padding:12px 16px 13px 20px}
+             font-size:14.5px;letter-spacing:0.4em;min-height:54px;
+             padding:16px 16px 17px 20px}
   .cast-send:disabled{opacity:.35;cursor:default;border-color:var(--rule-faint)}
-  .cast-close{border-bottom-color:transparent;color:var(--ink-3);font-size:12px;
-              letter-spacing:0.24em;min-height:var(--touch);padding:12px 8px}
-  .cast-close:hover{border-bottom-color:var(--rule-act)}
+  /* 送る前の、唯一の確認（S6）。数も件数も出さない一行——いま決まっているものを、
+     決めた順（どこへ／いろ／かたち）にそのまま並べるだけ。 */
+  .cast-sum{margin:0;font-size:11px;letter-spacing:0.14em;color:var(--ink-4);
+            text-align:center;word-break:keep-all;overflow-wrap:anywhere}
+  /* とじるは柱の左上（S6）。的は44×44、罫は語の下にだけ引く（44px幅の下線にしない）。 */
+  .cast-close{position:absolute;left:0;top:0;z-index:3;
+              width:var(--touch);height:var(--touch);padding:0;
+              display:flex;align-items:center;justify-content:center;
+              background:none;border:none;color:var(--ink-3);
+              transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .cast-close span{font-size:10.5px;letter-spacing:0.02em;padding-bottom:3px;
+                   border-bottom:1px solid var(--rule-act)}
+  .cast-close:hover{color:var(--ink-1)}
+  .cast-close:active{opacity:.62}
+  /* 常時の一行（S7）。この下に、罫の語「この投稿について」で開く二行がある */
   .cast-note{margin:0;font-size:11.5px;line-height:2.1;letter-spacing:var(--tr-body);
              color:var(--ink-4);text-align:center}
-  /* 著作権の一行（v2 §13）。注記より一段だけ立たせる：常時・消えない・畳まない */
-  .cast-own{margin:0 0 6px;font-size:12px;line-height:2;letter-spacing:0.14em;
-            color:var(--ink-3);text-align:center;word-break:keep-all}
+  .cast-more{font-size:11px;letter-spacing:0.2em;color:var(--ink-4);
+             min-height:var(--touch);padding:11px 2px}
+  .cast-about{display:flex;flex-direction:column;gap:6px;max-width:min(88vw,320px)}
+  .cast-about[hidden]{display:none}
+  .cast-about p{margin:0;font-size:11.5px;line-height:2.1;letter-spacing:var(--tr-body);
+                color:var(--ink-4);text-align:center;word-break:keep-all;
+                overflow-wrap:anywhere;text-wrap:pretty}
   .care-note{position:fixed;left:50%;bottom:calc(8dvh + var(--safe-b));transform:translate(-50%,8px);z-index:13;
              max-width:min(88vw,420px);padding:var(--s3) 22px;
              background:linear-gradient(90deg,rgba(179,143,111,.08),rgba(179,143,111,.03) 40%,rgba(179,143,111,0)),
@@ -834,6 +856,12 @@
   <div class="cast" id="castPane" role="dialog" aria-modal="true"
        aria-label="tayori-たより- へ、ことばを放つ" aria-hidden="true">
     <div class="cast-inner">
+      {# S6（仕様書 v1.0 §2.2）：出口を分ける。「放つ」（不可逆の決定）と「とじる」
+         （いつでもできる引き返し）が同じ帯に横並びで、罫の太さ（1.5px / 1px）だけの
+         差しか無かった＝同じ重さに見える。とじるは柱の左上へ退ける。
+         ラベルは「とじる」のまま——×記号だけにはしない（この世界は語で押す）。 #}
+      <button class="cast-close" id="castClose" type="button"
+              aria-label="書く柱をとじる"><span>とじる</span></button>
       {# 2026-07-27：プレースホルダから「詩」を外した。理念は「何気ない言葉が、だれかの
          意味になる」なのに、書き出しの一行目で詩を先に挙げていた＝装置の側が
          「詩を書け」と言っていた（利用者から「みんな文豪みたいになっている」と言われた）。 #}
@@ -919,22 +947,29 @@
       </div>
       <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
            付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
-      <!-- 著作権はUIに書く（v2 §13）：規約ではなく、書く手の目に入る場所に、常時一行。
-           歌詞は一行でもアウト。ここは引用を集める場所ではない -->
-      <p class="cast-own">ここに置けるのは、あなたのことばだけです。</p>
-      <!-- 打った過程が流れることは、書き始める前に必ず目に入る場所で言う（v2追補 §1）。
-           書き終わってからの告知は不可＝送信ボタンの脇や確認画面には置かない -->
-      <p class="cast-note">匿名のまま漂い、いつか知らない誰かのもとへ。<br>
-        打った過程も——消した文字も、ためらいの間も——そのまま流れます。</p>
-      {# 2026-07-27：出口を柱のいちばん下へ移した。sticky で底に貼るので、後ろに
-         何か置くとその下敷きになる——告知（打鍵が流れること・著作権）は必ず読める
-         位置に要るので、出口より前に出した。「送信ボタンの脇には置かない」という
-         v2追補 §1 の線も、下ではなく上に出すことで守られる。 #}
+      {# S7（仕様書 v1.0 §2.2）：告知の二段化。著作権と打鍵の記録が本文と同じ強さで
+         三行を占め、低い画面では便箋の字面を圧迫していた。常時出しておくのは
+         「どこへ行くことばか」の一行だけにし、残りは罫の語で開く。
+         制約（v2追補 §1）：打鍵が記録されることは「書き始める前に目に入る場所」に
+         無ければならない。だから（a）畳んだ引き金は出口より前に常時見えていること、
+         （b）初めて開いた時は展開状態で立つこと——畳んでよいのは二度目以降のみ。
+         「送信ボタンの脇には置かない」線も、出口より上に出すことで守られる。 #}
+      <p class="cast-note">匿名のまま漂い、いつか知らない誰かのもとへ。</p>
+      <button class="cast-more ruled" id="castMore" type="button"
+              aria-expanded="true" aria-controls="castAbout">この投稿について</button>
+      <div class="cast-about" id="castAbout">
+        <!-- 打った過程が流れること（v2追補 §1） -->
+        <p>打った過程も——消した文字も、ためらいの間も——そのまま流れます。</p>
+        <!-- 著作権はUIに書く（v2 §13）：規約ではなく、書く手の目に入る場所に。
+             歌詞は一行でもアウト。ここは引用を集める場所ではない -->
+        <p>ここに置けるのは、あなたのことばだけです。</p>
+      </div>
+      {# 出口は柱のいちばん下（sticky）。ここに残るのは「放つ」だけ——その直下に、
+         いま何を放とうとしているかの要約を一行（S6）。送信前の唯一の確認で、
+         確認画面は作らない。 #}
       <div class="cast-row">
         <button class="cast-send ruled" id="castSend" type="button">放つ</button>
-        {# 2026-07-28（4-4）：「閉じる」→「とじる」。閉じる系はすべて「とじる」、
-           取り消し系はすべて「やめる」の2語構成に統一（ここだけ漢字だった）。 #}
-        <button class="cast-close ruled" id="castClose" type="button">とじる</button>
+        <p class="cast-sum" id="castSum" aria-live="polite"></p>
       </div>
     </div>
   </div>
@@ -2154,7 +2189,14 @@ seekBack.addEventListener('click',()=>seekReset());
         toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob'),
         pickerNow=document.getElementById('pickerNow'),
         pickerDot=document.getElementById('pickerDot'),
+        castSum=document.getElementById('castSum'),
         vcaret=document.getElementById('castCaret');
+  /* 置き場所は下の renderWhere 一式が持つが、宣言だけ先に出しておく（2026-07-31）。
+     要約の一行（S6）は色・向き・置き場所のどれが動いても描き直すので、
+     色の paint() と向きの paintDir() からも呼ばれる——どちらも読み込み直後に
+     一度走るので、let のまま下に置くと初期化前参照になる。 */
+  let castRoom=null;
+  let horiz=false;      // 書く向き（下の castDir 一式が持つ）。理由は castRoom と同じ
 
   /* ── 気分の色（v12）──
      色相 × トーン（淡い⇄鮮やか⇄深い）の二段。宙は真っ暗なので明度の下限は46%まで。
@@ -2210,6 +2252,7 @@ seekBack.addEventListener('click',()=>seekReset());
        （air の色項と同じ線。放ったあとの colorTouched=false → paint() でここが畳む）。 */
     if(colorTouched){ pane.style.setProperty('--mood-air','hsla('+c.h+','+c.s+'%,'+c.l+'%,.07)'); }
     else{ pane.style.removeProperty('--mood-air'); }
+    paintSum();      // 要約の一行にも、いまの色の名を返す（S6）
   }
   function wireBar(bar,onPick){
     const pick=ev=>{
@@ -2518,6 +2561,17 @@ seekBack.addEventListener('click',()=>seekReset());
     cntBox.classList.toggle('full',n>=cap);
     // ことばがあり、置き場所も決まって初めて放てる（サーバも部屋を必須にしている）
     send.disabled=!ta.textContent.trim()||!castRoom;
+    paintSum();
+  }
+  /* 放つ直前の要約（S6）。区画の順（どこへ／いろ／かたち）でそのまま並べる。
+     置き場所がまだなら、そこだけ「どこへ、まだ」——放てない理由が一行で分かる
+     （「放つ」が押せない姿と同じことを、ことばの側からも言う）。 */
+  function paintSum(){
+    if(!castSum)return;
+    const room=(ROOMS||[]).find(r=>String(r.id)===String(castRoom));
+    castSum.textContent=[room?(room.name+' へ'):'どこへ、まだ',
+                         toneName(T)+hueName(H),
+                         horiz?'横書き':'縦書き'].join(' ／ ');
   }
   /* 打鍵イベント（TypeTrace／v2追補 §1）。打った過程は——消した文字も含めて——
      そのまま宙に流れる（そのことは書き始める前に .cast-note で明示してある）。
@@ -2563,6 +2617,7 @@ seekBack.addEventListener('click',()=>seekReset());
      書きかけの本文は消さない——閉じるのは取り消しではない（Apple §2 forgiveness）。 */
   function open(){release();                          // 受け止めていたことばは、そっと放す
                   pane.classList.add('on');pane.setAttribute('aria-hidden','false');
+                  document.body.classList.add('casting');   // ロゴの戸は退く（S6 のとじると重なる）
                   btn.classList.add('away');ta.focus();
                   // 焦点の島に居るなら、そこが置き場所。遠景から開いたなら、まだ決めない
                   castRoom=(focusIsl&&focusIsl.isl.room&&!focusIsl.isl.room.archived)?focusIsl.id:null;
@@ -2575,10 +2630,33 @@ seekBack.addEventListener('click',()=>seekReset());
                       if(pane.classList.contains('on'))renderWhere(); }
                   }).catch(()=>{});
                   paintCast();
+                  /* 告知（S7）は初めて開いた時だけ展開して立てる。二度目以降は畳んだ姿 */
+                  paintAbout(!toldOnce);
+                  if(!toldOnce){ toldOnce=true;
+                    try{ localStorage.setItem(NOTE_KEY,'1'); }catch(_){} }
                   requestAnimationFrame(drawCaret);}   // 柱が立った直後から筆先を置く
   function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');
+                  document.body.classList.remove('casting');
                   btn.classList.remove('away');vcaret.style.display='none';
                   btn.focus();}
+  /* ── 告知の二段化（S7）────────────────────────────────────────
+     常時見えているのは「匿名のまま漂い、いつか知らない誰かのもとへ。」の一行だけ。
+     打鍵が記録されることと著作権は、その下の罫の語で開く。
+     v2追補 §1 が「書き始める前に目に入る場所」を求めているので、**初めて柱を開いた時は
+     展開状態で立てる**。畳んだ姿で立ってよいのは二度目以降だけ。
+     覚えるのは端末（localStorage）。アカウントに持たせると、同じ人が別の端末で
+     初めて書く時に畳んだ姿で立つ——「書き始める前に目に入る」は端末ごとの話なので、
+     ここは端末に持たせるのが正しい（仕様書 §5 未決事項1）。 */
+  const more=document.getElementById('castMore'),about=document.getElementById('castAbout'),
+        NOTE_KEY='tayori.castnote';
+  let toldOnce=false;
+  try{ toldOnce=localStorage.getItem(NOTE_KEY)==='1'; }catch(_){}
+  function paintAbout(open){
+    about.hidden=!open;
+    more.setAttribute('aria-expanded',open?'true':'false');
+  }
+  paintAbout(!toldOnce);
+  more.addEventListener('click',()=>paintAbout(about.hidden));
   btn.addEventListener('click',open);
   close.addEventListener('click',shut);
   pane.addEventListener('click',e=>{if(e.target===pane)shut();});
@@ -2633,7 +2711,6 @@ seekBack.addEventListener('click',()=>seekReset());
      倒すのは入力欄だけ——漂う姿も読む柱も縦書きのままで、放たれた後は変わらない。
      選んだ向きは端末に覚えさせる（毎回選ばせない）。 */
   const dirBtn=document.getElementById('castDir'), DIR_KEY='tayori.castdir';
-  let horiz=false;
   try{ horiz=localStorage.getItem(DIR_KEY)==='h'; }catch(_){}
   /* S5（仕様書 v1.0 §2.2）：現在値だけを出す切替をやめ、「縦」「横」を並べて置く。
      4-6 の状態表示（罫のミニアイコン＋現在地）は「押すと何が起きるか」が
@@ -2649,6 +2726,7 @@ seekBack.addEventListener('click',()=>seekReset());
     // 自前カーソルは縦書きのための細工。横書きではネイティブに返す
     vcaret.style.display='none';
     if(!horiz)requestAnimationFrame(drawCaret);
+    paintSum();
   }
   dirBtn.addEventListener('click',e=>{
     const b=e.target.closest('button[data-dir]');
@@ -2668,7 +2746,6 @@ seekBack.addEventListener('click',()=>seekReset());
      （今までどおり、何も選ばずに放てる）。アーカイブ部屋は置けないので出さない。 */
   const whereBox=document.getElementById('castWhere'),
         whereLead=document.getElementById('whereLead');
-  let castRoom=null;
   function paintWhere(){
     whereBox.querySelectorAll('button').forEach(b=>{
       const on=String(b.dataset.id)===String(castRoom);
