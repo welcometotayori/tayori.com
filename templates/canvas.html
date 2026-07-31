@@ -74,11 +74,24 @@
   /* 近づいたら名と灯は退き、ことばが主役になる */
   body.near .isl-nm{opacity:.34}
   body.near .isl-glow{opacity:.25}
-  body.far .isl-w{opacity:.3}
   /* 紙片の面（読む面）に灯は要らない（2026-07-31 夜）。降りた島の灯は直径が
      島の1.5倍＝画面いっぱいの放射グラデーション三枚で、寄る・引くのたびに
      全画素を塗り直していた。紙を敷いたらそれは消す——読む面の背は、ただの闇。 */
   .isl.sheet .isl-glow{display:none}
+  /* ── 一枚の画面に、一つの読み方（2026-07-31 夜・利用者FB）────────────
+     「途中でフォーマットが変わる」「暗い字が黒に沈む」「重さが片側に寄る」の三つは、
+     どれも同じ一因だった——**読む面（紙片）と地形（散らばりの字）が同居していた**。
+     紙になるのは降りた島だけなので、まわりの島は黒地に生の字を撒いたままで、
+     同じ画面に二つの様式が並び、暗い色相の字が闇に沈み、密度が片側へ寄っていた。
+     直し方は「まわりを整える」ではなく、**降りたら、まわりは地形に還る**こと。
+       ・紙を敷いた島 … 読む面（紙片・不透明）
+       ・それ以外の島 … 地形。字は読み物ではなく粒（.3）
+       ・読んでいる間  … まわりの字は退き、名と灯だけが残る（一つの様式だけが残る）
+     倍率（far/near）で分けないのが要点：しきい値は画面幅で破綻するし、
+     「読む面かどうか」は倍率ではなく紙が敷かれたかどうかで決まっている。 */
+  .isl:not(.sheet) .isl-w{opacity:.3}
+  .isl.sheet .isl-w{opacity:1}
+  body.reading .isl:not(.sheet) .isl-w{opacity:0;pointer-events:none}
   /* ── 重さの修正（2026-07-31）──────────────────────────
      引いた宙（K<0.7）では、色の発光（text-shadow）も塗らない。遠景の字は
      小さく沈んでいて（.isl-w が 0.3）光暈はどのみち読めない——見えない光の
@@ -1113,9 +1126,15 @@ function posOf(isl,el){
 }
 function sheetLayout(isl,stagger){
   const gap=26;
-  // 縦長の画面（携帯）は敷き詰めも縦長に：一行2〜3枚で、下へ読み進む
+  /* 束の幅は「島の大きさ」ではなく「いま見えている画面の幅」で決める（2026-07-31 夜）。
+     旧実装は島の半径（R*2.1）から決めていたので、島の大きさ次第で束が画面の
+     半分ほどの幅に痩せ、右側が大きく空いて、そのぶん下へ長く伸びていた
+     ——「重さが片側に寄る」の正体。画面の幅（の88%）を世界の寸法に直して使えば、
+     どの島でも束は画面いっぱいに広がり、丈もそのぶん縮む。
+     縦長の画面（携帯）は下限が狭いので、結果として一行2〜3枚のままになる。 */
   const portrait=VH>VW;
-  const maxW=Math.max(portrait?340:540,Math.min(portrait?620:1100,isl.R*2.1));
+  const maxW=Math.max(portrait?340:540,
+                      Math.min(portrait?900:1400,(VW*0.88)/Math.max(K,0.08)));
   const order=isl.words
     .filter(el=>!el.classList.contains('mutedout'))
     .sort((a,b)=>{
@@ -1133,11 +1152,16 @@ function sheetLayout(isl,stagger){
   });
   if(row.length)rows.push({items:row,w:x-gap});
   const totalH=y+rowH;
+  /* 右の端を、どの行もそろえる（2026-07-31 夜・利用者FB「どこから読めばいいか分からない」）。
+     旧実装は行ごとに中央へ寄せていたので、行の長さが違うぶん右の端がぎざぎざになり、
+     読み始めの一本目（縦書きは右上）が行ごとに動いていた。紙の束の右端は一本の線に
+     そろえ、余りは最後の行の左に出す——縦書きの紙面と同じ姿になる。 */
+  const blockW=rows.reduce((m,r)=>Math.max(m,r.w),0);
   let idx=0;
   rows.forEach(r=>{
     r.items.forEach(it=>{
       // 右から埋める（vertical-rl の読み順）。行の中では上をそろえる
-      const tx=r.w/2-it.x-it.w, ty=it.y-totalH/2;
+      const tx=blockW/2-it.x-it.w, ty=it.y-totalH/2;
       it.el._gx=tx; it.el._gy=ty;
       /* 「次々流れてくる」（2026-07-31）：島に降りた瞬間、紙片は一斉に整列するのでは
          なく、読み順（右上→左下）に少しずつ席へ流れ着く。遅らせるのは transform だけ
@@ -1163,6 +1187,8 @@ function moving(isl){
 function sheet(isl){
   isl.sheeted=true;
   moving(isl);
+  // 読んでいる間、宙は一つの様式だけになる（まわりの島は名と灯＝地形に還る）
+  document.body.classList.add('reading');
   isl.el.classList.add('sheet');
   sheetLayout(isl,true);
   // 流れ着き終わったら遅れは畳む（残すと、受け止めや検索の応答まで遅れて見える）
@@ -1173,6 +1199,7 @@ function sheet(isl){
 function unsheet(isl){
   isl.sheeted=false;
   moving(isl);
+  document.body.classList.remove('reading');
   isl.el.classList.remove('sheet');
   clearTimeout(isl._stgT);
   isl.words.forEach(el=>{el.style.transform='';el.style.transitionDelay='';});
