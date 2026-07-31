@@ -29,10 +29,11 @@
   .logo{background:none;border:none;cursor:pointer;font-family:inherit;padding:0;
         text-align:left;color:var(--ink-1);text-decoration:none;font-size:var(--t-title);
         letter-spacing:var(--tr-title)}
-  /* 宙の上に常駐する字（名・足元・書く）には、島の名と同じ闇の暈をつける
-     （2026-07-31 夜）。紙片の面では背が白い紙になるので、白い墨がそのままだと消える。
-     数は三つだけなので、光暈を禁じた重さの規則（.w の text-shadow 全廃）には触れない。 */
-  .logo,.foot,.cast-btn{text-shadow:0 0 10px rgba(8,8,13,.92),0 0 24px rgba(8,8,13,.72)}
+  /* 宙の上に常駐する字には、島の名と同じ闇の暈をつける（2026-07-31 夜）。
+     紙片の面では背が白い紙になるので、白い墨がそのままだと消える。
+     案A以後、暈が要るのはロゴだけ——足元と「書く」は下辺の帯の上に乗り、
+     帯そのものが闇を敷いている（重ねて塗る理由が無い）。 */
+  .logo{text-shadow:0 0 10px rgba(8,8,13,.92),0 0 24px rgba(8,8,13,.72)}
   .logo small{color:var(--thread);font-size:var(--t-mono);letter-spacing:var(--tr-mono);
               margin-left:10px}
   .menu{position:relative;display:flex;flex-direction:column;align-items:flex-start}
@@ -62,9 +63,23 @@
               transition:color .2s var(--ease),border-color .2s var(--ease)}
   .menu-rooms button:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
   .menu-rooms button:active{opacity:.62}
-  /* ── 足元：この面の名。説明は置かない（宙の作法） ── */
-  .foot{position:fixed;left:calc(22px + var(--safe-l));bottom:calc(16px + var(--safe-b));
-        z-index:20;color:var(--ink-4);font-size:var(--t-mono);
+  /* ── 足元に、ひとつの帯（案A・UI改善仕様書 v1.0 §3.3）──────────────────
+     下辺に高さ84px（＋端末の縁）の帯を一つ置き、四隅に散っていた常駐物をここへ集める。
+     背は下へ向かって濃くなる霞——宙の字が帯の裏で読めていると、どこまでが操作で
+     どこからが宙なのか分からない。上辺は罫一本だけで、面も箱も作らない。
+     帯そのものは指を受けない（pointer-events:none）：宙は掴んで動かす面なので、
+     84pxぶんの帯が指の通り道を塞いではいけない。受けるのは、中の語だけ。 */
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:11;
+        height:calc(84px + var(--safe-b));
+        padding:0 calc(20px + var(--safe-r)) calc(10px + var(--safe-b)) calc(20px + var(--safe-l));
+        display:flex;flex-direction:column;justify-content:center;gap:6px;
+        background:linear-gradient(180deg,transparent,rgba(8,8,13,.92) 34%,var(--space) 62%);
+        border-top:1px solid var(--rule-faint);
+        pointer-events:none}
+  .dock-row{position:relative;display:flex;align-items:center;justify-content:space-between}
+  .dock-row>*{pointer-events:auto}
+  /* この面の名。説明は置かない（宙の作法）。帯の下段中央へ（案A） */
+  .foot{margin:0;text-align:center;color:var(--ink-4);font-size:var(--t-mono);
         letter-spacing:var(--tr-mono);pointer-events:none}
   /* ── 宙そのもの ── */
   /* 宙は「掴んで動かす面」なので、字は掴めない（2026-07-31 夜）。
@@ -179,8 +194,7 @@
     to{transform:translate(-50%,-50%) scale(1);opacity:0}}
   /* 寄りの操作（キーボードと、つまめない環境のための一対）。
      2026-07-31：語（よる／ひく）をやめ、どの地図でも通じる ＋／− に。 */
-  .zoom{position:fixed;right:calc(20px + var(--safe-r));bottom:calc(14px + var(--safe-b));
-        z-index:20;display:flex;gap:10px}
+  .zoom{display:flex;gap:10px}
   .zoom button{background:none;border:none;
         color:var(--ink-3);font-family:inherit;font-size:19px;line-height:1;
         width:var(--touch);min-height:var(--touch);padding:0;
@@ -259,37 +273,46 @@
   /* ── 検索（2026-07-31 刷新・Cosmos の作法）────────────────────
      罫の長い一行をやめ、畳まれた虫眼鏡ひとつに。触れると小さな角丸の器が
      ひらいて入力になる。楕円（ピル）にはしない——radius は高さの半分未満。 */
-  .seek{position:fixed;left:50%;bottom:calc(7dvh + var(--safe-b));transform:translateX(-50%);
-        z-index:22;display:none;align-items:center;gap:8px}
-  @supports not (height:1dvh){ .seek{bottom:calc(7vh + var(--safe-b))} }
-  .seek.here{display:flex}
-  .seek-bar{display:flex;align-items:center;width:var(--touch);height:var(--touch);
-            border-radius:13px;background:rgba(15,15,22,.9);
-            border:1px solid rgba(250,248,243,.10);overflow:hidden;
-            transition:width .34s var(--ease),border-color .22s var(--ease)}
-  .seek.open .seek-bar{width:min(68vw,260px);border-color:rgba(250,248,243,.18)}
-  .seek-open{flex:none;display:flex;align-items:center;justify-content:center;
-             width:var(--touch);height:var(--touch);background:none;border:none;
-             color:var(--ink-3);cursor:pointer;padding:0;
-             transition:color .22s var(--ease)}
-  .seek-open svg{width:16px;height:16px;fill:none;stroke:currentColor;
-                 stroke-width:1.4;stroke-linecap:round}
-  .seek-open:hover{color:var(--ink-1)}
-  .seek input{flex:1;min-width:0;background:none;border:none;outline:none;
+  /* 案A：畳まれた虫眼鏡と角丸13pxの器はやめた。ふだんは「さがす」の一語で、
+     押すと**その語の位置から罫が左へ伸びて**入力行になる。伸びるのは罫（下線）だけ
+     ——器は作らない。入力の行は右端に錨を打って絶対配置にするので、伸びても
+     帯の中の他のもの（＋−・書く）は一切動かない。 */
+  .seek{position:relative;display:flex;align-items:center}
+  .seek-open{font-size:12px;letter-spacing:0.2em;color:var(--ink-3);
+             min-height:var(--touch);padding:12px 2px;white-space:nowrap;
+             transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .seek.open .seek-open{opacity:0;pointer-events:none}
+  /* 罫は入力そのものが持つ（器ではなく行に引く）。「もどす」は別の押せる語なので、
+     自分の罫を持つ——押せるもので罫を持たないものは作らない（作法1-2）。 */
+  .seek-in{position:absolute;right:0;top:0;bottom:0;width:0;overflow:hidden;
+           display:flex;align-items:center;gap:var(--s2);
+           pointer-events:none;transition:width .34s var(--ease)}
+  /* 幅は仕様どおり min(68vw,260px)。ただし狭い画面では左端の ＋− に噛むので、
+     そこで止める（150px ＝ 帯の左右の余白40 + ＋−の98 + あいだの息12。
+     375px 実測：68vw=255px のままだと ＋− の右端に 6px 重なる）。 */
+  .seek.open .seek-in{pointer-events:auto;
+           width:min(68vw,260px,calc(100vw - 150px - var(--safe-l) - var(--safe-r)))}
+  /* 入力ともどすは、どちらも高さ44pxで罫を足元にそろえる（触れるものの最小・作法4）。
+     同じ高さに揃うので、二本の罫は一本の行が語のところで切れた姿に見える。 */
+  .seek input{flex:1;min-width:0;height:var(--touch);background:none;border:none;outline:none;
+              border-bottom:1px solid var(--rule-act);
               font-family:inherit;font-size:13px;letter-spacing:0.12em;
-              color:var(--ink-1);padding:0 14px 0 0;opacity:0;
-              transition:opacity .25s var(--ease)}
+              color:var(--ink-1);padding:0 2px;opacity:0;
+              transition:opacity .25s var(--ease),border-color .22s var(--ease)}
   .seek.open input{opacity:1}
   .seek input::placeholder{color:var(--ink-4);letter-spacing:0.18em}
-  .seek button#seekBack{background:none;border:none;font-family:inherit;font-size:var(--t-meta);
-               letter-spacing:0.14em;color:var(--ink-4);min-height:var(--touch);padding:9px 4px;
+  .seek button#seekBack{background:none;border:none;
+               border-bottom:1px solid var(--rule-act);
+               font-family:inherit;font-size:var(--t-mono);
+               letter-spacing:0.14em;color:var(--ink-3);
+               height:var(--touch);padding:0 2px;
                white-space:nowrap;transition:color .22s var(--ease)}
   .seek button#seekBack:hover{color:var(--ink-2)}
   .seek button#seekBack:active{opacity:.62}
-  .seek.seeking .seek-bar{border-color:var(--rule-act)}
-  /* 島に居るあいだ、「書く」は探す行の一段上へ（mood.html の body.in-room と同じ寸法） */
-  body.seekhere .cast-btn{bottom:calc(7dvh + var(--safe-b) + 58px)}
-  @supports not (height:1dvh){ body.seekhere .cast-btn{bottom:calc(7vh + var(--safe-b) + 58px)} }
+  .seek.seeking input{border-bottom-color:var(--thread)}
+  /* 入力しているあいだ、「書く」は退く（罫が伸びてくる先に居るため）。
+     場所は空けたままにする＝退くのは opacity だけで、帯の中の位置は動かさない。 */
+  body.seekopen .cast-btn{opacity:0;pointer-events:none}
   /* 寄せられた語は深いところから表層へ。それ以外の島のことばは息をひそめる
      （沈むのは透明度だけ。ぼかしは層を作るので使わない・2026-07-31） */
   .isl.gathered .w:not(.lit):not(.held){opacity:calc(var(--a,.8)*.22)!important}
@@ -339,21 +362,15 @@
      同名だったため。「放つ」は決定にだけ残す）：宙の下辺に静かな一語。
      この一語が宙で唯一の主動作なので、
      ホームバーの下に潜らせない（vh はアドレスバーの下まで数える／--safe-b はその縁） */
-  .cast-btn{position:fixed;left:50%;bottom:calc(7dvh + var(--safe-b));transform:translateX(-50%);
-            z-index:11;min-height:var(--touch);color:var(--ink-2);font-size:15px;letter-spacing:0.5em;
+  /* 帯の中央に据える（案A）。左右の二つ（＋−／さがす）に挟まれた真ん中ではなく、
+     帯そのものの中央に錨を打つ——左右の中身の幅が変わっても、この一語は動かない。
+     2026-07-29 まであった「島の中では58px持ち上げる」例外規則は畳んだ：
+     位置が状態で動くと、指は場所を覚えられない（案A が解こうとした D1 そのもの）。 */
+  .cast-btn{position:absolute;left:50%;transform:translateX(-50%);
+            min-height:var(--touch);color:var(--ink-2);font-size:15px;letter-spacing:0.5em;
             /* 4-3（2026-07-28）：主動作なので罫を1.5pxに（.ruled の1pxを上書き） */
             border-bottom-width:1.5px;
             padding:12px 18px 13px 23px}
-  @supports not (height:1dvh){ .cast-btn{bottom:calc(7vh + var(--safe-b))} }
-  /* 部屋の中では「書く」を一段上げ、空いた高さへ探す行を据える（2026-07-29）。
-     同じ帯に二つ置いていたので、罫一行の当たり判定の上半分が「書く」のそれと
-     重なっていた（実測：1280×720 で 11px・窓が低いほど広がり、500px 高では 21px＝
-     入力欄の半分）。おまけに探す行の下は 18px しか無く、スマホでは画面のいちばん下の
-     帯＝ブラウザが自分のために取っている場所に沈んでいた——押しても、何も起きない。
-     探す行は「書く」が居た高さ（7dvh）へ移す。ここは指が届くと分かっている位置。
-     部屋の外の「書く」は動かさない＝いつもの場所のまま。 */
-  body.in-room .cast-btn{bottom:calc(7dvh + var(--safe-b) + 58px)}
-  @supports not (height:1dvh){ body.in-room .cast-btn{bottom:calc(7vh + var(--safe-b) + 58px)} }
   /* 書く柱が立っている間は、下の「放つ」は退く。
      柱の背景が半透明なので、放つ／宙 へ 放 つ が二つ並んで見えていた（v12.1） */
   .cast-btn.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
@@ -773,7 +790,9 @@
   /* ── 灯（宙v1 §4.2）──
      いま、自分以外の誰かが宙のことばに触れた——その気配だけの、かすかな明滅。
      位置は宙の下のすみ。数字も文字も持たない（数えた瞬間に灯でなくなる）。 */
-  .lantern{position:fixed;left:calc(26px + var(--safe-l));bottom:calc(30px + var(--safe-b));
+  /* 灯は帯の上・左端26px（案A）。帯の中に入れず、帯のすぐ上に浮かせる——
+     これは操作ではなく気配なので、操作の列に並べない。 */
+  .lantern{position:absolute;left:calc(26px + var(--safe-l));bottom:calc(100% + 10px);
            width:7px;height:7px;border-radius:50%;
            background:var(--thread,#c9b98a);opacity:0;pointer-events:none;z-index:9;
            box-shadow:0 0 16px 4px rgba(222,205,160,.35);
@@ -827,16 +846,6 @@
 </header>
 <div id="vp"><div id="world"></div></div>
 <div class="hold" id="holdBox" hidden></div>
-<div class="seek" id="seek">
-  <div class="seek-bar">
-    <button class="seek-open" id="seekOpen" type="button" aria-label="検索" aria-expanded="false">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.6 10.6L14 14"/></svg>
-    </button>
-    <input id="seekQ" type="text" maxlength="80" autocomplete="off"
-           enterkeyhint="search" aria-label="検索" placeholder="検索" tabindex="-1">
-  </div>
-  <button id="seekBack" type="button" hidden>もどす</button>
-</div>
 <p class="whisper" id="whisper" aria-live="polite"></p>
 {% if logged_in %}
   <p class="wmark" id="wmark" aria-live="polite"></p>
@@ -849,10 +858,7 @@
     <p class="sent-2">いつか、<wbr>知らない<wbr>誰かの<wbr>もとへ。</p>
   </div>
   <div class="arrivals" id="arrivals" aria-live="polite"></div>
-  {# 2026-07-28（4-5）：入口の語を「書く」に。書く画面を開く入口（ここ）と、実際に
-     送信する不可逆の決定（castSend）がどちらも「放つ」で、可逆な行為と不可逆な
-     行為が同じ名前だった。「放つ」は決定にだけ残す——書くのはいつでもやめられる。 #}
-  <button class="cast-btn ruled" id="castBtn" type="button">書く</button>
+  {# 「書く」の一語は下辺の帯（.dock）へ移した（2026-07-31・案A）。 #}
   <div class="cast" id="castPane" role="dialog" aria-modal="true"
        aria-label="tayori-たより- へ、ことばを放つ" aria-hidden="true">
     <div class="cast-inner">
@@ -974,9 +980,6 @@
     </div>
   </div>
 {% endif %}
-<p class="foot">ひとつづきの宙</p>
-<!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
-  <div class="lantern" id="lantern" aria-hidden="true"></div>
 {% if logged_in %}
   <div class="arrivals" id="arrivals" aria-live="polite"></div>
   <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
@@ -995,9 +998,40 @@
     </div>
   </div>
 {% endif %}
-<div class="zoom">
-  <button id="zin" type="button" aria-label="宙に寄る">＋</button>
-  <button id="zout" type="button" aria-label="宙から引く">−</button>
+{# ── 足元に、ひとつの帯（UI改善仕様書 v1.0 §3.3・案A）────────────────────
+   宙には常時七つのものが浮いていて、うち三つが下辺 7dvh 前後に集まり、島の内外で
+   位置が 58px 動く例外規則まであった——指が位置を覚えられない。四隅の常駐物を
+   下辺の一列に集め、順を「＋− ／ 書く ／ さがす」で固定する。ここは状態で動かない。
+   「書く」だけは帯の中で位置を持たない（左右の二つに挟まれた中央＝絶対配置）ので、
+   さがすが横へ伸びても、ひとつづきの宙の名が下に入っても、真ん中から動かない。 #}
+<div class="dock" id="dock">
+  <div class="dock-row">
+    {# 寄りの操作（キーボードと、つまめない環境のための一対） #}
+    <div class="zoom">
+      <button id="zin" type="button" aria-label="宙に寄る">＋</button>
+      <button id="zout" type="button" aria-label="宙から引く">−</button>
+    </div>
+    {% if logged_in %}
+    {# 2026-07-28（4-5）：入口の語を「書く」に。書く画面を開く入口（ここ）と、実際に
+       送信する不可逆の決定（castSend）がどちらも「放つ」で、可逆な行為と不可逆な
+       行為が同じ名前だった。「放つ」は決定にだけ残す——書くのはいつでもやめられる。 #}
+    <button class="cast-btn ruled" id="castBtn" type="button">書く</button>
+    {% endif %}
+    {# 検索（案A）：虫眼鏡と角丸の器をやめ、「さがす」の一語に戻す。押すと、その語の
+       位置から罫が横に伸びて入力行になる——押せることの合図は、この世界では罫一本だけ。 #}
+    <div class="seek" id="seek">
+      <button class="seek-open ruled" id="seekOpen" type="button"
+              aria-expanded="false" aria-controls="seekQ">さがす</button>
+      <div class="seek-in">
+        <input id="seekQ" type="text" maxlength="80" autocomplete="off"
+               enterkeyhint="search" aria-label="ことばで寄せる" placeholder="ことばで寄せる" tabindex="-1">
+        <button id="seekBack" type="button" hidden>もどす</button>
+      </div>
+    </div>
+  </div>
+  <p class="foot">ひとつづきの宙</p>
+  <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->
+  <div class="lantern" id="lantern" aria-hidden="true"></div>
 </div>
 <script>
 'use strict';
@@ -1937,9 +1971,9 @@ function seekWatch(){
       if(sheetId!=null&&islands.has(sheetId))sheet(islands.get(sheetId));
     },140);
   }
-  // 検索はいつも足元に（2026-07-31）。「書く」はその一段上へ
-  seekEl.classList.add('here');
-  document.body.classList.add('seekhere');
+  /* 常駐UIの位置は、島の内外で動かない（案A）。かつてはここで「探す行を出す・
+     書くを一段上げる」を状態に応じて切り替えていたが、下辺の帯が常にある今、
+     出したり動かしたりするものは何も無い。 */
 }
 function seekReset(){
   seeking=false;
@@ -2004,12 +2038,14 @@ function seekRun(){
 const seekOpen=document.getElementById('seekOpen');
 function seekUnfold(){
   seekEl.classList.add('open');
+  document.body.classList.add('seekopen');   // 罫が伸びる先に居る「書く」は退く（案A）
   seekOpen.setAttribute('aria-expanded','true');
   seekQ.tabIndex=0;
-  setTimeout(()=>seekQ.focus(),60);   // 器がひらき始めてから筆先を入れる
+  setTimeout(()=>seekQ.focus(),60);   // 罫が伸び始めてから筆先を入れる
 }
 function seekFold(){
   seekEl.classList.remove('open');
+  document.body.classList.remove('seekopen');
   seekOpen.setAttribute('aria-expanded','false');
   seekQ.tabIndex=-1;
   if(document.activeElement===seekQ)seekQ.blur();
