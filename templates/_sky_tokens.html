@@ -92,6 +92,7 @@
          [13.5,10,12,17],  /* 昼の中心 13:30 #0A0C11 */
          [17.5,16,11,16],  /* 夕の中心 17:30 #100B10（灯ともし頃の暖） */
          [23.5,8,8,13]];   /* 夜の中心 23:30 #08080D（素の闇） */
+  var LAST=null;
   function ground(){
     var d=new Date(),h=d.getHours()+d.getMinutes()/60;
     var a,b,i;
@@ -104,6 +105,12 @@
             g=Math.round(a[2]+(b[2]-a[2])*k),
             u=Math.round(a[3]+(b[3]-a[3])*k);
         var c='rgb('+r+','+g+','+u+')';
+        /* 同じ色なら書かない（2026-07-31 夜）。--space は :root の**継承する**変数で、
+           書き換えると文書ぜんぶの計算済みスタイルが無効になる——一枚の宙のように
+           要素が数百ある面では、それだけで一拍つまずく。一歩は数分に一度しか動かない
+           （四段のうち一番速い成分でも 6時間で 5/255）ので、値が変わった時だけ書く。 */
+        if(c===LAST)return;
+        LAST=c;
         document.documentElement.style.setProperty('--space',c);
         var m=document.querySelector('meta[name="theme-color"]');
         if(m)m.setAttribute('content',c);

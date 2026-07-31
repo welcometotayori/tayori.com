@@ -49,12 +49,21 @@
   #vp.drag{cursor:grabbing}
   #world{position:absolute;left:50%;top:50%;width:0;height:0;
          transform-origin:0 0;will-change:transform}
-  /* 島：部屋の名と、その地形。名は倍率に抗って読める大きさを保つ（--ik はJSが書く） */
+  /* 島：部屋の名と、その地形。名は倍率に抗って読める大きさを保つ。
+     逆スケールは **JSが名の要素へ直に書く**（2026-07-31 夜）。かつては world に
+     カスタムプロパティ（--ik）を一本書いて継承で配っていたが、継承する変数を根に
+     書き換えると、その下の全要素（数百のことば）の計算済みスタイルが一斉に無効に
+     なる——つまみ／ホイールのたび、宙ぜんぶの字を再計算していた。名は14枚しかない。
+     14枚の葉に直接書くほうが、根に一度書くより圧倒的に軽い。 */
   .isl{position:absolute;transform:translate(-50%,-50%)}
-  .isl-nm{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(var(--ik,1));
+  .isl-nm{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
           color:var(--ink-2);font-size:17px;letter-spacing:.22em;white-space:nowrap;
           text-shadow:0 0 9px rgba(8,8,13,.9);pointer-events:none;
           transition:opacity .8s var(--ease),color .3s var(--ease)}
+  /* 島へ滑って降りる1.1sのあいだは、名も同じ時間をかけて寸法を変える
+     （JSは到着の値を先に書くので、滑走の始めに名だけ跳ねて見えていた） */
+  body.flying .isl-nm{transition:opacity .8s var(--ease),color .3s var(--ease),
+                      transform 1.1s var(--ease)}
   /* 遠景では、島の名がその島への戸になる（2026-07-31）。近景では紙片が主役なので
      名は気配に退き、指も受けない（紙のタップを名が横取りしない）。 */
   body.far .isl-nm{pointer-events:auto;cursor:pointer;padding:10px 14px;margin:-10px -14px}
@@ -828,7 +837,18 @@ const vp=document.getElementById('vp'), world=document.getElementById('world');
    毎フレーム読むと、そのたびレイアウトの確定を強いることがある——寸法が
    変わるのは resize の時だけなのだから、その時だけ測り直す。 */
 let VW=vp.clientWidth, VH=vp.clientHeight;
-addEventListener('resize',()=>{VW=vp.clientWidth;VH=vp.clientHeight;});
+/* 携帯はアドレスバーの出入りでも resize が飛ぶ（スクロールのたび何度も）。
+   測り直しと敷き直しは落ち着いてから一度だけ（2026-07-31 夜）。 */
+let rsT=0;
+addEventListener('resize',()=>{
+  VW=vp.clientWidth;VH=vp.clientHeight;
+  clearTimeout(rsT);
+  rsT=setTimeout(()=>{
+    // 画面の向きが変われば紙片の敷き詰めも変わる（縦長は一行2〜3枚）
+    if(sheetId!=null&&islands.has(sheetId))sheetLayout(islands.get(sheetId));
+    apply();
+  },160);
+});
 // ロゴタップ＝棚・設定の戸（2026-07-31 復活）。開け閉めだけ。外を触れば閉じる
 (function(){
   const sb=document.getElementById('logoBtn'), sl=document.getElementById('logoMenu');
@@ -990,7 +1010,7 @@ function build(rooms,words){
     const nm=document.createElement('div'); nm.className='isl-nm'; nm.textContent=s.room.name;
     isl.appendChild(nm);
     world.appendChild(isl);
-    islands.set(s.room.id,{el:isl,wordsEl:wl,cx:s.x,cy:s.y,R:s.R,words:[],room:s.room});
+    islands.set(s.room.id,{el:isl,wordsEl:wl,nm:nm,cx:s.x,cy:s.y,R:s.R,words:[],room:s.room});
   });
   words.forEach(w=>{
     const isl=islands.get(w.room); if(!isl)return;
@@ -1025,11 +1045,22 @@ function build(rooms,words){
    直線に押すと、同じ向きに並んだことばが島の外まで筋になって流れ出す（初版で実際に
    起きた）。渦なら家の近くの空席に収まり、島は塊のまま。順序固定＝決定論。 */
 function relax(){
+  /* 測るのと書くのを混ぜない（2026-07-31 夜・立ち上がりの固まりの真因）。
+     旧実装は「一枚測って、一枚置く」を数百回くり返していた。置いた瞬間に版面は
+     汚れるので、次の一枚を測るたびブラウザは版面を組み直す——数百回の強制レイアウト
+     ＝立ち上がりで宙が数秒沈黙する。先に全部測り、計算し、最後にまとめて置く。 */
+  const measured=new Map();
+  islands.forEach(isl=>isl.words.forEach(el=>{
+    const w=el.offsetWidth,h=el.offsetHeight;
+    el._sw=w; el._sh=h;                // 散らばりの姿の寸法（画面外の間引きに使う）
+    measured.set(el,[w,h]);
+  }));
+  const writes=[];
   islands.forEach(isl=>{
     const done=[];
     const order=[...isl.words].sort((a,b)=>(b._w.sink-a._w.sink)||(a._w.id<b._w.id?-1:1));
     order.forEach(el=>{
-      const w=el.offsetWidth,h=el.offsetHeight;
+      const m=measured.get(el)||[0,0], w=m[0], h=m[1];
       let x=el._hx,y=el._hy;
       const base=Math.atan2(el._hy,el._hx);
       const hits=()=>done.some(d=>Math.abs(x-d.x)<(w+d.w)/2+18&&Math.abs(y-d.y)<(h+d.h)/2+18);
@@ -1043,10 +1074,11 @@ function relax(){
         y=el._hy+Math.sin(aa)*rr*0.6;
       }
       el._hx=x; el._hy=y;
-      el.style.left=x+'px'; el.style.top=y+'px';
+      writes.push([el,x,y]);
       done.push({x,y,w,h});
     });
   });
+  writes.forEach(a=>{a[0].style.left=a[1]+'px';a[0].style.top=a[2]+'px';});
 }
 
 /* ── 紙片のグリッド（2026-07-31）──────────────────────
@@ -1071,7 +1103,9 @@ function sheetLayout(isl,stagger){
       if(!!a._w.pd!==!!b._w.pd)return a._w.pd?1:-1;          // 漂流物は人のことばの後
       return (b._w.sink-a._w.sink)||(String(a._w.id)<String(b._w.id)?-1:1);
     });
+  // 測るのは一度に全部（間に style を書かない＝強制レイアウトを起こさない）
   const sizes=order.map(el=>({el,w:el.offsetWidth,h:el.offsetHeight}));
+  sizes.forEach(it=>{it.el._pw=it.w;it.el._ph=it.h;});   // 紙片の姿の寸法（間引きに使う）
   let x=0,y=0,rowH=0;const rows=[];let row=[];
   sizes.forEach(it=>{
     if(row.length&&x+it.w>maxW){rows.push({items:row,w:x-gap});row=[];x=0;y+=rowH+gap;rowH=0;}
@@ -1098,19 +1132,31 @@ function sheetLayout(isl,stagger){
     });
   });
 }
+/* 席替えの最中（家⇄紙片の席）は、紙は二つの座のあいだを飛んでいる。
+   その間だけ「家でも席でも画面に掛かるなら描く」で間引く＝飛んでいる紙が
+   途中で消えない。1.9s は transform 1.1s ＋ 流れ込みの遅れ 0.5s の外側。 */
+function moving(isl){
+  isl._moving=true;
+  clearTimeout(isl._mvT);
+  isl._mvT=setTimeout(()=>{isl._moving=false;apply();},1900);
+}
 function sheet(isl){
   isl.sheeted=true;
+  moving(isl);
   isl.el.classList.add('sheet');
   sheetLayout(isl,true);
   // 流れ着き終わったら遅れは畳む（残すと、受け止めや検索の応答まで遅れて見える）
   clearTimeout(isl._stgT);
   isl._stgT=setTimeout(()=>isl.words.forEach(el=>{el.style.transitionDelay='';}),1700);
+  apply();
 }
 function unsheet(isl){
   isl.sheeted=false;
+  moving(isl);
   isl.el.classList.remove('sheet');
   clearTimeout(isl._stgT);
   isl.words.forEach(el=>{el.style.transform='';el.style.transitionDelay='';});
+  apply();
 }
 /* ── 寄る・引く・つまむ ─────────────────────────── */
 let K=0.5, PX=0, PY=0;             // 倍率と、世界の原点の画面上の位置
@@ -1119,7 +1165,7 @@ const KMIN=0.1, KMAX=2.4;
    wheel も pointermove もフレームより速く飛んでくる——来た数だけ style を
    書き直すと、指の速さぶんだけ余計に描き直しが積まれてつっかえる。
    rAF で束ね、最後の値だけを次のフレームで一度書く。 */
-let applyQ=false, ikLast=0;
+let applyQ=false, ikLast=0, farOn=null, crispOn=null;
 function apply(){
   if(applyQ)return;
   applyQ=true;
@@ -1128,36 +1174,92 @@ function apply(){
 function applyNow(){
   applyQ=false;
   world.style.transform='translate('+PX+'px,'+PY+'px) scale('+K+')';
-  /* その2：--ik（島の名の逆スケール）は全島おなじ値なのだから、島ごとに
-     書かない。world に一度だけ書けば、カスタムプロパティは継承で島の名に届く。
-     値がほぼ変わらないフレームでは書きもしない（書くだけで再計算が走る）。 */
-  const ik=Math.min(4.5,Math.max(1,0.62/K));
-  if(Math.abs(ik-ikLast)>0.004){
-    ikLast=ik;
-    world.style.setProperty('--ik',ik.toFixed(3));
-  }
+  /* その2（2026-07-31 夜に改訂）：しきい値をまたぐ class の付け外しには**遊び**を持たせる。
+     .far/.crisp は宙ぜんぶの字の見え方を変える class なので、付け外しのたびに数百枚の
+     スタイルが計算し直される。境目ちょうどでつまむと、一回のジェスチャの中で毎フレーム
+     付いたり外れたりして——それ自体が固まる原因になっていた（ヒステリシス）。 */
   // near＝島ひとつが視界に収まる倍率から。0.42だと「島に降りた直後」（?room=の
   // 初期倍率≒0.35〜0.45）が far のままで、探すの一行が出なかった
-  document.body.classList.toggle('far',K<0.32);
-  document.body.classList.toggle('near',K>=0.32);
-  document.body.classList.toggle('crisp',K<0.7);   // 引いた宙は、ぼかしの層を持たない
+  const far=(farOn===null)?(K<0.32):(K<0.30?true:(K>0.34?false:farOn));
+  if(far!==farOn){
+    farOn=far;
+    document.body.classList.toggle('far',far);
+    document.body.classList.toggle('near',!far);
+  }
+  // 引いた宙は、光暈を塗らない（見えない光のために宙ぜんぶの影は塗らない）
+  const crisp=(crispOn===null)?(K<0.7):(K<0.66?true:(K>0.74?false:crispOn));
+  if(crisp!==crispOn){ crispOn=crisp; document.body.classList.toggle('crisp',crisp); }
   cull();
+  scaleNames();
+  cullWords();
   if(typeof seekWatch==='function')seekWatch();   // 焦点の島＝検索の出どころ
 }
-/* 画面の外に出た島は描かない（2026-07-31）。display ではなく visibility：
-   寸法は保ったまま描画だけを畳む＝戻る時に測り直しが走らない。
-   余白は「relax の渦で島の縁の外へ逃げたことば＋岸の漂流物（1.12R）＋字の丈」ぶん。
-   flyTo（1.1sかけて島へ滑る）の間だけは全島を出す——目的地で先に畳むと、
-   通り道の島が滑走の途中でふっと消える。 */
-let cullOn=true;
+/* 島の名の逆スケール（2026-07-31 夜）。値が動いた時と、島が畳みから戻った時だけ、
+   名の要素（14枚）へ直に書く。継承する変数を world に書く旧法は、数百のことばの
+   スタイルを毎フレーム無効にしていた。 */
+function scaleNames(){
+  const ik=Math.min(4.5,Math.max(1,0.62/K));
+  const ch=Math.abs(ik-ikLast)>0.004;
+  if(ch)ikLast=ik;
+  const t='translate(-50%,-50%) scale('+ikLast.toFixed(3)+')';
+  islands.forEach(isl=>{
+    if(isl.off)return;
+    if(!ch&&!isl.nmDirty)return;
+    isl.nmDirty=false;
+    isl.nm.style.transform=t;
+  });
+}
+/* ── 画面の外は描かない（2026-07-31・夜に二段へ）─────────────────
+   display ではなく visibility：寸法は保ったまま描画だけを畳む＝戻る時に
+   測り直しが走らない。
+   ① 島ごと（余白は relax の渦で縁の外へ逃げたことば＋岸の漂流物ぶん）
+   ② 島の中の一枚ごと。降りた島には数百枚が居るのに、画面に入るのは十数枚——
+      残りの紙の地・影・光暈を毎フレーム塗るのは、見えないものを描いているだけ。
+   滑走（flyTo）の間は「出発の眺め」と「到着の眺め」の二つで判定する。到着だけで
+   畳むと、通り道の島が滑走の途中でふっと消える。 */
+const CULL_M=160;
+let views=null;                     // 非nullの間だけ、複数の眺めで判定する
+function onScreen(x,y,w,h){         // world座標の箱が、どれかの眺めに掛かるか
+  const V=views;
+  if(!V){
+    const sx=VW/2+PX+x*K, sy=VH/2+PY+y*K;
+    return sx+w*K>=-CULL_M&&sy+h*K>=-CULL_M&&sx<=VW+CULL_M&&sy<=VH+CULL_M;
+  }
+  for(let i=0;i<V.length;i++){
+    const px=V[i][0],py=V[i][1],k=V[i][2];
+    const sx=VW/2+px+x*k, sy=VH/2+py+y*k;
+    if(sx+w*k>=-CULL_M&&sy+h*k>=-CULL_M&&sx<=VW+CULL_M&&sy<=VH+CULL_M)return true;
+  }
+  return false;
+}
 function cull(){
   islands.forEach(isl=>{
-    let off=false;
-    if(cullOn){
-      const sx=VW/2+PX+isl.cx*K, sy=VH/2+PY+isl.cy*K, r=(isl.R*1.25+560)*K;
-      off=(sx+r<-32)||(sy+r<-32)||(sx-r>VW+32)||(sy-r>VH+32);
+    const r=isl.R*1.25+560;
+    const off=!onScreen(isl.cx-r,isl.cy-r,r*2,r*2);
+    if(isl.off!==off){
+      isl.off=off;
+      if(!off)isl.nmDirty=true;     // 戻ってきた島の名は、いまの倍率で書き直す
+      isl.el.style.visibility=off?'hidden':'';
     }
-    if(isl.off!==off){ isl.off=off; isl.el.style.visibility=off?'hidden':''; }
+  });
+}
+function cullWords(){
+  islands.forEach(isl=>{
+    if(isl.off)return;              // 島ごと畳んである（中は測らない）
+    const mv=isl._moving, sh=isl.sheeted;
+    isl.words.forEach(el=>{
+      let off=false;
+      const w=sh?el._pw:el._sw, h=sh?el._ph:el._sh;
+      // 寸法をまだ測っていない紙（放った直後の一枚）は、間引かない
+      if(w&&h&&!(el===held)&&!el.classList.contains('lit')&&!el.classList.contains('pull')){
+        const gx=el._gx==null?el._hx:el._gx, gy=el._gy==null?el._hy:el._gy;
+        const x=sh?gx:el._hx, y=sh?gy:el._hy;
+        off=!onScreen(isl.cx+x,isl.cy+y,w,h);
+        // 席替えの最中は、家と席の両方で見る（飛んでいる途中で消さない）
+        if(off&&mv)off=!onScreen(isl.cx+(sh?el._hx:gx),isl.cy+(sh?el._hy:gy),w,h);
+      }
+      if(el._off!==off){ el._off=off; el.style.visibility=off?'hidden':''; }
+    });
   });
 }
 function zoomAt(cx,cy,factor){
@@ -1195,7 +1297,9 @@ vp.addEventListener('pointermove',e=>{
     if(pinchD>0){ zoomAt((q[0].x+q[1].x)/2,(q[0].y+q[1].y)/2,d/pinchD); }
     pinchD=d; moved+=8;
   }
-});
+// 指の動きは止めない（preventDefault しない＝passive）。触れる面の touch-action:none で
+// ブラウザの巻き取りは既に切ってあるので、ここで待たせる理由がない（2026-07-31 夜）
+},{passive:true});
 function ptrUp(e){ ptrs.delete(e.pointerId); pinchD=0; if(!ptrs.size)vp.classList.remove('drag'); }
 vp.addEventListener('pointerup',ptrUp); vp.addEventListener('pointercancel',ptrUp);
 
@@ -1491,10 +1595,14 @@ function flyTo(isl){
   const k=Math.max(0.55,Math.min(1.1,
     Math.min(VW,VH)/(isl.R*1.12*2.15)));
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
-  cullOn=false;                       // 滑走の間は全島を出す（通り道が消えないように）
+  document.body.classList.add('flying');
+  // 滑走の間は「出発の眺め」と「到着の眺め」の二つで間引く（通り道が消えないように）
+  views=[[PX,PY,K],[-isl.cx*k,-isl.cy*k,k]];
   K=k; PX=-isl.cx*K; PY=-isl.cy*K;
   apply();
-  setTimeout(()=>{ world.style.transition=''; cullOn=true; cull(); },1200);
+  setTimeout(()=>{ world.style.transition='';
+                   document.body.classList.remove('flying');
+                   views=null; apply(); },1200);
 }
 function castLand(isl,poem,color,steps){
   const el=document.createElement('div');
@@ -1515,6 +1623,7 @@ function castLand(isl,poem,color,steps){
   isl.words.push(el);
   // 紙片に並んでいる島なら、新しい一枚の席も敷き直す（寸法は本文の丈で測る）
   if(isl.sheeted){ el.textContent=poem; sheetLayout(isl); }
+  else{ el.textContent=poem; el._sw=el.offsetWidth; el._sh=el.offsetHeight; }
   playType(el,poem,steps,()=>{});
 }
 setInterval(()=>{
