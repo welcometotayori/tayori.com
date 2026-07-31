@@ -52,12 +52,14 @@ import os
 import re
 import sys
 import zipfile
+import zlib
 from collections import Counter
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import (DB_PATH, _connect, init_db, _moderate,  # noqa: E402
-                 sem_ready, sem_embed, sem_store, _WRITE_LOCK, _sky_cache_bust)
+                 sem_ready, sem_embed, sem_store, _WRITE_LOCK, _sky_cache_bust,
+                 _sky_public_id)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CSV = os.path.join(HERE, "..", "seed", "tayori_pd.csv")
@@ -67,10 +69,25 @@ INDEX_REL = os.path.join("index_pages", "list_person_all_extended_utf8")
 # 地の文は「物語の途中」に見え、宙に漂うと前後を探させてしまう——漂流物は、
 # 前後が無くても一片で立っていなければならない。
 BODY_MIN, BODY_MAX = 18, 48
-PER_WORK = 2                    # 一冊から拾う上限。多く採ると、その本の色が宙に出る
-PER_AUTHOR = 10                 # 一人から拾う上限。ここが無いと、多作な人の宙になる
-TOTAL_CAP = 4000                # 全体の上限。漂流物は、流れ着くものであって在庫ではない
-SCORE_MIN = 0.40                # 情景の錨との近さの下限。これ未満は「ただの文」
+
+# ── 上限（2026-07-31・全量へ）──────────────────────────────────
+# ここまでは「一冊から2片・一人から10片・全体4000片」で絞り、さらに情景の錨との
+# 近さ（SCORE_MIN=0.40）で選っていた。結果 1,598片＝ふるいを通る量の 0.9%。
+# Kosei判断（2026-07-31）で**ふるいを通る全部**を入れる。実測で約18万片。
+#
+# 上限を外せたのは、宙の側の作りを変えたから：漂流物はもうプールに載らず、
+# その日その島の岸に上がるぶんだけ SQLite から引く（app.py の _drift_shore）。
+# 在るのは18万片、一度に見えるのは島ごと _SKY_SHORE_K 片、日ごとに入れ替わる。
+#
+# 錨の採点をやめたのは、選ばないなら測る必要が無いから——18万回の内積は
+# 抽出を数十分ぶん重くするだけで、一片も落とさない。
+# 均し（balance）も同じ理由で外した：全部入れるなら、誰かを削る話は起きない。
+PER_WORK = 0                    # 0＝上限なし
+PER_AUTHOR = 0
+TOTAL_CAP = 0
+SCORE_MIN = None                # None＝錨で選らない（全量のとき）
+# 岸を引く索引（app._SHUFFLE_SPAN）と必ず同じ値にすること。
+SHUFFLE_SPAN = 1 << 30
 
 
 # ── 情景と余白の錨 ────────────────────────────────────────────────
@@ -247,7 +264,14 @@ def pd_id(author, title, body):
 
 
 def extract(src, limit_works=0, sample=0):
-    """青空文庫の丸ごとから、拾った一節の一覧を作る（決定的）。"""
+    """青空文庫の丸ごとから、拾った一節の一覧を作る（決定的）。
+
+    部屋は**本まるごと**を見て決める（scripts/aozora_rooms.py）。一節から当てようと
+    して二通り試して二通りとも捨てた経緯は、あちらの冒頭に書いてある。決め手の無い
+    本の一節は room を空のままにする＝今までどおり、どの島の岸にも流れ着く。"""
+    from aozora_rooms import room_of_work, count_marks, corpus_rates, summarize
+    from aozora_mood import emotion_of, color_of, KIZASHI_MOOD
+    from aozora_mood import summarize as summarize_emo
     works = load_index(src)
     works.sort(key=lambda w: (w[1], w[2], w[0]))     # 決定的な順に
     if sample and sample < len(works):
@@ -257,8 +281,29 @@ def extract(src, limit_works=0, sample=0):
     if limit_works:
         works = works[:limit_works]
     print(f"[たより] 著作権の切れた新字新仮名の作品: {len(works)}")
-    seen_bodies, rows = set(), []
-    read_err = 0
+
+    # 一巡目：本ごとの印の数と長さを数えて、「ふつうの濃さ」を出す。
+    # 二巡目でその平均と比べる（生の数で決めると、長い小説がぜんぶ家族へ行く）。
+    # 本文を二度読むが、部屋の決め方を外から持ち込まないためにはこの順しかない。
+    print("[たより] 一巡目：どの部屋の語が、ふつうどれくらい出るかを数えます", flush=True)
+    stats, read_err = [], 0
+    for i, (path, _a, _t) in enumerate(works):
+        if i and i % 1000 == 0:
+            print(f"  … {i}/{len(works)} 冊", flush=True)
+        try:
+            with open(path, encoding="shift_jis", errors="ignore") as f:
+                text = strip_markup(f.read())
+        except OSError:
+            read_err += 1
+            continue
+        stats.append((count_marks(text), len(text)))
+    rates = corpus_rates(stats)
+    print("[たより] ふつうの濃さ（1万字あたり）: "
+          + "  ".join("%s %.2f" % (r, v * 10000)
+                      for r, v in sorted(rates.items(), key=lambda kv: -kv[1])))
+
+    print("[たより] 二巡目：一節を拾い、本ごとに部屋を決めます", flush=True)
+    seen_bodies, rows, assigned = set(), [], []
     for i, (path, author, title) in enumerate(works):
         if i and i % 500 == 0:
             print(f"  … {i}/{len(works)} 冊　拾った一節 {len(rows)}", flush=True)
@@ -266,23 +311,40 @@ def extract(src, limit_works=0, sample=0):
             with open(path, encoding="shift_jis", errors="ignore") as f:
                 raw = f.read()
         except OSError:
-            read_err += 1
             continue
-        cands = [s for s in sentences(strip_markup(raw)) if acceptable(s)]
+        text = strip_markup(raw)
+        room, _why = room_of_work(text, rates)   # 本まるごとで決める
+        assigned.append(room)
+        cands = [s for s in sentences(text) if acceptable(s)]
         cands = [s for s in dict.fromkeys(cands) if s not in seen_bodies]
         if not cands:
             continue
-        scored = sorted(zip(score_all(cands), cands), key=lambda t: (-t[0], t[1]))
-        for sc, body in scored[:PER_WORK]:
-            if sc < SCORE_MIN:
-                break
+        if SCORE_MIN is not None:                # 選ぶ時だけ測る（全量では測らない）
+            scored = sorted(zip(score_all(cands), cands), key=lambda t: (-t[0], t[1]))
+            cands = [b for sc, b in scored if sc >= SCORE_MIN]
+        if PER_WORK:
+            cands = cands[:PER_WORK]
+        for body in cands:
+            # 感情は**一節ごと**に見る（本ではなく）。書いてある語がそのまま印になるので、
+            # 主題と違って一文からでも取れる。取れたら部屋も色もそちらを優先する
+            # ——本まるごとの判定より、その一文自身の判定のほうが確かだから。
+            emo, mood_i, _ = emotion_of(body)
             seen_bodies.add(body)
             rows.append({"id": pd_id(author, title, body), "body": body,
                          "source_author": author, "source_title": title,
-                         "score": round(sc, 4)})
+                         "room": emo or room or "",
+                         "color": color_of(emo, mood_i == KIZASHI_MOOD) or "",
+                         "score": ""})
     if read_err:
         print(f"[たより] 読めなかった本: {read_err}")
-    return balance(rows)
+    print("[たより] 主題の部屋の割り当て（本ごと）:")
+    print(summarize(assigned))
+    print("[たより] 感情の部屋の割り当て（一節ごと・主題より優先）:")
+    print(summarize_emo([r["room"] if r["room"] in
+                         ("よろこび", "かなしみ", "つらさ", "さびしさ",
+                          "しずけさ", "あたたかさ", "こいしさ") else None
+                         for r in rows]))
+    return balance(rows) if PER_AUTHOR else rows
 
 
 def balance(rows):
@@ -313,13 +375,22 @@ def write_csv(rows, path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["id", "body", "source_author",
-                                          "source_title", "score"])
+                                          "source_title", "room", "color", "score"])
         w.writeheader()
         w.writerows(rows)
     print(f"[たより] 書き出し: {path}（{len(rows)}片）")
 
 
 def read_csv(path):
+    """抽出結果を読む。.gz でも素の .csv でも受ける。
+
+    全量（20万片）の CSV は 28MB あり、git に素で置くと永久にその重さが残る
+    （git は消したものも忘れない）。gzip なら 9MB。本番は取り込みの時に一度読むだけ
+    なので、圧縮したまま置いて、ここで開く。"""
+    if path.endswith(".gz"):
+        import gzip as _gz
+        with _gz.open(path, "rt", encoding="utf-8", newline="") as f:
+            return list(csv.DictReader(f))
     with open(path, encoding="utf-8", newline="") as f:
         return list(csv.DictReader(f))
 
@@ -337,6 +408,10 @@ def place(rows, apply_):
     if not sem_ready():
         sys.exit("意味の索引の表が読めません（semantic/ を確認してください）。")
 
+    # 部屋名 → id。無い名前は黙って部屋なしにする（勝手に部屋を作らない）。
+    room_ids = {r["name"]: r["id"] for r in db.execute(
+        "SELECT id, name FROM rooms WHERE deleted_at IS NULL")}
+
     stopped, keep = Counter(), []
     for r in rows:
         status, _ = _moderate(r["body"])
@@ -346,23 +421,42 @@ def place(rows, apply_):
         keep.append(r)
 
     print(f"[たより] 門番が止めた: {dict(stopped) or 'なし'}")
+    rooms_hit = Counter((r.get("room") or "——") for r in keep)
+    print("[たより] 置く一節の部屋（本の判定を引き継ぐ）:")
+    for name, n in rooms_hit.most_common():
+        print(f"    {name:6s} {n:7d}片" + ("" if name == "——" or name in room_ids
+                                           else "  ※その名の部屋が無いので部屋なしにします"))
     if not apply_:
         print(f"[たより] 下見（--apply で書き込みます）。置くもの {len(keep)}片")
         for r in keep[:5]:
-            print(f"    {r['source_author']}『{r['source_title']}』　{r['body']}")
+            print(f"    [{r.get('room') or '——'}] {r['source_author']}"
+                  f"『{r['source_title']}』　{r['body']}")
         return
 
     now = datetime.now().isoformat(timespec="seconds")
     put = 0
     with _WRITE_LOCK:
-        for r in keep:
+        for i, r in enumerate(keep):
+            if i and i % 20000 == 0:
+                db.commit()                # 18万件を一つのトランザクションで抱えない
+                print(f"  … {i}/{len(keep)} 片", flush=True)
+            rid = room_ids.get(r.get("room") or "")
+            col = r.get("color") or None
             cur = db.execute(
                 "INSERT OR IGNORE INTO external_texts"
                 " (id, body, source_author, source_title, license, room_id,"
-                "  sky_status, created_at) VALUES (?,?,?,?,'public_domain',NULL,'live',?)",
-                (r["id"], r["body"], r["source_author"], r["source_title"], now))
+                "  sky_status, created_at, pub_id, shuffle_key, mood_color)"
+                " VALUES (?,?,?,?,'public_domain',?,'live',?,?,?,?)",
+                (r["id"], r["body"], r["source_author"], r["source_title"], rid, now,
+                 _sky_public_id(r["id"]),
+                 zlib.crc32(("shuffle:" + r["id"]).encode()) % SHUFFLE_SPAN, col))
             if cur.rowcount:
                 put += 1
+            else:
+                # 既にある一節の部屋と色だけは上書きする（二度目の取り込みで
+                # 決め方を直したときに、古い割り当てが残らないように）。本文は触らない。
+                db.execute("UPDATE external_texts SET room_id=?, mood_color=? WHERE id=?",
+                           (rid, col, r["id"]))
             sem_store(db, r["id"], r["body"], source_type="public_domain")
         db.commit()
     _sky_cache_bust()
@@ -406,6 +500,8 @@ def main():
         rows = extract(a.src, a.limit_works, a.sample)
         write_csv(rows, a.csv)
     else:
+        if not os.path.exists(a.csv) and os.path.exists(a.csv + ".gz"):
+            a.csv += ".gz"                 # 素の CSV が無ければ、圧縮したほうを読む
         if not os.path.exists(a.csv):
             sys.exit(f"CSV がありません: {a.csv}（--src で抽出してください）")
         rows = read_csv(a.csv)
