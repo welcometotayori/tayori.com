@@ -39,7 +39,8 @@ from functools import wraps
 from collections import Counter, deque
 from datetime import datetime, date, timedelta, timezone, time as dtime
 
-from flask import Flask, request, jsonify, render_template, g, session, Response, redirect, abort
+from flask import (Flask, request, jsonify, render_template, g, session, Response,
+                   redirect, abort, send_from_directory)
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # サーバーのタイムゾーンを日本時間に固定する。
@@ -232,6 +233,19 @@ def _perf_start():
 _COMPRESSIBLE = ("text/html", "text/css", "text/plain", "text/javascript",
                  "application/javascript", "application/json", "image/svg+xml")
 _GZIP_MIN_BYTES = 1024
+# 圧縮の強さ（2026-07-31 に 6 → 1）。
+# 本番の前には Cloudflare が立っていて、こちらが gzip で渡したものを**解いて brotli で
+# 詰め直して**利用者へ送っている（実測：アプリは gzip、利用者が受け取るのは br）。
+# つまりここの強さは、利用者が落とす量に一切効かない——効くのは Render の CPU だけ。
+# 実測（/mood の299KB・この開発機）: level 6 は 39ms かかって 92KB、level 1 は 8.7ms で
+# 110KB。Render の 0.5CPU では level 6 が毎リクエスト 150〜300ms になる計算で、
+# それは TTFB 377ms の中に丸ごと乗っていた。origin と Cloudflare の間は米国内の速い
+# 経路なので、18KB の差はここで払ってよい。
+# 0 にしないのは、Cloudflare を外した時に素のまま出さないための保険。
+try:
+    _GZIP_LEVEL = max(1, min(9, int(os.environ.get("TAYORI_GZIP_LEVEL", "1"))))
+except ValueError:
+    _GZIP_LEVEL = 1
 
 
 @app.after_request
@@ -250,7 +264,7 @@ def _finalize_response(resp):
                     and "Content-Encoding" not in resp.headers):
                 data = resp.get_data()
                 if len(data) >= _GZIP_MIN_BYTES:
-                    resp.set_data(gzip.compress(data, compresslevel=6))
+                    resp.set_data(gzip.compress(data, compresslevel=_GZIP_LEVEL))
                     resp.headers["Content-Encoding"] = "gzip"
             resp.headers["Vary"] = "Accept-Encoding"
     except Exception as e:
@@ -263,6 +277,45 @@ def _finalize_response(resp):
                   f" -> {resp.status_code}", flush=True)
     except Exception:
         pass
+    return resp
+
+
+# ── 宙の様式とふるまい（2026-07-31）─────────────────────────────────
+# canvas.html は利用者ごとに中身が違う（立ち上がりの値を同梱している）ので no-cache。
+# その面に、誰にとっても同じ 180KB の様式とふるまいを載せ続けると、宙を開くたびに
+# 全部を取り直すことになる——本番は Cloudflare が日本の接続を Seattle で受けており、
+# 67KB(br) の受け取りだけで実測 425ms かかっていた。
+# なので static/sky/ へ出して、**中身のハッシュを URL に入れて**永久に持たせる。
+# 中身が変われば URL が変わるので、番号を手で上げる必要は無い（上げ忘れが事故になる）。
+_SKY_ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "sky")
+_sky_asset_ver = {}
+
+
+def sky_asset(name):
+    """/sky/<中身のハッシュ>/<名前> を返す。開発中は mtime を見て作り直す。"""
+    path = os.path.join(_SKY_ASSET_DIR, name)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return "/static/sky/" + name          # 無ければ素の道（開発中の取り違えを黙らせない）
+    got = _sky_asset_ver.get(name)
+    if not got or got[0] != mtime:
+        with open(path, "rb") as f:
+            got = (mtime, hashlib.sha256(f.read()).hexdigest()[:12])
+        _sky_asset_ver[name] = got
+    return "/sky/%s/%s" % (got[1], name)
+
+
+app.jinja_env.globals["sky_asset"] = sky_asset
+
+
+@app.route("/sky/<ver>/<name>")
+def sky_asset_file(ver, name):
+    """URL がハッシュを含む＝この中身は永久に変わらない。immutable を付けてよい。"""
+    if not re.fullmatch(r"[a-z0-9]{6,64}", ver or "") or name not in ("canvas.css", "canvas.js"):
+        abort(404)
+    resp = send_from_directory(_SKY_ASSET_DIR, name)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return resp
 
 
@@ -412,8 +465,18 @@ def _migrate_colors_to_hsl(db):
 #
 # デフォルトは14部屋。元案の20を統合して密度を保ちつつ、「いじめ」だけは統合せず
 # 独立させた——名前が見えていること自体が逃げ場になる、という判断（Kosei 確定）。
+#
+# 2026-07-31、**感情の名前の部屋を7つ足した**（Kosei確定）。ここまでの14室は
+# 「何について書くか」（主題）だったが、これは「どんな気持ちで来たか」で入る部屋。
+# 二つの軸が並ぶことになるが、それでよい——「いま、かなしい」から入れる戸口が要る、
+# というのが足した理由で、主題を先に決めさせないための道でもある。
+# 人もここへことばを放てる（Kosei確定）＝ふつうの部屋と同じ扱いにする。
+# 名前は宙がすでに持っていた気分7色（凪芽陽温恋憂沈）と地続きで、
+# scripts/aozora_mood.py が色との対応を持つ。
 DEFAULT_ROOMS = ("恋愛", "家族", "友達", "学校", "仕事", "お金", "生活",
-                 "人生", "心", "世界", "音楽", "アート", "趣味", "いじめ")
+                 "人生", "心", "世界", "音楽", "アート", "趣味", "いじめ",
+                 "よろこび", "かなしみ", "つらさ", "さびしさ",
+                 "しずけさ", "あたたかさ", "こいしさ")
 
 # 決め手が無かったことばの寄せ先。宙に「宙」という部屋があるのは入れ子で分かりにくく、
 # 旧データ専用の物置が漂い続けるのも据わりが悪いので廃した（2026-07-26 Kosei）。
@@ -822,6 +885,46 @@ def init_db():
             )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_external_room"
                    " ON external_texts (room_id)")
+        # ── 全量（約18万片）を捌くための二列（2026-07-31）───────────────
+        # ここまで漂流物は 1,598片で、宙のプールに人のことばと一緒に載せていた。
+        # 全量を入れると、その作りは 1件18µs・9.5KB で効いてくる（＝組み直し3.2秒・
+        # メモリ1.7GB）ので、**漂流物はプールに載せず、SQLite から必要なぶんだけ引く**。
+        #   pub_id … 宙に出す公開id（sha256("sky:"+id) の頭12桁）。触れたことばを引き
+        #            当てるのに、以前は全件を辞書に持っていた。列にして索引を張れば
+        #            一件引くだけで済む。手紙側と違って本の一節に秘密は無いが、
+        #            **公開idの形は人のことばと同じにする**（姿で見分けさせない）。
+        #   shuffle_key … 岸に流れ着く順を決める、行ごとの安定した数。日ごとに始点を
+        #            ずらして範囲で引く＝索引をなぞるだけで「その日の岸」が決まる。
+        #            日でハッシュを計算し直す方式だと、全件を読まないと順が決まらない。
+        # mood_color … その一節が持つ気分の色（2026-07-31・Kosei指示「本の一節の背景色も
+        #   人のことばと同じ色のバランスで」）。人の seal_color と同じ7色に落ちるので、
+        #   紙の色は `paperOf()` が同じ仕組みのまま手染めにする。
+        #   **書かれていない気分は足さない**：印の出ない一節は NULL のまま生成りの紙。
+        for col, ddl in (("pub_id", "TEXT"), ("shuffle_key", "INTEGER"),
+                         ("mood_color", "TEXT")):
+            try:
+                db.execute("ALTER TABLE external_texts ADD COLUMN %s %s" % (col, ddl))
+            except sqlite3.OperationalError:
+                pass                      # もう在る
+        db.execute("CREATE INDEX IF NOT EXISTS idx_external_pub"
+                   " ON external_texts (pub_id)")
+        # 岸を引く時の並び順そのもの。room_id ごとに shuffle_key を範囲で走査する。
+        db.execute("CREATE INDEX IF NOT EXISTS idx_external_shore"
+                   " ON external_texts (room_id, shuffle_key)")
+        # 既に入っている一節の二列を埋める（冪等・空の時だけ動く）。
+        # SQLite は sha256 を持たないのでこちらで作る。取り込み側（ingest_aozora.py）は
+        # 最初から入れて来るので、ここが動くのは今日より前に入った1,595片に対して一度だけ。
+        _fill = db.execute(
+            "SELECT id FROM external_texts WHERE pub_id IS NULL OR shuffle_key IS NULL"
+        ).fetchall()
+        if _fill:
+            for _r in _fill:
+                db.execute(
+                    "UPDATE external_texts SET pub_id=?, shuffle_key=? WHERE id=?",
+                    (_sky_public_id(_r["id"]),
+                     zlib.crc32(("shuffle:" + _r["id"]).encode()) % _SHUFFLE_SPAN,
+                     _r["id"]))
+            print(f"[たより] 漂流物の公開idと並びを埋めました: {len(_fill)}片", flush=True)
 
         # ── 自分の宙から消す（2026-07-29 フェーズ5）─────────────────
         # 読み手の側にだけ持つ。書き手には一切伝わらない（非対称の原則）。
@@ -3325,7 +3428,49 @@ def mood_page():
     # 旧い宙（mood.html＝球面・自転・漂い物理）は同日、読む柱・降りてきました・灯を
     # canvas へ移し終えたうえで畳んだ。戻すなら git（コミット de3d198 以前の系譜）。
     return render_template("canvas.html", logged_in=logged_in, open_letter_id=open_id,
-                           start_room=room)
+                           start_room=room, boot_json=_script_json(_boot_payload(logged_in)))
+
+
+# <script> の中へそのまま置ける JSON。Flask の |tojson と同じところを逃がす
+# （< > & と、JSでは行終端になってしまう U+2028/2029）。違うのは ensure_ascii を
+# 落としてあること——日本語を \uXXXX に開くと1字6バイトになり、同梱の本文が倍に膨らむ。
+_JS_ESC = {"<": "\\u003c", ">": "\\u003e", "&": "\\u0026",
+           "\u2028": "\\u2028", "\u2029": "\\u2029"}
+# 目に見えない字（U+2028/2029）はソースに直に置かない——編集で黙って消える
+_JS_ESC_RE = re.compile("[<>&\u2028\u2029]")
+
+
+def _script_json(obj):
+    s = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+    return _JS_ESC_RE.sub(lambda m: _JS_ESC[m.group()], s)
+
+
+# ── 立ち上がりの同梱（2026-07-31）─────────────────────────────────
+# 宙は開いたあと fetch を4本投げて、その返事が揃うまでことばを出せなかった。
+# 本番は Cloudflare が日本の接続を Seattle で受けており（colo=SEA）、その先に Render の
+# origin がもう一段ある。1往復が約350〜500ms——DBも触らない /robots.txt ですら 573ms
+# かかる経路で、立ち上がりに4往復を積むと、ことばが出るまで実測1.57秒だった。
+# 中身は同じなので、HTML を作る時に一緒に作って同梱する。往復は1回になる。
+#
+# 【なぜ「同梱があれば取り直さない」だけにするのか】
+# 画面側の fetch を消してしまうと、同梱が無い経路（開発中のテンプレ直読み・将来の
+# 別の入口）でことばが一つも出ない宙になる。同梱は**先回りであって、置き換えではない**。
+def _boot_payload(logged_in):
+    boot = {"rooms": _rooms_payload(), "canvas": _canvas_payload()}
+    if logged_in:
+        db, me = get_db(), session.get("uid")
+        boot["mine"] = {"kept": [{"src": r["src"], "ref": r["ref_id"]} for r in db.execute(
+            "SELECT src, ref_id FROM saved_words WHERE user_id=?", (me,))]}
+        rows = db.execute(
+            "SELECT d.id AS did, l.poem, l.seal_color, l.vertical"
+            "  FROM sky_deliveries d JOIN letters l ON l.id=d.letter_id"
+            " WHERE d.recipient=? AND d.deliver_at<=? AND d.opened_at IS NULL"
+            " ORDER BY d.deliver_at DESC",
+            (me, datetime.now().isoformat(timespec="seconds"))).fetchall()
+        boot["arrivals"] = {"arrivals": [
+            {"did": r["did"], "opened": False, "char_count": len(r["poem"] or ""),
+             "color": r["seal_color"], "vertical": bool(r["vertical"])} for r in rows]}
+    return boot
 
 
 # v8: time_bucket（4値enum）の参照は停止。列は既存データ互換のため残すが、
@@ -3577,6 +3722,14 @@ def sem_store(db, letter_id, text, source_type="user"):
     v = sem_embed(text)
     if v is None:
         return False
+    # 本から拾った一節だけ fp16 で置く（2026-07-31）。18万片は fp32 で184MB、
+    # fp16 なら92MB——Render の永続ディスクは1GBで、しかも毎日まるごとR2へ上げている。
+    # 元の表（potion_ja）自体が fp16 で配られており、長さ1に正規化したベクトルの
+    # 内積は 1e-3 ほどしか動かない（探すの下限 0.30 の前では見えない差）。
+    # 人のことばは fp32 のまま：既にある行に触らない＝移行を作らない。
+    if source_type == "public_domain":
+        import numpy as np
+        v = v.astype(np.float16)
     db.execute(
         "INSERT OR REPLACE INTO letter_vectors"
         " (letter_id, model, dim, v, made_at, source_type) VALUES (?,?,?,?,?,?)",
@@ -3599,7 +3752,11 @@ def _sem_vec(blob):
         import numpy as np
     except ImportError:
         return None
+    # 幅は長さで見分ける（2026-07-31）。人のことばは fp32、本から拾った一節は fp16。
+    # 曖昧にならない：256次元なら 1024バイトか 512バイトのどちらかにしかならない。
     try:
+        if len(blob) == _SEM_DIM * 2:
+            return np.frombuffer(blob, dtype=np.float16).astype(np.float32)
         v = np.frombuffer(blob, dtype=np.float32)
     except (TypeError, ValueError):
         return None
@@ -3977,12 +4134,26 @@ def _sky_pool():
 
 
 def _sky_index():
-    """公開id → (手紙id, 本文, 色, 縦書き)。触れられたことばを引き当てるためだけに使う。"""
+    """公開id → (手紙id, 本文, 色, 縦書き)。触れられたことばを引き当てるためだけに使う。
+    2026-07-31 以後、ここに載るのは**人のことばだけ**。漂流物は _sky_lookup を通す。"""
     now = time.time()
     with _sky_lock:
         if now - _sky_cache["t"] < _SKY_CACHE_SECONDS:
             return _sky_cache["index"]
     return _sky_rebuild()[1]
+
+
+def _sky_lookup(h):
+    """公開id → (実体id, 本文, 色, 縦書き, 題)。人のことばも、流れ着いたものも。
+
+    漂流物は 2026-07-31 に辞書から出した：18万件を毎回15秒ごとに組み直すと36MBの
+    辞書になる。列（pub_id）に索引を張ってあるので、触れられた一件だけを引けばよい。
+    人のことばを先に見るのは、そちらが常に手元にあるから（DBを叩かずに済む）。"""
+    hit = _sky_index().get(h)
+    if hit:
+        return hit
+    r = _drift_by_pub(get_db(), h)
+    return (r["id"], r["body"], None, 1, None) if r else None
 
 
 def _sky_rebuild():
@@ -4033,40 +4204,13 @@ def _sky_rebuild():
         ))
         index[h] = (r["id"], r["poem"], r["seal_color"], 1 if r["vertical"] else 0, r["title"])
 
-    # ── 言葉の漂流物（v3 §4.4）────────────────────────────────────
-    # 著作権の切れた本から拾った一節。人のことばと同じ宙に、同じタプルの形で並ぶ
-    # ——ここで形を揃えておくと、部屋の絞り込みも、棚も、ミュートも、探すも、
-    # 一行も足さずにそのまま効く。違うのは中身のほうだけ。
-    for r in db.execute(
-            "SELECT x.id, x.body, x.source_author, x.source_title, x.room_id,"
-            "       v.v AS sem_v"
-            "  FROM external_texts x LEFT JOIN letter_vectors v ON v.letter_id = x.id"
-            " WHERE x.sky_status='live' AND COALESCE(x.body,'')<>''").fetchall():
-        h = _sky_public_id(r["id"])
-        pool.append((
-            {
-                "id": h,
-                "poem": r["body"],
-                "color": None,            # 気分の色は本人の主観指標。本の一節には無い
-                "vertical": True,         # 本から来たものは、本の向きで漂う
-                "pd": True,               # 姿を変える印（打鍵を再生しない・出典を刻む）
-                "author": r["source_author"],
-                "work": r["source_title"],
-            },
-            # 空気を持たない＝air_distance は成分ごと外して中立（0.5）を返す。
-            # 漂流物は「いま」を持たないので、誰の今とも等距離にある。これは欠測では
-            # なく仕様——流れ着くものは、こちらの天気に合わせて来たりしない。
-            {"color": None, "season": None, "hour": None, "weather": None},
-            r["id"],
-            1.0,                          # 沈降。いまはどこからも読まれない（2026-07-27に選抜から外れた）
-            None,                         # 書き手が居ない＝「自分のことば」に決してならない
-            None,                         # 題は持たない（あるのは出典で、それは題ではない）
-            r["room_id"],
-            _flare_state(r["id"]),
-            _PD_AGE_DAYS,                 # 新着レーンに決して入らないための大きな齢（§4.4）
-            _sem_vec(r["sem_v"]),
-        ))
-        index[h] = (r["id"], r["body"], None, 1, None)
+    # 漂流物（v3 §4.4）は、2026-07-31 からここに載せない。
+    # 1,598片の頃は人のことばと同じタプルで並べていた——形を揃えておけば部屋の絞り込みも
+    # 棚もミュートも探すも一行も足さずに効く、という判断で、それ自体は正しかった。
+    # 全量（約18万片）を入れると同じ作りが 1件18µs・9.5KB で効いてくる：組み直しに
+    # 3.2秒、常駐1.7GB。15秒ごとにそれをやる場所ではない。
+    # いまは `_drift_shore()` が、その日その島に流れ着くぶんだけ SQLite から引く。
+    # 形を揃える約束は捨てていない：引いた行は `_drift_entry()` が**同じタプル**に組む。
 
     with _sky_lock:
         _sky_cache["t"] = time.time()
@@ -4220,12 +4364,20 @@ def _room_lock_if_needed(db, room_id, author_id):
 
 @app.route("/api/rooms")
 def api_rooms():
+    return jsonify(_rooms_payload())
+
+
+def _rooms_payload():
     """部屋の一覧。件数は返さない（原則2）。
     並びは固定（2026-07-26 Kosei確定）。それまでは毎回シャッフルしていたが、部屋が
     漂うのをやめて整列させたので、見るたびに面子が入れ替わると落ち着かない
     ——「あの部屋はここ」と覚えられることを採った。順は「元からある14室 → 作られた順」＝
     活動量とも新しさの評価とも無関係な、ただの生まれた順。
-    lights は部屋ごとの灯の色（最大3・新しい順）。数も中身も語らない。"""
+    lights は部屋ごとの灯の色（最大3・新しい順）。数も中身も語らない。
+
+    2026-07-31：ルートから切り出して dict を返す形にした。/mood が同じ値を HTML に
+    同梱するため——日本から本番までの1往復は約400msで、立ち上がりの fetch はその
+    まるごとを待たせていた（実測：DOMContentLoaded 1081ms → ことばが出るのは1571ms）。"""
     db = get_db()
     rows = db.execute(
         "SELECT id, name, is_default, archived, created_by, locked_at, position_index"
@@ -4242,9 +4394,9 @@ def api_rooms():
               "mine": bool(me and r["created_by"] == me and not r["locked_at"]),
               "lights": lights.get(r["id"], [])}
              for r in rows]
-    return jsonify(rooms=rooms,
-                   can_create=bool(me) and _rooms_created_ever(db, me) == 0,
-                   name_max=ROOM_NAME_MAX)
+    return {"rooms": rooms,
+            "can_create": bool(me) and _rooms_created_ever(db, me) == 0,
+            "name_max": ROOM_NAME_MAX}
 
 
 @app.route("/api/rooms", methods=["POST"])
@@ -4359,9 +4511,245 @@ _SKY_PD_ALPHA = _env_num("TAYORI_SKY_PD_ALPHA", 0.58, 0.05, 1.0)
 
 
 def _split_drift(pool):
-    """人のことばと、流れ着いたことばに分ける。"""
+    """人のことばと、流れ着いたことばに分ける。
+    2026-07-31 以後、プールに漂流物は入っていないので後ろは常に空になる
+    ——呼び出し側の形を変えずに済むよう、関数は残す。"""
     return ([e for e in pool if not e[0].get("pd")],
             [e for e in pool if e[0].get("pd")])
+
+
+# ── 岸（2026-07-31・全量版）─────────────────────────────────────────
+# 漂流物は約18万片ある。全部を同時に見せることは、どんな作りでもできない
+# （画面に2,800枚を超えると1フレームが0.58ms＝携帯では触れる速さでなくなる）。
+# なので「全部入れる」と「全部見せる」を分けた：
+#   ・在るのは18万片。探すはその全部に届く。
+#   ・一度に岸へ上がるのは、島ごと _SKY_SHORE_K 片。**日ごとに入れ替わる**。
+# 入れ替えは shuffle_key の範囲走査でやる。日から始点を決めて索引をなぞるだけなので、
+# 母数が18万でも1000万でも引く費用は変わらない（日ごとにハッシュを計算し直す方式だと、
+# 順を決めるのに毎回全件を読むことになる）。
+_DRIFT_AIR = {"color": None, "season": None, "hour": None, "weather": None}
+
+
+def _drift_entry(r):
+    """external_texts の一行 → 宙のプールと同じ形のタプル。
+    形を揃えるのは、部屋の絞り込みも棚もミュートも探すも、この形の上に書かれているから。
+    載せる場所を変えても、載っているものの形は変えない。"""
+    return (
+        {
+            "id": r["pub_id"] or _sky_public_id(r["id"]),
+            "poem": r["body"],
+            # 気分の色（2026-07-31）。ここは長く None だった——「気分の色は本人の
+            # 主観指標なので、本の一節には無い」という理由で。Kosei指示で、一節に
+            # **書かれている**感情語から7色へ落とすようにした（推測ではなく引用）。
+            # 語が出てこない一節は、いまも None のまま生成りの紙で漂う。
+            "color": r["mood_color"],
+            "vertical": True,         # 本から来たものは、本の向きで漂う
+            "pd": True,               # 姿を変える印（打鍵を再生しない・出典を刻む）
+            "author": r["source_author"],
+            "work": r["source_title"],
+        },
+        # 空気を持たない＝air_distance は成分ごと外して中立（0.5）を返す。
+        # 漂流物は「いま」を持たないので、誰の今とも等距離にある。これは欠測では
+        # なく仕様——流れ着くものは、こちらの天気に合わせて来たりしない。
+        _DRIFT_AIR,
+        r["id"],
+        1.0,                          # 沈降。いまはどこからも読まれない
+        None,                         # 書き手が居ない＝「自分のことば」に決してならない
+        None,                         # 題は持たない（あるのは出典で、それは題ではない）
+        r["room_id"],
+        None,                         # flare は見ない（18万件ぶんのsha256を毎回は回さない）
+        _PD_AGE_DAYS,                 # 新着レーンに決して入らないための大きな齢（§4.4）
+        None,                         # 意味ベクトルは、探す時にその場で引く
+    )
+
+
+_SHUFFLE_SPAN = 1 << 30               # shuffle_key の値域。ingest 側と必ず揃えること
+
+
+def _drift_shore(db, room_ids, k, muted=(), day=None, nonce=""):
+    """その日、島ごとに岸へ上がる漂流物。{room_id: [entry, …]} を返す。
+
+    その部屋の一節を先に採り、足りなければ部屋を持たない一節で埋める
+    （部屋を当てられなかった本の一節は、いままでどおりどの島の岸にも流れ着く）。
+
+    nonce を渡すと、その分だけ別の岸になる（2026-07-31・Kosei指示「島に降りるたびに
+    シャッフル」）。**空のときは全員が同じ岸を見る**——遠景の地形は共有のままにして、
+    降りた人の手元でだけ組み替わる形にしてある。宙の一日ごとの入れ替わりは変えていない
+    （降りずに眺めているだけの人にも、日を追って別の一節が流れ着く）。"""
+    if k <= 0 or not room_ids:
+        return {}
+    day = day or (datetime.now(JST) - timedelta(hours=4)).date().isoformat()
+    if nonce:
+        day = "%s#%s" % (day, nonce)
+    out, used = {}, set()
+
+    def draw(room_sql, params, want, seed_key):
+        """索引を start から k 件なぞる。端まで来たら頭へ回る（環状に読む）。"""
+        start = int(hashlib.sha256(seed_key.encode()).hexdigest()[:8], 16) % _SHUFFLE_SPAN
+        got = []
+        for lo, hi in ((start, _SHUFFLE_SPAN), (0, start)):
+            if len(got) >= want:
+                break
+            rows = db.execute(
+                "SELECT id, pub_id, body, source_author, source_title, room_id, mood_color"
+                "  FROM external_texts"
+                " WHERE sky_status='live' AND " + room_sql +
+                "   AND shuffle_key >= ? AND shuffle_key < ?"
+                " ORDER BY shuffle_key LIMIT ?",
+                tuple(params) + (lo, hi, want * 3)).fetchall()
+            for r in rows:
+                if len(got) >= want:
+                    break
+                if r["id"] in used or r["id"] in muted:
+                    continue
+                used.add(r["id"])
+                got.append(_drift_entry(r))
+        return got
+
+    for rid in room_ids:
+        got = draw("room_id = ?", (rid,), k, "shore:%s:%s" % (rid, day))
+        if len(got) < k:
+            got += draw("room_id IS NULL", (), k - len(got), "shore0:%s:%s" % (rid, day))
+        if got:
+            out[rid] = got
+    return out
+
+
+# ── 探すが漂流物へ届くための、一枚の板（2026-07-31）────────────────
+# 漂流物をプールから降ろしたので、探すも別の道を持たないと本の一節に届かなくなる。
+# 18万件を Python の for で回すと、一回の「探す」で18万回の内積になる（数秒）。
+# 表として一枚に積んでおけば、numpy の掛け算一回（実測 数十ms）で済む。
+# fp16 で持つのは、意味の索引そのもの（potion_ja）が fp16 で配られているのと同じ理由
+# ——18万×256 は fp32 で184MB、fp16 なら92MB。Render の 512MB に載せるならこちら。
+_drift_mat = {"gen": None, "ids": None, "rooms": None, "mat": None, "checked": 0.0}
+_DRIFT_GEN_CHECK_SECONDS = 300
+_drift_mat_lock = threading.Lock()
+# 積む上限。ここに当たったら**黙って切らずに数を言う**（下の print）。
+_DRIFT_SEARCH_MAX = int(_env_num("TAYORI_DRIFT_SEARCH_MAX", 300000, 0, 5000000))
+
+
+def _drift_matrix_build(gen):
+    """板を積む。20万行をDBから読むので**別のスレッドで**やる——起動後いちばん最初に
+    探した人を、これで数十秒待たせない（Render の 0.5CPU では現実に起きる）。
+    積み終わるまで、探すは人のことばだけを返す（本の一節がその回だけ出ない）。"""
+    import numpy as np
+    t0 = time.time()
+    db = _connect()                       # 別スレッド＝別の接続（get_db は要求ごと）
+    ids, rooms, vecs = [], [], []
+    try:
+        for r in db.execute(
+                "SELECT x.id, x.room_id, v.v"
+                "  FROM external_texts x JOIN letter_vectors v ON v.letter_id = x.id"
+                " WHERE x.sky_status='live' LIMIT ?", (_DRIFT_SEARCH_MAX,)):
+            v = _sem_vec(r["v"])
+            if v is None:
+                continue
+            ids.append(r["id"])
+            rooms.append(r["room_id"])
+            vecs.append(v)
+    finally:
+        db.close()
+    mat = np.stack(vecs).astype(np.float16) if vecs else None
+    if mat is not None:
+        if len(ids) >= _DRIFT_SEARCH_MAX:
+            print(f"[たより] 探すが見ている漂流物は {len(ids)}片で頭打ちです"
+                  f"（TAYORI_DRIFT_SEARCH_MAX）。残りは岸でだけ出会えます。", flush=True)
+        print(f"[たより] 漂流物の板: {mat.shape[0]}片 × {mat.shape[1]}次元 を "
+              f"{time.time() - t0:.1f}秒で積みました（{mat.nbytes / 1e6:.0f}MB）", flush=True)
+    with _drift_mat_lock:
+        _drift_mat.update(gen=gen, ids=ids, rooms=rooms, mat=mat,
+                          building=False, checked=time.time())
+
+
+def _drift_matrix(db):
+    """(実体idの列, 部屋idの列, ベクトルの板) を返す。まだ積めていなければ
+    (None, None, None) を返し、裏で積み始める。
+    版は external_texts の行数と最大 rowid で見る＝取り込みの後に一度だけ積み直る。"""
+    if _DRIFT_SEARCH_MAX <= 0:
+        return None, None, None
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        return None, None, None
+    # 版を見に行くのは、たまにでよい（2026-07-31 実測）。
+    # `COUNT(*) … WHERE sky_status='live'` は20万行を数え直すので52ms かかり、
+    # 探すたびにそれを払っていた（探す一回が991ms のうちの大半）。板が積み直るのは
+    # 取り込みをやった時だけ＝運用の出来事なので、5分に一度見れば足りる。
+    now = time.time()
+    with _drift_mat_lock:
+        fresh = (_drift_mat["mat"] is not None
+                 and now - _drift_mat.get("checked", 0.0) < _DRIFT_GEN_CHECK_SECONDS)
+        if fresh:
+            return _drift_mat["ids"], _drift_mat["rooms"], _drift_mat["mat"]
+    gen = db.execute("SELECT COUNT(*) c, COALESCE(MAX(rowid),0) m"
+                     "  FROM external_texts WHERE sky_status='live'").fetchone()
+    gen = (gen["c"], gen["m"])
+    with _drift_mat_lock:
+        if _drift_mat["gen"] == gen:
+            _drift_mat["checked"] = now
+            return _drift_mat["ids"], _drift_mat["rooms"], _drift_mat["mat"]
+        if _drift_mat.get("building"):
+            return None, None, None       # 積んでいる最中。待たせない
+        _drift_mat["building"] = True
+    threading.Thread(target=_drift_matrix_build, args=(gen,),
+                     name="drift-matrix", daemon=True).start()
+    return None, None, None
+
+
+def _drift_scored(db, qv, now_air, room_id, muted, cand=240):
+    """探すの候補になる漂流物を (遠さ, entry, air) の形で返す（多くて cand 件）。
+    人のことばと同じ形にして返すのは、そのあとの抽選を一本のままにするため。"""
+    ids, rooms, mat = _drift_matrix(db)
+    if mat is None or qv is None:
+        return []
+    import numpy as np
+    # 小分けにして掛ける（2026-07-31 実測）。20万×256 を一度に fp32 へ開くと
+    # 209MB の一時が要って 91ms、fp16 のまま掛けると BLAS に載らず 421ms。
+    # 32,768行ずつなら一時は34MBで 43ms——速さと、載る大きさの両方がここで揃う。
+    sims = np.empty(mat.shape[0], dtype=np.float32)
+    for s in range(0, mat.shape[0], 32768):
+        e = min(s + 32768, mat.shape[0])
+        sims[s:e] = mat[s:e].astype(np.float32) @ qv
+    n = int(min(cand * 4, sims.shape[0]))
+    top = np.argpartition(-sims, n - 1)[:n] if n < sims.shape[0] else np.arange(sims.shape[0])
+    picks = []
+    for i in top[np.argsort(-sims[top])]:
+        if len(picks) >= cand:
+            break
+        # 島に降りている間は、その部屋の一節と、部屋を持たない一節だけ
+        # （岸に流れ着くのと同じ範囲。探すが眺めより広く出ることはない）。
+        if room_id is not None and rooms[i] is not None and rooms[i] != room_id:
+            continue
+        sd = sem_hit_distance(float(sims[i]))
+        if sd is None:
+            break                    # 近い順に見ているので、切れたらそこで終わり
+        if ids[i] in muted:
+            continue
+        picks.append((ids[i], sd))
+    if not picks:
+        return []
+    rows = {r["id"]: r for r in db.execute(
+        "SELECT id, pub_id, body, source_author, source_title, room_id, mood_color"
+        "  FROM external_texts WHERE id IN (%s)" % ",".join("?" * len(picks)),
+        [p[0] for p in picks])}
+    out = []
+    for rid, sd in picks:
+        r = rows.get(rid)
+        if not r:
+            continue
+        air = dict(_DRIFT_AIR)
+        air["sem_d"] = sd
+        out.append((air_distance(now_air, air, mode="search"), _drift_entry(r), air))
+    return out
+
+
+def _drift_by_pub(db, pub_id):
+    """公開id → 漂流物の一行。以前は全件を辞書に持っていた（18万件では36MB）。
+    列に索引を張ってあるので、いまは一件引くだけで済む。"""
+    r = db.execute(
+        "SELECT id, pub_id, body, source_author, source_title, room_id, mood_color"
+        "  FROM external_texts WHERE pub_id=? AND sky_status='live'", (pub_id,)).fetchone()
+    return r
 
 
 def _pd_of_the_day(viewer_id, room_id, drift, k=None):
@@ -4601,16 +4989,45 @@ def _canvas_seed(raw_id, salt):
 
 
 # 島の岸に流れ着く漂流物の数（宙の一日・島ごと）。人のことばの枠を削らない足し算。
-_SKY_SHORE_K = int(_env_num("TAYORI_SKY_SHORE_K", 2, 0, 8))
+# 2026-07-31、漂流物が約20万片になったので上限を 8 → 200 まで開け、既定を Kosei 指示で
+# **8 → 32（4倍）**にした。島ごと32片＝岸は448片で、人のことば382通とほぼ同数になる。
+# ここを100にすると1400片で宙の8割が本の一節になる——止めているのは性能ではなく比率のほう
+# （触れる速さは2,800枚でパン0.58ms/フレームまで足りている）。
+# 岸は宙の一日（JST 4:00境界）ごとに入れ替わり、島に降りるたびにも組み替わる（下の nonce）。
+_SKY_SHORE_K = int(_env_num("TAYORI_SKY_SHORE_K", 32, 0, 200))
 
 
 @app.route("/api/sky/canvas")
 def api_sky_canvas():
+    return jsonify(_canvas_payload())
+
+
+# 組み上げた宙の控え（2026-07-31）。中身は「宙のプールの版」だけで決まり、読み手に
+# よって変わるのは『もう見ない』の除外だけ——そしてほとんどの人はそれを持たない。
+# 持たない人ぜんぶに同じ一枚を配る。プールは15秒で作り直されるので、その版が変われば
+# ここも作り直す＝新しく放たれたことばが古い控えに埋もれることはない。
+_canvas_cache = {"gen": None, "obj": None}
+
+
+def _canvas_payload():
     reader = session.get("uid")
     muted = _muted_ids(get_db(), reader) if reader else set()
+    pool = _sky_pool()
+    if muted:
+        return _canvas_build(pool, muted)
+    with _sky_lock:
+        gen = _sky_cache["t"]
+    if _canvas_cache["obj"] is not None and _canvas_cache["gen"] == gen:
+        return _canvas_cache["obj"]
+    obj = _canvas_build(pool, muted)
+    _canvas_cache["gen"], _canvas_cache["obj"] = gen, obj
+    return obj
+
+
+def _canvas_build(pool, muted):
     words = []
     pds = []
-    for e in _sky_pool():
+    for e in pool:
         pub, air, raw, decay, _uid, _title, room_id, flare, _age, _sem = e
         if pub.get("pd"):
             pds.append(e)                 # 漂流物は部屋を持たない。下の「岸」で島へ寄せる
@@ -4643,33 +5060,55 @@ def api_sky_canvas():
     # 決定論で流れ着く。種は 島×日×id だけ——viewer を入れない＝全員が同じ岸を見る
     # （漂いの _pd_of_the_day は読み手ごとだったが、一枚の宙は全員で同じ地形を見る面）。
     # 同じ一節が同じ日に二つの岸へ着かないよう、使った片は控える。
-    day = (datetime.now(JST) - timedelta(hours=4)).date().isoformat()
-    used = set()
-    room_ids = [r["id"] for r in get_db().execute(
+    db = get_db()
+    room_ids = [r["id"] for r in db.execute(
         "SELECT id FROM rooms WHERE deleted_at IS NULL ORDER BY COALESCE(position_index,1000000), id")]
-    for room_id in room_ids:
-        ranked = sorted(
-            pds, key=lambda e: hashlib.sha256(
-                ("shore:%s:%s:%s" % (room_id, day, e[2])).encode("utf-8")).digest())
-        got = 0
-        for e in ranked:
-            if got >= _SKY_SHORE_K:
-                break
-            pub, _air, raw = e[0], e[1], e[2]
-            if raw in used or raw in muted:
-                continue
-            used.add(raw)
-            got += 1
+    for room_id, got in _drift_shore(db, room_ids, _SKY_SHORE_K, muted).items():
+        for e in got:
+            pub, raw = e[0], e[2]
             ang = _canvas_seed(raw, "sa%s" % room_id) * 360.0
             rr = 1.0 + 0.12 * _canvas_seed(raw, "sr%s" % room_id)   # 岸＝島の縁のすこし外
             words.append({
-                "id": pub["id"], "poem": pub["poem"], "color": None,
+                "id": pub["id"], "poem": pub["poem"], "color": pub["color"],
                 "vertical": True, "room": room_id, "pd": True,
                 "author": pub["author"], "work": pub["work"],
                 "sink": 0.62,             # 紙に染みた濃さ。沈みも浮きもしない（時を持たない）
                 "x": round(math.cos(math.radians(ang)) * rr, 4),
                 "y": round(math.sin(math.radians(ang)) * rr, 4),
             })
+    return {"words": words}
+
+
+@app.route("/api/sky/shore")
+def api_sky_shore():
+    """島ひとつぶんの岸を、もう一度組み直して返す（2026-07-31・Kosei指示）。
+
+    島に降りるたびに違う一節が流れ着く。20万片あるので、同じ島でも二度と同じ顔ぶれには
+    ならない——「岸」という言い方のとおり、寄っているものは日にも、訪れにも依る。
+    返す形は /api/sky/canvas の words と同じ（画面側は差し替えるだけで済む）。"""
+    room = (request.args.get("room") or "").strip()
+    if not room.isdigit():
+        return jsonify(words=[])
+    room_id = int(room)
+    db = get_db()
+    if not _room_row(db, room_id):
+        return jsonify(words=[])
+    reader = session.get("uid")
+    muted = _muted_ids(db, reader) if reader else set()
+    # 訪れの種。読み手にも、時にも依る＝押すたびに違う（決定論に戻す必要が無い場所）。
+    nonce = secrets.token_hex(4)
+    words = []
+    for e in _drift_shore(db, [room_id], _SKY_SHORE_K, muted, nonce=nonce).get(room_id, []):
+        pub, raw = e[0], e[2]
+        ang = _canvas_seed(raw, "sa%s" % room_id) * 360.0
+        rr = 1.0 + 0.12 * _canvas_seed(raw, "sr%s" % room_id)
+        words.append({
+            "id": pub["id"], "poem": pub["poem"], "color": pub["color"],
+            "vertical": True, "room": room_id, "pd": True,
+            "author": pub["author"], "work": pub["work"], "sink": 0.62,
+            "x": round(math.cos(math.radians(ang)) * rr, 4),
+            "y": round(math.sin(math.radians(ang)) * rr, 4),
+        })
     return jsonify(words=words)
 
 
@@ -4782,7 +5221,11 @@ def api_sky_search():
     # どの部屋でも候補に入るため。実測で「雨」が9件中9件とも本からの一節になった。
     # 探しているのは人のことばで、本の一節はその傍らに流れ着くもの。順序を守る。
     h_scored = [t for t in scored if not t[1][0].get("pd")]
-    d_scored = [t for t in scored if t[1][0].get("pd")]
+    # 2026-07-31：漂流物はプールに居ないので、別の道で候補を作る（_drift_scored）。
+    # 分けて引く理由は変わらない——一つの山から引くと、18万片が数十通の人のことばを
+    # 押し出す。探しているのは人のことばで、本の一節はその傍らに流れ着くもの。
+    d_scored = _drift_scored(get_db(), qv, now_air, room_id,
+                             _muted_ids(get_db(), reader) if reader else set())
     chosen = draw(h_scored, _SKY_N) + draw(d_scored, _SKY_PD_K)
 
     words = [_sky_word(e, now_air, air=air, mode="search") for _d, e, air in chosen]
@@ -4802,7 +5245,7 @@ def api_sky_word_trace(h):
     """そのことばの打鍵イベント（v2追補 §1・§2）。ローテーション再生の材料。
     配ってよいのは trace_z（「打った過程がそのまま宙に流れます」を書く前に見た人の
     ことば）だけ。旧 trace 列＝開封再生のためだけの約束で預かった筆致は、決して出さない。"""
-    hit = _sky_index().get(h)
+    hit = _sky_lookup(h)
     if not hit:
         return jsonify(error="そのことばは、もう宙にありません。"), 404
     # 漂流物（§4.4）には打鍵が無い。ここで trace_ev=None を返すと、画面は
@@ -5533,7 +5976,7 @@ def _shelf_source(db, src, ref):
     if src == "drift":
         # 宙を漂っていることば（v14：触れて棚へ）。本文はもともと誰にでも見えているので
         # 新しく何かを晒すわけではない。引き当てはサーバ側の index だけが持つ。
-        got = _sky_index().get(ref)
+        got = _sky_lookup(ref)
         if not got:
             return None
         return got[1], got[2], got[3], got[0], got[4]
@@ -6020,7 +6463,7 @@ def api_sky_word_mark(h):
 @login_required
 def api_sky_word_mute(h):
     """このことばを、自分の宙から消す（戻すこともできる）。"""
-    ent = _sky_index().get(h)
+    ent = _sky_lookup(h)
     if not ent:
         return jsonify(error="それは見つかりません。"), 404
     letter_id = ent[0]

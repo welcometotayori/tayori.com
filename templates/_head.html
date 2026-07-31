@@ -20,10 +20,14 @@
 {# 書体は明朝一本（Shippori Mincho）。ここで読み込むのは、この <head> を使う紙
    （利用規約・プライバシー等）が font-family だけ宣言して webfont を読んでおらず、
    端末ごとに Hiragino / Yu Mincho へ散っていたため（2026-07-26）。
-   宙側は _sky_tokens.html が同じ書体を読む。 #}
+   宙側は _sky_tokens.html が同じ書体を読む。
+   2026-07-31：ウェイトから 700 を落とした（_sky_tokens 側と同じ理由・同じURLにする
+   ——URLが揃っていれば、両方を通る面でも取りに行くのは一度きり）。/privacy と
+   /terms は _sky_tokens を通らないので、この行を消してはいけない。 #}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&display=swap">
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&display=swap">
 
 <meta property="og:site_name" content="tayori-たより-">
 <meta property="og:locale" content="ja_JP">

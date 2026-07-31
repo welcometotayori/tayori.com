@@ -8,8 +8,25 @@
    「この4段のどれか」で足りないか考える。
    罫は2種＋操作用1種。--rule-act は「押せる」ことを示す罫だけに使う
    （非文字コントラスト 3:1 を満たす濃さ＝3.46:1）。 #}
+{# 書体（2026-07-31 に @import から link へ）。
+   CSS の @import は**直列**になる：面の様式を読み終えて、その中の一行を見つけて、
+   それから書体の目録を取りに行く。link なら HTML を読みながら並んで落ちてくる。
+   本番は日本の接続を Cloudflare が Seattle で受けており1往復が約400ms——直列の
+   1本は、そのまま最初の一字が出るまでの400msだった。
+   ウェイトを 700 落としたのは、どこも指定していなかったから（太字は下で600に寄せる）。
+   日本語の書体を自前で持たないのは Google Fonts の側が正しいことをしているため：
+   字ごとに120枚ほどへ割ってあり、その面に出ている字の分だけしか落ちてこない。
+   自前で一枚にすると、誰が何を書くか分からない宙では数MBを常に配ることになる。
+   _head.html も同じ行を持っている（/privacy と /terms はここを通らないため）。
+   **URLは必ず両方そろえること**——揃っていれば取りに行くのは一度きりで済む。 #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&display=swap');
+  /* 太字は600へ寄せる。既定の700は、どの面も指定していないのに <b> と <strong> だけが
+     呼び出していた——そのために書体をもう一段まるごと配るのは釣り合わない。 */
+  b,strong{font-weight:600}
   :root{
     /* ── 素材：闇と、紙の白と、封の糸の三色しかない ── */
     --space:#08080D; --chalk:#FAF8F3; --thread:#B38F6F;
