@@ -29,17 +29,39 @@
   .logo{background:none;border:none;cursor:pointer;font-family:inherit;padding:0;
         text-align:left;color:var(--ink-1);text-decoration:none;font-size:var(--t-title);
         letter-spacing:var(--tr-title)}
+  /* 宙の上に常駐する字（名・足元・書く）には、島の名と同じ闇の暈をつける
+     （2026-07-31 夜）。紙片の面では背が白い紙になるので、白い墨がそのままだと消える。
+     数は三つだけなので、光暈を禁じた重さの規則（.w の text-shadow 全廃）には触れない。 */
+  .logo,.foot,.cast-btn{text-shadow:0 0 10px rgba(8,8,13,.92),0 0 24px rgba(8,8,13,.72)}
   .logo small{color:var(--thread);font-size:var(--t-mono);letter-spacing:var(--tr-mono);
               margin-left:10px}
   .menu{position:relative;display:flex;flex-direction:column;align-items:flex-start}
-  .menu-list{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  .menu-list{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
              padding:6px 0 0}
+  /* 戸の背には霞をかける（2026-07-31 夜）。箱もカードも作らない——.hold と同じ、
+     闇がそこだけ濃くなるだけの霞。紙片の面ができてからは、戸の下に白い紙が来る＝
+     宙の墨（白）が白い紙に乗って消えるので、これが無いと文字が読めない。 */
+  .menu-list::before{content:'';position:absolute;inset:-16px -22px -14px -20px;z-index:-1;
+             pointer-events:none;
+             background:radial-gradient(76% 68% at 26% 44%,
+                        rgba(8,8,13,.97) 0%,var(--veil) 60%,rgba(8,8,13,0) 96%)}
   .menu-list[hidden]{display:none}
   .menu-list a{color:var(--ink-3);text-decoration:none;font-size:var(--t-meta);
                letter-spacing:var(--tr-meta);border-bottom:1px solid transparent;
                padding:10px 2px;min-height:var(--touch);
                transition:color .22s var(--ease),border-color .22s var(--ease)}
   .menu-list a:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
+  /* 戸の中のジャンル。錠剤も枠も作らず、名前が並んでいるだけ（.where と同じ作法）。
+     宙の紙より下の声（--ink-3）で、罫一本ぶんだけ下の頁ものと隔てる。 */
+  .menu-rooms{display:flex;flex-wrap:wrap;gap:0 14px;max-width:min(64vw,320px);
+              padding:2px 0 6px;margin-bottom:4px;
+              border-bottom:1px solid var(--rule-faint)}
+  .menu-rooms button{background:none;border:none;font-family:inherit;cursor:pointer;
+              font-size:11.5px;letter-spacing:.16em;color:var(--ink-3);
+              padding:11px 2px;min-height:var(--touch);border-bottom:1px solid transparent;
+              transition:color .2s var(--ease),border-color .2s var(--ease)}
+  .menu-rooms button:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
+  .menu-rooms button:active{opacity:.62}
   /* ── 足元：この面の名。説明は置かない（宙の作法） ── */
   .foot{position:fixed;left:calc(22px + var(--safe-l));bottom:calc(16px + var(--safe-b));
         z-index:20;color:var(--ink-4);font-size:var(--t-mono);
@@ -718,6 +740,8 @@
     <button class="logo" id="logoBtn" type="button" aria-expanded="false"
             aria-controls="logoMenu">たより <small>TAYORI</small></button>
     <div class="menu-list" id="logoMenu" hidden>
+      {# ジャンルの名。見えていない島へも、ここから降りられる（2026-07-31 夜） #}
+      <div class="menu-rooms" id="menuRooms" role="group" aria-label="ジャンル"></div>
       {% if logged_in %}
       <a href="/me">手元の棚・書架</a>
       <a href="/settings">設定</a>
@@ -903,6 +927,27 @@ addEventListener('resize',()=>{
     }
   },true);
 })();
+function menuClose(){
+  const sl=document.getElementById('logoMenu'), sb=document.getElementById('logoBtn');
+  sl.setAttribute('hidden','');sb.setAttribute('aria-expanded','false');
+}
+/* ジャンルの名を、戸の中にも並べる（2026-07-31 夜）。
+   宙の上の名は「そこに在るから押せる」もので、いま画面に無い島へは行けなかった。
+   ここに並ぶのは名前だけ——数も、中身の気配も出さない（数えた瞬間に棚になる）。
+   順は部屋の生まれた順＝宙の地形と同じ並び。押せば、その島へ滑って降りる。 */
+function fillMenuRooms(){
+  const box=document.getElementById('menuRooms');
+  if(!box)return;
+  box.textContent='';
+  ROOMS.forEach(r=>{
+    const isl=islands.get(r.id);
+    if(!isl)return;
+    const b=document.createElement('button');
+    b.type='button'; b.textContent=r.name;
+    b.addEventListener('click',()=>{ menuClose(); release(); flyTo(isl); });
+    box.appendChild(b);
+  });
+}
 const holdBox=document.getElementById('holdBox'),
       seekEl=document.getElementById('seek'),
       seekQ=document.getElementById('seekQ'),
@@ -2822,6 +2867,7 @@ Promise.all([
 ]).then(([rd,wd])=>{
   ROOMS=rd.rooms||[];
   build(ROOMS,wd.words||[]);
+  fillMenuRooms();   // 戸の中のジャンル（見えていない島への道）
   fetchMine();   // 自分の棚の控え（棚にあります の札のため）
   requestAnimationFrame(()=>{ relax();
     /* 2026-07-31：宙はミクロから始まる。全景（マクロ）から入ると、最初に見えるのが
