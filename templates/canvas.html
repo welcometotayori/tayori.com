@@ -366,7 +366,12 @@
   body.in-room-archived .cast-btn{display:none}
   /* 置き場所の札。部屋の名前は「分類」ではなく置き場所なので、選択肢の列ではなく
      名前が並んでいるだけの姿にする（丸い錠剤やセグメントは作らない・v3.10の作法）。 */
-  .where{display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:center;max-width:22em}
+  /* S3（仕様書 v1.0 §2.2）：置き場所は左揃えの一枚岩。中央寄せで折り返していたので、
+     行ごとに開始位置が動き、18個の名前が「揃った列」に見えなかった＝目が行頭を探す。
+     区画の高さは 132px で頭打ちにし、溢れは中で縦に送る（柱そのものは伸ばさない）。 */
+  .where{display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:flex-start;
+         width:100%;max-width:22em;max-height:132px;overflow-y:auto;overscroll-behavior:contain;
+         scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
   .where button{background:none;border:none;padding:9px 2px;min-height:var(--touch);
                 font-family:inherit;font-size:var(--t-meta);letter-spacing:0.14em;
                 color:var(--ink-4);border-bottom:1px solid transparent;
@@ -391,16 +396,22 @@
      align-items:center のまま溢れると上端が掴めなくなる（中央寄せの古い穴）ので、
      上端そろえ＋.cast-inner の margin:auto で中央に置く——余白がある時は中央、
      足りない時は上から素直に伸びる。 */
+  /* S1（仕様書 v1.0 §2.2）：背を「面」として成立させる。
+     旧実装は一様な膜（rgba(8,8,13,.74) + blur 3px）一枚だったので、背後の宙の濃さが
+     そのまま透けた——島の名や紙片の上では字が混ざって読めなかった。上から下へ濃くなる
+     縦のグラデーションに置き換える。上端 .55 は「宙の上に立っている」感覚を残すため、
+     字が乗る領域（32%以下）は不透明に近づける。blur は 3px のまま固定（遷移させない）。 */
   .cast{position:fixed;inset:0;z-index:12;display:flex;align-items:flex-start;justify-content:center;
         overflow-y:auto;overscroll-behavior:contain;
-        background:rgba(8,8,13,.55);opacity:0;pointer-events:none;visibility:hidden;
+        background:linear-gradient(180deg,rgba(8,8,13,.55) 0%,rgba(8,8,13,.92) 32%,var(--space) 55%);
+        opacity:0;pointer-events:none;visibility:hidden;
         /* ぼけの寸法は**遷移させない**（2026-07-31 夜）。backdrop-filter は画面ぜんぶを
            取り込んでぼかし直す処理で、その半径を0.6秒かけて動かすと、書く柱がひらく
            あいだ毎フレーム全画面のぼかしを作り直す＝ひらいた瞬間に必ずつっかえる。
            ぼけは最初から3pxで置いておき、渡すのは opacity だけ（GPUに載る）。 */
         backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
         transition:opacity .6s var(--ease),visibility 0s linear .6s}
-  .cast.on{opacity:1;pointer-events:auto;visibility:visible;background:rgba(8,8,13,.74);
+  .cast.on{opacity:1;pointer-events:auto;visibility:visible;
            transition:opacity .6s var(--ease),visibility 0s}
   @media (prefers-reduced-transparency: reduce){
     .cast.on{background:rgba(8,8,13,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -422,6 +433,16 @@
      字数・色・放つを含む柱ごと左へ寄って見える。便箋という物を中央に据える方を採る。 */
   .cast-inner{position:relative;margin:auto;display:flex;flex-direction:column;align-items:center;
               gap:var(--s2);padding:var(--s3);max-width:92vw}
+  /* ── S2（仕様書 v1.0 §2.2）：三つの区画に分ける ────────────────────
+     順序は「本文 → どこへ → いろ → かたち → 告知 → 出口」。必須（本文・どこへ）と
+     任意（いろ・かたち）のあいだに罫が入ることで、どこまでが必須かが線で分かる。
+     区画の見出しは 10px・字間 .22em・--ink-4・左揃え——読ませる文ではなく、
+     どこからどこまでが一つの決めごとかを言う小さな札。罫は区画のあいだにだけ引く。 */
+  .cast-sec{align-self:stretch;display:flex;flex-direction:column;align-items:flex-start;
+            gap:var(--s1);padding:var(--s2) 0}
+  .cast-sec + .cast-sec{border-top:1px solid var(--rule-faint)}
+  .sec-lead{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);
+            width:100%;margin:0;font-size:10px;letter-spacing:0.22em;color:var(--ink-4)}
   /* ── 宙の便箋：4本の縦罫（v13.1）────────────────────────────
      列幅＝line-height（--cw）、1列 --cch 字。4列 × 20字 = 80字＝本文の上限とちょうど同じ。
      箱の寸法を固定するのが要点：これまで width:auto だったので、字が増えて列が伸びるたび
@@ -521,11 +542,10 @@
   .picker{display:flex;flex-direction:column;gap:2px;align-items:center}
   /* 畳まずに置く色の器（2026-07-28 夜）。開閉を持たないので .cast-opt とは別の名前にする
      ——同じ姿でも、片方は「開く箱」、片方は「ずっとそこにある帯」で、役目が違う。 */
-  .cast-color{display:flex;flex-direction:column;align-items:center;
-              width:100%;margin:var(--s1) 0 0}
-  /* 何をするところかを一行。命令ではなく、置いてあるだけの声で */
-  .picker-lead{margin:var(--s2) 0 0;font-size:11.5px;letter-spacing:var(--tr-body);
-               color:var(--ink-3);text-align:center}
+  /* 区画の中では左端にそろえる（S2/S3）。中央寄せの部品と左揃えの部品が同じ柱に
+     混ざると、行頭の位置が区画ごとに動いて「揃っていない」に見える。 */
+  .cast-color{display:flex;flex-direction:column;align-items:flex-start;
+              width:100%;margin:0}
   /* いま選んでいる色の名。触るたびに変わる＝二本の帯の役目が、触れば分かる */
   .picker-now{margin:2px 0 0;min-height:1.6em;font-size:11px;letter-spacing:0.22em;
               color:var(--ink-4);text-align:center;
@@ -549,10 +569,10 @@
      一行に沈めて、触れたときだけその場で開く。
      ・題／色 … data-opt で対応する箱の hidden を外す
      ・向き   … それ自体が行為なので、この行で直接切り替える（castDir をここへ移設） */
-  .cast-opt-row{display:flex;flex-wrap:wrap;justify-content:center;
+  .cast-opt-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;
                 /* 間は --s3。--s4(32px) だと 375px 幅で計 309px＞行幅 305px となり
                    4px だけ溢れて二行に折れた（実測 2026-07-28）。一行に沈めるのが主題 */
-                gap:2px var(--s3);margin:var(--s2) 0 0}
+                gap:2px var(--s3);margin:0}
   .cast-opt-row button{background:none;border:none;font-family:inherit;cursor:pointer;
                        min-height:var(--touch);padding:11px 4px;
                        font-size:11.5px;letter-spacing:0.2em;color:var(--ink-4);
@@ -562,8 +582,8 @@
   .cast-opt-row button[aria-expanded="true"]{border-bottom-color:var(--rule)}
   /* 中身が入っている引き金は、閉じていても分かるように点を一つ添える */
   .cast-opt-row button[data-filled="1"]::after{content:"・";color:var(--ink-3)}
-  .cast-opt{display:flex;flex-direction:column;align-items:center;
-            gap:var(--s2);width:100%;margin:var(--s2) 0 0;
+  .cast-opt{display:flex;flex-direction:column;align-items:flex-start;
+            gap:var(--s2);width:100%;margin:var(--s1) 0 0;
             /* 開いた箱を scrollIntoView で見せるとき、sticky の出口の裏に
                尻を差し込ませない遊び（出口の丈 ≒72px + ひと呼吸）。
                375×560 実測：これが無いと色名の行が出口の下に 8px 欠けた（2026-07-28） */
@@ -821,8 +841,13 @@
       {# 2026-07-28（4-10）：「どこに置きますか。まだ決めていません。」は問いと状態が
          一文に混ざっていた。見出しは「どこへ」だけ。未選択かどうかは選択肢の側の
          見た目（.picked）が言う——文で状態を説明しない。 #}
-      <p class="picker-lead" id="whereLead">どこへ</p>
-      <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
+      {# S2（仕様書 v1.0 §2.2）：柱の中身を「どこへ／いろ／かたち」の三区画に分ける。
+         必須（本文・どこへ）と任意（いろ・かたち）のあいだに罫が入る＝どこまでが
+         必須かが線で分かる。見出しは説明ではなく、区画の名前だけ。 #}
+      <div class="cast-sec">
+        <p class="sec-lead" id="whereLead">どこへ</p>
+        <div class="where" id="castWhere" role="radiogroup" aria-label="ことばを置く部屋"></div>
+      </div>
 
       {# ── 色（2026-07-28 夜に畳むのをやめた）────────────────────
          同日昼に「色をえらぶ」の一行へ畳んだが、押さないかぎり帯そのものが無いので、
@@ -832,7 +857,9 @@
          位置は「どこへ」の下＝必須の二つ（書く→どこへ）は割らない（同日昼の線を守る）。
          帯を動かすと、いま書いた字の色がその場で変わる＝何のための帯かは、
          見出しではなく便箋自身が言う。 #}
-      <div class="cast-color" id="castOptColor">
+      <div class="cast-sec">
+        <p class="sec-lead">いろ</p>
+        <div class="cast-color" id="castOptColor">
         <div class="picker">
           <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
                aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
@@ -842,25 +869,29 @@
              名残なので落とした——帯の下に結果の名が一つ出ていれば、役目は伝わる。 #}
           <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
         </div>
+        </div>
       </div>
 
-      {# ── 任意の二つ（2026-07-28）──
+      {# ── かたち（題・向き）──
          題も向きも、無いまま放ってよい。だから一行に沈めて、触れたときだけ開く。 #}
-      <div class="cast-opt-row" id="castOptRow">
-        <button type="button" data-opt="castOptTitle" aria-expanded="false"
-                aria-controls="castOptTitle">題をつける</button>
-        {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
-           向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。
-           2026-07-28（4-6）：中身は paintDir が描く（罫のミニアイコン＋現在地「縦／横」）。 #}
-        <button class="cast-dir" id="castDir" type="button" aria-pressed="false"></button>
-      </div>
+      <div class="cast-sec">
+        <p class="sec-lead">かたち</p>
+        <div class="cast-opt-row" id="castOptRow">
+          <button type="button" data-opt="castOptTitle" aria-expanded="false"
+                  aria-controls="castOptTitle">題をつける</button>
+          {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
+             向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。
+             2026-07-28（4-6）：中身は paintDir が描く（罫のミニアイコン＋現在地「縦／横」）。 #}
+          <button class="cast-dir" id="castDir" type="button" aria-pressed="false"></button>
+        </div>
 
-      <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚と書架でだけ立つ
-           （辿るを畳んだ 2026-07-28 以後、題が出る面はこの二つだけになった） -->
-      <div class="cast-opt" id="castOptTitle" hidden>
-        <input id="castTitle" type="text" maxlength="10" autocomplete="off"
-               placeholder="題をつける（10字まで・なくても）"
-               aria-label="このことばの題（10字まで・任意）">
+        <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚と書架でだけ立つ
+             （辿るを畳んだ 2026-07-28 以後、題が出る面はこの二つだけになった） -->
+        <div class="cast-opt" id="castOptTitle" hidden>
+          <input id="castTitle" type="text" maxlength="10" autocomplete="off"
+                 placeholder="題をつける（10字まで・なくても）"
+                 aria-label="このことばの題（10字まで・任意）">
+        </div>
       </div>
       <!-- 付箋の入力はここには無い（v2.2 §3）。書き手が付けるのは題だけで、
            付箋は読み手が自分の棚に残す瞬間に貼る（→ .fusen-pad） -->
