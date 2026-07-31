@@ -1335,7 +1335,9 @@ const ptrs=new Map(); let moved=0, pinchD=0;
 vp.addEventListener('pointerdown',e=>{
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   moved=0; vp.classList.add('drag');
-  vp.setPointerCapture(e.pointerId);
+  // 指を捕まえる（紙の外へ滑ってもひきずりを見失わない）。捕まえられない指も
+  // 稀にある（合成のイベント・端末の癖）——そこで落とすと、以後の受け止めが全部死ぬ
+  try{ vp.setPointerCapture(e.pointerId); }catch(err){}
   if(ptrs.size===2){ const p=[...ptrs.values()]; pinchD=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); }
 });
 vp.addEventListener('pointermove',e=>{
@@ -1355,7 +1357,34 @@ vp.addEventListener('pointermove',e=>{
 // 指の動きは止めない（preventDefault しない＝passive）。触れる面の touch-action:none で
 // ブラウザの巻き取りは既に切ってあるので、ここで待たせる理由がない（2026-07-31 夜）
 },{passive:true});
-function ptrUp(e){ ptrs.delete(e.pointerId); pinchD=0; if(!ptrs.size)vp.classList.remove('drag'); }
+/* ── 触れた、を click に頼らない（2026-07-31 夜）───────────────────
+   宙は pointerdown で指を捕まえている（setPointerCapture＝指が紙の外へ滑っても
+   ひきずりを見失わないため）。その代償として、離した時の click は**捕まえた側**
+   （#vp）へ付け替えられて配られる——ことばにも島の名にも届かない。指で触れても
+   受け止められない＝棚にも残せない、の正体はこれだった（マウスでは届く実装もあり、
+   机の上では起きないので長く見つからなかった）。
+   だから、離した場所を自分で見る：6px未満しか動いていなければ、その座標の下に
+   居るものを elementFromPoint で引き当てて、受け止めか、島への戸として扱う。 */
+function tapAt(x,y){
+  const t=document.elementFromPoint(x,y);
+  if(!t)return;
+  // 遠景では、島の名（ジャンル）がその島への戸
+  const nm=t.closest('.isl-nm');
+  if(nm){
+    for(const isl of islands.values()){
+      if(isl.el.contains(nm)){ release(); flyTo(isl); return; }
+    }
+  }
+  const el=t.closest('.w');
+  if(el)hold(el,x,y); else release();
+}
+function ptrUp(e){
+  const had=ptrs.has(e.pointerId);
+  ptrs.delete(e.pointerId); pinchD=0;
+  if(!ptrs.size)vp.classList.remove('drag');
+  // ひきずった指は受け止めではない（6px未満＝置いて、離しただけ）
+  if(e.type==='pointerup'&&had&&!ptrs.size&&moved<=6)tapAt(e.clientX,e.clientY);
+}
 vp.addEventListener('pointerup',ptrUp); vp.addEventListener('pointercancel',ptrUp);
 
 /* ── 受け止めと共鳴 ─────────────────────────────
@@ -1396,21 +1425,39 @@ function renderHold(){
   holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
   holdBox.querySelector('.mute').addEventListener('click',()=>toggleMute(held));
 }
-/* 行いは、そのことばの隣に置く（出どころから立ち上がる／mood.html と同じ手順） */
-function placeHold(){
+/* 行いは、そのことばの隣に置く（出どころから立ち上がる／mood.html と同じ手順）。
+   ただし紙片の面では、一枚が画面より丈の高いことがある——ことばの箱の外へ置こうとすると
+   画面の端まで飛ばされ、触れた場所と行いが遠く離れる（＝「押しても何も出ない」に見える）。
+   触れた場所が分かっている時（指・マウス）は、その真下に置く（2026-07-31 夜）。 */
+function placeHold(tx,ty){
   if(!held)return;
   const r=held.getBoundingClientRect(), W=innerWidth, H=innerHeight;
   holdBox.hidden=false;
   holdBox.classList.remove('on');
   void holdBox.offsetHeight;
   const b=holdBox.getBoundingClientRect();
-  let x=r.left+r.width/2-b.width/2, y=r.bottom+6;
-  if(y+b.height>H-12) y=Math.max(12,r.top-b.height-6);
+  let x,y;
+  if(tx!=null&&ty!=null){
+    x=tx-b.width/2; y=ty+20;
+    if(y+b.height>H-12) y=ty-20-b.height;
+  }else{
+    x=r.left+r.width/2-b.width/2; y=r.bottom+6;
+    if(y+b.height>H-12) y=Math.max(12,r.top-b.height-6);
+  }
   x=Math.min(Math.max(12,x),Math.max(12,W-b.width-12));
   y=Math.min(Math.max(12,y),Math.max(12,H-b.height-12));
   holdBox.style.left=x+'px'; holdBox.style.top=y+'px';
-  holdBox.style.transformOrigin=(r.left+r.width/2-x)+'px 0px';
+  holdBox.style.transformOrigin=((tx!=null?tx:r.left+r.width/2)-x)+'px 0px';
   setTimeout(()=>{ if(held)holdBox.classList.add('on'); },16);
+}
+/* 開いたあとで丈が伸びた時に、下へはみ出したぶんだけ静かに上げる（横は動かさない
+   ＝触れた場所との関係を崩さない）。収まっている時は何もしない。 */
+function keepInView(){
+  if(holdBox.hidden)return;
+  const b=holdBox.getBoundingClientRect(), H=innerHeight;
+  if(b.bottom<=H-12)return;
+  const top=Math.max(12,Math.min(b.top,H-12-b.height));
+  holdBox.style.top=top+'px';
 }
 function paintAct(sel,on,onTxt,offTxt){
   const b=holdBox.querySelector(sel); if(!b)return;
@@ -1431,7 +1478,10 @@ async function toggleKeep(el){
     if(!r.ok)throw new Error('keep');
     const d=await r.json().catch(()=>null);
     // 残した、その場に付箋の紙片が開く（貼らずに閉じてよい・v2.2 §3）
-    if(on&&d&&d.id&&held===el){fusenPad(holdBox,d.id,[]);wherePad(holdBox,d.id,d.shelf,d.shelves);}
+    if(on&&d&&d.id&&held===el){
+      fusenPad(holdBox,d.id,[]);wherePad(holdBox,d.id,d.shelf,d.shelves);
+      keepInView();   // 付箋と置き場所のぶん丈が伸びる。画面の外へはみ出させない
+    }
   }catch(e){
     dropPad(holdBox);
     if(on)kept.delete(key); else kept.add(key);
@@ -1458,7 +1508,7 @@ async function toggleMute(el){
     whisper('いま、<wbr>届きませんでした。',6000);
   }
 }
-function hold(el){
+function hold(el,tx,ty){
   if(held===el){ release(); return; }
   release();
   held=el; el.classList.add('held');
@@ -1477,7 +1527,7 @@ function hold(el){
   }
   noteTouch(el._w.room);              // 触れた気配（部屋の灯が呼吸する）
   renderHold();
-  placeHold();
+  placeHold(tx,ty);
   fetch('/api/sky/near?id='+encodeURIComponent(el._w.id))
     .then(r=>r.json()).then(d=>{
       if(held!==el||!d.ids)return;
@@ -1493,19 +1543,8 @@ function hold(el){
       });
     }).catch(()=>{});
 }
-world.addEventListener('click',e=>{
-  if(moved>6)return;               // ひきずった指は受け止めではない
-  /* 遠景では、島の名（ジャンル）がその島への戸（2026-07-31）。
-     押せば、その島へ滑って降りる——降りた先で紙片が敷き詰められる。 */
-  const nm=e.target.closest('.isl-nm');
-  if(nm){
-    for(const isl of islands.values()){
-      if(isl.el.contains(nm)){ release(); flyTo(isl); return; }
-    }
-  }
-  const el=e.target.closest('.w');
-  if(el){ hold(el); } else { release(); }
-});
+/* 受け止めと島への戸は、上の tapAt（pointerup）が引き受けた。ここに click の
+   listener は置かない——二重に効いて、触れた端から自分で取り消してしまう。 */
 
 /* ── 打鍵の実時間再生（v2追補 §1 の移植）───────────────────
    一枚の宙でも、ことばは「置いてある」ではなく「いま書かれている」もの。
