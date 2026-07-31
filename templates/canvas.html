@@ -492,12 +492,14 @@
      border-bottom 前提（color だけ上書き）だったので、.ruled を外した今は残すと死に体。
      同日 4-6：中身を状態表示（罫のミニアイコン＋「縦／横」）にしたぶんの器だけ持つ。
      横は同じ罫が倒れた姿＝rotate（別のアイコンを描かない。物は一つ、向きが変わるだけ）。 */
-  .cast-dir{display:inline-flex;align-items:center;gap:6px}
-  .cast-dir .dico{width:12px;height:12px;flex:none;fill:none;stroke:currentColor;
-                  stroke-width:1;stroke-linecap:round;
-                  transition:transform .3s var(--ease)}
-  .cast-dir.h .dico{transform:rotate(90deg)}
-  @media (prefers-reduced-motion: reduce){ .cast-dir .dico{transition:none} }
+  /* S5：二択を同時に見せる。姿は「罫一本」だけ——選択中は墨が立って罫が引かれ、
+     非選択は退く。塗りも角丸の器も作らない（作法1-2）。各44px。 */
+  .cast-dir{display:inline-flex;align-items:center;gap:var(--s2)}
+  .cast-opt-row .cast-dir button{min-width:var(--touch);text-align:center;
+                  color:var(--ink-4);border-bottom:1px solid transparent}
+  .cast-opt-row .cast-dir button[aria-checked="true"]{color:var(--ink-1);
+                  border-bottom-color:var(--thread)}
+  .cast-opt-row .cast-dir button:active{opacity:.62}
   /* :empty が成立するのは中身が本当に空（<br>も残っていない）時だけ。JS側で保証する */
   .cast .ctext:empty:before{content:attr(data-placeholder);color:var(--ink-4)}
   /* 自前カーソル：列幅いっぱい（＝横書きの行と同じ背丈）の横棒。
@@ -539,7 +541,15 @@
      上＝色相（鮮やかなまま全周）、下＝淡い⇄鮮やか⇄深い。選んだ色はその場で文字にのる。
      v14：帯の見た目は11pxのまま、指の的だけ上下パディングで44pxに広げた
      （background-clip:content-box なので、色は細い帯にしか乗らない）。 */
-  .picker{display:flex;flex-direction:column;gap:2px;align-items:center}
+  .picker{display:flex;flex-direction:column;gap:2px;align-items:stretch;width:min(70vw,300px)}
+  /* S4：帯の左に固定幅34pxのラベル（色相／濃さ）。帯は残りを取る＝帯の実寸は
+     端末で変わるが、つまみの位置は割合で置いているので何も狂わない。 */
+  .bar-row{display:flex;align-items:center;gap:var(--s1);width:100%}
+  .bar-tag{flex:0 0 34px;width:34px;font-size:10px;letter-spacing:0.08em;color:var(--ink-4)}
+  /* 見出しの右端に置く、いまの色（丸い見本＋名）。見本は22px、縁は紙の白のごく薄い一本。 */
+  .sec-now{display:inline-flex;align-items:center;gap:var(--s1)}
+  .sec-swatch{width:22px;height:22px;border-radius:50%;flex:none;
+              border:1px solid rgba(250,248,243,.18);background:transparent}
   /* 畳まずに置く色の器（2026-07-28 夜）。開閉を持たないので .cast-opt とは別の名前にする
      ——同じ姿でも、片方は「開く箱」、片方は「ずっとそこにある帯」で、役目が違う。 */
   /* 区画の中では左端にそろえる（S2/S3）。中央寄せの部品と左揃えの部品が同じ柱に
@@ -547,19 +557,20 @@
   .cast-color{display:flex;flex-direction:column;align-items:flex-start;
               width:100%;margin:0}
   /* いま選んでいる色の名。触るたびに変わる＝二本の帯の役目が、触れば分かる */
-  .picker-now{margin:2px 0 0;min-height:1.6em;font-size:11px;letter-spacing:0.22em;
-              color:var(--ink-4);text-align:center;
+  .picker-now{font-size:11px;letter-spacing:0.14em;color:var(--ink-4);white-space:nowrap;
               transition:color .3s var(--ease)}
   /* box-sizing:content-box が要点：global の border-box では height:11px に padding が
      食われて帯そのものが消える（＝色が見えなくなる）。ここだけ content-box に戻す。 */
-  .colorbar{position:relative;box-sizing:content-box;width:min(70vw,300px);height:11px;
+  .colorbar{position:relative;box-sizing:content-box;flex:1;min-width:0;height:11px;
             padding:17px 0;background-clip:content-box;border-radius:6px;
             cursor:pointer;touch-action:none}
   .huebar{background-image:linear-gradient(90deg,
             hsl(0,80%,60%),hsl(40,80%,60%),hsl(80,80%,60%),hsl(120,80%,60%),
             hsl(160,80%,60%),hsl(200,80%,60%),hsl(240,80%,60%),hsl(280,80%,60%),
             hsl(320,80%,60%),hsl(360,80%,60%))}
-  .tonebar{background-image:linear-gradient(90deg,hsl(0,22%,88%),hsl(0,80%,60%),hsl(0,62%,32%))}
+  /* 濃さの帯は、選んでいる色相で描き替わる（paint が backgroundImage を書く）。
+     ここに置くのは既定色（H0=210）の姿——赤のまま立ち上がって一拍後に青へ、を作らない。 */
+  .tonebar{background-image:linear-gradient(90deg,hsl(210,24%,88%),hsl(210,78%,64%),hsl(210,66%,46%))}
   .bar-knob{position:absolute;top:50%;left:0;width:20px;height:20px;border-radius:50%;
             transform:translate(-50%,-50%);border:1.5px solid var(--chalk);
             background:transparent;pointer-events:none;
@@ -858,16 +869,24 @@
          帯を動かすと、いま書いた字の色がその場で変わる＝何のための帯かは、
          見出しではなく便箋自身が言う。 #}
       <div class="cast-sec">
-        <p class="sec-lead">いろ</p>
+        {# 見出しの右端に、いま選んでいる色の丸い見本と、その名（S4）。
+           帯を動かす前から現在色が見えている＝「触るまで分からない」を解く。 #}
+        <p class="sec-lead">いろ<span class="sec-now"><span class="sec-swatch" id="pickerDot"
+             aria-hidden="true"></span><span class="picker-now" id="pickerNow" aria-hidden="true"></span></span></p>
         <div class="cast-color" id="castOptColor">
         <div class="picker">
-          <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
-               aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
-          <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
-               aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
-          {# いま選んでいる色の名。見出し（「このことばの色。」）は畳んでいた頃の
-             名残なので落とした——帯の下に結果の名が一つ出ていれば、役目は伝わる。 #}
-          <p class="picker-now" id="pickerNow" aria-hidden="true"></p>
+          {# S4（仕様書 v1.0 §2.2）：二本の帯が何を決めるものか、触れる前に分かるように、
+             各帯の左に固定幅34pxのラベルを置く。結果（色名）は区画見出しの右端へ。 #}
+          <div class="bar-row">
+            <span class="bar-tag" aria-hidden="true">色相</span>
+            <div class="colorbar huebar" id="hueBar" role="slider" aria-label="ことばの色（色あい）"
+                 aria-valuemin="0" aria-valuemax="360" tabindex="0"><span class="bar-knob" id="hueKnob"></span></div>
+          </div>
+          <div class="bar-row">
+            <span class="bar-tag" aria-hidden="true">濃さ</span>
+            <div class="colorbar tonebar" id="toneBar" role="slider" aria-label="色の深さ（淡い〜深い）"
+                 aria-valuemin="0" aria-valuemax="100" tabindex="0"><span class="bar-knob" id="toneKnob"></span></div>
+          </div>
         </div>
         </div>
       </div>
@@ -881,8 +900,13 @@
                   aria-controls="castOptTitle">題をつける</button>
           {# 縦書きの入力は、スマホだと変換候補（横）と字の流れ（縦）が直交して打ちにくい。
              向きは書く人が決められるようにする。読む面・漂う姿は縦書きのまま変わらない。
-             2026-07-28（4-6）：中身は paintDir が描く（罫のミニアイコン＋現在地「縦／横」）。 #}
-          <button class="cast-dir" id="castDir" type="button" aria-pressed="false"></button>
+             S5（仕様書 v1.0 §2.2）：現在値だけを出す切替をやめ、「縦」「横」を隣り合わせに
+             置く。押すまで何が起きるか分からない一語は、切替と気づかれなかった。
+             選択中のみ罫が立ち、非選択は退く——セグメント（塗り・角丸の器）にはしない。 #}
+          <span class="cast-dir" id="castDir" role="radiogroup" aria-label="書く向き">
+            <button type="button" role="radio" data-dir="v">縦</button>
+            <button type="button" role="radio" data-dir="h">横</button>
+          </span>
         </div>
 
         <!-- 題（v2.2 §2.1）：10字以内・任意。宙を漂う間は出ず、棚と書架でだけ立つ
@@ -2129,6 +2153,7 @@ seekBack.addEventListener('click',()=>seekReset());
         hueBar=document.getElementById('hueBar'),hueKnob=document.getElementById('hueKnob'),
         toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob'),
         pickerNow=document.getElementById('pickerNow'),
+        pickerDot=document.getElementById('pickerDot'),
         vcaret=document.getElementById('castCaret');
 
   /* ── 気分の色（v12）──
@@ -2175,6 +2200,8 @@ seekBack.addEventListener('click',()=>seekReset());
     toneBar.setAttribute('aria-valuetext',toneName(T)+'　'+hueName(H));
     // 見えている人にも同じことばで返す（帯に触れた手応えが、名前として残る）
     if(pickerNow){ pickerNow.textContent=toneName(T)+'　'+hueName(H); pickerNow.style.color=col; }
+    // 区画見出しの右端の見本。丸の内側だけを塗る（縁は紙の白のまま・S4）
+    if(pickerDot) pickerDot.style.background=col;
     // 選んだ色は、書いている文字にそのままのる（宙に放たれた後と同じ見え方に）
     ta.style.color=col;
     ta.style.textShadow='0 0 22px hsla('+c.h+','+c.s+'%,'+c.l+'%,.45)';
@@ -2608,23 +2635,27 @@ seekBack.addEventListener('click',()=>seekReset());
   const dirBtn=document.getElementById('castDir'), DIR_KEY='tayori.castdir';
   let horiz=false;
   try{ horiz=localStorage.getItem(DIR_KEY)==='h'; }catch(_){}
+  /* S5（仕様書 v1.0 §2.2）：現在値だけを出す切替をやめ、「縦」「横」を並べて置く。
+     4-6 の状態表示（罫のミニアイコン＋現在地）は「押すと何が起きるか」が
+     aria-label にしか無く、目で見ているだけでは切替と気づかれなかった。
+     二つ並べば、選べることも、いまどちらかも、姿だけで分かる。 */
   function paintDir(){
     ta.classList.toggle('h',horiz);
-    /* 2026-07-28（4-6）：ラベルを「次の動作」から「現在地」に。「横書きにする」だと
-       押すまで今どちらなのか分からなかった。便箋の縦罫4本のメタファーを小さく流用し、
-       罫のミニアイコン＋「縦／横」の状態表示にする（横は同じ罫が倒れた姿＝rotate）。
-       何が起きるかは aria-label が言う（見た目は状態・読み上げは行為）。 */
-    dirBtn.classList.toggle('h',horiz);
-    dirBtn.innerHTML='<svg class="dico" viewBox="0 0 12 12" aria-hidden="true">'
-      +'<path d="M2.5 1.5v9M6 1.5v9M9.5 1.5v9"/></svg>'+(horiz?'横':'縦');
-    dirBtn.setAttribute('aria-label',horiz?'いま横書き。押すと縦書きで書く':'いま縦書き。押すと横書きで書く');
-    dirBtn.setAttribute('aria-pressed',horiz?'true':'false');
+    dirBtn.querySelectorAll('button').forEach(b=>{
+      const on=(b.dataset.dir==='h')===horiz;
+      b.setAttribute('aria-checked',on?'true':'false');
+      b.setAttribute('tabindex',on?'0':'-1');   // radiogroup は焦点を一つだけ持つ
+    });
     // 自前カーソルは縦書きのための細工。横書きではネイティブに返す
     vcaret.style.display='none';
     if(!horiz)requestAnimationFrame(drawCaret);
   }
-  dirBtn.addEventListener('click',()=>{
-    horiz=!horiz;
+  dirBtn.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-dir]');
+    if(!b)return;
+    const want=(b.dataset.dir==='h');
+    if(want===horiz){ ta.focus(); return; }   // 同じ向きを押しても何も変えない
+    horiz=want;
     try{ localStorage.setItem(DIR_KEY,horiz?'h':'v'); }catch(_){}
     paintDir();ta.focus();
   });
