@@ -64,10 +64,18 @@
      （JSは到着の値を先に書くので、滑走の始めに名だけ跳ねて見えていた） */
   body.flying .isl-nm{transition:opacity .8s var(--ease),color .3s var(--ease),
                       transform 1.1s var(--ease)}
-  /* 遠景では、島の名がその島への戸になる（2026-07-31）。近景では紙片が主役なので
-     名は気配に退き、指も受けない（紙のタップを名が横取りしない）。 */
-  body.far .isl-nm{pointer-events:auto;cursor:pointer;padding:10px 14px;margin:-10px -14px}
-  body.far .isl-nm:hover{color:var(--chalk)}
+  /* 島の名は、その島への戸（2026-07-31・夜に倍率の縛りを外した）。
+     はじめは遠景（body.far）だけの戸だったが、紙を敷いてからは、まわりに残るのが
+     「名と灯」だけになった——見えているのが名しかないのに押せない、では戸に見えない。
+     **紙を敷いていない島の名は、いつでも戸**。降りている島（.sheet）の名だけは
+     指を受けない：そこは読む面で、主役は紙。名が紙のタップを横取りしてはいけない。
+     的は44px（v14の作法）＝17pxの字に上下14px・左右16pxの余白を負のマージンで足す。 */
+  .isl:not(.sheet) .isl-nm{pointer-events:auto;cursor:pointer;
+                           padding:14px 16px;margin:-14px -16px}
+  .isl:not(.sheet) .isl-nm:hover{color:var(--chalk)}
+  /* 押した瞬間に応える（離すのを待たない・Apple §1）。飛ぶのは1.1秒かけてでも、
+     「受け取った」は指が触れたその場で言う。 */
+  .isl:not(.sheet) .isl-nm:active{color:var(--chalk);opacity:.72}
   .isl-glow{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;
             transition:opacity 1.2s var(--ease)}
   .isl-glow span{position:absolute;border-radius:50%;transform:translate(-50%,-50%)}
