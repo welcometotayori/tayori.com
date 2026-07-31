@@ -1479,32 +1479,38 @@ function renderHold(){
   holdBox.querySelector('.keep').addEventListener('click',()=>toggleKeep(held));
   holdBox.querySelector('.mute').addEventListener('click',()=>toggleMute(held));
 }
-/* 行いは、そのことばの**足元**に置く（出どころから立ち上がる／mood.html と同じ手順）。
-   霞が濃いので、ことばの上に重ねると読んでいる字を隠してしまう——まず紙の下に出す。
-   ただし紙片の面では、一枚が画面より丈の高いことがある。その時だけ触れた指の下へ
-   （旧実装はここで画面の端まで飛ばしていて、触れた場所と行いが遠く離れていた
-     ＝「押しても何も出ない」に見えた原因・2026-07-31 夜）。 */
+/* 行いは、そのことばの**左下**に置く（2026-07-31 夜・Kosei が三案から選んだ位置）。
+   縦書きは右から左へ流れるので、左下＝読み終わったところ。行いはその真横に、
+   紙の下端と揃えて添う——紙の字も、まだ読んでいない右の紙も隠さない。
+   霞が濃いぶん重ねられないので、置けない時の順は左脇 → 真下（左端そろえ）→ 指の下。
+   （旧実装は置けない時に画面の端まで飛ばしていて、触れた場所と行いが遠く離れた
+     ＝「押しても何も出ない」に見えた原因）
+   30px は霞の張り出し（::before の -34px）とほぼ同じ＝闇の縁が紙の際で止まる寸法。 */
 function placeHold(tx,ty){
   if(!held)return;
   const r=held.getBoundingClientRect(), W=innerWidth, H=innerHeight;
   holdBox.hidden=false;
   holdBox.classList.remove('on');
-  void holdBox.offsetHeight;
-  const b=holdBox.getBoundingClientRect();
-  let x,y,ax;
-  // 30px は霞の張り出し（::before の -34px）とほぼ同じ＝闇の縁が紙の下端に触れて止まる
-  if(r.bottom+30+b.height<=H-12){          // 紙の足元に置ける（ことばを隠さない）
-    y=r.bottom+30; ax=r.left+r.width/2;
-  }else if(tx!=null&&ty!=null){           // 置けない＝紙が画面より高い。指の下へ
-    y=(ty+20+b.height<=H-12)?ty+20:ty-20-b.height; ax=tx;
-  }else{                                  // 触れた場所が分からない時（鍵盤から）
-    y=Math.max(12,r.top-b.height-6); ax=r.left+r.width/2;
+  // 寸法は offsetWidth/Height で測る：畳んでいる間は scale(.97) が掛かっていて、
+  // getBoundingClientRect だと3%小さい札を基準に置いてしまう（端をそろえると数px狂う）
+  const b={width:holdBox.offsetWidth,height:holdBox.offsetHeight};
+  let x,y,ax,oy;
+  if(r.left-b.width-30>=12&&r.bottom-b.height>=12){   // ① 左脇・下そろえ（本命）
+    x=r.left-b.width-30; y=r.bottom-b.height;
+    ax=r.left; oy=b.height;                          // 立ち上がりの起点＝紙の左下の角
+  }else if(r.bottom+30+b.height<=H-12){              // ② 左に無ければ真下・左端そろえ
+    x=r.left; y=r.bottom+30; ax=r.left; oy=0;
+  }else if(tx!=null&&ty!=null){                      // ③ 紙が画面より高い＝触れた指の下
+    y=(ty+20+b.height<=H-12)?ty+20:ty-20-b.height;
+    x=tx-b.width/2; ax=tx; oy=0;
+  }else{                                             // 触れた場所が分からない時（鍵盤から）
+    x=r.left+r.width/2-b.width/2; y=Math.max(12,r.top-b.height-6);
+    ax=r.left+r.width/2; oy=0;
   }
-  x=ax-b.width/2;
   x=Math.min(Math.max(12,x),Math.max(12,W-b.width-12));
   y=Math.min(Math.max(12,y),Math.max(12,H-b.height-12));
   holdBox.style.left=x+'px'; holdBox.style.top=y+'px';
-  holdBox.style.transformOrigin=(ax-x)+'px 0px';
+  holdBox.style.transformOrigin=(ax-x)+'px '+oy+'px';
   setTimeout(()=>{ if(held)holdBox.classList.add('on'); },16);
 }
 /* 開いたあとで丈が伸びた時に、下へはみ出したぶんだけ静かに上げる（横は動かさない
