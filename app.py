@@ -183,6 +183,15 @@ _load_dotenv()
 
 app = Flask(__name__)
 
+# JSON に日本語をそのまま書く（2026-08-01）。Flask の既定は ensure_ascii=True で、
+# 「空」が `空` になる＝UTF-8で3バイトの字が6バイトの逃げ書きに膨らむ。
+# このサービスの API はほとんど本文（＝ほぼ全部が日本語）なので、これが効く。
+# 実測（/api/sky/canvas）: 346KB → 245KB（71%）、gzip後 96KB → 83KB。
+# JSON の既定の文字符号は UTF-8 なので、逃げ書きをやめても読み手側は何も変わらない。
+# HTML へ同梱する側（_script_json）は最初から ensure_ascii=False で書いていた。
+app.json.ensure_ascii = False
+app.json.sort_keys = False        # 並べ替えの手間を省く（鍵の順は誰も見ていない）
+
 
 def _load_secret():
     env = os.environ.get("TAYORI_SECRET")
@@ -4635,21 +4644,40 @@ def _drift_matrix_build(gen):
     import numpy as np
     t0 = time.time()
     db = _connect()                       # 別スレッド＝別の接続（get_db は要求ごと）
-    ids, rooms, vecs = [], [], []
+    ids, rooms = [], []
+    mat = None
     try:
-        for r in db.execute(
-                "SELECT x.id, x.room_id, v.v"
-                "  FROM external_texts x JOIN letter_vectors v ON v.letter_id = x.id"
-                " WHERE x.sky_status='live' LIMIT ?", (_DRIFT_SEARCH_MAX,)):
-            v = _sem_vec(r["v"])
-            if v is None:
-                continue
-            ids.append(r["id"])
-            rooms.append(r["room_id"])
-            vecs.append(v)
+        # 板は**先に一枚ぶん確保して、そこへ直に書く**（2026-08-01）。
+        # 前は 20万本のベクトルを Python の list に貯めてから np.stack して astype して
+        # いた。同じ中身が三重に在る瞬間ができる：list（1本1KB＋器の重み）＋stack した
+        # fp32 の板（209MB）＋fp16 に写した板（104MB）。実測で最大 597MB まで膨らんで
+        # いた——Render Starter の器は 512MB なので、**最初に探した人がこの山を踏んだ
+        # 瞬間にプロセスごと落ちる**（落ちれば起き直る＝その間ぜんぶが黙る）。
+        # 確保してから書けば、山は板そのもの（104MB）だけになる。
+        cap = int((db.execute("SELECT COUNT(*) c FROM external_texts"
+                              " WHERE sky_status='live'").fetchone() or {"c": 0})["c"])
+        cap = min(cap, _DRIFT_SEARCH_MAX)
+        if cap > 0:
+            buf = np.empty((cap, _SEM_DIM), dtype=np.float16)
+            n = 0
+            for r in db.execute(
+                    "SELECT x.id, x.room_id, v.v"
+                    "  FROM external_texts x JOIN letter_vectors v ON v.letter_id = x.id"
+                    " WHERE x.sky_status='live' LIMIT ?", (cap,)):
+                v = _sem_vec(r["v"])
+                if v is None:
+                    continue
+                buf[n] = v                # fp32 → fp16 はこの代入の中で済む
+                ids.append(r["id"])
+                rooms.append(r["room_id"])
+                n += 1
+            # 数え終わってから確保しているので普通は n == cap。ベクトルの無い行が
+            # 混じった時だけ余りが出る——余りは切って**捨てる**（view のままだと
+            # 大きいほうの板が掴まれ続けて、切った意味が無い）。
+            mat = buf if n == cap else (buf[:n].copy() if n else None)
+            del buf
     finally:
         db.close()
-    mat = np.stack(vecs).astype(np.float16) if vecs else None
     if mat is not None:
         if len(ids) >= _DRIFT_SEARCH_MAX:
             print(f"[たより] 探すが見ている漂流物は {len(ids)}片で頭打ちです"
@@ -4996,10 +5024,48 @@ def _canvas_seed(raw_id, salt):
 # 岸は宙の一日（JST 4:00境界）ごとに入れ替わり、島に降りるたびにも組み替わる（下の nonce）。
 _SKY_SHORE_K = int(_env_num("TAYORI_SKY_SHORE_K", 32, 0, 200))
 
+# 遠景（一枚の宙ぜんぶ）に積む岸の数だけは、別に持つ（2026-08-01）。
+# 島に降りると reshore() が **その島の岸を丸ごと捨てて引き直す**（canvas.js）。
+# つまり最初の一枚に島ごと32片を積んでも、降りた人はそれを一片も読まないまま捨てる。
+# 実測：/api/sky/canvas 245KB のうち 176KB（72%）が、この捨てられるぶんだった。
+# 遠景に要るのは「島に紙が積もっている」という地形なので、遠景は少なく持ち、
+# 降りたときに _SKY_SHORE_K（32）で満たす。**降りたあとの見え方は変わらない。**
+# 遠景の紙の密度を戻したいときは TAYORI_SKY_CANVAS_SHORE_K を上げる（32 で元通り）。
+_SKY_CANVAS_SHORE_K = int(_env_num("TAYORI_SKY_CANVAS_SHORE_K", 12, 0, 200))
+
 
 @app.route("/api/sky/canvas")
 def api_sky_canvas():
-    return jsonify(_canvas_payload())
+    # 『もう見ない』を持つ人には、その人だけの一枚を組む（控えは配らない）。
+    if session.get("uid") and _muted_ids(get_db(), session.get("uid")):
+        return jsonify(_canvas_payload())
+    gen, obj = _canvas_shared()
+    raw, gz = _canvas_wire(gen, obj)
+    if gz is not None and "gzip" in (request.headers.get("Accept-Encoding") or ""):
+        resp = app.response_class(gz, mimetype="application/json")
+        resp.headers["Content-Encoding"] = "gzip"
+        return resp
+    return app.response_class(raw, mimetype="application/json")
+
+
+# 配る形のままの控え（2026-08-01）。共有の一枚は15秒に一度しか変わらないのに、
+# 要求のたびに json へ書き出し直し、gzip で詰め直していた——0.5CPU では、その二つが
+# 毎回まるごと TTFB に乗る。版ごとに一度だけやって、出来たバイト列を配る。
+# 詰め方を強く（level 6）できるのはこのため：一度きりなので、強さの代金は15秒に一度。
+# 実測 96KB → 70KB。Cloudflare を外すと、この差はそのまま利用者の落とす量になる。
+_canvas_wire_cache = {"gen": None, "raw": None, "gz": None}
+_canvas_wire_lock = threading.Lock()
+
+
+def _canvas_wire(gen, obj):
+    with _canvas_wire_lock:
+        if _canvas_wire_cache["gen"] == gen and _canvas_wire_cache["raw"] is not None:
+            return _canvas_wire_cache["raw"], _canvas_wire_cache["gz"]
+    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    gz = gzip.compress(raw, 6) if len(raw) >= _GZIP_MIN_BYTES else None
+    with _canvas_wire_lock:
+        _canvas_wire_cache.update(gen=gen, raw=raw, gz=gz)
+    return raw, gz
 
 
 # 組み上げた宙の控え（2026-07-31）。中身は「宙のプールの版」だけで決まり、読み手に
@@ -5009,19 +5075,25 @@ def api_sky_canvas():
 _canvas_cache = {"gen": None, "obj": None}
 
 
-def _canvas_payload():
-    reader = session.get("uid")
-    muted = _muted_ids(get_db(), reader) if reader else set()
+def _canvas_shared():
+    """『もう見ない』を持たない人ぜんぶに配る一枚。(版, 中身) を返す。
+    版を外へ出すのは、配る形（json・gzip）の控えを同じ版で揃えるため。"""
     pool = _sky_pool()
-    if muted:
-        return _canvas_build(pool, muted)
     with _sky_lock:
         gen = _sky_cache["t"]
     if _canvas_cache["obj"] is not None and _canvas_cache["gen"] == gen:
-        return _canvas_cache["obj"]
-    obj = _canvas_build(pool, muted)
+        return gen, _canvas_cache["obj"]
+    obj = _canvas_build(pool, set())
     _canvas_cache["gen"], _canvas_cache["obj"] = gen, obj
-    return obj
+    return gen, obj
+
+
+def _canvas_payload():
+    reader = session.get("uid")
+    muted = _muted_ids(get_db(), reader) if reader else set()
+    if muted:
+        return _canvas_build(_sky_pool(), muted)
+    return _canvas_shared()[1]
 
 
 def _canvas_build(pool, muted):
@@ -5063,7 +5135,7 @@ def _canvas_build(pool, muted):
     db = get_db()
     room_ids = [r["id"] for r in db.execute(
         "SELECT id FROM rooms WHERE deleted_at IS NULL ORDER BY COALESCE(position_index,1000000), id")]
-    for room_id, got in _drift_shore(db, room_ids, _SKY_SHORE_K, muted).items():
+    for room_id, got in _drift_shore(db, room_ids, _SKY_CANVAS_SHORE_K, muted).items():
         for e in got:
             pub, raw = e[0], e[2]
             ang = _canvas_seed(raw, "sa%s" % room_id) * 360.0
