@@ -323,9 +323,47 @@ def sky_asset_file(ver, name):
     """URL がハッシュを含む＝この中身は永久に変わらない。immutable を付けてよい。"""
     if not re.fullmatch(r"[a-z0-9]{6,64}", ver or "") or name not in ("canvas.css", "canvas.js"):
         abort(404)
+    # 詰めたものを控える（2026-08-02）。canvas.js は115KB、canvas.css は67KB。
+    # URL にハッシュが入っている＝**この中身は永久に変わらない**のに、
+    # 訪れるたび gunicorn が詰め直していた（0.5CPU で毎回そのぶん）。
+    # 一度きりなら強く詰めてよい：level 1 の 74KB に対し level 9 で 63KB。
+    if "gzip" in (request.headers.get("Accept-Encoding") or ""):
+        gz = _sky_asset_gz(name)
+        if gz is not None:
+            resp = app.response_class(gz, mimetype=(
+                "text/css" if name.endswith(".css") else "text/javascript"))
+            resp.headers["Content-Encoding"] = "gzip"
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            resp.headers["Vary"] = "Accept-Encoding"
+            return resp
     resp = send_from_directory(_SKY_ASSET_DIR, name)
     resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return resp
+
+
+_sky_asset_gz_cache = {}
+_sky_asset_gz_lock = threading.Lock()
+
+
+def _sky_asset_gz(name):
+    """様式とふるまいを、詰めた形で控える。鍵は mtime＝直せば作り直る（開発中も正しい）。"""
+    path = os.path.join(_SKY_ASSET_DIR, name)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return None
+    with _sky_asset_gz_lock:
+        got = _sky_asset_gz_cache.get(name)
+        if got and got[0] == mtime:
+            return got[1]
+    try:
+        with open(path, "rb") as f:
+            blob = gzip.compress(f.read(), 9)
+    except OSError:
+        return None
+    with _sky_asset_gz_lock:
+        _sky_asset_gz_cache[name] = (mtime, blob)
+    return blob
 
 
 NETWORK_ENABLED = bool(os.environ.get("TAYORI_ENABLE_NETWORK"))
@@ -3436,8 +3474,38 @@ def mood_page():
     # 一枚の宙（無限キャンバス・canvas.html）だけが宙（2026-07-30 切替・Kosei判断）。
     # 旧い宙（mood.html＝球面・自転・漂い物理）は同日、読む柱・降りてきました・灯を
     # canvas へ移し終えたうえで畳んだ。戻すなら git（コミット de3d198 以前の系譜）。
+    #
+    # 通りすがりの人には、版ごとに一度だけ組んだものを配る（2026-08-02）。
+    # ランディングが宙なので、ここは**いちばん人が来る面**。なのに毎回、同梱を
+    # json へ書き出し（1.3ms）逃がし（0.5ms）詰め直して（1.8ms）いた——0.5CPU では
+    # 一回あたり25〜35ms、来た人ぜんぶに払っていた。
+    # 控えてよいのは**セッションを持たない人**だけ。持っている人は棚も便りも違う。
+    # 3人ぶんの HTML がバイト単位で同じで Set-Cookie も出ないことを確かめてある。
+    # 版は宙のプールの版なので、新しいことばは15秒で必ず載る。
+    if not logged_in and not open_id and not session:
+        gen = (_canvas_shared()[0], room)
+        with _mood_html_lock:
+            got = _mood_html_cache.get("v")
+        if not got or got[0] != gen:
+            html = render_template("canvas.html", logged_in=False, open_letter_id="",
+                                   start_room=room,
+                                   boot_json=_script_json(_boot_payload(False))).encode("utf-8")
+            # 詰めるのも版ごとに一度きり（137KB を毎回詰め直すのが残りの重さだった）
+            got = (gen, html, gzip.compress(html, 6))
+            with _mood_html_lock:
+                _mood_html_cache["v"] = got
+        if "gzip" in (request.headers.get("Accept-Encoding") or ""):
+            resp = app.response_class(got[2], mimetype="text/html")
+            resp.headers["Content-Encoding"] = "gzip"
+            return resp
+        return app.response_class(got[1], mimetype="text/html")
     return render_template("canvas.html", logged_in=logged_in, open_letter_id=open_id,
                            start_room=room, boot_json=_script_json(_boot_payload(logged_in)))
+
+
+# 通りすがりに配る一枚の控え。版（宙のプールの版, 降りている部屋）で決まる。
+_mood_html_cache = {}
+_mood_html_lock = threading.Lock()
 
 
 # <script> の中へそのまま置ける JSON。Flask の |tojson と同じところを逃がす
@@ -4628,13 +4696,24 @@ def _drift_shore(db, room_ids, k, muted=(), day=None, nonce=""):
 # 漂流物をプールから降ろしたので、探すも別の道を持たないと本の一節に届かなくなる。
 # 18万件を Python の for で回すと、一回の「探す」で18万回の内積になる（数秒）。
 # 表として一枚に積んでおけば、numpy の掛け算一回（実測 数十ms）で済む。
-# fp16 で持つのは、意味の索引そのもの（potion_ja）が fp16 で配られているのと同じ理由
-# ——18万×256 は fp32 で184MB、fp16 なら92MB。Render の 512MB に載せるならこちら。
+# 【2026-08-02・fp16 20万 → fp32 10万に組み替えた】
+# fp16 で全量を持つと、**掛けるたびに fp32 へ開き直さなければならない**（numpy の
+# fp16 は BLAS に載らず、そのままでは 421ms かかる）。開く手間は毎回かかる：
+# 実測 64ms/回、0.5CPU では数百ms。探す人が2人重なると 3.6秒になっていた。
+# fp32 で持てば開く手間はゼロで BLAS がそのまま効く——ただし20万件だと209MBで器に
+# 載らない。**同じ常駐量（約102MB）で、開かずに済む形**が10万件の fp32。
+#   fp16 20万件: 掛け算 64ms・常駐104MB
+#   fp32 10万件: 掛け算  8ms・常駐102MB   ← こちら（8倍）
+# 探すが見る数は半分になるが、選んで見せるのは毎回ほんの数片で、10万片あれば
+# 「近い一節」の顔ぶれはほとんど変わらない。全量に戻すなら TAYORI_DRIFT_SEARCH_MAX
+# を上げる（そのぶん常駐が増える＝512MBの器では落ちる。プランを上げてから）。
+# **どの一節を採るかは shuffle_key 順**＝本の並び順ではない。rowid 順で切ると
+# 取り込んだ順＝本ごとに切れて、**後半の作家がまるごと探せなくなる**。
 _drift_mat = {"gen": None, "ids": None, "rooms": None, "mat": None, "checked": 0.0}
 _DRIFT_GEN_CHECK_SECONDS = 300
 _drift_mat_lock = threading.Lock()
 # 積む上限。ここに当たったら**黙って切らずに数を言う**（下の print）。
-_DRIFT_SEARCH_MAX = int(_env_num("TAYORI_DRIFT_SEARCH_MAX", 300000, 0, 5000000))
+_DRIFT_SEARCH_MAX = int(_env_num("TAYORI_DRIFT_SEARCH_MAX", 100000, 0, 5000000))
 
 
 def _drift_matrix_build(gen):
@@ -4654,20 +4733,27 @@ def _drift_matrix_build(gen):
         # いた——Render Starter の器は 512MB なので、**最初に探した人がこの山を踏んだ
         # 瞬間にプロセスごと落ちる**（落ちれば起き直る＝その間ぜんぶが黙る）。
         # 確保してから書けば、山は板そのもの（104MB）だけになる。
-        cap = int((db.execute("SELECT COUNT(*) c FROM external_texts"
-                              " WHERE sky_status='live'").fetchone() or {"c": 0})["c"])
-        cap = min(cap, _DRIFT_SEARCH_MAX)
+        total = int((db.execute("SELECT COUNT(*) c FROM external_texts"
+                                " WHERE sky_status='live'").fetchone() or {"c": 0})["c"])
+        cap = min(total, _DRIFT_SEARCH_MAX)
+        # 全量に届かない時、**どこを採るか**を決めるのがこの境目。
+        # rowid 順＝取り込み順＝本ごとなので、素直に LIMIT で切ると後半の作家が
+        # まるごと探せなくなる。shuffle_key は値域に一様に散らしてあるので、
+        # 「上から何割」で切れば作家も作品も満遍なく混ざる。
+        # ORDER BY にしないのは、shuffle_key 単独の索引が無く、20万行＋1KBのBLOBを
+        # 並べ替えることになるから（範囲で切れば読むだけで済む）。
+        cut = _SHUFFLE_SPAN if cap >= total else int(_SHUFFLE_SPAN * (cap / max(total, 1)) * 1.02)
         if cap > 0:
-            buf = np.empty((cap, _SEM_DIM), dtype=np.float16)
+            buf = np.empty((cap, _SEM_DIM), dtype=np.float32)
             n = 0
             for r in db.execute(
                     "SELECT x.id, x.room_id, v.v"
                     "  FROM external_texts x JOIN letter_vectors v ON v.letter_id = x.id"
-                    " WHERE x.sky_status='live' LIMIT ?", (cap,)):
+                    " WHERE x.sky_status='live' AND x.shuffle_key < ? LIMIT ?", (cut, cap)):
                 v = _sem_vec(r["v"])
                 if v is None:
                     continue
-                buf[n] = v                # fp32 → fp16 はこの代入の中で済む
+                buf[n] = v
                 ids.append(r["id"])
                 rooms.append(r["room_id"])
                 n += 1
@@ -4731,13 +4817,11 @@ def _drift_scored(db, qv, now_air, room_id, muted, cand=240):
     if mat is None or qv is None:
         return []
     import numpy as np
-    # 小分けにして掛ける（2026-07-31 実測）。20万×256 を一度に fp32 へ開くと
-    # 209MB の一時が要って 91ms、fp16 のまま掛けると BLAS に載らず 421ms。
-    # 32,768行ずつなら一時は34MBで 43ms——速さと、載る大きさの両方がここで揃う。
-    sims = np.empty(mat.shape[0], dtype=np.float32)
-    for s in range(0, mat.shape[0], 32768):
-        e = min(s + 32768, mat.shape[0])
-        sims[s:e] = mat[s:e].astype(np.float32) @ qv
+    # 板は fp32 で積んである（2026-08-02）ので、**開かずにそのまま掛ける**。
+    # 小分けも要らない：開くための一時が無いのだから、刻む理由も無い。
+    # 前は fp16 を 32,768行ずつ fp32 へ開いていた——一時は小さく保てるが、
+    # 開く手間そのものが毎回の探すに乗り続けていた（実測 64ms → いま 8ms）。
+    sims = mat @ qv
     n = int(min(cand * 4, sims.shape[0]))
     top = np.argpartition(-sims, n - 1)[:n] if n < sims.shape[0] else np.arange(sims.shape[0])
     picks = []
@@ -7776,13 +7860,26 @@ def _run_backup_to_s3():
         _make_db_snapshot(tmp)
         _snap_ms = (time.monotonic() - _t0) * 1000.0
         print(f"[たより] スナップショット完了（{_snap_ms:.0f}ms）", flush=True)
-        with open(tmp, "rb") as fh:
-            blob = gzip.compress(fh.read())
+        # 流しながら詰めて、流しながら上げる（2026-08-02）。
+        # 前は `gzip.compress(fh.read())` の一行だった——**DBまるごとをメモリへ載せて**
+        # から詰める書き方で、202MBのDBで実測 RSS 414MB。本番はこれに加えて漂流物の板
+        # 104MB と Flask/numpy を抱えているので、**Render Starter の 512MB を超える。**
+        # 日に一度これが走って、そのたびプロセスが落ちて起き直っていた＝「動かない時が
+        # ある」の正体。しかも 0.5CPU で20秒以上 CPU を握るので、落ちなかった日も
+        # その間ぜんぶが待たされる。
+        # 1MBずつ写せば、載るのは常にその1MBだけ。実測 RSS 31MB・時間も短い
+        # （414MB→31MB、21.9秒→11.8秒。メモリを節約したほうが速いのは、
+        # 巨大な一時を作らないぶん確保と複写が要らないから）。
+        gz_path = tmp + ".gz"
+        with open(tmp, "rb") as fh, gzip.open(gz_path, "wb", compresslevel=6) as out:
+            shutil.copyfileobj(fh, out, 1024 * 1024)
+        blob_size = os.path.getsize(gz_path)
         key = "backups/tayori-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".db.gz"
         s3 = boto3.client("s3", endpoint_url=cfg["endpoint"],
                           aws_access_key_id=cfg["key"], aws_secret_access_key=cfg["secret"])
-        s3.put_object(Bucket=cfg["bucket"], Key=key, Body=blob)
-        print(f"[たより] バックアップ完了 → {key}（{len(blob)} bytes）", flush=True)
+        # upload_file はファイルから分割して送る（put_object は渡した中身を丸ごと抱える）
+        s3.upload_file(gz_path, cfg["bucket"], key)
+        print(f"[たより] バックアップ完了 → {key}（{blob_size} bytes）", flush=True)
         try:
             keep = int(os.environ.get("TAYORI_BACKUP_KEEP", "14"))
         except ValueError:
@@ -7796,10 +7893,13 @@ def _run_backup_to_s3():
         print(f"[たより] バックアップ失敗（本体は継続）: {e}", flush=True)
         return False
     finally:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
+        # 詰めたものも必ず消す（ディスクは1GB・DB 202MB＋控え 202MB＋詰めた 135MB で、
+        # 消し忘れると翌日ぶんが載らなくなる）。
+        for p in (tmp, tmp + ".gz"):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
 
 
 @app.route("/admin.welcometotayori/backup")
