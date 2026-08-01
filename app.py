@@ -3845,7 +3845,28 @@ def _sem_vec(blob):
 # 「ねむれない夜は」も 0.40 で拾えている）。一方、その部屋に一通も無い「母」は 0.08、
 # 「学校」は 0.07 だった。0.30 はこの二つの山のあいだの谷で、
 # 「無いものは無い」と言えるようにするための線。
-_SEM_HIT_MIN = _env_num("TAYORI_SEM_HIT_MIN", 0.30, -1.0, 1.0)
+#
+# 2026-08-02、0.30 → 0.22（Kosei判断）。上の実測は**部屋ひとつ49通**で採った線で、
+# 宙ぜんたい（392通）に当てると厳しすぎることが分かった：**語がそのまま本文に
+# 書いてあるのに落ちることばが23通**あった。いちばん露骨なのが「朝」で、
+# 「朝」と書いてある25通のうち18通が落選する。「絵の中の海が少し揺れて見えた。」も
+# 「海」で 0.193 だった——意味の索引は語ベクトルの**平均**なので、文が長いほど
+# 一語ぶんの信号が薄まる。49通の部屋では谷に見えた線が、長い文の混ざる母数では
+# 山の中腹だった。
+# 0.22 にすると 20語で 282通 → 662通。「近くはないがいちばんマシな一通」を混ぜない
+# という 7/29 の原則は変えていない（絶対値で切るのはそのまま・順位では均さない）。
+_SEM_HIT_MIN = _env_num("TAYORI_SEM_HIT_MIN", 0.22, -1.0, 1.0)
+
+# 本の一節には、別の線を引く（2026-08-02）。
+# **同じ数字でも、母数が違えば意味が違う。** でたらめな語（qqqzzz）を投げたとき：
+#   人のことば   392通 … 最大 0.190 ＝ 何も超えない（0.22 で正しく「無い」と言える）
+#   本の一節  10万片 … 最大 0.310・**0.22超えが425片**
+# 10万も並べれば、意味の無い語にも雑音で数百が当たる。0.22 のままだと
+# 「qqqzzz」で11片が返る＝**探せていないのに探せた顔をする**、7/29 に潰したはずの
+# 病がもっと悪い形で戻る。
+# 本物の語は本の一節に対して 0.45〜0.81 で当たる（海0.545 朝0.486 炭鉱0.811
+# スマホ0.449）。でたらめは 0.31 止まり。0.35 はその谷。
+_SEM_HIT_MIN_PD = _env_num("TAYORI_SEM_HIT_MIN_PD", 0.35, -1.0, 1.0)
 
 
 def sem_similarity(query_vec, vecs):
@@ -3869,11 +3890,13 @@ def sem_similarity(query_vec, vecs):
     return out
 
 
-def sem_hit_distance(sim):
-    """コサイン → 意味の遠さ 0.0（そのもの）〜1.0（下限すれすれ）。下限未満は None。"""
-    if sim is None or sim < _SEM_HIT_MIN:
+def sem_hit_distance(sim, floor=None):
+    """コサイン → 意味の遠さ 0.0（そのもの）〜1.0（下限すれすれ）。下限未満は None。
+    floor を渡すと、その下限で測る（本の一節は母数が桁違いなので別の線を使う）。"""
+    lo = _SEM_HIT_MIN if floor is None else floor
+    if sim is None or sim < lo:
         return None
-    span = max(1e-6, 1.0 - _SEM_HIT_MIN)
+    span = max(1e-6, 1.0 - lo)
     return max(0.0, min(1.0, (1.0 - sim) / span))
 
 
@@ -4832,7 +4855,7 @@ def _drift_scored(db, qv, now_air, room_id, muted, cand=240):
         # （岸に流れ着くのと同じ範囲。探すが眺めより広く出ることはない）。
         if room_id is not None and rooms[i] is not None and rooms[i] != room_id:
             continue
-        sd = sem_hit_distance(float(sims[i]))
+        sd = sem_hit_distance(float(sims[i]), floor=_SEM_HIT_MIN_PD)
         if sd is None:
             break                    # 近い順に見ているので、切れたらそこで終わり
         if ids[i] in muted:
@@ -5332,10 +5355,10 @@ def api_sky_search():
         # 自分の宙から消したものは、探しても出さない（「二度と漂着しない」）。
         muted = _muted_ids(get_db(), reader)
         pool = [e for e in pool if e[4] != reader and e[2] not in muted]
-    if not pool:
-        return jsonify(words=[])
-
-    sims = sem_similarity(qv, [e[9] for e in pool])
+    # 人のことばが一通も無くても、ここで返さない（2026-08-02）。
+    # 上の早期returnと同じ取り残し——部屋を絞った時や、全部ミュートした人の宙では
+    # pool が空になり、本の一節を一度も見ずに0件で返っていた。
+    sims = sem_similarity(qv, [e[9] for e in pool]) if pool else []
     now_air = _viewer_air()
     scored = []
     for e, sim in zip(pool, sims):
@@ -5348,10 +5371,13 @@ def api_sky_search():
         air = dict(e[1])
         air["sem_d"] = sd
         scored.append((air_distance(now_air, air, mode="search"), e, air))
-    if not scored:
-        # 0件。件数の顔は見せず、words=[] だけ返す（画面は「まだここにありません」の
-        # 一行を置いて、ふだんの漂いをそのまま続ける）。
-        return jsonify(words=[])
+    # 2026-08-02：ここに `if not scored: return jsonify(words=[])` が立っていた。
+    # 書かれた 7/29 時点では pool に**本の一節も入っていた**ので、これは「宙のどこにも
+    # 近いものが無い」という正しい判定だった。7/31 に本を pool から出して別の道
+    # （_drift_scored）へ回したとき、この関所だけが**人のことばの前**に取り残された。
+    # 結果、人のことばが一通も届かない語は、本の一節が何百あっても0件で返っていた
+    # （実測：20語中5語。「海」で142片、「炭鉱」で121片を捨てていた）。
+    # 判定は本を数えたあと（下）へ移した。設計を変えたのではなく、置き場所を戻した。
 
     # 重み付き抽選（近いほど選ばれやすいが、決まってはいない）
     def draw(rest, n):
@@ -5382,7 +5408,17 @@ def api_sky_search():
     # 押し出す。探しているのは人のことばで、本の一節はその傍らに流れ着くもの。
     d_scored = _drift_scored(get_db(), qv, now_air, room_id,
                              _muted_ids(get_db(), reader) if reader else set())
-    chosen = draw(h_scored, _SKY_N) + draw(d_scored, _SKY_PD_K)
+    # 人のことばの空き枠は、本の一節が埋める（2026-08-02・Kosei判断）。
+    # 出す総数は _SKY_N + _SKY_PD_K で変わらない——変わるのは中の比だけ。
+    # 人が9通いれば今までどおり 9＋2、3通しかいなければ 3＋8、0通なら 0＋11。
+    # 順序の思想（人のことばを先に採る）は保つ：埋めるのは**採り終えた後の余り**で、
+    # 本が人を押し出すことはない。
+    h_chosen = draw(h_scored, _SKY_N)
+    chosen = h_chosen + draw(d_scored, _SKY_PD_K + (_SKY_N - len(h_chosen)))
+    if not chosen:
+        # 宙のどこにも近いものが無かった。件数の顔は見せず words=[] だけ返す
+        # （画面は「まだここにありません」の一行を置いて、漂いをそのまま続ける）。
+        return jsonify(words=[])
 
     words = [_sky_word(e, now_air, air=air, mode="search") for _d, e, air in chosen]
     random.shuffle(words)   # 並び順からは何も推測させない（順位に読めないように）
