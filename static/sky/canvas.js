@@ -2228,8 +2228,11 @@ Promise.all([
     +'padding:8px 10px;border-radius:8px;background:rgba(8,8,13,.88);'
     +'border:1px solid rgba(179,143,111,.3);color:#FAF8F3;'
     +'font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;'
-    +'white-space:pre;pointer-events:auto;-webkit-user-select:none;user-select:none';
+    +'white-space:pre;pointer-events:auto';
+  /* 読み取った数字は**選べるように**しておく（宙そのものは選べなくしてあるが、
+     ここは持ち帰るための面）。携帯では選ぶのが難しいので「写す」も置く。 */
   const out=document.createElement('div');
+  out.style.cssText='-webkit-user-select:text;user-select:text';
   const btns=document.createElement('div');
   btns.style.cssText='display:flex;gap:6px;margin-top:6px';
   const mk=(label,fn)=>{
@@ -2250,6 +2253,15 @@ Promise.all([
     reset();
   });
   mk('ならす',()=>reset());
+  /* 携帯では5行を指で選ぶのが難しい。押した時の姿だけで「写った」と分かるようにする
+     （クリップボードが使えない場でも、選べる面は上に残してある）。 */
+  const bCopy=mk('写す',async()=>{
+    const t=(hidden?'【字を消した状態】\n':'【字あり】\n')
+      +navigator.userAgent+'\n'+out.textContent;
+    try{ await navigator.clipboard.writeText(t); bCopy.textContent='写した'; }
+    catch(_){ bCopy.textContent='選んで写して'; }
+    setTimeout(()=>{bCopy.textContent='写す';},1600);
+  });
   box.appendChild(out); box.appendChild(btns);
   const st=document.createElement('style');
   st.textContent='body.fps-nowords .w{visibility:hidden!important}';
