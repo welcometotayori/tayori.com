@@ -172,6 +172,22 @@ function tintOf(c){
 /* 紙片の紙の色（2026-07-31）。選ばれた色は手染めの紙に淡く染み、
    無彩（サーバの _AIR_GRAY_S=12 と同じ線）は生成り〜灰白の三種から
    本文のハッシュで一つ——同じことばは、いつ来ても同じ紙。漂流物は灰の紙。 */
+/* 灯の色に薄さを足す（2026-08-03）。色は二通りの書き方で来る：人が選んだ色は
+   hsl(…)、本の一節に付いた気分の色は本番では **#RRGGBB**（気分7色のhex）。
+   旧実装は 'hsl(' の置換しかしておらず、hex はそのまま通って**真っ白に不透明な玉**に
+   なった（本番で発覚。手元のDBは hsl だったので出なかった）。 */
+function glowOf(c,a){
+  const s=String(c||'').trim();
+  const h=/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s);
+  if(h){
+    let x=h[1];
+    if(x.length===3)x=x[0]+x[0]+x[1]+x[1]+x[2]+x[2];
+    return 'rgba('+parseInt(x.slice(0,2),16)+','+parseInt(x.slice(2,4),16)+','
+      +parseInt(x.slice(4,6),16)+','+a+')';
+  }
+  if(s.indexOf('hsl(')===0)return s.replace('hsl(','hsla(').replace(')',','+a+')');
+  return 'rgba(232,230,224,'+a+')';        // 読めない書き方の色は、生成りの灯にする
+}
 function paperOf(w){
   const m=/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%/.exec(w.color||'');
   if(m&&+m[2]>=12)return 'hsl('+(+m[1])+',24%,90%)';
@@ -311,8 +327,7 @@ function build(rooms,words){
       g.style.width=g.style.height=d+'px';
       g.style.left=((j-(lit.length-1)/2)*s.R*0.35)+'px';
       g.style.top=(lit.length<2?0:(j%2?s.R*0.2:-s.R*0.15))+'px';
-      g.style.background='radial-gradient(circle,'
-        +String(c).replace('hsl(','hsla(').replace(')',','+a+')')+' 0%,transparent 70%)';
+      g.style.background='radial-gradient(circle,'+glowOf(c,a)+' 0%,transparent 70%)';
       glow.appendChild(g);
     });
     isl.appendChild(glow);
