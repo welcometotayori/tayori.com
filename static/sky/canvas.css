@@ -5,51 +5,77 @@
    させる**側へ移す。編集はこのファイルを直に。URLのハッシュはサーバが中身から
    作り直すので、増やす番号は無い。 */
   html,body{margin:0;height:100%;overflow:hidden}
-  /* ── 頭：ロゴと、いつもの宙への帰り道だけ ── */
+  /* ── 頭の帯（2026-08-02 差し替え）──────────────────────────────
+     左に名、中央に探す、右に「書く」としるし。左右を flex:1 で同じ幅にしてあるので、
+     探すの器は画面のちょうど中央に立つ（中の語の長さが変わっても動かない）。 */
   header{position:fixed;left:0;right:0;top:0;z-index:20;display:flex;
-         align-items:center;justify-content:space-between;
-         padding:calc(14px + var(--safe-t)) calc(20px + var(--safe-r)) 10px calc(22px + var(--safe-l));
+         align-items:center;gap:var(--s2);
+         padding:calc(12px + var(--safe-t)) calc(16px + var(--safe-r)) 10px calc(20px + var(--safe-l));
          pointer-events:none}
-  header a,header button{pointer-events:auto}
-  /* ロゴ＝棚・設定への戸（2026-07-31 復活）。栞の一語を右上に置くより、
-     いつも目に入る名前そのものが戸である方が、指が覚える。 */
-  .logo{background:none;border:none;cursor:pointer;font-family:inherit;padding:0;
-        text-align:left;color:var(--ink-1);text-decoration:none;font-size:var(--t-title);
-        letter-spacing:var(--tr-title)}
+  header a,header button,header input,header .seek{pointer-events:auto}
+  /* 頭の帯も、足元の帯と同じように闇を敷く（2026-08-02）。紙片の面では背が白い紙に
+     なるので、白い字も白いしるしも、そのままでは消える。下辺の .dock と同じ作法——
+     上から下へ薄れる霞を一枚。指は受けない（宙は掴んで動かす面なので塞がない）。 */
+  header::before{content:'';position:absolute;inset:0 0 -20px;z-index:-1;pointer-events:none;
+         background:linear-gradient(180deg,var(--space) 0%,rgba(8,8,13,.90) 48%,rgba(8,8,13,0) 100%)}
   /* 宙の上に常駐する字には、島の名と同じ闇の暈をつける（2026-07-31 夜）。
-     紙片の面では背が白い紙になるので、白い墨がそのままだと消える。
-     案A以後、暈が要るのはロゴだけ——足元と「書く」は下辺の帯の上に乗り、
-     帯そのものが闇を敷いている（重ねて塗る理由が無い）。 */
-  .logo{text-shadow:0 0 10px rgba(8,8,13,.92),0 0 24px rgba(8,8,13,.72)}
-  .logo small{color:var(--thread);font-size:var(--t-mono);letter-spacing:var(--tr-mono);
+     紙片の面では背が白い紙になるので、白い墨がそのままだと消える。 */
+  .brand{flex:1 1 0;min-width:0;margin:0;white-space:nowrap;overflow:hidden;
+        color:var(--ink-1);font-size:var(--t-title);letter-spacing:var(--tr-title);
+        text-shadow:0 0 10px rgba(8,8,13,.92),0 0 24px rgba(8,8,13,.72)}
+  .brand small{color:var(--thread);font-size:var(--t-mono);letter-spacing:var(--tr-mono);
               margin-left:10px}
-  .menu{position:relative;display:flex;flex-direction:column;align-items:flex-start}
-  .menu-list{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
-             padding:6px 0 0}
-  /* 戸の背には霞をかける（2026-07-31 夜）。箱もカードも作らない——.hold と同じ、
-     闇がそこだけ濃くなるだけの霞。紙片の面ができてからは、戸の下に白い紙が来る＝
-     宙の墨（白）が白い紙に乗って消えるので、これが無いと文字が読めない。 */
-  .menu-list::before{content:'';position:absolute;inset:-16px -22px -14px -20px;z-index:-1;
-             pointer-events:none;
-             background:radial-gradient(76% 68% at 26% 44%,
-                        rgba(8,8,13,.97) 0%,var(--veil) 60%,rgba(8,8,13,0) 96%)}
+  .top-mid{flex:0 1 460px;min-width:0;display:flex;justify-content:center}
+  .top-right{flex:1 1 0;display:flex;align-items:center;justify-content:flex-end;gap:var(--s1)}
+  /* しるし＝戸。三つの粒はロゴそのもの（黒地のPNGは白い紙の上で黒い四角になるので、
+     同じ形を字の色で描く＝どんな地の上でも消えない）。 */
+  .logo-mark{display:grid;place-items:center;width:var(--touch);height:var(--touch);
+        padding:0;background:none;border:none;border-radius:50%;color:var(--ink-1);
+        filter:drop-shadow(0 0 8px rgba(8,8,13,.92));
+        transition:background .2s var(--ease),opacity .2s var(--ease)}
+  .logo-mark svg{width:30px;height:27px;display:block}
+  .logo-mark:hover{background:rgba(250,248,243,.08)}
+  .logo-mark:active{opacity:.62}
+  .logo-mark[aria-expanded="true"]{background:rgba(250,248,243,.10)}
+  /* ── 戸の中身（Kosei の画の作法：暗い板・行は左に語、右に符）──────────
+     v3.10 で汎用の板を物質へ置き換えた線を、ここだけは越える。戸は宙の中の物では
+     なく「宙の外へ出る道」の一覧で、白い紙片の上に重なる面でもある——霞では読めない。 */
+  .menu{position:relative}
+  .menu-list{position:absolute;right:0;top:calc(100% + 8px);z-index:2;
+             width:min(86vw,300px);display:flex;flex-direction:column;gap:1px;
+             padding:8px;border-radius:16px;
+             background:rgba(16,16,22,.97);border:1px solid rgba(179,143,111,.18);
+             box-shadow:0 26px 60px -26px rgba(0,0,0,.92);
+             max-height:min(78dvh,600px);overflow-y:auto;overscroll-behavior:contain;
+             scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
   .menu-list[hidden]{display:none}
-  .menu-list a{color:var(--ink-3);text-decoration:none;font-size:var(--t-meta);
-               letter-spacing:var(--tr-meta);border-bottom:1px solid transparent;
-               padding:10px 2px;min-height:var(--touch);
-               transition:color .22s var(--ease),border-color .22s var(--ease)}
-  .menu-list a:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
-  /* 戸の中のジャンル。錠剤も枠も作らず、名前が並んでいるだけ（.where と同じ作法）。
-     宙の紙より下の声（--ink-3）で、罫一本ぶんだけ下の頁ものと隔てる。 */
-  .menu-rooms{display:flex;flex-wrap:wrap;gap:0 14px;max-width:min(64vw,320px);
-              padding:2px 0 6px;margin-bottom:4px;
-              border-bottom:1px solid var(--rule-faint)}
+  .menu-form{margin:0}
+  .menu-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);
+            width:100%;min-height:var(--touch);padding:11px 12px;
+            background:none;border:none;border-radius:10px;text-align:left;
+            color:var(--ink-2);text-decoration:none;
+            font-family:inherit;font-size:13px;letter-spacing:.1em;
+            transition:background .18s var(--ease),color .18s var(--ease)}
+  .menu-row:hover{background:rgba(250,248,243,.07);color:var(--ink-1)}
+  .menu-row:active{background:rgba(250,248,243,.12)}
+  .menu-row .mi{flex:none;width:17px;height:17px;color:var(--ink-4)}
+  .menu-row:hover .mi{color:var(--thread)}
+  .menu-sep{height:1px;margin:6px 10px;background:var(--rule-faint)}
+  .menu-head{margin:0;padding:8px 12px 4px;font-size:10px;letter-spacing:.28em;color:var(--ink-4)}
+  /* 戸の中のジャンル＝島への道。読んでいる最中（紙を敷いた島に居る間）でも、
+     ここからなら別の島へ降りられる——それがこの一覧の在る理由（2026-08-02）。 */
+  .menu-rooms{display:grid;grid-template-columns:1fr 1fr;gap:1px;
+              max-height:216px;overflow-y:auto;overscroll-behavior:contain;
+              scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
   .menu-rooms button{background:none;border:none;font-family:inherit;cursor:pointer;
-              font-size:11.5px;letter-spacing:.16em;color:var(--ink-3);
-              padding:11px 2px;min-height:var(--touch);border-bottom:1px solid transparent;
-              transition:color .2s var(--ease),border-color .2s var(--ease)}
-  .menu-rooms button:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
-  .menu-rooms button:active{opacity:.62}
+              display:flex;align-items:center;min-height:40px;padding:10px 12px;
+              border-radius:9px;font-size:12.5px;letter-spacing:.12em;color:var(--ink-3);
+              transition:background .18s var(--ease),color .18s var(--ease)}
+  .menu-rooms button:hover{background:rgba(250,248,243,.07);color:var(--ink-1)}
+  .menu-rooms button:active{background:rgba(250,248,243,.12)}
+  .menu-rooms button[aria-current="true"]{color:var(--ink-1);background:rgba(250,248,243,.09)}
+  .menu-rooms button[aria-current="true"]::before{content:'';flex:none;width:5px;height:5px;
+              margin-right:8px;border-radius:50%;background:var(--thread)}
   /* ── 足元に、ひとつの帯（案A・UI改善仕様書 v1.0 §3.3）──────────────────
      下辺に高さ84px（＋端末の縁）の帯を一つ置き、四隅に散っていた常駐物をここへ集める。
      背は下へ向かって濃くなる霞——宙の字が帯の裏で読めていると、どこまでが操作で
@@ -210,9 +236,6 @@
   .isl.sheet .w.held{color:rgba(30,27,33,.96)!important;
      box-shadow:0 0 0 1px var(--rule-act),0 18px 34px -18px rgba(0,0,0,.95)}
   .isl.sheet .w .tcaret{background:rgba(30,27,33,.6)}
-  /* 宙ぜんたいから寄せた時（2026-07-31）：遠景の字の沈み（.isl-w の 0.3）は
-     少し起こして、灯った先が見えるように */
-  body.far .isl.gathered .isl-w{opacity:.85}
   /* ── 打鍵の実時間再生（mood.html と同じ筆先・同じにじみ） ── */
   .tcaret{display:inline-block;width:2px;height:1em;background:var(--thread);
           vertical-align:-0.12em;animation:tcBlink .9s steps(1) infinite}
@@ -257,55 +280,78 @@
                border:1px solid var(--thread);background:transparent;
                transition:bottom .38s var(--ease),background .38s var(--ease)}
   .hold-act.on .ic-shelf .p{bottom:4px;background:var(--thread)}
-  /* ── 検索（2026-07-31 刷新・Cosmos の作法）────────────────────
-     罫の長い一行をやめ、畳まれた虫眼鏡ひとつに。触れると小さな角丸の器が
-     ひらいて入力になる。楕円（ピル）にはしない——radius は高さの半分未満。 */
-  /* 案A：畳まれた虫眼鏡と角丸13pxの器はやめた。ふだんは「さがす」の一語で、
-     押すと**その語の位置から罫が左へ伸びて**入力行になる。伸びるのは罫（下線）だけ
-     ——器は作らない。入力の行は右端に錨を打って絶対配置にするので、伸びても
-     帯の中の他のもの（＋−・書く）は一切動かない。 */
-  .seek{position:relative;display:flex;align-items:center}
-  .seek-open{font-size:12px;letter-spacing:0.2em;color:var(--ink-3);
-             min-height:var(--touch);padding:12px 2px;white-space:nowrap;
-             transition:color .22s var(--ease),opacity .22s var(--ease)}
-  .seek.open .seek-open{opacity:0;pointer-events:none}
-  /* 罫は入力そのものが持つ（器ではなく行に引く）。「もどす」は別の押せる語なので、
-     自分の罫を持つ——押せるもので罫を持たないものは作らない（作法1-2）。 */
-  .seek-in{position:absolute;right:0;top:0;bottom:0;width:0;overflow:hidden;
-           display:flex;align-items:center;gap:var(--s2);
-           pointer-events:none;transition:width .34s var(--ease)}
-  /* 幅は仕様どおり min(68vw,260px)。ただし狭い画面では左端の ＋− に噛むので、
-     そこで止める（150px ＝ 帯の左右の余白40 + ＋−の98 + あいだの息12。
-     375px 実測：68vw=255px のままだと ＋− の右端に 6px 重なる）。 */
-  .seek.open .seek-in{pointer-events:auto;
-           width:min(68vw,260px,calc(100vw - 150px - var(--safe-l) - var(--safe-r)))}
-  /* 入力ともどすは、どちらも高さ44pxで罫を足元にそろえる（触れるものの最小・作法4）。
-     同じ高さに揃うので、二本の罫は一本の行が語のところで切れた姿に見える。 */
-  .seek input{flex:1;min-width:0;height:var(--touch);background:none;border:none;outline:none;
-              border-bottom:1px solid var(--rule-act);
+  /* ── 探す（2026-08-02・頭の帯へ）──────────────────────────────
+     畳んだ一語→押して開く、をやめて、はじめから入力の器を置く。押せることの合図が
+     罫一本だけ、という宙の作法をここでは降ろした（Kosei の画）——探すは宙の物ではなく、
+     宙を見るための道具で、いつでも同じ場所に在ることのほうが要る。 */
+  .seek{display:flex;align-items:center;gap:var(--s1);width:100%;max-width:460px;
+        height:42px;padding:0 var(--s2) 0 14px;border-radius:21px;
+        background:rgba(250,248,243,.10);border:1px solid transparent;
+        transition:background .22s var(--ease),border-color .22s var(--ease)}
+  .seek:hover{background:rgba(250,248,243,.14)}
+  .seek:focus-within{background:rgba(250,248,243,.15);border-color:var(--rule-faint)}
+  .seek-ic{flex:none;display:block;width:16px;height:16px;color:var(--ink-3)}
+  .seek-ic svg{width:100%;height:100%;display:block}
+  .seek input{flex:1;min-width:0;height:100%;background:none;border:none;outline:none;
               font-family:inherit;font-size:13px;letter-spacing:0.12em;
-              color:var(--ink-1);padding:0 2px;opacity:0;
-              transition:opacity .25s var(--ease),border-color .22s var(--ease)}
-  .seek.open input{opacity:1}
-  .seek input::placeholder{color:var(--ink-4);letter-spacing:0.18em}
-  .seek button#seekBack{background:none;border:none;
-               border-bottom:1px solid var(--rule-act);
-               font-family:inherit;font-size:var(--t-mono);
-               letter-spacing:0.14em;color:var(--ink-3);
-               height:var(--touch);padding:0 2px;
-               white-space:nowrap;transition:color .22s var(--ease)}
-  .seek button#seekBack:hover{color:var(--ink-2)}
+              color:var(--ink-1);padding:0}
+  .seek input::placeholder{color:var(--ink-3);letter-spacing:0.18em}
+  .seek button#seekBack{flex:none;background:none;border:none;border-radius:50%;
+               width:26px;height:26px;line-height:1;font-size:15px;
+               color:var(--ink-3);transition:background .18s var(--ease),color .18s var(--ease)}
+  .seek button#seekBack:hover{background:rgba(250,248,243,.12);color:var(--ink-1)}
   .seek button#seekBack:active{opacity:.62}
-  .seek.seeking input{border-bottom-color:var(--thread)}
-  /* 入力しているあいだ、「書く」は退く（罫が伸びてくる先に居るため）。
-     場所は空けたままにする＝退くのは opacity だけで、帯の中の位置は動かさない。 */
-  body.seekopen .cast-btn{opacity:0;pointer-events:none}
-  /* 寄せられた語は深いところから表層へ。それ以外の島のことばは息をひそめる
-     （沈むのは透明度だけ。ぼかしは層を作るので使わない・2026-07-31） */
-  .isl.gathered .w:not(.lit):not(.held){opacity:calc(var(--a,.8)*.22)!important}
-  .w.lit{opacity:1!important;z-index:4}
-  /* 「もう見ない」と決めた紙は、放した時に静かに引く（出来事にしない） */
-  .w.mutedout:not(.held){opacity:0!important;pointer-events:none}
+  .seek.seeking{border-color:var(--rule-act)}
+  /* ── 集まってきた片（2026-08-02）──────────────────────────────
+     返ってきたことばは、宙のどこに在っても、この面へ流れ着いて並ぶ。
+     出どころ（画面に見えていた片はその場所から、見えていないものは宙の外から）
+     から飛んでくる＝「寄ってきた」ことが動きで分かる。 */
+  .gather{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;
+          background:rgba(8,8,13,.92);
+          opacity:0;visibility:hidden;pointer-events:none;
+          transition:opacity .4s var(--ease),visibility 0s linear .4s}
+  .gather.on{opacity:1;visibility:visible;pointer-events:auto;
+             transition:opacity .4s var(--ease),visibility 0s}
+  .gather[hidden]{display:none}
+  /* 頭の帯（探すの器・しるし）はこの面より上に居るので、その下から始める */
+  .gather-top{flex:none;display:flex;align-items:center;justify-content:space-between;
+          gap:var(--s2);
+          padding:calc(74px + var(--safe-t)) calc(20px + var(--safe-r)) 6px calc(22px + var(--safe-l))}
+  .gather-lead{margin:0;font-size:12px;letter-spacing:.16em;color:var(--ink-3);
+          word-break:keep-all;overflow-wrap:anywhere}
+  .gather-lead b{color:var(--ink-1);font-weight:400}
+  .gather-close{flex:none;background:none;border:none;border-bottom:1px solid var(--rule-act);
+          font-family:inherit;font-size:var(--t-meta);letter-spacing:var(--tr-meta);
+          color:var(--ink-2);min-height:var(--touch);padding:12px 2px;
+          transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .gather-close:hover{color:var(--ink-1);border-color:var(--thread)}
+  .gather-close:active{opacity:.62}
+  .gather-field{flex:1;min-height:0;display:flex;overflow-y:auto;overscroll-behavior:contain;
+          padding:var(--s2) calc(20px + var(--safe-r)) calc(24px + var(--safe-b)) calc(20px + var(--safe-l))}
+  /* 余った所は margin:auto が食う＝収まる時は中央、溢れる時は上から素直に伸びる
+     （align-content:center は溢れた時に上を切り落とす・書く柱で踏んだ穴と同じ） */
+  .gather-in{margin:auto;display:flex;flex-direction:row-reverse;flex-wrap:wrap;
+          justify-content:center;align-items:flex-start;gap:16px;max-width:1120px}
+  /* 片の姿は、島に降りた時の紙片（.isl.sheet .w）と同じ物にそろえる */
+  .gw{position:relative;writing-mode:vertical-rl;white-space:pre-wrap;overflow-wrap:anywhere;
+      max-height:min(52dvh,320px);max-width:18em;
+      font-size:14px;line-height:2;letter-spacing:.12em;
+      padding:20px 16px;border-radius:var(--edge);cursor:pointer;
+      background:var(--pp,#EBE7DE);
+      color:rgba(30,27,33,calc(.52 + .44*var(--a,.9)));
+      box-shadow:0 10px 20px -14px rgba(0,0,0,.95);
+      will-change:transform,opacity}
+  .gw.h{writing-mode:horizontal-tb;max-width:22em;max-height:none}
+  .gw.pd{color:rgba(30,27,33,.62)}
+  .gw.held{color:rgba(30,27,33,.96);
+      box-shadow:0 0 0 1px var(--rule-act),0 18px 34px -18px rgba(0,0,0,.95)}
+  @media (prefers-reduced-motion: reduce){ .gw{transition:opacity .25s ease!important} }
+  /* 島の中で灯す（.lit・.gathered）様式は 2026-08-02 に畳んだ——寄せた片は
+     宙の上で灯るのではなく、.gather の面へ集まってくる。 */
+  /* 「もう見ない」と決めた紙は、放した時に静かに引く（出来事にしない）。
+     集まってきた片（.gw）も同じ——同じ行いは、どこでも同じ姿で応える。 */
+  .w.mutedout:not(.held),.gw.mutedout:not(.held){opacity:0!important;pointer-events:none}
+  .gw{transition:opacity .5s var(--ease)}
   /* ひとこと（0件・不通のときだけ。数字は出さない） */
   .whisper{position:fixed;left:50%;bottom:calc(15dvh + var(--safe-b));transform:translateX(-50%);
            z-index:22;margin:0;color:var(--ink-3);font-size:12px;letter-spacing:.14em;
@@ -349,15 +395,17 @@
      同名だったため。「放つ」は決定にだけ残す）：宙の下辺に静かな一語。
      この一語が宙で唯一の主動作なので、
      ホームバーの下に潜らせない（vh はアドレスバーの下まで数える／--safe-b はその縁） */
-  /* 帯の中央に据える（案A）。左右の二つ（＋−／さがす）に挟まれた真ん中ではなく、
-     帯そのものの中央に錨を打つ——左右の中身の幅が変わっても、この一語は動かない。
-     2026-07-29 まであった「島の中では58px持ち上げる」例外規則は畳んだ：
-     位置が状態で動くと、指は場所を覚えられない（案A が解こうとした D1 そのもの）。 */
-  .cast-btn{position:absolute;left:50%;transform:translateX(-50%);
-            min-height:var(--touch);color:var(--ink-2);font-size:15px;letter-spacing:0.5em;
-            /* 4-3（2026-07-28）：主動作なので罫を1.5pxに（.ruled の1pxを上書き） */
-            border-bottom-width:1.5px;
-            padding:12px 18px 13px 23px}
+  /* 2026-08-02：下辺の帯の中央から、頭の帯の右へ。罫一本ではなく器（角丸の帯）で
+     押せることを言う——探すの器と同じ形にそろえ、二つで一組に見えるようにする。 */
+  .cast-btn{display:inline-flex;align-items:center;gap:6px;flex:none;
+            height:42px;padding:0 18px;border:none;border-radius:21px;
+            background:rgba(250,248,243,.10);
+            font-family:inherit;color:var(--ink-1);font-size:14px;letter-spacing:0.18em;
+            white-space:nowrap;
+            transition:background .22s var(--ease),opacity .22s var(--ease)}
+  .cast-btn:hover{background:rgba(250,248,243,.15)}
+  .cast-btn:active{opacity:.62}
+  .cast-btn .pl{font-size:13px;color:var(--ink-3);line-height:1}
   /* 書く柱が立っている間は、下の「放つ」は退く。
      柱の背景が半透明なので、放つ／宙 へ 放 つ が二つ並んで見えていた（v12.1） */
   .cast-btn.away{opacity:0;pointer-events:none;transition:opacity .35s ease}
@@ -751,7 +799,8 @@
   .like-mark[hidden]{display:none}
   /* ── 宙のすみで待っている、だれかのことば（棚を畳んだので宙側へ・v11.1）──
      数も、だれのものかも言わない。ただ「降りてきた」ことだけが灯る。 */
-  .arrivals{position:fixed;right:calc(20px + var(--safe-r));top:calc(48px + var(--safe-t));z-index:11;
+  /* 2026-08-02：頭の帯に「書く」としるしが並んだので、一段下げる（重なりを避ける） */
+  .arrivals{position:fixed;right:calc(20px + var(--safe-r));top:calc(74px + var(--safe-t));z-index:11;
             display:flex;flex-direction:column;
             align-items:flex-end;gap:2px;transition:opacity .34s var(--ease),top .34s var(--ease)}
   /* 栞が開いている間は、同じ場所にいる「降りてきました」は退く（v13） */
@@ -808,3 +857,25 @@
      グラデーション三枚を永久にGPUへ載せ続ける理由はない。 */
   body.near .isl.lit .isl-glow{animation:none}
   @media (prefers-reduced-motion: reduce){ .isl.lit .isl-glow{animation:none} }
+  /* ── 狭い画面の頭の帯（2026-08-02）──────────────────────────────
+     名・探す・書く・しるしの四つは、560px を切ると横に並びきらない。落とすのは
+     名の添え（TAYORI）と「書く」の一語＝しるしと符だけが残る。探すの器は縮めない
+     ——この帯で唯一、字を入れる場所なので、いちばん最後まで幅を持つ。 */
+  @media (max-width:560px){
+    header{gap:var(--s1);padding-left:calc(14px + var(--safe-l));padding-right:calc(12px + var(--safe-r))}
+    .brand{flex:0 0 auto;font-size:13px;letter-spacing:.12em}
+    .brand small{display:none}
+    .top-mid{flex:1 1 auto}
+    .top-right{flex:0 0 auto}
+    .seek{height:38px;padding-left:12px}
+    .cast-btn{height:38px;padding:0 12px;font-size:13px;letter-spacing:.1em}
+    .menu-rooms{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:430px){
+    .seek{padding-left:10px;gap:6px}
+    .cast-btn{padding:0 11px;gap:4px}
+  }
+  /* いちばん狭い画面（340px 未満）でだけ名を畳む。探すの器の幅を守るため */
+  @media (max-width:340px){
+    .brand{display:none}
+  }

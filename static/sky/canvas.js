@@ -22,12 +22,13 @@ addEventListener('resize',()=>{
     apply();
   },160);
 });
-// ロゴタップ＝棚・設定の戸（2026-07-31 復活）。開け閉めだけ。外を触れば閉じる
+// しるしタップ＝戸（2026-08-02 に右上へ）。開け閉めだけ。外を触れば閉じる
 (function(){
   const sb=document.getElementById('logoBtn'), sl=document.getElementById('logoMenu');
   sb.addEventListener('click',()=>{
     const opening=sl.hasAttribute('hidden');
-    if(opening)sl.removeAttribute('hidden'); else sl.setAttribute('hidden','');
+    if(opening){ sl.removeAttribute('hidden'); markMenuRoom(); }
+    else sl.setAttribute('hidden','');
     sb.setAttribute('aria-expanded',opening?'true':'false');
   });
   document.addEventListener('pointerdown',e=>{
@@ -35,14 +36,20 @@ addEventListener('resize',()=>{
       sl.setAttribute('hidden','');sb.setAttribute('aria-expanded','false');
     }
   },true);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&!sl.hasAttribute('hidden')){ menuClose(); sb.focus(); }
+  });
 })();
 function menuClose(){
   const sl=document.getElementById('logoMenu'), sb=document.getElementById('logoBtn');
   sl.setAttribute('hidden','');sb.setAttribute('aria-expanded','false');
 }
-/* ジャンルの名を、戸の中にも並べる（2026-07-31 夜）。
+/* ジャンルの名を、戸の中にも並べる（2026-07-31 夜／2026-08-02 に島渡りの主役へ）。
    宙の上の名は「そこに在るから押せる」もので、いま画面に無い島へは行けなかった。
-   ここに並ぶのは名前だけ——数も、中身の気配も出さない（数えた瞬間に棚になる）。
+   さらに、紙を敷いた島に降りている間（＝片を読んでいる間）は、まわりの島の字が
+   退いているので、引き算をしないかぎり別の島へ移れなかった——利用者の「片を見ている
+   時に別の島へ移れない」はこれ。ここに並ぶ名は、どの状態からでも押せる島の戸。
+   並ぶのは名前だけ——数も、中身の気配も出さない（数えた瞬間に棚になる）。
    順は部屋の生まれた順＝宙の地形と同じ並び。押せば、その島へ滑って降りる。 */
 function fillMenuRooms(){
   const box=document.getElementById('menuRooms');
@@ -52,9 +59,22 @@ function fillMenuRooms(){
     const isl=islands.get(r.id);
     if(!isl)return;
     const b=document.createElement('button');
-    b.type='button'; b.textContent=r.name;
-    b.addEventListener('click',()=>{ menuClose(); release(); flyTo(isl); });
+    b.type='button'; b.textContent=r.name; b.dataset.id=r.id;
+    /* 読んでいる面（集まってきた片・受け止めている一枚）は、島を渡る前に畳む。
+       畳まずに飛ぶと、別の島の上に前の島で開いた面が残る。 */
+    b.addEventListener('click',()=>{ menuClose(); gatherHide(); release(); flyTo(isl); });
     box.appendChild(b);
+  });
+  markMenuRoom();
+}
+/* いま居る島に印をつける（戸を開けるたび引き直す）。数は言わない・順も変えない */
+function markMenuRoom(){
+  const box=document.getElementById('menuRooms');
+  if(!box)return;
+  const now=sheetId!=null?String(sheetId):(focusIsl?String(focusIsl.id):'');
+  box.querySelectorAll('button').forEach(b=>{
+    if(b.dataset.id===now)b.setAttribute('aria-current','true');
+    else b.removeAttribute('aria-current');
   });
 }
 const holdBox=document.getElementById('holdBox'),
@@ -703,16 +723,21 @@ async function toggleMute(el){
     whisper('いま、<wbr>届きませんでした。',6000);
   }
 }
+/* 受け止めるのは、島の上の一枚とは限らない（2026-08-02）。探して集まってきた片は
+   どの島にも属さない面（.gather）の上に居るので、島が無くても通る道にしておく。 */
 function hold(el,tx,ty){
   if(held===el){ release(); return; }
   release();
   held=el; el.classList.add('held');
   const isl=islands.get(el._w.room);
-  isl.el.classList.add('hush');
+  if(isl)isl.el.classList.add('hush');
   /* 放った直後の自分のことばは、まだ宙のidを持たない（公開idは次の読み込みで付く）。
      行いも共鳴も引けないので、鮮明になるだけ——それでいい（自分の字を確かめる間）。 */
-  if(!el._w.id){ noteTouch(el._w.room); return; }
+  if(!el._w.id){ if(el._w.room!=null)noteTouch(el._w.room); return; }
   noteSeen(el._w.id);                 // 受け止めた時だけ「見た」に数える（一望は数えない）
+  if(!isl){                           // 集まってきた片：行いだけを添える（共鳴は島の中の話）
+    renderHold(); placeHold(tx,ty); return;
+  }
   if(!REDUCED){
     const r=document.createElement('span'); r.className='ripple';
     // 波紋はことばの今いる場所から（紙片に並んでいる時はその席から）
@@ -885,7 +910,13 @@ function screenPos(el){
 /* ── 放ったことばの着地（書く柱から）────────────────────────
    置いた島へ滑らかに降り、島の心の近くで自分の打鍵がそのまま再生される。
    まだ宙のidを持たない（サーバの公開idは次の読み込みで付く）＝受け止めても行いは出ない。 */
+/* 島を渡る（2026-08-02）：どの状態から呼ばれても、まず前の島で開いていたものを畳む。
+   受け止めていた一枚も、集まってきた片の面も、置き去りにしない。
+   焦点の引き直し（＝紙を敷く島の入れ替え）は apply() を待たずその場で始める
+   ——rAF が止まる環境では、待つと島に着いても紙が敷かれないままになる。 */
 function flyTo(isl){
+  release();
+  gatherHide();
   const k=Math.max(0.55,Math.min(1.1,
     Math.min(VW,VH)/(isl.R*1.12*2.15)));
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
@@ -893,10 +924,10 @@ function flyTo(isl){
   // 滑走の間は「出発の眺め」と「到着の眺め」の二つで間引く（通り道が消えないように）
   views=[[PX,PY,K],[-isl.cx*k,-isl.cy*k,k]];
   K=k; PX=-isl.cx*K; PY=-isl.cy*K;
-  apply();
+  applyNow();
   setTimeout(()=>{ world.style.transition='';
                    document.body.classList.remove('flying');
-                   views=null; apply(); },1200);
+                   views=null; applyNow(); markMenuRoom(); },1200);
 }
 function castLand(isl,poem,color,steps){
   const el=document.createElement('div');
@@ -935,12 +966,15 @@ setInterval(()=>{
   due.sort((a,b)=>a.d-b.d).slice(0,3).forEach(x=>rotateOne(x.el));
 },8000);
 
-/* ── 探す（Semantic Gravity のキャンバス版）────────────────
-   罫の一行はいつも足元にある。島に寄っていればその島の中から、
-   引いた宙（遠景）では**宙ぜんたい**から寄せる（2026-07-31 に
-   プライバシーポリシー第4項を改訂して、部屋横断をここだけ開いた）。
-   リストは出さない：寄せられた語が深層から表層へ浮かび、灯る。 */
-let focusIsl=null, seeking=false, litEls=[], seekScope=null;
+/* ── 探す（2026-08-02 に「集まってくる」へ全面差し替え）──────────────
+   これまでは「返ってきた片のうち、いま画面に載っているものだけ」を灯していた。
+   宙は20万片あって、画面に載っているのは数百——実測で「海」は11件返ってきて
+   表示0件、「ありがとう」は10件中3件しか灯らなかった。探せていなかったのは
+   索引ではなく、**受け取り方**のほう。
+   だから寄せる相手を、灯ではなく片そのものに変える：返ってきたことばは、宙の
+   どこに在っても、この面へ飛んできて並ぶ。出どころが画面にあればその場所から、
+   無ければ宙の外から。宙の地形（位置の意味）はそのまま、読む場所だけを別に作る。 */
+let focusIsl=null;
 function seekWatch(){
   // 焦点の島＝画面の中心にいちばん近く、その懐（1.6R）に入っている島
   let best=null,bd=1e9;
@@ -953,8 +987,6 @@ function seekWatch(){
   // （K のしきい値は画面の広さで破綻する——424px の電話と 1280px の机では別の倍率になる）
   const big=best&&best.isl.R*K>0.32*Math.min(VW,VH);
   const f=(best&&big&&best.d<best.isl.R*1.6)?best:null;
-  // 寄せた範囲（島／宙ぜんたい）から離れたら、寄せた宙は静かにほどける
-  if(seeking&&(f?f.id:null)!==seekScope)seekReset();
   focusIsl=f;
   // 降りた島は紙片の敷き詰めに、離れた島は散らばりの家へ（2026-07-31）。
   // 出入りは140ms落ち着いてから：しきい値の上でつまみが揺れると、一回のジェスチャの
@@ -974,100 +1006,149 @@ function seekWatch(){
      書くを一段上げる」を状態に応じて切り替えていたが、下辺の帯が常にある今、
      出したり動かしたりするものは何も無い。 */
 }
-function seekReset(){
-  seeking=false;
-  seekScope=null;
+/* ── 集まってくる面（.gather）──────────────────────────────────
+   片は、島の上の紙片と同じ物として作る（同じ姿・同じ行い）。違うのは、どの島にも
+   属さないこと——だから受け止め（hold）は島が無くても通る道にしてある。 */
+const gatherEl=document.getElementById('gather'),
+      gatherIn=document.getElementById('gatherIn'),
+      gatherLead=document.getElementById('gatherLead'),
+      gatherCloseBtn=document.getElementById('gatherClose');
+let gatherT=0, seekBusy=false;
+function mkGather(w){
+  const el=document.createElement('div');
+  el.className='gw'+(w.vertical?'':' h')+(w.pd?' pd':'');
+  el.textContent=w.poem||'';
+  // 沈降（薄さ）は宙と同じ値を使う。ただし紙の上では下限を持たせる（読めなくしない）
+  el.style.setProperty('--a',Math.max(0.5,Math.min(1,+w.alpha||0.9)).toFixed(3));
+  el.style.setProperty('--pp',paperOf(w));
+  el.setAttribute('role','button'); el.setAttribute('tabindex','0');
+  el.setAttribute('aria-label',(w.pd
+    ? '流れ着いたことば：'+w.poem+'（'+w.author+'『'+w.work+'』より）'
+    : 'tayori-たより- のことば：'+w.poem)
+    +'。ひらくと、棚にとっておく ができます。');
+  el._w=w;
+  return el;
+}
+/* 出どころ。いま宙に見えている片ならその場所から、載っていないものは宙の外から
+   （向きは本文のハッシュ＝同じことばは毎回同じ方角から来る）。 */
+function gatherFrom(by,w){
+  const src=by.get(w.id);
+  if(src){
+    const r=src.getBoundingClientRect();
+    if(r.width||r.height)return {x:r.left+r.width/2,y:r.top+r.height/2};
+  }
+  const a=(fnv(String(w.id||w.poem))%360)*Math.PI/180, R=Math.max(VW,VH)*0.66;
+  return {x:VW/2+Math.cos(a)*R, y:VH/2+Math.sin(a)*R};
+}
+function gatherShow(q,words){
+  release();                       // 宙で受け止めていた一枚は、面が立つ前に放す
+  clearTimeout(gatherT);
+  const by=new Map();
+  islands.forEach(isl=>isl.words.forEach(el=>{ if(el._w&&el._w.id)by.set(el._w.id,el); }));
+  gatherIn.textContent='';
+  const cards=words.map(mkGather);
+  cards.forEach(el=>gatherIn.appendChild(el));
+  gatherLead.innerHTML='<b>'+esc(q)+'</b> に<wbr>近い<wbr>ことばが、<wbr>集まって<wbr>きました。';
+  gatherEl.hidden=false;
+  gatherEl.setAttribute('aria-hidden','false');
+  gatherEl.classList.add('on');
+  seekEl.classList.add('seeking');
+  seekBack.hidden=false;
+  whisper('');
+  if(REDUCED)return;               // 動きを望まない人には、ただ在るだけ
+  /* 席を先に測り、出どころへ戻してから飛ばす（FLIP）。測ってから書くまでのあいだに
+     描画は挟まらないので、席に居る姿は一度も見えない。 */
+  const flip=cards.map(el=>{
+    const r=el.getBoundingClientRect();
+    const s=gatherFrom(by,el._w);
+    return [el,s.x-(r.left+r.width/2),s.y-(r.top+r.height/2)];
+  });
+  flip.forEach(([el,dx,dy])=>{
+    el.style.transition='none';
+    el.style.opacity='0';
+    el.style.transform='translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px) scale(.32)';
+  });
+  // rAF ではなくタイマで戻す（rAFの止まる環境でも、片は必ず席に着く）
+  gatherT=setTimeout(()=>{
+    flip.forEach(([el],i)=>{
+      const d=Math.min(i*0.05,0.6).toFixed(2);
+      el.style.transition='transform 1s var(--ease) '+d+'s,opacity .55s var(--ease) '+d+'s';
+      el.style.opacity='';
+      el.style.transform='';
+    });
+  },24);
+}
+function gatherHide(){
+  if(!gatherEl||gatherEl.hidden)return;
+  if(held&&gatherIn.contains(held))release();
+  gatherEl.classList.remove('on');
+  gatherEl.setAttribute('aria-hidden','true');
+  clearTimeout(gatherT);
+  gatherT=setTimeout(()=>{ gatherEl.hidden=true; gatherIn.textContent=''; },420);
   seekEl.classList.remove('seeking');
-  seekBack.hidden=true;
+}
+function seekReset(){
+  gatherHide();
   seekQ.value='';
-  seekFold();
-  litEls.forEach(el=>{el.classList.remove('lit');
-    el.style.transform=posOf(islands.get(el._w.room),el);});
-  litEls=[];
-  islands.forEach(isl=>isl.el.classList.remove('gathered'));
+  seekBack.hidden=true;
   whisper('');
 }
+/* 探すのは、いつでも宙ぜんたいから（2026-08-02）。島に降りている時だけ島の中を
+   探す作法は畳んだ——探している人は「この島の中に在るか」ではなく「宙のどこかに
+   在るか」を訊いている。どの島の片かは、集まった紙の色と出典が言う。 */
 function seekRun(){
   const q=(seekQ.value||'').trim();
-  if(!q)return;
-  const f=focusIsl;                 // null＝宙ぜんたいから寄せる（2026-07-31）
+  if(!q||seekBusy)return;
+  seekBusy=true;
   seekQ.blur();
-  fetch('/api/sky/search?q='+encodeURIComponent(q)+(f?('&room='+f.id):''))
+  fetch('/api/sky/search?q='+encodeURIComponent(q))
     .then(r=>r.json().then(d=>({ok:r.ok,d})))
     .then(({ok,d})=>{
-      if((focusIsl?focusIsl.id:null)!==(f?f.id:null))return;
       if(!ok||!d.words){
         whisper((d&&d.error)||'いまは、<wbr>寄せられません。',5200);
         return;
       }
-      const by=new Map();
-      (f?[f.isl]:[...islands.values()]).forEach(isl=>isl.words.forEach(x=>by.set(x._w.id,x)));
-      const hits=d.words.map(w=>by.get(w.id)).filter(Boolean);
-      if(!hits.length){
-        whisper('この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>この'+
-                (f?'島':'宙')+'に<wbr>ありません。',6000);
+      if(!d.words.length){
+        whisper('この<wbr>ことばに<wbr>近い<wbr>空気は、<wbr>まだ<wbr>この宙に<wbr>ありません。',6000);
         return;
       }
-      if(held)release();
-      seeking=true;
-      seekScope=f?f.id:null;
-      seekEl.classList.add('seeking');
-      seekBack.hidden=false;
-      if(f)f.isl.el.classList.add('gathered');
-      else islands.forEach(isl=>isl.el.classList.add('gathered'));
-      litEls=hits;
-      // 島の心へ、黄金角の輪になって浮かび上がる（深いところから表層へ）。
-      // 紙片に並んでいる時は席を動かさない——寄せられた紙だけが明るく残り、
-      // まわりが沈む（グリッドは読む面なので、並びを崩さない）。
-      // 宙ぜんたいの時も動かさない：位置は島の地形の意味を持つので、
-      // 灯りだけで「ここに近いことばがある」と言う。
-      hits.forEach((el,i)=>{
-        el.classList.add('lit');
-        if(!f||f.isl.sheeted)return;
-        const rr=110+64*Math.sqrt(i), aa=i*2.39996;
-        const tx=Math.cos(aa)*rr*1.25, ty=Math.sin(aa)*rr*0.7;
-        el.style.transform='translate('+(tx-el._hx)+'px,'+(ty-el._hy)+'px)';
-      });
+      gatherShow(q,d.words);
     })
-    .catch(()=>{ whisper('いまは、<wbr>寄せられません。',5200); });
+    .catch(()=>{ whisper('いまは、<wbr>寄せられません。',5200); })
+    .finally(()=>{ seekBusy=false; });
 }
-/* ── 検索の開け閉め（2026-07-31・Cosmos の作法）──
-   ふだんは虫眼鏡ひとつ。触れると器がひらいて入力になり、空のまま離れれば
-   ひとりでに畳まれる。寄せている間（seeking）は畳まない——「もどす」が出ている。 */
-const seekOpen=document.getElementById('seekOpen');
-function seekUnfold(){
-  seekEl.classList.add('open');
-  document.body.classList.add('seekopen');   // 罫が伸びる先に居る「書く」は退く（案A）
-  seekOpen.setAttribute('aria-expanded','true');
-  seekQ.tabIndex=0;
-  setTimeout(()=>seekQ.focus(),60);   // 罫が伸び始めてから筆先を入れる
-}
-function seekFold(){
-  seekEl.classList.remove('open');
-  document.body.classList.remove('seekopen');
-  seekOpen.setAttribute('aria-expanded','false');
-  seekQ.tabIndex=-1;
-  if(document.activeElement===seekQ)seekQ.blur();
-}
-seekOpen.addEventListener('click',()=>{
-  if(seekEl.classList.contains('open')){
-    if(seekQ.value.trim()){ seekRun(); }   // 開いていて字がある＝虫眼鏡は「検索する」
-    else seekFold();
-  }else seekUnfold();
-});
-seekQ.addEventListener('blur',()=>{
-  // 空のまま離れたら畳む。ひと呼吸おくのは、もどす・虫眼鏡へのタップを先に通すため
-  setTimeout(()=>{
-    if(document.activeElement!==seekQ&&!seekQ.value&&!seeking)seekFold();
-  },140);
-});
 /* IME変換中の Enter・Escape は横取りしない（2026-07-29 に mood.html で踏んだ轍） */
 seekQ.addEventListener('keydown',e=>{
   if(e.isComposing||e.keyCode===229)return;
   if(e.key==='Enter'){ e.preventDefault(); seekRun(); }
   if(e.key==='Escape'){ seekReset(); }
 });
-seekBack.addEventListener('click',()=>seekReset());
+seekQ.addEventListener('input',()=>{ seekBack.hidden=!seekQ.value; });
+seekBack.addEventListener('click',()=>{ seekReset(); seekQ.focus(); });
+document.querySelector('.seek-ic').addEventListener('click',()=>{
+  if(seekQ.value.trim())seekRun(); else seekQ.focus();
+});
+gatherCloseBtn.addEventListener('click',()=>seekReset());
+/* 集まった片に触れる＝宙の片に触れるのと同じ（受け止めて、棚にとっておける）。
+   #vp の外なので指の捕まえ（setPointerCapture）は無く、click がそのまま届く。 */
+gatherIn.addEventListener('click',e=>{
+  const el=e.target.closest('.gw');
+  if(el)hold(el,e.clientX,e.clientY);
+});
+gatherIn.addEventListener('keydown',e=>{
+  if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('gw')){
+    e.preventDefault(); hold(e.target);
+  }
+});
+// 紙の無いところを触れば、受け止めを放す。もう一度触れば面ごと畳む
+gatherEl.addEventListener('click',e=>{
+  if(e.target.closest('.gw')||e.target.closest('.gather-top'))return;
+  if(held){ release(); return; }
+  gatherHide();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!gatherEl.hidden&&!held)gatherHide();
+});
 
 /* ════ 以下、mood.html から移植（付箋・保存先・書く一式）════ */
   /* 保存にまつわる続き（付箋・保存先）は、「近いことば」を分ける罫より **前** に置く。
@@ -1651,6 +1732,7 @@ seekBack.addEventListener('click',()=>seekReset());
   /* 柱を開いた／閉じたときのフォーカス。閉じたら「放つ」へ返す（来た道から出る／Apple §7）。
      書きかけの本文は消さない——閉じるのは取り消しではない（Apple §2 forgiveness）。 */
   function open(){release();                          // 受け止めていたことばは、そっと放す
+                  gatherHide();                       // 集まってきた片も畳む（柱はその下に立つ）
                   pane.classList.add('on');pane.setAttribute('aria-hidden','false');
                   document.body.classList.add('casting');   // ロゴの戸は退く（S6 のとじると重なる）
                   btn.classList.add('away');ta.focus();
@@ -1951,6 +2033,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape')release(); });
 
   function showRead(o){
     release();                    // 宙で受け止めていたことばは、柱が立つ前に放す
+    gatherHide();                 // 集まってきた片の面も畳む（柱はその下に立つ）
     if(!rp.classList.contains('on'))readBack=document.activeElement;
     dropPad(readFusen);           // 前に開いた付箋の紙片は持ち越さない
     readDid=o.did||null;

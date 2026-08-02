@@ -42,26 +42,88 @@ function bootOr(k,url){
 <script src="{{ sky_asset('canvas.js') }}" defer></script>
 </head>
 <body>
+{# ══ 頭の帯（2026-08-02・Kosei の画で全面差し替え）════════════════════
+   名は左上に置いたまま、探すと書くを画面の上へ上げ、戸（メニュー）は右上の
+   しるしへ移した。下辺の帯に集めていた三つのうち、残るのは ＋− だけ。
+   探すが常に見えていること・戸がどの状態からでも開くことの二つが、この配置の目的。 #}
 <header>
-  {# ロゴタップで棚・設定の戸がひらく（2026-07-31 復活）。栞の一語は畳んだ。 #}
-  <div class="menu">
-    <button class="logo" id="logoBtn" type="button" aria-expanded="false"
-            aria-controls="logoMenu">たより <small>TAYORI</small></button>
-    <div class="menu-list" id="logoMenu" hidden>
-      {# ジャンルの名。見えていない島へも、ここから降りられる（2026-07-31 夜） #}
-      <div class="menu-rooms" id="menuRooms" role="group" aria-label="ジャンル"></div>
-      {% if logged_in %}
-      <a href="/me">手元の棚・書架</a>
-      <a href="/settings">設定</a>
-      {% else %}
-      <a href="/?start=1&amp;new=1">はじめる</a>
-      <a href="/?start=1">ログイン</a>
-      {% endif %}
-      <a href="/about">tayori-たより- について</a>
-      <a href="/contact">お問い合わせ</a>
+  <p class="brand">たより <small>TAYORI</small></p>
+  {# 探す：畳んだ一語ではなく、はじめから入力そのものを置く（押して開く手順を無くす） #}
+  <div class="top-mid">
+    <div class="seek" id="seek">
+      <span class="seek-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"
+             stroke-linecap="round"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/></svg>
+      </span>
+      <input id="seekQ" type="text" maxlength="80" autocomplete="off"
+             enterkeyhint="search" aria-label="ことばで探す" placeholder="検索">
+      <button id="seekBack" type="button" hidden aria-label="探したことばを消す">×</button>
+    </div>
+  </div>
+  <div class="top-right">
+    {% if logged_in %}
+    {# 「書く」の一語は下辺の帯から上へ戻した（2026-08-02）。押せる合図は罫ではなく器 #}
+    <button class="cast-btn" id="castBtn" type="button"><span class="pl" aria-hidden="true">＋</span>書く</button>
+    {% endif %}
+    {# しるしタップで戸がひらく。ジャンル（島）へは、どの状態からでもここから降りられる #}
+    <div class="menu">
+      <button class="logo-mark" id="logoBtn" type="button" aria-expanded="false"
+              aria-controls="logoMenu" aria-label="メニュー">
+        <svg viewBox="0 0 40 36" aria-hidden="true" fill="currentColor">
+          <ellipse cx="7.6" cy="26" rx="5" ry="7.2" transform="rotate(-32 7.6 26)"/>
+          <ellipse cx="19" cy="20.5" rx="7.4" ry="10.4" transform="rotate(-24 19 20.5)"/>
+          <ellipse cx="32" cy="14.6" rx="8.4" ry="13.2" transform="rotate(-19 32 14.6)"/>
+        </svg>
+      </button>
+      <div class="menu-list" id="logoMenu" hidden>
+        {# ジャンルの名。見えていない島へも、読んでいる最中でも、ここから降りられる #}
+        <p class="menu-head">ジャンル</p>
+        <div class="menu-rooms" id="menuRooms" role="group" aria-label="ジャンル"></div>
+        <div class="menu-sep"></div>
+        {% if logged_in %}
+        <a class="menu-row" href="/me">手元の棚・書架
+          <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+               aria-hidden="true"><path d="M2.5 13.5h13"/><rect x="5" y="5" width="8" height="6.5"/></svg></a>
+        <a class="menu-row" href="/settings">設定
+          <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+               stroke-linecap="round" aria-hidden="true"><path d="M2.5 6h13M2.5 12h13"/><circle cx="6.5" cy="6" r="1.9"/><circle cx="11.5" cy="12" r="1.9"/></svg></a>
+        {% else %}
+        <a class="menu-row" href="/?start=1&amp;new=1">はじめる
+          <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+               stroke-linecap="round" aria-hidden="true"><path d="M7 3.5h5.5v11H7"/><path d="M3 9h6.5M7.4 6.6 9.8 9l-2.4 2.4"/></svg></a>
+        <a class="menu-row" href="/?start=1">ログイン
+          <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+               stroke-linecap="round" aria-hidden="true"><path d="M7 3.5h5.5v11H7"/><path d="M3 9h6.5M7.4 6.6 9.8 9l-2.4 2.4"/></svg></a>
+        {% endif %}
+        <a class="menu-row" href="/about">tayori-たより- について
+          <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+               stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6.4"/><path d="M9 8.2v4"/><path d="M9 5.8v.6"/></svg></a>
+        <a class="menu-row" href="/contact">お問い合わせ
+          <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+               stroke-linejoin="round" aria-hidden="true"><path d="M3 5.4h12v7.2H8.4L5.2 15v-2.4H3z"/></svg></a>
+        {% if logged_in %}
+        <div class="menu-sep"></div>
+        <form method="post" action="/logout" class="menu-form">
+          <button class="menu-row" type="submit">ログアウト
+            <svg class="mi" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"
+                 stroke-linecap="round" aria-hidden="true"><path d="M11 3.5H5.5v11H11"/><path d="M9 9h6M12.6 6.6 15 9l-2.4 2.4"/></svg></button>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </div>
 </header>
+{# ── 探すと、片が集まってくる（2026-08-02）───────────────────────────
+   これまでの探すは「いま画面に載っていることばだけ」を灯していたので、返ってきた
+   十一片のうち画面に無いものは全部捨てられ、多くの語で0件に見えていた（実測：
+   「海」11件→表示0件）。返ってきた片は、宙のどこに在っても**ここに集まる**。 #}
+<div class="gather" id="gather" hidden aria-hidden="true">
+  <div class="gather-top">
+    <p class="gather-lead" id="gatherLead" aria-live="polite"></p>
+    <button class="gather-close" id="gatherClose" type="button">とじる</button>
+  </div>
+  <div class="gather-field" id="gatherField"><div class="gather-in" id="gatherIn"></div></div>
+</div>
 <div id="vp"><div id="world"></div></div>
 <div class="hold" id="holdBox" hidden></div>
 <p class="whisper" id="whisper" aria-live="polite"></p>
@@ -216,35 +278,15 @@ function bootOr(k,url){
     </div>
   </div>
 {% endif %}
-{# ── 足元に、ひとつの帯（UI改善仕様書 v1.0 §3.3・案A）────────────────────
-   宙には常時七つのものが浮いていて、うち三つが下辺 7dvh 前後に集まり、島の内外で
-   位置が 58px 動く例外規則まであった——指が位置を覚えられない。四隅の常駐物を
-   下辺の一列に集め、順を「＋− ／ 書く ／ さがす」で固定する。ここは状態で動かない。
-   「書く」だけは帯の中で位置を持たない（左右の二つに挟まれた中央＝絶対配置）ので、
-   さがすが横へ伸びても、ひとつづきの宙の名が下に入っても、真ん中から動かない。 #}
+{# ── 足元の帯（2026-08-02 に痩せた）────────────────────────────────
+   案Aで下辺へ集めた三つのうち、「書く」と「さがす」は頭の帯へ上げた（Kosei の画）。
+   ここに残るのは寄り引きの ＋− と、面の名と、灯だけ——どれも状態で位置が動かない。 #}
 <div class="dock" id="dock">
   <div class="dock-row">
     {# 寄りの操作（キーボードと、つまめない環境のための一対） #}
     <div class="zoom">
       <button id="zin" type="button" aria-label="宙に寄る">＋</button>
       <button id="zout" type="button" aria-label="宙から引く">−</button>
-    </div>
-    {% if logged_in %}
-    {# 2026-07-28（4-5）：入口の語を「書く」に。書く画面を開く入口（ここ）と、実際に
-       送信する不可逆の決定（castSend）がどちらも「放つ」で、可逆な行為と不可逆な
-       行為が同じ名前だった。「放つ」は決定にだけ残す——書くのはいつでもやめられる。 #}
-    <button class="cast-btn ruled" id="castBtn" type="button">書く</button>
-    {% endif %}
-    {# 検索（案A）：虫眼鏡と角丸の器をやめ、「さがす」の一語に戻す。押すと、その語の
-       位置から罫が横に伸びて入力行になる——押せることの合図は、この世界では罫一本だけ。 #}
-    <div class="seek" id="seek">
-      <button class="seek-open ruled" id="seekOpen" type="button"
-              aria-expanded="false" aria-controls="seekQ">さがす</button>
-      <div class="seek-in">
-        <input id="seekQ" type="text" maxlength="80" autocomplete="off"
-               enterkeyhint="search" aria-label="ことばで寄せる" placeholder="ことばで寄せる" tabindex="-1">
-        <button id="seekBack" type="button" hidden>もどす</button>
-      </div>
     </div>
   </div>
   <p class="foot">ひとつづきの宙</p>
