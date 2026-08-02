@@ -184,19 +184,73 @@ function paperOf(w){
    固定した同じ手順で解くので、同じ宙は誰の画面でもほぼ同じ地形になる。 */
 let islands=new Map();   // room_id -> {el,wordsEl,cx,cy,R,words:[]}
 function islandR(n){ return 150+62*Math.sqrt(n); }
+const ISL_GAP=150;       // 島と島のあいだ（岸から岸まで）。ここを詰めると陸は繋がる
+let ISL_GRAV=0.012;      // 宙の真ん中へ寄せる弱い重み（地図の空洞を埋めるぶんだけ）
+/* 島の席（2026-08-02 に「生まれた順の渦」から「意味の地図」へ）。
+   サーバが部屋の重心から二次元の地図（mx,my）を配る。画面はそれを寸法へ直し、
+   重なりだけを解く。
+
+   一様な倍率だけで重なりを避けようとすると破綻する：いちばん近い二島（心と生活は
+   0.215）に合わせると倍率は6200になり、いちばん遠い島（お金）は原点から11700
+   ——地図は正しいのに、誰も隣に見えない宙になる。だから中ほどの隔たりで寸法を
+   決めておいて、あとは**重なった組だけを押し分ける**。地図の遠近は薄まるが、
+   隣り合わせ（誰の隣が誰か）は保たれる。押し分けと同時に、それぞれを地図の上の
+   自分の場所へ弱く引き戻す＝ばらけた島が意味から離れていかない。 */
 function placeIslands(rooms,counts){
-  // 黄金角の渦に沿って歩き、先客と重ならない最初の席に座る（決定論・部屋は生まれた順）
   const placed=[];
-  rooms.forEach((r,i)=>{
-    const R=islandR(counts.get(r.id)||0);
-    let t=i===0?0:1.2;
+  const R=r=>islandR(counts.get(r.id)||0);
+  const map=rooms.filter(r=>r.mx!=null&&r.my!=null);
+  if(map.length>1){
+    /* 寸法は「ほとんどの組が押し分けを要らなくなる」ところに置く（要る倍率の95%目）。
+       中ほど（中央値）で決めると半分の組が重なり、押し分けが地図を作り直してしまう
+       ——実測で、地図の上では隣どうしの恋愛と友達が、画面では宙の反対側に飛んだ。
+       隣三つがどれだけ残るかで測った：中央値34% / 九割目76% / 95%目92% / 全部100%。
+       全部（＝押し分けが一度も要らない寸法）に合わせると宙は25000まで広がって、
+       今度は誰も隣に見えない。92%と、いまの宙より少し広いだけの5300を採る。 */
+    const need=[];
+    map.forEach((a,i)=>map.forEach((b,j)=>{
+      if(j>i)need.push((R(a)+R(b)+ISL_GAP)/Math.max(Math.hypot(a.mx-b.mx,a.my-b.my),1e-3));
+    }));
+    need.sort((p,q)=>p-q);
+    const s=need[Math.min(need.length-1,Math.floor(need.length*0.95))];
+    const P=map.map(r=>({x:r.mx*s,y:r.my*s,R:R(r),room:r,ax:r.mx*s,ay:r.my*s}));
+    for(let t=0;t<220;t++){
+      let moved=0;
+      for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){
+        const a=P[i],b=P[j];
+        let dx=b.x-a.x,dy=b.y-a.y;
+        let d=Math.hypot(dx,dy);
+        if(d<1e-6){ dx=(i+1)*0.37; dy=(j+1)*0.29; d=Math.hypot(dx,dy); }
+        const need=a.R+b.R+ISL_GAP;
+        if(d>=need)continue;
+        const push=(need-d)/2/d;
+        a.x-=dx*push; a.y-=dy*push; b.x+=dx*push; b.y+=dy*push;
+        moved++;
+      }
+      /* 引き戻し（地図の上の自分の場所へ）＋ごく弱い重み（宙の真ん中へ）。
+         重みが要るのは、地図には**空洞**があるから：意味の空間では「気持ちの名」と
+         「出来事の名」が遠くに離れていて、そのまま置くと二つの大陸のあいだに
+         誰も居ない海ができる。真ん中へ寄せておいて、重なりだけ押し分ける。
+         引き戻しは途中まで（最後は押し分けだけ＝綱引きのまま終わって重なりが残らない）。 */
+      if(t<180)P.forEach(p=>{
+        p.x+=(p.ax-p.x)*0.04-p.x*ISL_GRAV; p.y+=(p.ay-p.y)*0.04-p.y*ISL_GRAV;
+      });
+      else if(!moved)break;
+    }
+    P.forEach(p=>placed.push({x:Math.round(p.x),y:Math.round(p.y),R:p.R,room:p.room}));
+  }
+  // 黄金角の渦（地図を持たない部屋の席）。先客と重ならない最初の空きに座る
+  rooms.forEach(r=>{
+    if(r.mx!=null&&r.my!=null&&map.length>1)return;
+    const rr=R(r);
+    let t=placed.length?1.2:0;
     let x=0,y=0;
     for(;;){
       x=64*t*Math.cos(t*2.39996); y=64*t*Math.sin(t*2.39996)*0.86;
-      if(placed.every(p=>Math.hypot(x-p.x,y-p.y)>p.R+R+320))break;
+      if(placed.every(p=>Math.hypot(x-p.x,y-p.y)>p.R+rr+ISL_GAP))break;
       t+=0.18;
     }
-    placed.push({x,y,R,room:r});
+    placed.push({x:x,y:y,R:rr,room:r});
   });
   return placed;
 }
@@ -254,8 +308,27 @@ function mkWord(isl,w){
   // 家の座標：色相が方位、あとはハッシュ。**島の中心からの相対**で持つ——
   // .w の包含ブロックは .isl（もう島の位置に居る）なので、世界座標で書くと
   // 島の中心が二重に足されて、ことばが島の外へ筋になって流れ出す（初版で実際に起きた）
-  el._hx=w.x*(isl.R-70);
-  el._hy=w.y*(isl.R-70);
+  let ux=w.x,uy=w.y;
+  /* またぐことばは、遠景でも相手の島の側へ寄る（2026-08-02）。降りた島の中で
+     やっていること（中心＝固有／縁＝またぐ）を、島の外からも見えるようにする
+     ＝島と島は、あいだに掛かることばで繋がって見える。
+     色相の方位は捨てない：寄せるのは「またいでいる度合い」の分だけで、
+     ほとんどのことば（実測 6割）は今までどおり色の方角に居る。 */
+  const cr=w.cr!=null?w.cr:0;
+  if(cr<0&&w.pr!=null){
+    const d=partnerDir(isl,el);
+    if(d!=null){
+      const t=Math.min(1,-cr/0.12)*0.8;
+      const a0=Math.atan2(uy,ux), r0=Math.min(1,Math.hypot(ux,uy));
+      let dd=d-a0;
+      while(dd>Math.PI)dd-=2*Math.PI;
+      while(dd<-Math.PI)dd+=2*Math.PI;
+      const a=a0+dd*t, r=r0+(1-r0)*t*0.8;   // 方角は相手へ、隔たりは縁へ
+      ux=Math.cos(a)*r; uy=Math.sin(a)*r;
+    }
+  }
+  el._hx=ux*(isl.R-70);
+  el._hy=uy*(isl.R-70);
   el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
   isl.wordsEl.appendChild(el);
   isl.words.push(el);
@@ -330,6 +403,16 @@ function relax(){
         x=el._hx+Math.cos(aa)*rr*1.15;
         y=el._hy+Math.sin(aa)*rr*0.6;
       }
+      /* 逃げてよい。ただし**隣の島には入らない**（2026-08-02）。島の席を意味の
+         地図に置いて間合いを詰めたので、押し出された一枚がそのまま隣の島へ紛れる
+         ようになった（実測31片・いちばん深いもので332）。自分の島の半径で頭を
+         押さえると、こんどは中で団子になる（人の多い島は、そもそも入り切らない）。
+         だから止めるのは「他の島の中」だけ——あいだの海へは、いくらでも出てよい。 */
+      islands.forEach(o=>{
+        if(o===isl)return;
+        const dx=isl.cx+x-o.cx, dy=isl.cy+y-o.cy, d=Math.hypot(dx,dy);
+        if(d<o.R&&d>1e-3){ const k=(o.R-d)/d; x+=dx*k; y+=dy*k; }
+      });
       el._hx=x; el._hy=y;
       writes.push([el,x,y]);
       done.push({x,y,w,h});
@@ -2273,18 +2356,25 @@ Promise.all([
        「地図」で、ことばそのものに触れるまでが遠かった——降りた島の紙片から始め、
        引けば（−・つまむ）いつでも全景へ出られる。降りる先は、いちばん新しい
        ことばが昇った島＝いま息をしている場所（?room= は今までどおりその島へ）。 */
-    let fx=0,fy=0,fr=900;
-    if(START_ROOM&&islands.has(+START_ROOM)){
-      const i=islands.get(+START_ROOM); fx=i.cx; fy=i.cy; fr=i.R*1.12; }
+    let fx=0,fy=0,fr=900,k0=null;
+    // 降りる先の倍率は束から（2026-08-02）。滑って降りる時と同じ寸法で始める。
+    const land=i=>{
+      fx=i.cx; fy=i.cy; fr=i.R*1.12; k0=fitK(i); i._flown=true;
+      // 滑って降りた時と同じ扱い（＝「居る」）にしておく。束に合わせた倍率は
+      // 入る線を割ることがあるので、行き先を告げずに置くと紙が敷かれないまま始まる。
+      sheetLock=i.room.id;
+      setTimeout(()=>{ sheetLock=null; },1200);
+    };
+    if(START_ROOM&&islands.has(+START_ROOM)){ land(islands.get(+START_ROOM)); }
     else{
       let best=null,bs=-1;
       islands.forEach(isl=>isl.words.forEach(el=>{
         if(!el._w.pd&&el._w.sink>bs){bs=el._w.sink;best=isl;}
       }));
-      if(best){ fx=best.cx; fy=best.cy; fr=best.R*1.12; }
+      if(best){ land(best); }
       else{ let mx=0; islands.forEach(i=>{mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R);}); fr=mx||900; }
     }
-    K=Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/(fr*2.15)));
+    K=k0!=null?k0:Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/(fr*2.15)));
     PX=-fx*K; PY=-fy*K;
     applyNow();   // 立ち上がりだけは同じフレームで描く（1フレームの素の宙を見せない）
   });

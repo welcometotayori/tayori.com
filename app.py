@@ -865,6 +865,13 @@ def init_db():
             # ＝穴は穴のまま残す（「自分の部屋はあの位置」という空間の記憶を壊さないため）。
             # 座標そのものは持たない。番号→座標は画面側の純関数（roomSeat）が決める。
             "ALTER TABLE rooms ADD COLUMN position_index INTEGER",
+            # 島の席（2026-08-02）。番号（position_index）は「生まれた順」でしかなく、
+            # 隣り合っていることに意味が無かった。意味の近い部屋が隣に来るよう、
+            # 部屋の重心どうしの隔たりから二次元の地図を起こして**一度だけ**置く。
+            # 座標を持つのは、地図が動かないようにするため：中身は毎日増えるので、
+            # 都度計算し直すと「あの部屋はあっち」の記憶が毎日ずれる。
+            "ALTER TABLE rooms ADD COLUMN pos_x REAL",
+            "ALTER TABLE rooms ADD COLUMN pos_y REAL",
             # 色は書き手が「選んだ」時だけ空気になる（2026-07-28）。
             # 色は air の4変数（色・季節・時刻・天気）で唯一、書き手が作る変数。
             # 触られなかった既定色（淡い青）を発言として流通させると、色という記号が
@@ -1212,6 +1219,12 @@ def init_db():
         db.execute("CREATE INDEX IF NOT EXISTS idx_letters_room ON letters (room_id)")
         _seed_rooms(db)
         _seat_rooms(db)
+        try:
+            _placed = _seat_rooms_xy(db)      # 島の席＝意味の地図（一度だけ・以後は空振り）
+            if _placed:
+                print(f"[たより] 島の席を意味の地図へ置いた: {_placed}室", flush=True)
+        except Exception as e:
+            print(f"[たより] 島の席の計算に失敗（渦の配置で続行）: {e}", flush=True)
         _moved = _backfill_rooms(db)
         if _moved:
             print("[たより] 部屋へ移送: "
@@ -3321,6 +3334,11 @@ def start_notifier(interval=None):
                             _db.commit()
                         if cur.rowcount:
                             print(f"[たより] 誰も来なかった部屋: {cur.rowcount}室を畳みました", flush=True)
+                        # 生まれたての部屋には重心が無い＝地図に置けない。ことばが
+                        # 入ってから、日次でそっと席に着かせる（既にある島は動かさない）。
+                        placed = _seat_rooms_xy(_db)
+                        if placed:
+                            print(f"[たより] 島の席を意味の地図へ置いた: {placed}室", flush=True)
                     finally:
                         _db.close()
             except Exception as e:
@@ -4432,6 +4450,109 @@ def _seat_rooms(db):
     return len(rows)
 
 
+def _room_centroids(db):
+    """部屋 → 意味の重心（長さ1）。ことばもベクトルも無い部屋は返さない。"""
+    try:
+        import numpy as np
+    except Exception:
+        return {}, None
+    rows = db.execute(
+        "SELECT l.room_id AS rid, v.v AS v, v.dim AS dim"
+        "  FROM letters l JOIN letter_vectors v ON v.letter_id=l.id"
+        " WHERE l.room_id IS NOT NULL AND l.mode='sky'").fetchall()
+    acc = {}
+    for r in rows:
+        v = _sem_vec(r["v"])
+        if v is None:
+            continue
+        a = acc.get(r["rid"])
+        acc[r["rid"]] = v if a is None else a + v
+    """部屋 → 意味の重心。**名前と中身を半分ずつ**混ぜる。
+
+    中身だけだと、まだ人のことばが無い部屋（流れ着いたものしか無い部屋）が測れない。
+    そこだけ名前で代用すると、名前の一語と文章の平均は空間の別の場所に居るので、
+    地図が「中身のある部屋」と「名前だけの部屋」の二つの島群に割れる（実際に割れた）。
+    どの部屋も同じ作り方にすれば、その段差は消える。名前は部屋の看板であって、
+    読む人が見ているのもそれなので、半分を名前に預けるのは筋が通っている。"""
+    out = {}
+    for r in db.execute("SELECT id, name FROM rooms WHERE deleted_at IS NULL").fetchall():
+        nv = sem_embed(r["name"])
+        c = acc.get(r["id"])
+        if c is not None:
+            n = float(np.linalg.norm(c))
+            c = (c / n) if n > 0 else None
+        v = c if nv is None else (nv if c is None else c + nv)
+        if v is None:
+            continue
+        n = float(np.linalg.norm(v))
+        if n > 0:
+            out[r["id"]] = (v / n).astype(np.float32)
+    return out, np
+
+
+def _seat_rooms_xy(db):
+    """島の席を、意味の地図の上に置く（2026-08-02）。冪等——座標を持つ部屋は動かさない。
+
+    部屋の重心どうしのコサインを隔たりに直し、古典的MDS（二重中心化した行列の
+    固有ベクトル）で二次元へ落とす。近い部屋どうしが隣に来る＝島を渡ることに
+    意味が生まれる（隣は、隣であるべくして隣にいる）。
+    符号の向きは固有ベクトルでは決まらないので、部屋idの小さい方が正になるよう固定
+    ——同じDBからは必ず同じ地図が出る。
+    あとから生まれた部屋は、地図を作り直さずに**その部屋だけ**を置く（既にある島の
+    位置は誰かの記憶なので動かさない）：近い部屋ほど強く引く重み付き平均で決める。"""
+    cent, np = _room_centroids(db)
+    if not cent:
+        return 0
+    live = db.execute(
+        "SELECT id, pos_x, pos_y FROM rooms WHERE deleted_at IS NULL ORDER BY id").fetchall()
+    fixed = {r["id"]: (r["pos_x"], r["pos_y"])
+             for r in live if r["pos_x"] is not None and r["pos_y"] is not None}
+    need = [r["id"] for r in live if r["id"] not in fixed and r["id"] in cent]
+    if not need:
+        return 0
+    put = {}
+    if not fixed:
+        ids = sorted(cent)
+        C = np.stack([cent[i] for i in ids])
+        S = np.clip(C @ C.T, -1.0, 1.0)
+        D = np.sqrt(np.maximum(2.0 - 2.0 * S, 0.0))       # コサイン → 弦の長さ
+        n = len(ids)
+        J = np.eye(n) - np.ones((n, n)) / n
+        B = -0.5 * J @ (D ** 2) @ J                        # 二重中心化
+        w, V = np.linalg.eigh(B)
+        idx = np.argsort(w)[::-1][:2]
+        X = V[:, idx] * np.sqrt(np.maximum(w[idx], 0.0))
+        for k in range(2):                                 # 符号を固定（idの小さい方が正）
+            col = X[:, k]
+            j = int(np.argmax(np.abs(col)))
+            if col[j] < 0:
+                X[:, k] = -col
+        rms = float(np.sqrt((X ** 2).sum(1).mean())) or 1.0
+        X = X / rms                                        # 平均の隔たりを1に
+        for k, i in enumerate(ids):
+            put[i] = (float(X[k, 0]), float(X[k, 1]))
+    else:
+        for i in need:
+            wsum, ax, ay = 0.0, 0.0, 0.0
+            for j, xy in fixed.items():
+                if j not in cent:
+                    continue
+                s = float(cent[i] @ cent[j])
+                w = max(0.0, s - 0.5) ** 2                 # 近い部屋ほど強く引く
+                wsum += w; ax += w * xy[0]; ay += w * xy[1]
+            if wsum <= 0:                                  # 誰とも近くない＝外周へ
+                put[i] = (1.4, 0.0)
+            else:
+                put[i] = (ax / wsum, ay / wsum)
+            fixed[i] = put[i]
+    with _WRITE_LOCK:
+        for i, xy in put.items():
+            db.execute("UPDATE rooms SET pos_x=?, pos_y=? WHERE id=?",
+                       (round(xy[0], 5), round(xy[1], 5), i))
+        db.commit()
+    return len(put)
+
+
 def _rooms_created_ever(db, user_id):
     """その人がいま持っている部屋の数（2026-07-26：一日にひとつ → 一人ひとつ）。
     消した部屋は数えない。消せるのは「まだ誰の声も入っていない空の部屋」だけなので
@@ -4492,7 +4613,8 @@ def _rooms_payload():
     まるごとを待たせていた（実測：DOMContentLoaded 1081ms → ことばが出るのは1571ms）。"""
     db = get_db()
     rows = db.execute(
-        "SELECT id, name, is_default, archived, created_by, locked_at, position_index"
+        "SELECT id, name, is_default, archived, created_by, locked_at, position_index,"
+        "       pos_x, pos_y"
         "  FROM rooms WHERE deleted_at IS NULL"
         "  ORDER BY COALESCE(position_index, 1000000), id").fetchall()
     me = session.get("uid")
@@ -4501,6 +4623,9 @@ def _rooms_payload():
               "is_default": bool(r["is_default"]), "archived": bool(r["archived"]),
               # 席番号（円配置）。NULL のまま来た部屋は画面側が末尾へ座らせる
               "seat": r["position_index"],
+              # 島の席＝意味の地図の上の位置（2026-08-02・単位はRMS半径1）。
+              # 隔たりだけが意味を持つ。画面側が寸法へ直し、重なりだけを解く。
+              "mx": r["pos_x"], "my": r["pos_y"],
               # mine は「消せるかもしれない部屋」を本人の画面にだけ示すためのもの。
               # 誰が作ったかは他人には決して返さない（部屋にも作者を出さない）。
               "mine": bool(me and r["created_by"] == me and not r["locked_at"]),
