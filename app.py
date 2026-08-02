@@ -4490,6 +4490,65 @@ def _room_centroids(db):
     return out, np
 
 
+def _bend_ring(X, S, np):
+    """地図を曲げる（2026-08-03・Kosei確定）。
+
+    意味の空間では「気持ちそのものの名」（よろこび・かなしみ・つらさ…）が一つの
+    家族を作っていて、「学校」「仕事」型の名のどれからも遠い。測り方を変えても
+    消えない（名前だけ1.93／名前＋中身2.03／順位で測り直して2.04）ので、これは
+    数字の事故ではなくこの宙の構造——なのに、そのまま平面に置くと二つの大陸の
+    あいだに誰も居ない海ができる。
+    そこで一次元目を「遠さ」ではなく**囲み**として読む：少数派の群を、多数派の
+    大陸を取り巻く環にする。環の並びは、隣どうしがいちばん似る一周（総当たりで解く）。
+    環の向きは、それぞれが「いちばん似た大陸の島」のある方角に立つように回す。
+    半径は方角ごとの海岸線に合わせる＝環は陸の形に沿う。
+    群が割れていない地図（大きな隙間が無い）なら、何もしないでそのまま返す。"""
+    import itertools
+    u = X[:, 0]
+    order = np.argsort(u)
+    n = len(u)
+    gaps = [(float(u[order[k + 1]] - u[order[k]]), k) for k in range(n - 1)]
+    ok = [(g, k) for g, k in gaps
+          if 2 <= min(k + 1, n - k - 1) <= n * 0.45]
+    if not ok:
+        return X, None
+    g, k = max(ok)
+    if g < 3.0 * float(np.median([x for x, _ in gaps])):
+        return X, None            # ひと続きの地図。曲げる理由が無い
+    lo, hi = list(order[:k + 1]), list(order[k + 1:])
+    rim, core = (lo, hi) if len(lo) < len(hi) else (hi, lo)
+    P = X - X[core].mean(0)
+    Rc = float(np.linalg.norm(P[core], axis=1).max()) or 1.0
+    if len(rim) <= 9:             # 一周の並び（8室までなら総当たりで最良が出る）
+        best, bs = None, -1e9
+        head = rim[0]
+        for perm in itertools.permutations(rim[1:]):
+            cyc = (head,) + perm
+            s = sum(float(S[cyc[i], cyc[(i + 1) % len(cyc)]]) for i in range(len(cyc)))
+            if s > bs:
+                bs, best = s, cyc
+        rim = list(best)
+    else:
+        rim = sorted(rim, key=lambda i: float(P[i, 1]))
+    phi = np.array([np.arctan2(*reversed(P[max(core, key=lambda c: S[i, c])]))
+                    for i in rim])
+    m = len(rim)
+    best, bs = (1, 0), -1e9
+    for d in (1, -1):
+        for r in range(m):
+            th = np.array([2 * np.pi * d * ((j + r) % m) / m for j in range(m)])
+            s = float(np.cos(th - phi).sum())
+            if s > bs:
+                bs, best = s, (d, r)
+    d, r = best
+    for j, i in enumerate(rim):
+        th = 2 * np.pi * d * ((j + r) % m) / m
+        e = np.array([np.cos(th), np.sin(th)])
+        coast = max(float(P[c] @ e) for c in core)      # その方角の海岸線
+        P[i] = (max(coast, Rc * 0.45) + Rc * 0.30) * e
+    return P, rim
+
+
 def _seat_rooms_xy(db):
     """島の席を、意味の地図の上に置く（2026-08-02）。冪等——座標を持つ部屋は動かさない。
 
@@ -4527,10 +4586,14 @@ def _seat_rooms_xy(db):
             j = int(np.argmax(np.abs(col)))
             if col[j] < 0:
                 X[:, k] = -col
+        X, rim = _bend_ring(X, S, np)          # 遠い少数派は、大陸を取り巻く環へ
         rms = float(np.sqrt((X ** 2).sum(1).mean())) or 1.0
         X = X / rms                                        # 平均の隔たりを1に
         for k, i in enumerate(ids):
             put[i] = (float(X[k, 0]), float(X[k, 1]))
+        if rim:
+            print("[たより] 地図を曲げた（環）: "
+                  + " ".join(str(ids[i]) for i in rim), flush=True)
     else:
         for i in need:
             wsum, ax, ay = 0.0, 0.0, 0.0

@@ -185,7 +185,7 @@ function paperOf(w){
 let islands=new Map();   // room_id -> {el,wordsEl,cx,cy,R,words:[]}
 function islandR(n){ return 150+62*Math.sqrt(n); }
 const ISL_GAP=150;       // 島と島のあいだ（岸から岸まで）。ここを詰めると陸は繋がる
-let ISL_GRAV=0.012;      // 宙の真ん中へ寄せる弱い重み（地図の空洞を埋めるぶんだけ）
+let ISL_GRAV=0.006;      // 宙の真ん中へ寄せる弱い重み（地図の空洞を埋めるぶんだけ）
 /* 島の席（2026-08-02 に「生まれた順の渦」から「意味の地図」へ）。
    サーバが部屋の重心から二次元の地図（mx,my）を配る。画面はそれを寸法へ直し、
    重なりだけを解く。
