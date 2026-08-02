@@ -261,7 +261,7 @@ function bootOr(k,url){
   </div>
 {% endif %}
 {% if logged_in %}
-  <div class="arrivals" id="arrivals" aria-live="polite"></div>
+  {# arrivals はこの上（書く柱の前）に一枚だけ。二枚あった片方は id が死んでいた（2026-08-03） #}
   <div class="read" id="readPane" role="dialog" aria-modal="true" aria-label="降りてきたことば" aria-hidden="true">
     <div class="read-inner">
       <div class="read-body" id="readBody" tabindex="-1"></div>
@@ -288,6 +288,9 @@ function bootOr(k,url){
       <button id="zin" type="button" aria-label="宙に寄る">＋</button>
       <button id="zout" type="button" aria-label="宙から引く">−</button>
     </div>
+    {# 島に降りている間だけ立つ、引き返す語（2026-08-03 操作性）。
+       出る道が「つまむ・−の連打」しか無かった。押せば全景へ滑って戻る。 #}
+    <button class="sky-home" id="skyHome" type="button">宙へもどる</button>
   </div>
   <p class="foot">ひとつづきの宙</p>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->

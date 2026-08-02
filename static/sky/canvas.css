@@ -215,9 +215,23 @@
   .zoom button{background:none;border:none;
         color:var(--ink-3);font-family:inherit;font-size:19px;line-height:1;
         width:var(--touch);min-height:var(--touch);padding:0;
-        transition:color .22s var(--ease)}
+        transition:color .22s var(--ease);
+        touch-action:none}   /* 押し続けの寄り引き（pointerdown 連打）を巻き取らせない */
   .zoom button:hover{color:var(--ink-1)}
   .zoom button:active{opacity:.62}
+  /* 引き返す語（2026-08-03 操作性）。島に降りている間（body.reading）だけ立つ。
+     語で押す作法のまま、罫一本を下に敷く——器は作らない（宙の中の道具ではなく出口）。 */
+  .sky-home{background:none;border:none;font-family:inherit;
+        color:var(--ink-3);font-size:12.5px;letter-spacing:.2em;
+        min-height:var(--touch);padding:0 2px 0 6px;
+        border-bottom:1px solid transparent;
+        opacity:0;pointer-events:none;visibility:hidden;
+        /* 畳んだ面は visibility も畳む（v4作法）。残すと消えた語に焦点の輪だけが立つ */
+        transition:opacity .6s var(--ease),color .22s var(--ease),visibility 0s .6s}
+  body.reading .sky-home{opacity:1;pointer-events:auto;visibility:visible;
+        transition:opacity .6s var(--ease),color .22s var(--ease)}
+  .sky-home:hover{color:var(--ink-1);border-bottom-color:var(--rule-faint)}
+  .sky-home:active{opacity:.62}
   /* ── 言葉の漂流物：島の岸（§4.4）。人のことばと同じ姿では置かない——
         色を持たず、紙に染みた淡墨。書かれもしない（打鍵の再生から除外） ── */
   .w.pd{color:var(--ink-3);text-shadow:0 0 16px rgba(179,143,111,.20)}

@@ -621,6 +621,10 @@ function sheet(isl){
   moving(isl);
   // 読んでいる間、宙は一つの様式だけになる（まわりの島は名と灯＝地形に還る）
   document.body.classList.add('reading');
+  // 足元の名＝いま居る場所。つまみで流れ着いた島でもURLを書き換えておく
+  // （リロードで同じ島に立てる）。積まない＝ジェスチャは履歴を伸ばさない。
+  footNames(isl.room.name);
+  if(typeof noteRoomURL==='function')noteRoomURL(isl.room.id,false);
   isl.el.classList.add('sheet');
   sheetLayout(isl,true);
   // 流れ着き終わったら遅れは畳む（残すと、受け止めや検索の応答まで遅れて見える）
@@ -633,10 +637,18 @@ function unsheet(isl){
   isl.sheeted=false;
   moving(isl);
   document.body.classList.remove('reading');
+  footNames(null);
+  if(typeof noteRoomURL==='function'&&sheetWant==null)noteRoomURL(null,false);
   isl.el.classList.remove('sheet');
   clearTimeout(isl._stgT);
   isl.words.forEach(el=>{el.style.transform='';el.style.transitionDelay='';});
   apply();
+}
+/* 足元の一行＝いま居る場所の名。島に降りている間はその島の名、全景では面の名。
+   「どこに居るのか分からない」への、いちばん静かな答え（2026-08-03 操作性）。 */
+function footNames(name){
+  const f=document.querySelector('.foot');
+  if(f)f.textContent=name||'ひとつづきの宙';
 }
 /* ── 寄る・引く・つまむ ─────────────────────────── */
 let K=0.5, PX=0, PY=0;             // 倍率と、世界の原点の画面上の位置
@@ -753,8 +765,26 @@ vp.addEventListener('wheel',e=>{
   e.preventDefault();
   zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*0.0016));
 },{passive:false});
-document.getElementById('zin').addEventListener('click',()=>zoomAt(VW/2,VH/2,1.45));
-document.getElementById('zout').addEventListener('click',()=>zoomAt(VW/2,VH/2,1/1.45));
+/* ＋−は押し続けられる（2026-08-03 操作性）。ひと押し＝一段、350ms押し続けたら
+   そこから小刻みに寄り続ける。click ではなく pointerdown で受ける——click だと
+   一段ずつ何度も押し直すしかなく、遠くまで引くのに六連打が要った。 */
+(function(){
+  let rpT=0,rpI=0;
+  function stopRepeat(){ clearTimeout(rpT); clearInterval(rpI); rpT=0; rpI=0; }
+  function holdZoom(btn,f){
+    btn.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      zoomAt(VW/2,VH/2,f);
+      rpT=setTimeout(()=>{ rpI=setInterval(()=>zoomAt(VW/2,VH/2,f>1?1.13:1/1.13),120); },350);
+    });
+    ['pointerup','pointercancel','pointerleave'].forEach(t=>btn.addEventListener(t,stopRepeat));
+    // 鍵盤（Enter/Space）からは click で来る。pointerdown を踏んだ指の click は
+    // detail>0 ＝もう一段になるので、鍵盤（detail 0）だけを通す。
+    btn.addEventListener('click',e=>{ if(!e.detail)zoomAt(VW/2,VH/2,f); });
+  }
+  holdZoom(document.getElementById('zin'),1.45);
+  holdZoom(document.getElementById('zout'),1/1.45);
+})();
 // つまむ・ひきずる（1本＝パン、2本＝ピンチ。タップ判定は移動6px未満）
 const ptrs=new Map(); let moved=0, pinchD=0;
 vp.addEventListener('pointerdown',e=>{
@@ -790,6 +820,7 @@ vp.addEventListener('pointermove',e=>{
    机の上では起きないので長く見つからなかった）。
    だから、離した場所を自分で見る：6px未満しか動いていなければ、その座標の下に
    居るものを elementFromPoint で引き当てて、受け止めか、島への戸として扱う。 */
+let lastTap=null;   // 空白の二度叩き＝寄る（地図の常套。ことばの上では効かせない）
 function tapAt(x,y){
   const t=document.elementFromPoint(x,y);
   if(!t)return;
@@ -801,7 +832,14 @@ function tapAt(x,y){
     }
   }
   const el=t.closest('.w');
-  if(el)hold(el,x,y); else release();
+  if(el){ lastTap=null; hold(el,x,y); return; }
+  release();
+  /* 何も無いところを、続けて二度。時計は performance.now だけ（rAFとは混ぜない）。
+     48px は指の着地のぶれ。ことばの上は受け止め（上で return 済み）なので効かない。 */
+  const now=performance.now();
+  if(lastTap&&now-lastTap.t<400&&Math.hypot(x-lastTap.x,y-lastTap.y)<48){
+    lastTap=null; zoomAt(x,y,1.9);
+  }else lastTap={t:now,x,y};
 }
 function ptrUp(e){
   const had=ptrs.has(e.pointerId);
@@ -1162,10 +1200,26 @@ function fitK(isl){
   return k;
 }
 let sheetLock=null;      // 滑走中の行き先（着くまでは「居る」として扱う）
+/* ── 居場所とURLを揃える（2026-08-03 操作性）──────────────────────
+   島へ降りるたび `/mood?room=<id>` を履歴へ積む。携帯の戻る＝「島から宙へ」
+   「前の島へ」になり、リロードしても同じ島に立てる（?room= はサーバが既に読む）。
+   積むのは flyTo（意志のある移動）だけ。つまみ・ひきずりで島を出入りした時は
+   replace で書き換えるだけ＝ジェスチャの数だけ履歴が伸びることはない。 */
+function urlRoom(){ const m=location.search.match(/[?&]room=(\d+)/); return m?+m[1]:null; }
+let navQuiet=false;      // popstate から呼ばれた移動は、履歴へ積み直さない
+function noteRoomURL(id,push){
+  try{
+    if(urlRoom()===id)return;
+    const u=id!=null?('/mood?room='+id):'/mood';
+    if(push&&!navQuiet)history.pushState({room:id},'',u);
+    else history.replaceState({room:id},'',u);
+  }catch(e){}
+}
 function flyTo(isl){
   release();
   gatherHide();
   const k=fitK(isl);
+  noteRoomURL(isl.room.id,true);
   sheetLock=isl.room.id;
   isl._flown=true;     // 岸が着いたら、もう一度だけ寸法を見直してよい印
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
@@ -1179,6 +1233,37 @@ function flyTo(isl){
                    sheetLock=null;   // ここから先は、敷かれているかどうかだけで見る
                    views=null; applyNow(); markMenuRoom(); },1200);
 }
+/* ── 宙へもどる（全景）──────────────────────────────────
+   島に降りたあと、引き返す道が「つまむ・−を何度も」しか無かった。
+   全景の倍率は立ち上がりと同じ式（全島が収まるところ）。滑走の作法は flyTo と同じ。 */
+function overview(){
+  release();
+  gatherHide();
+  let mx=0; islands.forEach(i=>{ mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R); });
+  const k=Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/((mx||900)*2.15)));
+  noteRoomURL(null,true);
+  world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
+  document.body.classList.add('flying');
+  views=[[PX,PY,K],[0,0,k]];
+  K=k; PX=0; PY=0;
+  applyNow();
+  setTimeout(()=>{ world.style.transition='';
+                   document.body.classList.remove('flying');
+                   views=null; applyNow(); markMenuRoom(); },1200);
+}
+(function(){
+  const b=document.getElementById('skyHome');
+  if(b)b.addEventListener('click',()=>overview());
+})();
+/* 戻る＝ひとつ前の眺めへ。島のidが載っていればその島へ、無ければ全景へ。 */
+addEventListener('popstate',e=>{
+  const r=(e.state&&typeof e.state.room==='number')?e.state.room:urlRoom();
+  navQuiet=true;
+  try{
+    if(r!=null&&islands.has(+r))flyTo(islands.get(+r));
+    else overview();
+  }finally{ navQuiet=false; }
+});
 function castLand(isl,poem,color,steps){
   const el=document.createElement('div');
   el.className='w';
@@ -2229,6 +2314,40 @@ world.addEventListener('keydown',e=>{
   }
   if(e.key==='Escape')release();
 });
+/* ── 鍵盤で宙を動かす（2026-08-03 操作性）───────────────────
+   矢印＝ひきずり、＋−＝寄り引き、0＝全景、Escape＝島から宙へ。
+   入力中・柱や戸が開いている間は、宙には触らない。
+   capture で受ける：Escape は「開いているものを閉じる」が常に先で、宙へ引くのは
+   何も開いていない時だけ。柱や戸の Escape（bubble）より前に、開いている姿の
+   まま見なければ、閉じたその同じ一押しで宙まで引いてしまう。 */
+document.addEventListener('keydown',e=>{
+  if(e.isComposing||e.metaKey||e.ctrlKey||e.altKey)return;
+  const t=e.target;
+  if(t&&t.closest&&t.closest('input,textarea,select,[contenteditable="true"]'))return;
+  const cast=document.getElementById('castPane'), read=document.getElementById('readPane');
+  if(cast&&cast.classList.contains('on'))return;
+  if(read&&read.classList.contains('on'))return;
+  if(!gatherEl.hidden)return;
+  if(e.key==='Escape'){
+    // 受け止め中・戸・放った合図は、それぞれの Escape が先に引き受ける
+    const menu=document.getElementById('logoMenu'), veil=document.getElementById('sentVeil');
+    if(held)return;
+    if(menu&&!menu.hasAttribute('hidden'))return;
+    if(veil&&veil.classList.contains('on'))return;
+    if(sheetId!=null&&!document.body.classList.contains('flying'))overview();
+    return;
+  }
+  const step=120;
+  switch(e.key){
+    case 'ArrowLeft':  PX+=step; apply(); e.preventDefault(); break;
+    case 'ArrowRight': PX-=step; apply(); e.preventDefault(); break;
+    case 'ArrowUp':    PY+=step; apply(); e.preventDefault(); break;
+    case 'ArrowDown':  PY-=step; apply(); e.preventDefault(); break;
+    case '+': case '=': zoomAt(VW/2,VH/2,1.3); e.preventDefault(); break;
+    case '-': case '_': zoomAt(VW/2,VH/2,1/1.3); e.preventDefault(); break;
+    case '0': overview(); e.preventDefault(); break;
+  }
+},true);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape')release(); });
 
 /* ════ 読む柱・降りてきました・開く（mood.html 3979-4141 から移植）════ */
