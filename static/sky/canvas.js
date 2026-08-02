@@ -2199,18 +2199,22 @@ Promise.all([
 
   const N=240;                       // 直近4秒ぶん（60fps換算）
   const dt=new Float32Array(N), ges=new Uint8Array(N);
-  let n=0, prev=0, selfMs=0, selfMax=0;
-  let gesture=false, gesEnd=0;
+  let n=0, prev=0, selfMs=0, selfMax=0, fastest=1e9;
 
   /* 手がふれている間だけを別に集める。止まっている宙の 16.7ms を何百個
-     混ぜると、肝心のつまんでいる最中の山が中央値に埋もれる。 */
-  const touch=()=>{gesture=true;gesEnd=0;};
-  const untouch=()=>{gesEnd=1;};
+     混ぜると、肝心のつまんでいる最中の山が中央値に埋もれる。
+     2026-08-02 改訂：時計で窓を切らず、**フレームを数える**。イベント側の
+     performance.now() と rAF の時刻を比べると、混ぜてはいけない二つの時計を
+     混ぜることになる（7/27 に打鍵の再生が携帯で動かなかったのがそれ）。
+     入力が来たら20フレームぶん旗を立て、フレームごとに1つ倒す——つまみ終わりの
+     余韻まで拾えるし、＋／− のボタンでも1回ぶんは必ず数えられる。 */
+  let gesFrames=0;
+  const touch=()=>{gesFrames=20;};
   vp.addEventListener('pointerdown',touch,true);
   vp.addEventListener('pointermove',e=>{if(e.buttons)touch();},true);
-  addEventListener('pointerup',untouch,true);
-  addEventListener('pointercancel',untouch,true);
-  vp.addEventListener('wheel',()=>{touch();untouch();},true);
+  vp.addEventListener('wheel',touch,true);
+  document.getElementById('zin').addEventListener('click',touch,true);
+  document.getElementById('zout').addEventListener('click',touch,true);
 
   /* 自前の所要時間も残しておく（比べるものが無いと「ブラウザの分」が言えない）。
      applyNow は関数宣言＝書き換えられる束縛で、apply() は呼ぶ時にその時の値を
@@ -2253,10 +2257,23 @@ Promise.all([
     reset();
   });
   mk('ならす',()=>reset());
+  /* 二つ目の分かれ道（2026-08-02）。字を消しても 33ms が動かなかったので、
+     次は**宙ごと**消す。宙を消しても 33ms のままなら、その33msは宙の外にある
+     ——画面の速度そのものか、宙以外の何かが毎フレーム走っている。
+     visibility ではなく display:none にするのは、版面の計算ごと外すため
+     （字を消した時に何も変わらなかったのは、visibility が版面を残すからでもある）。 */
+  let noSky=false;
+  const bSky=mk('宙を消す',()=>{
+    noSky=!noSky;
+    world.style.display=noSky?'none':'';
+    bSky.textContent=noSky?'宙を戻す':'宙を消す';
+    reset();
+  });
   /* 携帯では5行を指で選ぶのが難しい。押した時の姿だけで「写った」と分かるようにする
      （クリップボードが使えない場でも、選べる面は上に残してある）。 */
   const bCopy=mk('写す',async()=>{
-    const t=(hidden?'【字を消した状態】\n':'【字あり】\n')
+    const t='【'+(hidden?'字なし':'字あり')+'・'+(noSky?'宙なし':'宙あり')+'】\n'
+      +'画面 '+(screen.width+'×'+screen.height)+' dpr'+devicePixelRatio+'\n'
       +navigator.userAgent+'\n'+out.textContent;
     try{ await navigator.clipboard.writeText(t); bCopy.textContent='写した'; }
     catch(_){ bCopy.textContent='選んで写して'; }
@@ -2268,7 +2285,7 @@ Promise.all([
   document.head.appendChild(st);
   document.body.appendChild(box);
 
-  function reset(){ n=0; prev=0; selfMax=0; }
+  function reset(){ n=0; prev=0; selfMax=0; fastest=1e9; }
 
   function pct(a,p){
     if(!a.length)return 0;
@@ -2281,9 +2298,10 @@ Promise.all([
     if(prev){
       const d=now-prev;
       const i=n%N;
-      dt[i]=d; ges[i]=gesture?1:0;
+      dt[i]=d; ges[i]=gesFrames>0?1:0;
+      if(d<fastest&&d>0)fastest=d;   // 一度でも出た最速＝この画面が出せる上限
       n++;
-      if(gesEnd){ gesture=false; gesEnd=0; }
+      if(gesFrames>0)gesFrames--;
     }
     prev=now;
 
@@ -2303,6 +2321,10 @@ Promise.all([
         '手がふれている間  '+(g.length?f(pct(g,.5))+' / '+f(pct(g,.95))+' / '+f(g[g.length-1]):'—')+' ms\n'
         +'                  中央 / p95 / 最悪   ('+g.length+'枚)\n'
         +'ぜんぶ            '+(all.length?f(pct(all,.5))+' / '+f(pct(all,.95)):'—')+' ms\n'
+        /* いちばん速かった一枚＝この画面が出せる上限。ここが 16.7 付近なら画面は
+           60Hz で、33ms は**落としている**。ここも 33 なら画面が 30Hz ＝
+           落としてなどおらず、測っていたのは画面の速度のほうだった。 */
+        +'最速の一枚        '+(fastest<1e9?f(fastest)+' ms'+(fastest<20?'（画面は60Hz以上）':'（画面が'+Math.round(1000/fastest)+'Hz）'):'—')+'\n'
         +'うち自前のJS      '+f(selfMs)+' ms（最悪 '+f(selfMax)+'）\n'
         +'倍率 K            '+K.toFixed(3)+(document.body.classList.contains('far')?'  遠景':'  近景')
         +(document.body.classList.contains('crisp')?'・光暈なし':'')+'\n'
