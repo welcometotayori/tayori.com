@@ -1,0 +1,33 @@
+# Docker のビルド文脈から外すもの（2026-08-02）
+#
+# .gitignore は Docker には効かない。ここを書き忘れると、tayori.db（201MB）が
+# そのままイメージに焼かれる——**永続ディスクに載っているはずの本体が、
+# デプロイのたびに古い姿で上書きされる**という、いちばん静かな事故になる。
+
+# 本体（永続ボリューム /var/data の側にだけ在るべきもの）
+*.db
+*.db-wal
+*.db-shm
+*.db.bak-*
+*.db.local-backup
+
+# 器の外の道具
+.git/
+.gitignore
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# 秘密（fly secrets set で入れる。焼かない）
+.env
+.secret_key
+
+# 手元でしか使わないもの
+.claude/
+.agents/
+demo/
+tayori.code-workspace
+progress.txt
+dephasing.html

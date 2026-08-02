@@ -1,0 +1,88 @@
+# たより — Fly.io の設定（2026-08-02・試しデプロイ用）
+#
+# これは**まだ本番ではない**。tayori-nrt.fly.dev に、DBの写しを載せて立てて、
+# 東京から測るためのもの（手順は docs/fly-rehearsal.md）。
+# 数字を見て「移す」と決めてから、app 名とドメインを本番のものに替える。
+#
+# Render を消さずに並べて立てられるのは、コードに Render 固有の分岐が
+# 一行も無いから（`grep RENDER app.py` がゼロ件）。器の違いは env だけで吸える。
+
+app = "tayori-nrt"
+primary_region = "nrt"          # 東京。ここがこの引っ越しの唯一の目的
+
+[build]
+  # Dockerfile を使う。builder も buildpack も指定しない
+
+# ── 素の値（秘密は fly secrets set で別に入れる）────────────────
+[env]
+  TAYORI_DB_PATH = "/var/data/tayori.db"
+  TAYORI_PRODUCTION = "1"
+  TAYORI_ENABLE_NETWORK = "1"
+  TAYORI_SEARCH_AI = "1"
+
+  # 【Render との唯一の実質的な違い】
+  # Render の /var/data はネットワーク越しのディスクで遅いので、app.py は既定で
+  # 「/tmp に生きたDBを置き、30秒ごとに永続側へ写す」形（_LOCAL_CACHE）で動く。
+  # これは 201MB を 30 秒ごとに二度コピーしており、かつ**落ちると直近30秒の
+  # 書き込みが消える**。Fly のボリュームは機械に直付けの NVMe なので、
+  # 迂回する理由が無い＝ボリュームの上で直に動かす。
+  # 試しデプロイでは 0 と 1 の両方で測って、体感が変わらないことを確かめること。
+  TAYORI_DB_LOCAL_CACHE = "0"
+
+  # 仮ホストの間は、メールの中のリンクもここを向く（本番ドメインに向けない）
+  TAYORI_BASE_URL = "https://tayori-nrt.fly.dev"
+
+  TAYORI_SMTP_HOST = "smtp.resend.com"
+  TAYORI_SMTP_PORT = "587"
+  TAYORI_SMTP_USER = "resend"
+  TAYORI_MAIL_FROM = "tayori-たより- <no-reply@tayori-letter.com>"
+
+# ── 永続ボリューム ────────────────────────────────────────
+# ここに tayori.db（201MB）が載る。デプロイでイメージは入れ替わるが、
+# ここは入れ替わらない。3GB にしてあるのは、201MB の本体＋バックアップの
+# 一時ファイル（_persist_to_durable / _run_backup_to_s3 が作る .tmp）が
+# 同じ床に同居しても詰まらない余白のため。
+[[mounts]]
+  source = "tayori_data"
+  destination = "/var/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # 【この二行が、この構成でいちばん壊れやすいところ】
+  # 止めてはいけない。止まると通知ループ（30秒ごとの配達と天気待ち伏せ）も、
+  # 探すの板（100MBを別スレッドで積んだもの）も、一緒に消える。
+  # 次に誰かが来たとき、板を積み直す数十秒を、その人が全部待つことになる。
+  auto_stop_machines = false
+  min_machines_running = 1
+  auto_start_machines = true    # それでも止まってしまったときの、最後の保険
+
+  # 生きているかの確認。専用の口は作っていないので、DBもテンプレートも
+  # 通らない /robots.txt を叩く（起動の速さを測るのにも同じ口を使う）。
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"        # 起動直後は init_db とマイグレーションが走る
+    method = "GET"
+    path = "/robots.txt"
+
+# ── 器 ────────────────────────────────────────────────
+# 1GB。512MB にしない——探すの板を積む瞬間に山ができる（2026-08-01 に Render で
+# 597MB まで膨らんでプロセスごと落ちた実績がある。いまは板を先に確保する形に
+# 直して 102MB で収まっているが、余白の無い器で走る理由が無い）。
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[deploy]
+  # 単機かつ SQLite なので、**新旧が一瞬でも並んで立ってはいけない**（書き手が
+  # 二人になる）。bluegreen も canary も二台目を作るので使えない。immediate は
+  # 止めてから入れ替える＝十数秒の窓と引き換えに、書き手を一人に保つ。
+  strategy = "immediate"
+
+# SIGTERM を受けたら、app.py 側の atexit / signal ハンドラが最後の書き出しを
+# する（_LOCAL_CACHE を切っていれば何もしない）。gunicorn が受けている要求を
+# 捌き終わる余裕として 30 秒。
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
