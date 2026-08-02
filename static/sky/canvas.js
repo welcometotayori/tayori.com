@@ -2285,7 +2285,9 @@ Promise.all([
   document.head.appendChild(st);
   document.body.appendChild(box);
 
-  function reset(){ n=0; prev=0; selfMax=0; fastest=1e9; }
+  /* selfMs も一緒に捨てる。前は最悪だけ0に戻していたので、直近値だけが古いまま
+     残り「1.0 ms（最悪 0.0）」という、読んだ人が二度見する行が出ていた。 */
+  function reset(){ n=0; prev=0; selfMs=0; selfMax=0; fastest=1e9; }
 
   function pct(a,p){
     if(!a.length)return 0;
