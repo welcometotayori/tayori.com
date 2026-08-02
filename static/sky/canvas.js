@@ -2179,3 +2179,123 @@ Promise.all([
   p.textContent='いまは、宙をひらけません。';
   document.body.appendChild(p);
 });
+
+/* ════ フレームの計器（2026-08-02・`?fps=1` を付けた時だけ立つ）════════════
+   7/31 に「パン 0.06〜0.31ms/フレーム」と測って JS を無罪にしたが、あれは
+   **自前のJSが走っている時間**だった。ガクツキは、そのJSが return したあとに
+   ブラウザがやる仕事——スタイルの再計算・レイアウト・ペイント・ラスタライズ・
+   合成——で起きる。自分の関数の中にストップウォッチを置く限り、そこは永遠に
+   見えない。だから測るのは rAF と rAF の**あいだ**：その一区間に、自前の分も
+   ブラウザの分も、全部が入っている。
+
+   時計は rAF が渡してくる引数だけを使う（performance.now() と混ぜない——
+   2026-07-27 に打鍵の再生が携帯で動かなかったのは、この二つを混ぜたせい）。
+
+   「字を消す」は決め手の実験。字を消してなめらかに動くなら、重いのは
+   **倍率が変わるたびに数百枚の字を描き直す仕事**で、直す場所は間引きの
+   さじ加減ではなく、遠景の描き方そのものになる。 */
+(function(){
+  if(!/[?&]fps=1(&|$)/.test(location.search))return;
+
+  const N=240;                       // 直近4秒ぶん（60fps換算）
+  const dt=new Float32Array(N), ges=new Uint8Array(N);
+  let n=0, prev=0, selfMs=0, selfMax=0;
+  let gesture=false, gesEnd=0;
+
+  /* 手がふれている間だけを別に集める。止まっている宙の 16.7ms を何百個
+     混ぜると、肝心のつまんでいる最中の山が中央値に埋もれる。 */
+  const touch=()=>{gesture=true;gesEnd=0;};
+  const untouch=()=>{gesEnd=1;};
+  vp.addEventListener('pointerdown',touch,true);
+  vp.addEventListener('pointermove',e=>{if(e.buttons)touch();},true);
+  addEventListener('pointerup',untouch,true);
+  addEventListener('pointercancel',untouch,true);
+  vp.addEventListener('wheel',()=>{touch();untouch();},true);
+
+  /* 自前の所要時間も残しておく（比べるものが無いと「ブラウザの分」が言えない）。
+     applyNow は関数宣言＝書き換えられる束縛で、apply() は呼ぶ時にその時の値を
+     読むので、ここで包んでも経路は変わらない。 */
+  const rawApply=applyNow;
+  applyNow=function(){
+    const t0=performance.now();
+    rawApply();
+    selfMs=performance.now()-t0;
+    if(selfMs>selfMax)selfMax=selfMs;
+  };
+
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;z-index:60;left:8px;bottom:calc(96px + env(safe-area-inset-bottom));'
+    +'padding:8px 10px;border-radius:8px;background:rgba(8,8,13,.88);'
+    +'border:1px solid rgba(179,143,111,.3);color:#FAF8F3;'
+    +'font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;'
+    +'white-space:pre;pointer-events:auto;-webkit-user-select:none;user-select:none';
+  const out=document.createElement('div');
+  const btns=document.createElement('div');
+  btns.style.cssText='display:flex;gap:6px;margin-top:6px';
+  const mk=(label,fn)=>{
+    const b=document.createElement('button');
+    b.textContent=label;
+    b.style.cssText='flex:1;padding:7px 6px;min-height:32px;background:rgba(250,248,243,.08);'
+      +'border:1px solid rgba(179,143,111,.3);border-radius:6px;color:#FAF8F3;'
+      +'font:inherit;letter-spacing:.06em';
+    b.addEventListener('click',fn);
+    btns.appendChild(b);
+    return b;
+  };
+  let hidden=false;
+  const bHide=mk('字を消す',()=>{
+    hidden=!hidden;
+    document.body.classList.toggle('fps-nowords',hidden);
+    bHide.textContent=hidden?'字を戻す':'字を消す';
+    reset();
+  });
+  mk('ならす',()=>reset());
+  box.appendChild(out); box.appendChild(btns);
+  const st=document.createElement('style');
+  st.textContent='body.fps-nowords .w{visibility:hidden!important}';
+  document.head.appendChild(st);
+  document.body.appendChild(box);
+
+  function reset(){ n=0; prev=0; selfMax=0; }
+
+  function pct(a,p){
+    if(!a.length)return 0;
+    const i=Math.min(a.length-1,Math.max(0,Math.round((a.length-1)*p)));
+    return a[i];
+  }
+
+  let paintAt=0;
+  requestAnimationFrame(function frame(now){
+    if(prev){
+      const d=now-prev;
+      const i=n%N;
+      dt[i]=d; ges[i]=gesture?1:0;
+      n++;
+      if(gesEnd){ gesture=false; gesEnd=0; }
+    }
+    prev=now;
+
+    if(now-paintAt>250){
+      paintAt=now;
+      const m=Math.min(n,N);
+      const all=[], g=[];
+      for(let i=0;i<m;i++){ all.push(dt[i]); if(ges[i])g.push(dt[i]); }
+      all.sort((a,b)=>a-b); g.sort((a,b)=>a-b);
+      let vis=0, tot=0, isl=0;
+      islands.forEach(is=>{
+        if(!is.off)isl++;
+        is.words.forEach(el=>{ tot++; if(!is.off&&!el._off)vis++; });
+      });
+      const f=x=>x.toFixed(1);
+      out.textContent=
+        '手がふれている間  '+(g.length?f(pct(g,.5))+' / '+f(pct(g,.95))+' / '+f(g[g.length-1]):'—')+' ms\n'
+        +'                  中央 / p95 / 最悪   ('+g.length+'枚)\n'
+        +'ぜんぶ            '+(all.length?f(pct(all,.5))+' / '+f(pct(all,.95)):'—')+' ms\n'
+        +'うち自前のJS      '+f(selfMs)+' ms（最悪 '+f(selfMax)+'）\n'
+        +'倍率 K            '+K.toFixed(3)+(document.body.classList.contains('far')?'  遠景':'  近景')
+        +(document.body.classList.contains('crisp')?'・光暈なし':'')+'\n'
+        +'ことば            '+vis+' / '+tot+' 枚を描画中（島 '+isl+'）';
+    }
+    requestAnimationFrame(frame);
+  });
+})();
