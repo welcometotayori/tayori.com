@@ -302,6 +302,14 @@
   .seek button#seekBack:hover{background:rgba(250,248,243,.12);color:var(--ink-1)}
   .seek button#seekBack:active{opacity:.62}
   .seek.seeking{border-color:var(--rule-act)}
+  /* 探しているあいだ（2026-08-02）。選別が入って待ちが1秒ほど生まれたので、
+     黙って固まらないよう、虫眼鏡だけが息をする。線は動かさない＝騒がない。 */
+  .seek.waiting{border-color:var(--rule-act)}
+  .seek.waiting .seek-ic{animation:seek-breath 1.6s var(--ease) infinite}
+  @keyframes seek-breath{0%,100%{opacity:.42}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){
+    .seek.waiting .seek-ic{animation:none;opacity:.62}
+  }
   /* ── 集まってきた片（2026-08-02）──────────────────────────────
      返ってきたことばは、宙のどこに在っても、この面へ流れ着いて並ぶ。
      出どころ（画面に見えていた片はその場所から、見えていないものは宙の外から）

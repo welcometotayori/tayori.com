@@ -1101,6 +1101,7 @@ function seekRun(){
   if(!q||seekBusy)return;
   seekBusy=true;
   seekQ.blur();
+  seekEl.classList.add('waiting');   // 選別のぶんだけ待つ（server 側で1秒ほど）
   fetch('/api/sky/search?q='+encodeURIComponent(q))
     .then(r=>r.json().then(d=>({ok:r.ok,d})))
     .then(({ok,d})=>{
@@ -1115,7 +1116,7 @@ function seekRun(){
       gatherShow(q,d.words);
     })
     .catch(()=>{ whisper('いまは、<wbr>寄せられません。',5200); })
-    .finally(()=>{ seekBusy=false; });
+    .finally(()=>{ seekBusy=false; seekEl.classList.remove('waiting'); });
 }
 /* IME変換中の Enter・Escape は横取りしない（2026-07-29 に mood.html で踏んだ轍） */
 seekQ.addEventListener('keydown',e=>{
