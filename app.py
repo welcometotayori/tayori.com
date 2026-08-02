@@ -4642,6 +4642,44 @@ def _room_lights(db, limit=3):
         lights = out.setdefault(rid, [])
         if len(lights) < limit:
             lights.append(c)
+    # 人のことばで満たない部屋は、流れ着いたことばの色で灯る（2026-08-03）。
+    # 気持ちの名の7室（よろこび・かなしみ…）には人のことばが一通も無く、遠景で
+    # 名前だけが暗がりに浮いていた。灯は「その部屋にいまあることばの色」なので、
+    # 流れ着いたものの色もその部屋の色でよい——人の色を押しのけはしない（後ろに足す）。
+    for rid, cols in _drift_room_colors(db).items():
+        lights = out.setdefault(rid, [])
+        for c in cols:
+            if len(lights) >= limit:
+                break
+            if c not in lights:
+                lights.append(c)
+    return out
+
+
+# 流れ着いたことばの色は、宙が動いても変わらない（本の一節は色を変えない）。
+# 20万行の集計を要求のたびに走らせる場所ではないので、一時間ごとに一度だけ。
+_drift_colors_cache = {"t": 0.0, "map": {}}
+
+
+def _drift_room_colors(db, limit=3):
+    """部屋ごとの、流れ着いたことばの色（多い順・最大3）。"""
+    now = time.time()
+    if _drift_colors_cache["map"] and now - _drift_colors_cache["t"] < 3600:
+        return _drift_colors_cache["map"]
+    out = {}
+    try:
+        for r in db.execute(
+                "SELECT room_id, mood_color, COUNT(*) AS n FROM external_texts"
+                " WHERE room_id IS NOT NULL AND mood_color IS NOT NULL AND mood_color<>''"
+                " GROUP BY room_id, mood_color"
+                " ORDER BY room_id, n DESC, mood_color").fetchall():
+            cols = out.setdefault(r["room_id"], [])
+            if len(cols) < limit:
+                cols.append(r["mood_color"])
+    except Exception as e:
+        print(f"[たより] 流れ着いた色の集計に失敗（灯は人のことばだけ）: {e}", flush=True)
+        return _drift_colors_cache["map"]
+    _drift_colors_cache.update(t=now, map=out)
     return out
 
 

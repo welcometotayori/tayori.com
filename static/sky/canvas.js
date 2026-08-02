@@ -264,13 +264,20 @@ function build(rooms,words){
     isl.style.left=s.x+'px'; isl.style.top=s.y+'px';
     // 灯の気配（部屋の灯の色・最大3）。遠景で島を見分ける唯一の色
     const glow=document.createElement('div'); glow.className='isl-glow';
-    (s.room.lights||[]).slice(0,3).forEach((c,j)=>{
+    // 灯は島の心を挟んで並ぶ。一つしか無い部屋（人のことばがまだ無い島）でも
+    // 島の真ん中に灯るように、数で中心をとる（旧実装は j-1 固定で、一つだと左上に寄った）
+    const lit=(s.room.lights||[]).slice(0,3);
+    // 一つしか無い灯は、三つ重なった灯より薄く見える（重なりぶんの明るさが無い）。
+    // 数の少なさは「静かな部屋」として残しつつ、灯っていることは分かる濃さまで戻す。
+    const a=[0,0.22,0.17,0.13][lit.length]||0.13;
+    lit.forEach((c,j)=>{
       const g=document.createElement('span');
-      const d=Math.round(s.R*1.5);
+      const d=Math.round(s.R*(lit.length<2?1.7:1.5));
       g.style.width=g.style.height=d+'px';
-      g.style.left=((j-1)*s.R*0.35)+'px'; g.style.top=(j%2?s.R*0.2:-s.R*0.15)+'px';
+      g.style.left=((j-(lit.length-1)/2)*s.R*0.35)+'px';
+      g.style.top=(lit.length<2?0:(j%2?s.R*0.2:-s.R*0.15))+'px';
       g.style.background='radial-gradient(circle,'
-        +String(c).replace('hsl(','hsla(').replace(')',',.13)')+' 0%,transparent 70%)';
+        +String(c).replace('hsl(','hsla(').replace(')',','+a+')')+' 0%,transparent 70%)';
       glow.appendChild(g);
     });
     isl.appendChild(glow);
