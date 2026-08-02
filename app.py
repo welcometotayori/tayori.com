@@ -8584,105 +8584,127 @@ def _admin_metrics(db):
 @app.route("/admin.welcometotayori")
 @admin_required
 def admin_page():
+    """管理画面（2026-08-03 刷新）。
+    手紙時代の集計（到着・開封・写真・声・AI対話・オンボーディング）は畳み、
+    いまの tayori＝宙のことばを軸に「誰が・いつ・どの部屋で・何を書いたか」を
+    そのまま読める形に組み直した。
+    ※2026-07-26 の「覗き窓を閉じる（運営は本文を読まない）」判断は、収益化に向けた
+      利用分析のため Kosei の指示で撤回した（2026-08-03）。運営がことばの本文を
+      閲覧・分析することは、同日改訂の利用規約・プライバシーポリシーに明記してある。
+      ここで作る数字・本文の一覧は管理画面の中だけのもので、ユーザー側には出さない。"""
     db = get_db()
-    now_iso = datetime.now().isoformat(timespec="seconds")
 
     users = db.execute(
-        """SELECT id,username,email,email_verified,notify_enabled,
-                  onboarding,onboarded,last_lat,created,is_admin,
-                  last_login_at,suspended_at
-           FROM users ORDER BY created"""
-    ).fetchall()
+        """SELECT id,username,email,email_verified,notify_enabled,created,is_admin,
+                  COALESCE(is_seed,0) AS is_seed,last_login_at,suspended_at
+           FROM users ORDER BY created""").fetchall()
 
-    thread_by_user = {}
-    for row in db.execute(
-        """SELECT l.user_id AS uid, t.who AS who, COUNT(*) AS c
-           FROM thread t JOIN letters l ON l.id = t.letter_id
-           GROUP BY l.user_id, t.who"""):
-        d = thread_by_user.setdefault(row["uid"], {"total": 0, "ai": 0, "now": 0})
-        d["total"] += row["c"]
-        if row["who"] == "ai":
-            d["ai"] += row["c"]
-        elif row["who"] == "now":
-            d["now"] += row["c"]
+    rooms_by_id = {r["id"]: r["name"] for r in db.execute("SELECT id,name FROM rooms")}
 
-    onb_total = len(ONBOARDING_QUESTIONS)
-    user_stats = {}
+    # ことば単位の反応（読まれた・灯された・配られた・消された・棚に入った）
+    def _cnt(sql):
+        return {r["k"]: r["c"] for r in db.execute(sql)}
+    seen_by = _cnt("SELECT letter_id k, COUNT(*) c FROM sky_seen GROUP BY letter_id")
+    lantern_by = _cnt("SELECT letter_id k, COUNT(*) c FROM sky_reaction GROUP BY letter_id")
+    delivered_by = _cnt("SELECT letter_id k, COUNT(*) c FROM sky_deliveries GROUP BY letter_id")
+    muted_by = _cnt("SELECT letter_id k, COUNT(*) c FROM muted GROUP BY letter_id")
+
+    rows = db.execute(
+        """SELECT id,user_id,poem,title,room_id,sent_date,seal_color,
+                  COALESCE(seal_color_chosen,1) AS seal_color_chosen,
+                  COALESCE(vertical,0) AS vertical,mode,sky_status,
+                  COALESCE(returned_count,0) AS returned_count,shelved_at,
+                  first_seen_at,time_bucket
+             FROM letters WHERE COALESCE(demo_mode,0)=0
+            ORDER BY sent_date DESC""").fetchall()
+
+    # ── ことばの一覧（本文つき・最新順）と、書き手ごとの横顔 ──────────────
+    words = []
+    per = {}          # user_id -> 集計（どういう人が・いつ・どの部屋で・何を書くか）
+    def _blank():
+        return {"n": 0, "live": 0, "pending": 0, "blocked": 0, "legacy": 0,
+                "chars": 0, "titled": 0, "vertical": 0, "colored": 0,
+                "rooms": {}, "bands": {k: 0 for k in _AIR_BANDS},
+                "seen": 0, "lanterns": 0, "delivered": 0, "muted": 0,
+                "shelved": 0, "returned": 0, "colors": [],
+                "first_at": None, "last_at": None}
+    for r in rows:
+        st = per.setdefault(r["user_id"], _blank())
+        if r["mode"] != "sky":
+            st["legacy"] += 1          # 手紙時代のもの（宙には出ていない）
+            continue
+        status = r["sky_status"] or "live"
+        poem = (r["poem"] or "").strip()
+        try:
+            hour = int((r["sent_date"] or "")[11:13])
+        except ValueError:
+            hour = 22
+        band = _hour_band(hour)
+        st["n"] += 1
+        st[status if status in ("live", "pending", "blocked") else "live"] += 1
+        st["chars"] += len(poem)
+        if r["title"]: st["titled"] += 1
+        if r["vertical"]: st["vertical"] += 1
+        if r["seal_color"] and r["seal_color_chosen"]:
+            st["colored"] += 1
+            if len(st["colors"]) < 14: st["colors"].append(r["seal_color"])
+        room = rooms_by_id.get(r["room_id"]) or "—"
+        st["rooms"][room] = st["rooms"].get(room, 0) + 1
+        if band in st["bands"]: st["bands"][band] += 1
+        st["seen"] += seen_by.get(r["id"], 0)
+        st["lanterns"] += lantern_by.get(r["id"], 0)
+        st["delivered"] += delivered_by.get(r["id"], 0)
+        st["muted"] += muted_by.get(r["id"], 0)
+        if r["shelved_at"]: st["shelved"] += 1
+        st["returned"] += r["returned_count"]
+        d = (r["sent_date"] or "")[:10]
+        if d:
+            st["last_at"] = st["last_at"] or d       # rows は最新順
+            st["first_at"] = d
+        words.append({
+            "id": r["id"], "user_id": r["user_id"], "poem": poem,
+            "title": r["title"] or "", "room": room,
+            "sent": (r["sent_date"] or "")[:16].replace("T", " "),
+            "status": status, "color": r["seal_color"] or "",
+            "vertical": bool(r["vertical"]),
+            "seen": seen_by.get(r["id"], 0),
+            "lanterns": lantern_by.get(r["id"], 0),
+            "delivered": delivered_by.get(r["id"], 0),
+            "muted": muted_by.get(r["id"], 0),
+            "shelved": bool(r["shelved_at"]),
+            "returned": r["returned_count"],
+        })
+    name_by_id = {u["id"]: u["username"] for u in users}
+    for w in words:
+        w["username"] = name_by_id.get(w["user_id"], "？")
+
+    enriched_users = []
     for u in users:
-        rows = db.execute(
-            """SELECT arrive_at, arrive_date, weather_event, weather_met_at,
-                      opened, photo, voice, from_reply, reflect_count
-               FROM letters WHERE user_id=?""",
-            (u["id"],)
-        ).fetchall()
-        total = len(rows)
-        received = transit = waiting_weather = 0
-        opened = photo = voice = weather = reply = reflect = 0
-        for r in rows:
-            wevent = r["weather_event"]
-            if wevent:
-                met = r["weather_met_at"]
-                if met and met <= now_iso:
-                    received += 1
-                else:
-                    transit += 1
-                    waiting_weather += 1
-                weather += 1
-            else:
-                arrive_at = r["arrive_at"] or (r["arrive_date"] + "T00:00:00")
-                if arrive_at <= now_iso:
-                    received += 1
-                else:
-                    transit += 1
-            if r["opened"]: opened += 1
-            if r["photo"]: photo += 1
-            if r["voice"]: voice += 1
-            if r["from_reply"]: reply += 1
-            reflect += (r["reflect_count"] or 0)
-        th = thread_by_user.get(u["id"], {"total": 0, "ai": 0, "now": 0})
-        ob = _load_onboarding(u["onboarding"])
-        onb_answered = sum(1 for v in ob.values() if str(v).strip())
-        user_stats[u["id"]] = {
-            "total": total, "received": received,
-            "transit": transit, "waiting_weather": waiting_weather,
-            "opened": opened, "photo": photo, "voice": voice,
-            "weather": weather, "reply": reply, "reflect": reflect,
-            "dialogues": th["total"], "ai": th["ai"], "replies": th["now"],
-            "onb_answered": onb_answered,
-        }
+        d = dict(u)
+        st = per.get(u["id"]) or _blank()
+        st["avg_chars"] = round(st["chars"] / st["n"], 1) if st["n"] else 0
+        st["rooms_top"] = sorted(st["rooms"].items(), key=lambda x: -x[1])[:3]
+        st["bands_ja"] = [(_DAYPART_JA.get(k, k), st["bands"][k]) for k in _AIR_BANDS]
+        st["band_max"] = max(list(st["bands"].values()) + [1])
+        d["stats"] = st
+        enriched_users.append(d)
 
-    def _sum(k): return sum(s[k] for s in user_stats.values())
     totals = {
         "users": len(users),
-        "letters": _sum("total"),
-        "received": _sum("received"),
-        "transit": _sum("transit"),
-        "waiting_weather": _sum("waiting_weather"),
-        "opened": _sum("opened"),
-        "dialogues": _sum("dialogues"),
-        "ai": _sum("ai"),
-        "photo": _sum("photo"),
-        "voice": _sum("voice"),
-        "weather": _sum("weather"),
-        "reply": _sum("reply"),
         "emails": sum(1 for u in users if u["email"]),
         "verified": sum(1 for u in users if u["email_verified"]),
-        "onboarded": sum(1 for u in users if user_stats[u["id"]]["onb_answered"]),
-        "located": sum(1 for u in users if u["last_lat"]),
         "notify": sum(1 for u in users if u["notify_enabled"]),
         "suspended": sum(1 for u in users if u["suspended_at"]),
+        "words": sum(s["stats"]["n"] for s in enriched_users),
+        "writers": sum(1 for s in enriched_users if s["stats"]["n"]),
     }
-    totals["open_rate"] = round(totals["opened"] / totals["received"] * 100) if totals["received"] else 0
-    totals["email_rate"] = round(totals["emails"] / totals["users"] * 100) if totals["users"] else 0
-    totals["onb_rate"] = round(totals["onboarded"] / totals["users"] * 100) if totals["users"] else 0
-    totals["avg_letters"] = round(totals["letters"] / totals["users"], 1) if totals["users"] else 0
 
+    # ── 推移（直近14日：登録と、放たれたことば）───────────────────────
     signups = {}
     for u in users:
         day = (u["created"] or "")[:10]
         if day:
             signups[day] = signups.get(day, 0) + 1
-    # 同じ14日窓で「放たれたことば」も数える（登録の棒グラフと並べて読めるように）。
     released = {}
     for r in db.execute(
             "SELECT sent_date FROM letters WHERE mode='sky' AND COALESCE(demo_mode,0)=0"):
@@ -8690,43 +8712,23 @@ def admin_page():
         if day:
             released[day] = released.get(day, 0) + 1
     trend = []
-    cumulative_before = 0
     span_days = 14
     start = date.today() - timedelta(days=span_days - 1)
-    for u in users:
-        d = (u["created"] or "")[:10]
-        if d and d < start.isoformat():
-            cumulative_before += 1
-    running = cumulative_before
+    running = sum(1 for u in users
+                  if (u["created"] or "")[:10] and (u["created"] or "")[:10] < start.isoformat())
     for i in range(span_days):
         d = (start + timedelta(days=i)).isoformat()
         new = signups.get(d, 0)
         running += new
         trend.append({"date": d, "new": new, "cumulative": running,
                       "released": released.get(d, 0)})
-
     max_new = max((t["new"] for t in trend), default=0)
     max_rel = max((t["released"] for t in trend), default=0)
     for t in trend:
         t["bar_h"] = int(round(t["new"] / max_new * 100)) if (max_new and t["new"]) else 0
         t["rel_h"] = int(round(t["released"] / max_rel * 100)) if (max_rel and t["released"]) else 0
 
-    enriched_users = []
-    for u in users:
-        d = dict(u)
-        d["stats"] = user_stats[u["id"]]
-        d["has_location"] = bool(u["last_lat"])
-        d.pop("onboarding", None)
-        enriched_users.append(d)
-
-    # ※「最近の便り（中身つき）」の一覧は 2026-07-26 に撤去した。運営が本文を読める場所は
-    #   下の承認キュー（掲載の門番）だけに絞る＝覗き窓を閉じ、門だけを残す。
-    #   `ADMIN_READ_CONTENT` と `/api/admin/letters/<id>` も同時に廃止している。
-
-    # ── 承認キュー（2026-07-25 v13 §8）──────────────────────────────
-    # 門番がグレーと見たことばだけが、ここで待っている。掲載/却下を決めるには本文を
-    # 読む必要があるので、この一覧は ADMIN_READ_CONTENT では絞らない（覗き窓ではなく門）。
-    # 放った本人には何も伝わっていない（【J】）＝ここで捌いたことも通知されない。
+    # ── 承認キュー（2026-07-25 v13 §8）─────────────────────────────
     pending_sky = []
     for r in db.execute(
         """SELECT l.id, l.poem, l.sent_date, l.seal_color, u.username AS username
@@ -8744,6 +8746,7 @@ def admin_page():
         "admin.html",
         users=enriched_users,
         totals=totals,
+        words=words,
         trend=trend,
         pending_sky=pending_sky,
         blocked_count=blocked_count,
@@ -8751,7 +8754,6 @@ def admin_page():
         audit=[dict(a) for a in db.execute(
             "SELECT actor, action, target_id, note, at FROM admin_audit_log"
             " ORDER BY id DESC LIMIT 50")],
-        onb_total=onb_total,
     )
 
 

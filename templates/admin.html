@@ -605,6 +605,53 @@
             font-size: 13px;
         }
         .modal-close:hover { background: #710014; }
+
+        /* ── 2026-08-03 刷新：書き手の横顔と、ことばの一覧 ─────────────── */
+        .profiles { display: flex; flex-direction: column; gap: 14px; margin-bottom: 8px; }
+        .profile {
+            border: 1px solid #e7e5e4; border-radius: 10px; padding: 16px 18px;
+            background: #fdfcfa;
+        }
+        .profile-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .profile-name {
+            background: none; border: 0; padding: 0; cursor: pointer;
+            font-family: inherit; font-size: 16px; font-weight: 600; color: #1c1917;
+            border-bottom: 1px solid #d6cdbe;
+        }
+        .profile-name:hover { color: #710014; border-bottom-color: #710014; }
+        .profile-mail { font-size: 12px; color: #78716c; }
+        .profile-ops { margin-left: auto; white-space: nowrap; }
+        .profile-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px; margin-top: 12px;
+        }
+        .pf-box { background: #ffffff; border: 1px solid #f0ede8; border-radius: 8px; padding: 10px 12px; }
+        .pf-num { font-size: 20px; font-weight: 600; color: #1c1917; font-variant-numeric: tabular-nums; }
+        .pf-lbl { font-size: 11px; color: #78716c; margin-top: 2px; }
+        .pf-sub { font-size: 11px; color: #a8a29e; margin-top: 4px; line-height: 1.7; }
+        .pf-rooms { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+        .pf-room {
+            font-size: 11px; color: #44403c; background: #f5f2ec;
+            border-radius: 999px; padding: 3px 9px;
+        }
+        .pf-room b { color: #710014; font-weight: 600; }
+        .pf-bands { display: flex; gap: 8px; align-items: flex-end; margin-top: 6px; height: 46px; }
+        .pf-band { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+        .pf-band i { display: block; width: 14px; background: #b3a58f; border-radius: 2px 2px 0 0; min-height: 2px; }
+        .pf-band em { font-style: normal; font-size: 10px; color: #a8a29e; }
+        .pf-colors { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+        .pf-sw {
+            display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+            border: 1px solid rgba(0,0,0,.10); vertical-align: -2px; margin-right: 2px;
+        }
+        .profile-foot { margin-top: 10px; font-size: 11px; color: #a8a29e; }
+        .words-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        .words-bar input {
+            flex: 0 1 340px; padding: 8px 12px; font-size: 13px;
+            border: 1px solid #e7e5e4; border-radius: 8px; background: #fff;
+        }
+        .word-poem { max-width: 460px; line-height: 1.9; }
+        .word-row.hide { display: none; }
     </style>
 </head>
 <body>
@@ -614,59 +661,43 @@
             <!-- adminセッションのまま "/" へ行くと管理画面へ戻されるため、先にログアウトしてからゲートへ -->
             <a href="/" class="back-link" id="backToLogin">← ログイン画面へ戻る</a>
         </div>
-        <p class="subtitle">アプリケーションに登録されているユーザーアカウント、および関連する全てのデータ（便り・下書き・対話）を一元管理・閲覧・削除できます。</p>
+        <p class="subtitle">登録ユーザーと、宙へ放たれたことば（本文つき）を一元的に閲覧・分析・管理できます。{# 2026-08-03 刷新：手紙時代（到着・開封・写真・声・AI対話・オンボード）の集計は畳んだ #}</p>
 
         <div class="section-title">全体サマリー</div>
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-num">{{ totals.users }}</div>
                 <div class="stat-lbl">登録ユーザー</div>
-                <div class="stat-sub">1人あたり便り {{ totals.avg_letters }} 通</div>
+                <div class="stat-sub">書いた人 {{ totals.writers }} 人</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num">{{ totals.letters }}</div>
-                <div class="stat-lbl">便り総数</div>
-            </div>
-            <div class="stat-card teal">
-                <div class="stat-num">{{ totals.received }}</div>
-                <div class="stat-lbl">受信済み</div>
+                <div class="stat-num">{{ totals.words }}</div>
+                <div class="stat-lbl">放たれたことば</div>
+                <div class="stat-sub">掲載中 {{ metrics.sky_live }}</div>
             </div>
             <div class="stat-card accent">
-                <div class="stat-num">{{ totals.transit }}</div>
-                <div class="stat-lbl">配送中</div>
-                <div class="stat-sub">うち天気待ち {{ totals.waiting_weather }}</div>
+                <div class="stat-num">{{ metrics.sky_pending }}</div>
+                <div class="stat-lbl">承認待ち</div>
+                <div class="stat-sub">掲載しない {{ metrics.sky_blocked }}</div>
             </div>
             <div class="stat-card teal">
-                <div class="stat-num">{{ totals.open_rate }}%</div>
-                <div class="stat-lbl">開封率</div>
-                <div class="stat-sub">{{ totals.opened }} / {{ totals.received }} 通</div>
+                <div class="stat-num">{{ metrics.explored }}</div>
+                <div class="stat-lbl">誰かの宙に浮かんだ</div>
             </div>
-            <div class="stat-card accent">
-                <div class="stat-num">{{ totals.dialogues }}</div>
-                <div class="stat-lbl">対話メッセージ</div>
-                <div class="stat-sub">AI問い {{ totals.ai }} ・ 返信 {{ totals.reply }}</div>
+            <div class="stat-card teal">
+                <div class="stat-num">{{ metrics.delivered }}</div>
+                <div class="stat-lbl">だれか一人へ配られた</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num">{{ totals.email_rate }}%</div>
-                <div class="stat-lbl">メール登録率</div>
-                <div class="stat-sub">{{ totals.emails }} 人（認証 {{ totals.verified }}）</div>
+                <div class="stat-num">{{ metrics.shelved }}</div>
+                <div class="stat-lbl">誰かの棚に入った</div>
+                <div class="stat-sub">灯 {{ metrics.lanterns }}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num">{{ totals.onb_rate }}%</div>
-                <div class="stat-lbl">オンボード回答率</div>
-                <div class="stat-sub">{{ totals.onboarded }} / {{ totals.users }} 人が回答</div>
+                <div class="stat-num">{{ totals.emails }}</div>
+                <div class="stat-lbl">メール登録</div>
+                <div class="stat-sub">認証済 {{ totals.verified }} ・ 通知ON {{ totals.notify }}</div>
             </div>
-        </div>
-
-        <div class="section-title">利用機能の内訳</div>
-        <div class="breakdown">
-            <div class="bd-card"><div class="bd-num">{{ totals.photo }}</div><div class="bd-lbl">写真つきの便り</div></div>
-            <div class="bd-card"><div class="bd-num">{{ totals.voice }}</div><div class="bd-lbl">声の便り</div></div>
-            <div class="bd-card"><div class="bd-num">{{ totals.weather }}</div><div class="bd-lbl">天気待ち伏せの便り</div></div>
-            <div class="bd-card"><div class="bd-num">{{ totals.reply }}</div><div class="bd-lbl">返信から生まれた便り</div></div>
-            <div class="bd-card"><div class="bd-num">{{ totals.ai }}</div><div class="bd-lbl">AIへの問いかけ</div></div>
-            <div class="bd-card"><div class="bd-num">{{ totals.located }}</div><div class="bd-lbl">位置情報を許可した人</div></div>
-            <div class="bd-card"><div class="bd-num">{{ totals.notify }}</div><div class="bd-lbl">通知ONの人</div></div>
         </div>
 
         <div class="trend">
@@ -844,82 +875,108 @@
         {# 2026-07-26: 「最近の便り（中身つき）」の覗き窓は撤去した。運営が本文を読める場所は
            上の承認キューだけ＝門番として必要な一瞬に限る。復活させないこと。 #}
 
-        <div class="section-title">ユーザー一覧（行をクリックでも詳細）</div>
+        {# ══ 書き手ごとの横顔（2026-08-03 刷新の本体・その1）═══════════════
+           「どういうユーザーが、何を書くか」。数字は全部この画面だけのもの。 #}
+        {# 並ぶのは「何か書いたことのある人」＝いまの宙のことば、または手紙時代の残りを
+           持つ人。見出しの数は並んだ枚数そのもの（totals.writers＝宙に放った人だけ、
+           とは一致しない。旧手紙しか無い人もここには居る）。 #}
+        {% set shown = users | selectattr('stats.n') | list
+                     + users | rejectattr('stats.n') | selectattr('stats.legacy') | list %}
+        <div class="section-title">書き手ごとの横顔（{{ shown | length }} 人 ／ うち宙に放った人 {{ totals.writers }}）</div>
+        <div class="trend-note">名前を押すと、下の「ことばの一覧」がその人だけに絞られます。</div>
+        <div class="profiles">
+            {% for u in users %}{% if u.stats.n or u.stats.legacy %}
+            <div class="profile" id="user-row-{{ u.id }}">
+                <div class="profile-head">
+                    <button class="profile-name" onclick="filterWords('{{ u.id }}', '{{ u.username }}')">{{ u.username }}</button>
+                    {% if u.is_seed %}<span class="pill off">種</span>{% endif %}
+                    {% if u.is_admin %}<span class="pill ok">運営</span>{% endif %}
+                    {% if u.suspended_at %}<span class="pill warn">停止中</span>{% endif %}
+                    <span class="profile-mail">
+                        {% if u.email %}{{ u.email }}{% if u.email_verified %}（認証済）{% endif %}
+                        {% else %}メール未登録{% endif %}
+                    </span>
+                    <span class="profile-ops">
+                        {% if not u.is_admin %}
+                            {% if u.suspended_at %}
+                                <button class="btn-state" onclick="setUserState('{{ u.id }}', '{{ u.username }}', 'restore')">復帰</button>
+                            {% else %}
+                                <button class="btn-state" onclick="setUserState('{{ u.id }}', '{{ u.username }}', 'suspend')">停止</button>
+                            {% endif %}
+                            <button class="btn-delete" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')">削除</button>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="profile-grid">
+                    <div class="pf-box">
+                        <div class="pf-num">{{ u.stats.n }}</div>
+                        <div class="pf-lbl">ことば</div>
+                        <div class="pf-sub">掲載 {{ u.stats.live }}{% if u.stats.pending %} ・ 待ち {{ u.stats.pending }}{% endif %}{% if u.stats.blocked %} ・ 非掲載 {{ u.stats.blocked }}{% endif %}{% if u.stats.legacy %} ・ 旧手紙 {{ u.stats.legacy }}{% endif %}</div>
+                    </div>
+                    <div class="pf-box">
+                        <div class="pf-num">{{ u.stats.avg_chars }}</div>
+                        <div class="pf-lbl">平均字数</div>
+                        <div class="pf-sub">題つき {{ u.stats.titled }} ・ 縦書き {{ u.stats.vertical }}</div>
+                    </div>
+                    <div class="pf-box">
+                        <div class="pf-lbl">よく書く部屋</div>
+                        <div class="pf-rooms">
+                            {% for name, n in u.stats.rooms_top %}<span class="pf-room">{{ name }} <b>{{ n }}</b></span>{% else %}<span class="email-none">—</span>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="pf-box">
+                        <div class="pf-lbl">書く時間帯</div>
+                        <div class="pf-bands">
+                            {% for ja, n in u.stats.bands_ja %}
+                            <span class="pf-band" title="{{ ja }} {{ n }}">
+                                <i data-h="{{ (n * 100 / u.stats.band_max) | round | int }}"></i><em>{{ ja[:1] }}</em>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="pf-box">
+                        <div class="pf-lbl">受け取った反応</div>
+                        <div class="pf-sub">読まれた {{ u.stats.seen }} ・ 灯 {{ u.stats.lanterns }} ・ 配られた {{ u.stats.delivered }}<br>
+                            棚入り {{ u.stats.shelved }} ・ 帰還 {{ u.stats.returned }} ・ 消された {{ u.stats.muted }}</div>
+                    </div>
+                    <div class="pf-box">
+                        <div class="pf-lbl">色の傾向</div>
+                        <div class="pf-colors">
+                            {% for c in u.stats.colors %}<span class="pf-sw" data-color="{{ c }}" title="{{ c }}"></span>{% else %}<span class="email-none">色なし</span>{% endfor %}
+                        </div>
+                        <div class="pf-sub">色を選んだ {{ u.stats.colored }} / {{ u.stats.n }}</div>
+                    </div>
+                </div>
+                <div class="profile-foot">
+                    登録 {{ u.created[:10] }}
+                    ・ 最終ログイン {% if u.last_login_at %}{{ u.last_login_at[:16].replace('T',' ') }}{% else %}記録なし{% endif %}
+                    {% if u.stats.first_at %}・ 初めて放った日 {{ u.stats.first_at }} ・ 最後に放った日 {{ u.stats.last_at }}{% endif %}
+                </div>
+            </div>
+            {% endif %}{% endfor %}
+        </div>
 
+        {# まだ何も書いていない人（管理操作はここから） #}
+        {% set silent = users | selectattr('stats.n', 'eq', 0) | selectattr('stats.legacy', 'eq', 0) | list %}
+        {% if silent %}
+        <div class="section-title">まだ書いていない人（{{ silent | length }}）</div>
         <div class="table-scroll">
         <table>
-            <thead>
-                <tr>
-                    <th>ユーザー名</th>
-                    <th>メール</th>
-                    <th>投函数（受信 / 配送中）</th>
-                    <th class="num">開封</th>
-                    <th class="num">対話（AI / 返信）</th>
-                    <th class="num">向き合い</th>
-                    <th>オンボード</th>
-                    <th>位置 / 通知</th>
-                    <th>状態</th>
-                    <th>アカウント作成日</th>
-                    <th>最終ログイン</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
+            <thead><tr><th>名前</th><th>メール</th><th>状態</th><th>登録日</th><th>最終ログイン</th><th>操作</th></tr></thead>
             <tbody>
-                {% for u in users %}
+                {% for u in silent %}
                 <tr id="user-row-{{ u.id }}">
-                    <td><span class="username">{{ u.username }}</span></td>
-                    <td>
-                        {% if u.email %}
-                            {{ u.email }}
+                    <td><span class="username">{{ u.username }}</span>
+                        {% if u.is_seed %}<span class="pill off">種</span>{% endif %}
+                        {% if u.is_admin %}<span class="pill ok">運営</span>{% endif %}</td>
+                    <td>{% if u.email %}{{ u.email }}
                             {% if u.email_verified %}<span class="pill ok">認証済</span>{% else %}<span class="pill warn">未認証</span>{% endif %}
-                        {% else %}
-                            <span class="email-none">未登録</span>
-                        {% endif %}
-                    </td>
-                    <td class="count-cell">
-                        {% if u.stats.total %}
-                            <div class="count-main">{{ u.stats.total }} 通</div>
-                            <div class="count-break">
-                                <span class="recv">受信 {{ u.stats.received }}</span> ·
-                                <span class="tran">配送中 {{ u.stats.transit }}</span>{% if u.stats.waiting_weather %} · <span class="wx">天気待ち {{ u.stats.waiting_weather }}</span>{% endif %}
-                            </div>
-                        {% else %}
-                            <span class="count-zero">0 通</span>
-                        {% endif %}
-                    </td>
-                    <td class="num">{{ u.stats.opened }}</td>
-                    <td class="num">
-                        {{ u.stats.dialogues }}
-                        {% if u.stats.dialogues %}<div class="sub-inline">{{ u.stats.ai }} / {{ u.stats.replies }}</div>{% endif %}
-                    </td>
-                    <td class="num">{{ u.stats.reflect }}</td>
-                    <td>
-                        {% if u.stats.onb_answered %}
-                            <span class="pill {% if u.onboarded %}ok{% else %}warn{% endif %}">{{ u.stats.onb_answered }} / {{ onb_total }}</span>
-                        {% else %}
-                            <span class="pill off">未回答</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if u.has_location %}<span class="pill ok">位置</span>{% else %}<span class="pill off">位置—</span>{% endif %}
-                        {% if u.notify_enabled %}<span class="pill ok">通知</span>{% else %}<span class="pill off">通知—</span>{% endif %}
-                    </td>
+                        {% else %}<span class="email-none">未登録</span>{% endif %}</td>
                     <td class="state-cell">
-                        {% if u.suspended_at %}
-                            <span class="pill warn">停止中</span>
-                            <div class="sub-inline">{{ u.suspended_at[:10] }}</div>
-                        {% else %}
-                            <span class="pill ok">有効</span>
-                        {% endif %}
-                    </td>
-                    <td><span class="date">{{ u.created[:19].replace('T', ' ') }}</span></td>
-                    <td>
-                        {% if u.last_login_at %}
-                            <span class="date">{{ u.last_login_at[:16].replace('T', ' ') }}</span>
-                        {% else %}
-                            <span class="email-none">記録なし</span>
-                        {% endif %}
-                    </td>
+                        {% if u.suspended_at %}<span class="pill warn">停止中</span>{% else %}<span class="pill ok">有効</span>{% endif %}</td>
+                    <td><span class="date">{{ u.created[:10] }}</span></td>
+                    <td>{% if u.last_login_at %}<span class="date">{{ u.last_login_at[:16].replace('T',' ') }}</span>
+                        {% else %}<span class="email-none">記録なし</span>{% endif %}</td>
                     <td>
                         {% if not u.is_admin %}
                             {% if u.suspended_at %}
@@ -928,8 +985,60 @@
                                 <button class="btn-state" onclick="setUserState('{{ u.id }}', '{{ u.username }}', 'suspend')">停止</button>
                             {% endif %}
                             <button class="btn-delete" onclick="deleteUser('{{ u.id }}', '{{ u.username }}')">削除</button>
-                        {% else %}
-                            <span class="protected">保護対象 (管理者)</span>
+                        {% else %}<span class="protected">保護対象 (管理者)</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% endif %}
+
+        {# ══ ことばの一覧（本文つき・2026-08-03 刷新の本体・その2）══════════
+           誰が・いつ・どの部屋で・何を書いたか。フィルタは書き手／部屋／本文の照合。 #}
+        <div class="section-title">ことばの一覧（本文つき・{{ words | length }}）</div>
+        <div class="words-bar">
+            <input id="wordsQ" type="search" placeholder="本文・題・名前・部屋で絞り込む"
+                   oninput="applyWordsFilter()">
+            <span id="wordsWho" class="pill off" hidden></span>
+            <button class="btn-state" id="wordsClear" onclick="clearWordsFilter()" hidden>絞り込みを外す</button>
+            <span class="trend-note" id="wordsCount"></span>
+        </div>
+        <div class="table-scroll">
+        <table id="wordsTable">
+            <thead><tr>
+                <th>放った日</th><th>名前</th><th>部屋</th><th>ことば（全文）</th>
+                <th>状態</th><th class="num">読</th><th class="num">灯</th><th class="num">配</th>
+                <th class="num">消</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+                {% for w in words %}
+                <tr class="word-row" data-uid="{{ w.user_id }}"
+                    data-q="{{ (w.poem ~ ' ' ~ w.title ~ ' ' ~ w.username ~ ' ' ~ w.room) | lower }}">
+                    <td><span class="date">{{ w.sent }}</span></td>
+                    <td><span class="username">{{ w.username }}</span></td>
+                    <td>{{ w.room }}</td>
+                    <td class="word-poem">
+                        {% if w.color %}<span class="pf-sw" data-color="{{ w.color }}" title="{{ w.color }}"></span>{% endif %}
+                        {{ w.poem }}
+                        {% if w.title %}<span class="protected">（題：{{ w.title }}）</span>{% endif %}
+                        {% if w.shelved %}<span class="pill ok" title="誰かの棚に入った">棚</span>{% endif %}
+                        {% if w.returned %}<span class="pill off" title="本人へ帰った回数">帰{{ w.returned }}</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if w.status == 'live' %}<span class="pill ok">掲載中</span>
+                        {% elif w.status == 'pending' %}<span class="pill warn">承認待ち</span>
+                        {% else %}<span class="pill off">非掲載</span>{% endif %}
+                    </td>
+                    <td class="num">{{ w.seen or '' }}</td>
+                    <td class="num">{{ w.lanterns or '' }}</td>
+                    <td class="num">{{ w.delivered or '' }}</td>
+                    <td class="num">{{ w.muted or '' }}</td>
+                    <td class="state-cell">
+                        {% if w.status == 'live' %}
+                        <button class="btn-state" onclick="moderateSky('{{ w.id }}','reject')">下げる</button>
+                        {% elif w.status == 'blocked' %}
+                        <button class="btn-state" onclick="moderateSky('{{ w.id }}','approve')">掲載</button>
                         {% endif %}
                     </td>
                 </tr>
@@ -988,6 +1097,45 @@
         document.querySelectorAll('.dist-fill[data-h]').forEach(function(el){
             el.style.width = el.getAttribute('data-h') + '%';
         });
+        // 色見本と時間帯の棒（2026-08-03 刷新）
+        document.querySelectorAll('.pf-sw[data-color]').forEach(function(el){
+            el.style.background = el.getAttribute('data-color');
+        });
+        document.querySelectorAll('.pf-band i[data-h]').forEach(function(el){
+            el.style.height = Math.max(4, +el.getAttribute('data-h') * 0.42) + 'px';
+        });
+
+        // ── ことばの一覧の絞り込み（書き手・本文） ──────────────────
+        let wordsUid = null;
+        function applyWordsFilter(){
+            const q = (document.getElementById('wordsQ').value || '').trim().toLowerCase();
+            let n = 0, total = 0;
+            document.querySelectorAll('#wordsTable .word-row').forEach(function(tr){
+                total++;
+                const hit = (!wordsUid || tr.dataset.uid === wordsUid)
+                         && (!q || tr.dataset.q.indexOf(q) >= 0);
+                tr.classList.toggle('hide', !hit);
+                if (hit) n++;
+            });
+            document.getElementById('wordsCount').textContent =
+                (wordsUid || q) ? (n + ' / ' + total + ' 件') : (total + ' 件');
+            document.getElementById('wordsClear').hidden = !(wordsUid || q);
+        }
+        function filterWords(uid, name){
+            wordsUid = uid;
+            const who = document.getElementById('wordsWho');
+            who.textContent = name + ' のことば';
+            who.hidden = false;
+            applyWordsFilter();
+            document.getElementById('wordsTable').scrollIntoView({behavior:'smooth', block:'start'});
+        }
+        function clearWordsFilter(){
+            wordsUid = null;
+            document.getElementById('wordsQ').value = '';
+            document.getElementById('wordsWho').hidden = true;
+            applyWordsFilter();
+        }
+        applyWordsFilter();
 
         // 部屋の改名。判定はユーザーの作成経路と同じルールをサーバ側で通す。
         function renameRoom(id, current){
@@ -1063,6 +1211,9 @@
                 if (card) {
                     card.innerHTML = '<div class="q-done">' +
                         (verdict === 'approve' ? 'tayori-たより- へ出しました。' : 'tayori-たより- には出しません。') + '</div>';
+                } else {
+                    // ことばの一覧（本文つき）から裁いた時はキューの札が無い＝表ごと読み直す
+                    window.location.reload();
                 }
             } catch (err) {
                 btns.forEach(b => b.disabled = false);
