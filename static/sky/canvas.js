@@ -2227,6 +2227,29 @@ Promise.all([
     if(selfMs>selfMax)selfMax=selfMs;
   };
 
+  /* ── 最悪の一枚が「何だったのか」を残す（2026-08-02）──────────────
+     664枚を出したままでも17msで回るのに、広い範囲を引いてきた回だけ350msが出た。
+     つまり重いのは**在ること**ではなく、途中で起きた**出来事**のほう。
+     宙には倍率でまたぐ境目があり、またぐと body や島の class が入れ替わる＝
+     その下の要素のスタイルが一斉に計算し直される。どのフレームで何が入れ替わった
+     かを控えておけば、最悪の一枚に名前が付く。
+     class の変化は MutationObserver で拾う（本当に変わった時だけ呼ばれるので、
+     毎フレーム何かを見に行く形にはならない＝計器が症状を作らない）。 */
+  let lastEvent='', worstD=0, worstK=0, worstEvent='';
+  new MutationObserver(ms=>{
+    for(const m of ms){
+      const t=m.target;
+      if(t===document.body){
+        const c=t.className||'';
+        lastEvent=(c.includes('far')?'遠景':'近景')
+          +(c.includes('crisp')?'・光暈なし':'・光暈あり')+'へ切替';
+      }else if(t.classList&&t.classList.contains('isl')){
+        lastEvent=t.classList.contains('sheet')?'島が紙片に':'島が散らばりに';
+      }
+    }
+  }).observe(document.documentElement,
+             {subtree:true,attributes:true,attributeFilter:['class']});
+
   const box=document.createElement('div');
   box.style.cssText='position:fixed;z-index:60;left:8px;bottom:calc(96px + env(safe-area-inset-bottom));'
     +'padding:8px 10px;border-radius:8px;background:rgba(8,8,13,.88);'
@@ -2287,7 +2310,8 @@ Promise.all([
 
   /* selfMs も一緒に捨てる。前は最悪だけ0に戻していたので、直近値だけが古いまま
      残り「1.0 ms（最悪 0.0）」という、読んだ人が二度見する行が出ていた。 */
-  function reset(){ n=0; prev=0; selfMs=0; selfMax=0; fastest=1e9; }
+  function reset(){ n=0; prev=0; selfMs=0; selfMax=0; fastest=1e9;
+                    worstD=0; worstK=0; worstEvent=''; lastEvent=''; }
 
   function pct(a,p){
     if(!a.length)return 0;
@@ -2302,6 +2326,10 @@ Promise.all([
       const i=n%N;
       dt[i]=d; ges[i]=gesFrames>0?1:0;
       if(d<fastest&&d>0)fastest=d;   // 一度でも出た最速＝この画面が出せる上限
+      /* 最悪の一枚には、その時の倍率と、直前に起きた出来事を添えておく。
+         数字だけでは「たまたま重かった」と「境目をまたいだ」が区別できない。 */
+      if(d>worstD){ worstD=d; worstK=K; worstEvent=lastEvent; }
+      lastEvent='';                  // 出来事は一枚ぶんだけ持つ（次の枚に持ち越さない）
       n++;
       if(gesFrames>0)gesFrames--;
     }
@@ -2328,6 +2356,8 @@ Promise.all([
            落としてなどおらず、測っていたのは画面の速度のほうだった。 */
         +'最速の一枚        '+(fastest<1e9?f(fastest)+' ms'+(fastest<20?'（画面は60Hz以上）':'（画面が'+Math.round(1000/fastest)+'Hz）'):'—')+'\n'
         +'うち自前のJS      '+f(selfMs)+' ms（最悪 '+f(selfMax)+'）\n'
+        +'最悪の一枚        '+(worstD?f(worstD)+' ms  K='+worstK.toFixed(3)
+                              +(worstEvent?'  '+worstEvent:'  （境目はまたいでいない）'):'—')+'\n'
         +'倍率 K            '+K.toFixed(3)+(document.body.classList.contains('far')?'  遠景':'  近景')
         +(document.body.classList.contains('crisp')?'・光暈なし':'')+'\n'
         +'ことば            '+vis+' / '+tot+' 枚を描画中（島 '+isl+'）';
