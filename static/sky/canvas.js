@@ -281,6 +281,18 @@ function reshore(isl){
         return false;
       });
       d.words.forEach(w=>mkWord(isl,w));
+      /* 岸が着くと束は一回り大きくなる（実測 46片→66片）。降りる時に測った倍率は
+         その手前の寸法なので、そのままだと紙が画面から溢れる。**滑って来た時だけ**
+         倍率を引き直す（自分でつまんで寄せた人の手は取らない）。 */
+      if(isl._flown){
+        isl._flown=false;
+        const k=fitK(isl);
+        if(Math.abs(k-K)>0.02){
+          world.style.transition=REDUCED?'none':'transform .7s var(--ease)';
+          K=k; PX=-isl.cx*K; PY=-isl.cy*K;
+          setTimeout(()=>{world.style.transition='';applyNow();},760);
+        }
+      }
       sheetLayout(isl,true);             // 新しい紙も、いまの束に混ぜて並べ直す
       apply();
     }).catch(()=>{shoreBusy=null;});
@@ -326,67 +338,134 @@ function relax(){
   writes.forEach(a=>{a[0].style.left=a[1]+'px';a[0].style.top=a[2]+'px';});
 }
 
-/* ── 紙片のグリッド（2026-07-31）──────────────────────
-   島に降りる（＝焦点の島になる）と、そのことばたちは散らばりから紙片の
-   敷き詰めへ並び替わる。新しいものが右上、沈んだものほど左下、漂流物は最後
-   ——縦書きの読み順（右→左）で流す。位置は transform で動かす＝家（_hx/_hy）は
-   保ったまま。離れれば、それぞれの家へ静かに帰る。
-   寸法は紙片の姿（.sheet のpadding込み）で測るので、classを立ててから読む。 */
+/* ── 紙片の島（2026-07-31 敷き詰め → 2026-08-02 円）──────────────
+   島に降りる（＝焦点の島になる）と、ことばたちは散らばりから紙片の束へ並び替わる。
+   位置は transform で動かす＝家（_hx/_hy）は保ったまま。離れれば静かに帰る。
+   寸法は紙片の姿（.sheet のpadding込み）で測るので、classを立ててから読む。
+
+   束の姿は**円**（正しくは、いま見えている画面と同じ比の楕円）。遠景で島が
+   丸い灯として見えるのだから、降りた先も丸い——姿がひとつづきになる。
+   真円にはしない：16:9 の画面に真円を置くと左右が三割空き、それは 7/31 に直した
+   「右が大きく空いて、そのぶん下へ伸びる」の再発でしかない。
+
+   並びは「新しさ」ではなく「その部屋らしさ」（2026-08-02・Kosei確定）。
+     中心 … この部屋にしかないことば（cr が大きい）
+     縁　 … 他の部屋にも掛かることば。掛かっている相手の島がある側へ寄る
+     外側 … 流れ着いたもの（部屋を持たない＝岸）
+   これで「新しいものが右上・右端をそろえる」（7/31）は降ろした。読み始めの一点を
+   決める代わりに、中心から外へ読む面になる。 */
+const SHEET_GAP=26;          // 紙と紙のあいだ
+const SHEET_PAD=150;         // 頭の帯と足元に譲る丈
+const CHORD_MIN=0.06;        // いちばん上下の段にも、一枚は置ける弦を残す
+const RUN_SLACK=1.06;        // 段の詰め残り（入らなかった一枚ぶん）の遊び
 let sheetId=null, sheetWant=null, sheetT=0;
 function posOf(isl,el){
   return (isl&&isl.sheeted&&el._gx!=null)
     ?'translate('+(el._gx-el._hx)+'px,'+(el._gy-el._hy)+'px)':'';
 }
-function sheetLayout(isl,stagger){
-  const gap=26;
-  /* 束の幅は「島の大きさ」ではなく「いま見えている画面の幅」で決める（2026-07-31 夜）。
-     旧実装は島の半径（R*2.1）から決めていたので、島の大きさ次第で束が画面の
-     半分ほどの幅に痩せ、右側が大きく空いて、そのぶん下へ長く伸びていた
-     ——「重さが片側に寄る」の正体。画面の幅（の88%）を世界の寸法に直して使えば、
-     どの島でも束は画面いっぱいに広がり、丈もそのぶん縮む。
-     縦長の画面（携帯）は下限が狭いので、結果として一行2〜3枚のままになる。 */
-  const portrait=VH>VW;
-  const maxW=Math.max(portrait?340:540,
-                      Math.min(portrait?900:1400,(VW*0.88)/Math.max(K,0.08)));
-  const order=isl.words
+/* 「この部屋のもの」度。大きいほど中心へ。流れ着いたものは、どの部屋にも属さない
+   ＝いちばん外（-2 は、人のことばのいちばんまたいでいる片より必ず外側）。 */
+function crossOf(el){ return el._w.pd?-2:(el._w.cr!=null?el._w.cr:0); }
+/* 掛かっている相手の島の方角（世界座標の角）。相手が居なければ null */
+function partnerDir(isl,el){
+  const t=el._w.pr!=null?islands.get(el._w.pr):null;
+  return (!t||t===isl)?null:Math.atan2(t.cy-isl.cy,t.cx-isl.cx);
+}
+/* 束を組む（席は決めるが、まだ動かさない）。倍率もこの寸法から決めるので、
+   「どう並ぶか」と「どこまで寄るか」は同じ一つの計算から出る。
+
+   楕円の選び方：段数 n を決めれば半短径 b が決まり、総丈（run）から半長径 a が
+   決まる＝**中身でちょうど埋まる**楕円が一意に出る。あとはその中から、いまの
+   画面にいちばん近い比のものを採るだけ。 */
+function sheetPlan(isl,maxW){
+  const items=isl.words
     .filter(el=>!el.classList.contains('mutedout'))
-    .sort((a,b)=>{
-      if(!!a._w.pd!==!!b._w.pd)return a._w.pd?1:-1;          // 漂流物は人のことばの後
-      return (b._w.sink-a._w.sink)||(String(a._w.id)<String(b._w.id)?-1:1);
-    });
-  // 測るのは一度に全部（間に style を書かない＝強制レイアウトを起こさない）
-  const sizes=order.map(el=>({el,w:el.offsetWidth,h:el.offsetHeight}));
-  sizes.forEach(it=>{it.el._pw=it.w;it.el._ph=it.h;});   // 紙片の姿の寸法（間引きに使う）
-  let x=0,y=0,rowH=0;const rows=[];let row=[];
-  sizes.forEach(it=>{
-    if(row.length&&x+it.w>maxW){rows.push({items:row,w:x-gap});row=[];x=0;y+=rowH+gap;rowH=0;}
-    it.x=x;it.y=y;row.push(it);
-    x+=it.w+gap;rowH=Math.max(rowH,it.h);
-  });
-  if(row.length)rows.push({items:row,w:x-gap});
-  const totalH=y+rowH;
-  /* 右の端を、どの行もそろえる（2026-07-31 夜・利用者FB「どこから読めばいいか分からない」）。
-     旧実装は行ごとに中央へ寄せていたので、行の長さが違うぶん右の端がぎざぎざになり、
-     読み始めの一本目（縦書きは右上）が行ごとに動いていた。紙の束の右端は一本の線に
-     そろえ、余りは最後の行の左に出す——縦書きの紙面と同じ姿になる。 */
-  const blockW=rows.reduce((m,r)=>Math.max(m,r.w),0);
-  let idx=0;
+    .map(el=>({el:el,w:el.offsetWidth,h:el.offsetHeight}));
+  if(!items.length)return null;
+  items.forEach(it=>{it.el._pw=it.w;it.el._ph=it.h;});   // 紙片の姿の寸法（間引きに使う）
+  let tall=0,run=0;
+  items.forEach(it=>{tall=Math.max(tall,it.h);run+=it.w+SHEET_GAP;});
+  const rowH=tall+SHEET_GAP;
+  run*=RUN_SLACK;
+  const want=VW/Math.max(VH-SHEET_PAD,200);
+  let A=0,B=0,best=1e9;
+  for(let n=1;n<=24;n++){
+    const b=n*rowH/2;
+    let S=0;
+    for(let i=0;i<n;i++){
+      const y=(i+0.5)*rowH-b;
+      S+=Math.sqrt(Math.max(1-(y/b)*(y/b),CHORD_MIN));
+    }
+    const a=run/(2*S);
+    /* 画面より広い束は作らない（maxW）。中身が多くて一画面に入りきらない島では、
+       溢れる向きを縦にする——横へ溢れると、縦書きの読み順（右→左）そのものが
+       画面の外へ出る。段を増やせば束は細く高くなるので、幅の収まる形の中から
+       いちばん画面の比に近いものを選ぶ。どれも収まらなければ、いちばん細いもの。 */
+    if(maxW&&2*a>maxW){ if(n<24||A)continue; A=a;B=b;break; }
+    const e=Math.abs(Math.log((a/b)/want));
+    if(e<best){best=e;A=a;B=b;}
+  }
+  // 段＝楕円の弦。中心に近い段から埋める（中心がいちばん「その部屋のもの」）
+  const rows=[];
+  for(let y=-B+rowH/2;y<B;y+=rowH){
+    const t=Math.max(1-(y/B)*(y/B),CHORD_MIN);
+    rows.push({y:y,ch:2*A*Math.sqrt(t),items:[]});
+  }
+  rows.sort((p,q)=>Math.abs(p.y)-Math.abs(q.y));
+  const q=items.slice().sort((x,y)=>
+    (crossOf(y.el)-crossOf(x.el))                        // その部屋らしい順
+    ||(y.el._w.sink-x.el._w.sink)                        // 同じなら、沈んでいない順
+    ||(String(x.el._w.id)<String(y.el._w.id)?-1:1));     // 決定論（同じ宙は同じ姿）
+  let i=0;
   rows.forEach(r=>{
-    r.items.forEach(it=>{
-      // 右から埋める（vertical-rl の読み順）。行の中では上をそろえる
-      const tx=blockW/2-it.x-it.w, ty=it.y-totalH/2;
-      it.el._gx=tx; it.el._gy=ty;
-      /* 「次々流れてくる」（2026-07-31）：島に降りた瞬間、紙片は一斉に整列するのでは
-         なく、読み順（右上→左下）に少しずつ席へ流れ着く。遅らせるのは transform だけ
-         （.w の transition-property の並びは opacity, transform の二つ——同日夜に
-         色・地・影の遷移をやめたので、遅れの並びも二つに詰めた）。
-         薄さまで遅らせると、闇に光る字が紙の上に居残って読めない瞬間ができる。 */
-      if(stagger&&!REDUCED){
-        it.el.style.transitionDelay='0s,'+Math.min(idx*0.03,0.5).toFixed(2)+'s';
-        idx++;
-      }
-      it.el.style.transform=posOf(isl,it.el);
+    let w=0;
+    while(i<q.length&&w+q[i].w+SHEET_GAP<=r.ch){ w+=q[i].w+SHEET_GAP; r.items.push(q[i]); i++; }
+  });
+  while(i<q.length)rows[rows.length-1].items.push(q[i++]);   // 余りは最も外の段へ
+  /* 段の丈は、その段に居る紙で決め直す（段ごとに詰める）。丈の見積り（rowH）は
+     いちばん長い一枚に合わせてあるので、短い紙ばかりの段——たいてい中心——に
+     一枚ぶんの空きが残る。楕円の姿は保ったまま、そこだけ詰める。 */
+  const line=rows.filter(r=>r.items.length).sort((p,q)=>p.y-q.y);
+  let H=0;
+  line.forEach(r=>{ r.h=0; r.items.forEach(it=>{r.h=Math.max(r.h,it.h);}); H+=r.h+SHEET_GAP; });
+  H-=SHEET_GAP;
+  let cur=-H/2;
+  line.forEach(r=>{ r.y=cur+r.h/2; cur+=r.h+SHEET_GAP; });
+  /* 段の中でも中心から外へ。またぐ一片は、相手の島のある側（右か左か）へ寄る。
+     ただし片側が弦の半分を越えたら、寄せたい側でも反対へ回す——「みんな同じ方角へ
+     掛かっている」島（隣が一つしか無い島では実際に起きる）で、束が片側だけ倍に
+     伸びて画面から出るのを防ぐ。方角は希望であって、場所の取り合いには勝てない。 */
+  let W=0;
+  line.forEach(r=>{
+    const half=r.ch/2, R=[],L=[];
+    let rw=0,lw=0;
+    r.items.forEach((it,k)=>{
+      const d=partnerDir(isl,it.el);
+      let right=(d==null)?(k%2===0):(Math.cos(d)>=0);
+      if(right?(rw+it.w>half&&lw<rw):(lw+it.w>half&&rw<lw))right=!right;
+      if(right){R.push(it);rw+=it.w+SHEET_GAP;}else{L.push(it);lw+=it.w+SHEET_GAP;}
     });
+    let x=0;
+    R.forEach(it=>{ it.x=x+it.w/2; it.y=r.y; x+=it.w+SHEET_GAP; W=Math.max(W,2*x); });
+    x=0;
+    L.forEach(it=>{ x-=it.w+SHEET_GAP; it.x=x+it.w/2; it.y=r.y; W=Math.max(W,-2*x); });
+  });
+  return {items:items,W:W,H:H};
+}
+/* 組んだ席へ、実際に動かす。「次々流れてくる」（2026-07-31）は残すが、流れる向きは
+   読み順から**中心→外**へ変えた＝島がひらく。遅らせるのは transform だけ（.w の
+   transition-property の並びは opacity, transform の二つ）。薄さまで遅らせると、
+   闇に光る字が紙の上に居残って読めない瞬間ができる。 */
+function sheetLayout(isl,stagger){
+  const pl=sheetPlan(isl,(VW*0.94)/Math.max(K,0.08)); if(!pl)return;
+  const ax=Math.max(pl.W/2,1), ay=Math.max(pl.H/2,1);
+  pl.items.forEach(it=>{
+    it.el._gx=it.x-it.w/2; it.el._gy=it.y-it.h/2;
+    if(stagger&&!REDUCED){
+      const rho=Math.min(1,Math.hypot(it.x/ax,it.y/ay));
+      it.el.style.transitionDelay='0s,'+(rho*0.42).toFixed(2)+'s';
+    }
+    it.el.style.transform=posOf(isl,it.el);
   });
 }
 /* 席替えの最中（家⇄紙片の席）は、紙は二つの座のあいだを飛んでいる。
@@ -914,11 +993,41 @@ function screenPos(el){
    受け止めていた一枚も、集まってきた片の面も、置き去りにしない。
    焦点の引き直し（＝紙を敷く島の入れ替え）は apply() を待たずその場で始める
    ——rAF が止まる環境では、待つと島に着いても紙が敷かれないままになる。 */
+/* 降りる先の倍率は、島の半径ではなく**束の寸法**から決める（2026-08-02）。
+   半径は遠景の姿でしかないので、中身が12片の島は画面がすかすかになり、80片の島は
+   画面から溢れていた。束を測って「入るところまで寄る／退く」なら、どちらも余白は
+   残らない。測るために一瞬だけ紙片の姿にする（同じフレームで戻す＝描かれない）。
+   下限は「島に居る」の線（R*K>0.32*短辺）より上に置く——寄った拍子に島から
+   追い出されては元も子もない。収める前に、まず居られること。 */
+function fitK(isl){
+  const was=isl.el.classList.contains('sheet');
+  if(!was)isl.el.classList.add('sheet');
+  // 下限は、字が読めるところ（0.42）と、島から押し出されない線（出る線 0.20）の外側
+  const lo=Math.max(0.42,0.21*Math.min(VW,VH)/isl.R);
+  /* 束の形は倍率で変わり（幅の上限）、倍率は束の形で決まる。数回まわせば落ち着く
+     ——寄るほど束は細く高くなり、細いほど寄れる、の片側だけに動くので。 */
+  let k=1.05,pl=null;
+  try{
+    for(let t=0;t<5;t++){
+      pl=sheetPlan(isl,(VW*0.94)/k);
+      if(!pl)break;
+      const nk=Math.max(lo,Math.min(1.05,
+        Math.min((VW*0.94)/Math.max(pl.W,1),((VH-SHEET_PAD)*0.94)/Math.max(pl.H,1))));
+      if(Math.abs(nk-k)<0.01){ k=nk; break; }
+      k=nk;
+    }
+  }catch(e){ pl=null; }
+  if(!was)isl.el.classList.remove('sheet');
+  if(!pl)return Math.max(0.55,Math.min(1.1,Math.min(VW,VH)/(isl.R*1.12*2.15)));
+  return k;
+}
+let sheetLock=null;      // 滑走中の行き先（着くまでは「居る」として扱う）
 function flyTo(isl){
   release();
   gatherHide();
-  const k=Math.max(0.55,Math.min(1.1,
-    Math.min(VW,VH)/(isl.R*1.12*2.15)));
+  const k=fitK(isl);
+  sheetLock=isl.room.id;
+  isl._flown=true;     // 岸が着いたら、もう一度だけ寸法を見直してよい印
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
   document.body.classList.add('flying');
   // 滑走の間は「出発の眺め」と「到着の眺め」の二つで間引く（通り道が消えないように）
@@ -927,6 +1036,7 @@ function flyTo(isl){
   applyNow();
   setTimeout(()=>{ world.style.transition='';
                    document.body.classList.remove('flying');
+                   sheetLock=null;   // ここから先は、敷かれているかどうかだけで見る
                    views=null; applyNow(); markMenuRoom(); },1200);
 }
 function castLand(isl,poem,color,steps){
@@ -985,7 +1095,12 @@ function seekWatch(){
   });
   // 「島に居る」の判定は倍率の絶対値ではなく、**島が視界の大半を占めているか**で見る
   // （K のしきい値は画面の広さで破綻する——424px の電話と 1280px の机では別の倍率になる）
-  const big=best&&best.isl.R*K>0.32*Math.min(VW,VH);
+  // 入る線と出る線は分ける（2026-08-02）。降りた先の倍率は束の寸法で決まるので、
+  // 中身の多い島では入った直後の倍率が入る線を割ることがある——同じ一本で見ていると、
+  // 降りた瞬間に押し出される。出る時はもっと退いてから（ついでに、線の上での
+  // ちらつきも消える）。sheetLock は滑走中（まだ敷かれていない）の行き先。
+  const stay=best&&(best.id===sheetId||best.id===sheetLock);
+  const big=best&&best.isl.R*K>(stay?0.20:0.32)*Math.min(VW,VH);
   const f=(best&&big&&best.d<best.isl.R*1.6)?best:null;
   focusIsl=f;
   // 降りた島は紙片の敷き詰めに、離れた島は散らばりの家へ（2026-07-31）。

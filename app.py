@@ -5215,9 +5215,54 @@ def _canvas_payload():
     return _canvas_shared()[1]
 
 
+def _canvas_cross(pool):
+    """一片ごとに「この部屋にしか居ない度」を測る（2026-08-02）。
+
+    部屋の重心（その部屋のことばの意味ベクトルの平均）を作り、自分の部屋との近さから
+    いちばん近い**他の**部屋との近さを引く。正なら中心へ、負なら縁へ——負のときは
+    どの部屋へ掛かっているかも返す（縁は、その相手の島がある側を向く）。
+    部屋の割り当て自体は動かさない：これは並べ方の話で、居場所の話ではない。
+    測れない片（ベクトルが無い・部屋が一つしかない）は 0 として中庸に置く。"""
+    try:
+        import numpy as np
+    except Exception:
+        return {}
+    by_room = {}
+    for e in pool:
+        v, room = e[9], e[6]
+        if v is None or room is None or e[0].get("pd"):
+            continue
+        by_room.setdefault(room, []).append((e[2], v))
+    if len(by_room) < 2:
+        return {}
+    ids = sorted(by_room)
+    rows, owner, keys = [], [], []
+    for k, room in enumerate(ids):
+        for raw, v in by_room[room]:
+            rows.append(v)
+            owner.append(k)
+            keys.append(raw)
+    V = np.stack(rows).astype(np.float32)
+    n = np.linalg.norm(V, axis=1, keepdims=True)
+    V /= np.where(n > 0, n, 1.0)
+    owner = np.asarray(owner)
+    C = np.stack([V[owner == k].mean(0) for k in range(len(ids))])
+    n = np.linalg.norm(C, axis=1, keepdims=True)
+    C /= np.where(n > 0, n, 1.0)
+    S = V @ C.T
+    r = np.arange(len(V))
+    own = S[r, owner]
+    S[r, owner] = -9.0                      # 自分の部屋を外して、次に近い部屋を見る
+    other = S.argmax(1)
+    diff = own - S[r, other]
+    return {keys[i]: (round(float(diff[i]), 3), ids[int(other[i])])
+            for i in range(len(V))}
+
+
 def _canvas_build(pool, muted):
     words = []
     pds = []
+    cross = _canvas_cross(pool)
     for e in pool:
         pub, air, raw, decay, _uid, _title, room_id, flare, _age, _sem = e
         if pub.get("pd"):
@@ -5238,13 +5283,21 @@ def _canvas_build(pool, muted):
         sink = max(0.06, min(1.0, decay))
         if flare:
             sink = max(sink, 0.92)        # 浮上中は表層へ（沈んだ字がまた読める）
-        words.append({
+        w = {
             "id": pub["id"], "poem": pub["poem"], "color": pub["color"],
             "vertical": pub["vertical"], "room": room_id,
             "sink": round(sink, 3),
             "x": round(math.cos(math.radians(ang)) * rad, 4),
             "y": round(math.sin(math.radians(ang)) * rad, 4),
-        })
+        }
+        cr = cross.get(raw)
+        if cr:
+            # cr … 大きいほど「この部屋のもの」（島に降りた時の中心）
+            # pr … 掛かっている相手の部屋（縁は、その島のある側へ寄る）
+            w["cr"] = cr[0]
+            if cr[0] < 0:
+                w["pr"] = cr[1]
+        words.append(w)
 
     # ── 島の岸（フェーズ2）──────────────────────────────────
     # 漂流物は部屋を持たないが、宙の一日（JST 4:00境界）ごとに、島ごと2片まで
