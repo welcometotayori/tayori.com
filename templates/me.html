@@ -84,9 +84,15 @@
   .slip::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
                 background:var(--slip,rgba(30,27,33,.22));border-radius:1px}
   /* 題（v2.2 §3）。書き手が付けた10字以内の名。棚では、ことばの上に小さく立つ
-     ——並んだ紙片の中からもう一度見つけるための手がかり（辿る・書架と同じ姿） */
-  .slip-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
+     ——並んだ紙片の中からもう一度見つけるための手がかり（辿る・書架と同じ姿）
+     2026-08-02：鉤括弧でくくって出す。くくらないと本文の一行目に見えてしまう
+     （宙の出典が『作品名』より で立つのと同じ、名を名として置く姿）。
+     括弧は姿であって中身ではないので、CSS で足す＝DBに入るのは素の題のまま。
+     行頭のカギは半角ぶんの空きを内側に持つので、その分だけ左へ引いて本文と頭を揃える。 */
+  .slip-title{margin:0 0 4px -.5em;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
               word-break:keep-all;overflow-wrap:anywhere}
+  .slip-title::before{content:"「"}
+  .slip-title::after{content:"」"}
   /* 本文に keep-all は掛けない——文節折返しは UI 文言の作法で、人のことばには介入しない
      （tayori の恒久方針）。overflow-wrap は箱を破らないための安全網なので残す。 */
   .slip-poem{margin:0 0 var(--s2);font-size:var(--t-lead);line-height:2.4;
@@ -157,9 +163,12 @@
           box-shadow:0 1px 0 rgba(250,248,243,.05),0 14px 30px -20px rgba(0,0,0,.9)}
   .m-slip::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
                   background:var(--slip,rgba(30,27,33,.22));border-radius:1px}
-  /* 題（v2.2 §3）。書架でも、ことばの上に小さく立つ（棚・辿ると同じ姿） */
-  .m-title{margin:0 0 4px;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
+  /* 題（v2.2 §3）。書架でも、ことばの上に小さく立つ（棚・辿ると同じ姿）。
+     鉤括弧は .slip-title と同じ理由で CSS の側で足す（2026-08-02） */
+  .m-title{margin:0 0 4px -.5em;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
            word-break:keep-all;overflow-wrap:anywhere}
+  .m-title::before{content:"「"}
+  .m-title::after{content:"」"}
   /* 本文に keep-all は掛けない（.slip-poem と同じ理由） */
   .m-poem{margin:0;font-size:var(--t-lead);line-height:2.3;letter-spacing:var(--tr-word);
           white-space:pre-wrap;overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
