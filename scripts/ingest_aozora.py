@@ -28,6 +28,9 @@
 ・指示語で始まる文と、誰のことか分からない人物への言及は落とす。前後が無い場所へ
   出すのだから、一片で立っていないものは置けない。
 ・鉤括弧を含む文は落とす。会話は前後が無いと宙で迷子になる。
+・「と、」「が、」「で、」で始まる文と、破線・三点リーダで始まる文は落とす。
+  頭に前の文への継ぎ手が残っていると、一片だけを見た人には**途中から拾い読み
+  している**ように見える（2026-08-02）。
 ・現代語の語尾で終わる文だけを残す。文語は、静かではなく、遠い。
 ・注記・ルビ・見出しは本文ではないので、読む前に落とす。
 
@@ -115,6 +118,14 @@ _KANA = re.compile(r"[ぁ-んァ-ヶ]")
 # 前後が無いと宙で迷子になる文。指示語で始まる文（「それは」「そこへ」）と、
 # 誰のことか分からない人物への言及（彼・おじさん）は、一片で立てない。
 _DEIXIS_HEAD = re.compile(r"^(それ|そこ|そう|これ|ここ|あれ|あそこ|あの|その|この|彼)")
+# 前の文から切れて、継ぎ手だけがこちらに残った頭（2026-08-02）。
+# 「と、猿の間に混乱が起って……」の「と、」は、その手前にあった会話の閉じ括弧
+# （「〜〜。」と、）ごと前の一片へ行ってしまった残りで、鉤括弧のふるいをすり抜ける。
+# 「が、」「で、」は続きの合図そのもの。一字＋読点で始まる文は、呼びかけ（「ね、」
+# 「さ、」）や口ごもり（「ど、どうか」）も含めて、前後の無い場所では拾い読みに見える。
+# 破線・三点リーダで始まる文も同じ——「ここから続き」とだけ書いてある。
+_DANGLING_HEAD = re.compile(r"^[とがでをにはもてのかしばやどなんさえあまねよぞ]、")
+_LEAD_MARK = re.compile(r"^[―—…‥]")
 _NEEDS_CAST = re.compile(r"彼女|彼|おじさん|おばさん|おじいさん|おばあさん|"
                          r"お父さん|お母さん|主人|旦那|奥さん|さんは|君は|ちゃんは")
 # 青空文庫の注記とルビ（テキスト版・XHTML版のどちらにも出る形）
@@ -154,6 +165,15 @@ def sentences(text):
     return out
 
 
+def dangling_head(s):
+    """頭に、前の文への継ぎ手だけが残っていないか。
+
+    ふるいと、既に置いてある一節を降ろす側（retire）の両方から呼ぶ。規則が二つに
+    分かれると、次に取り込んだときに降ろしたはずのものが戻ってくる。"""
+    s = s.strip()
+    return bool(_DANGLING_HEAD.match(s) or _LEAD_MARK.match(s))
+
+
 def acceptable(s):
     """宙へ出してよい一文か。迷ったら落とす——拾い漏らしは誰も困らない。"""
     s = s.strip()
@@ -169,6 +189,8 @@ def acceptable(s):
         return False                      # 息が長い文は、漂う一片には向かない
     if _DEIXIS_HEAD.match(s) or _NEEDS_CAST.search(s):
         return False                      # 前後が無いと立てない文（指示語・登場人物）
+    if dangling_head(s):
+        return False                      # 前の文からの続きに見える頭
     kana = len(_KANA.findall(s))
     if kana < len(s) * 0.3:
         return False                      # 漢字ばかりの文は、目が滑る
@@ -414,6 +436,9 @@ def place(rows, apply_):
 
     stopped, keep = Counter(), []
     for r in rows:
+        if dangling_head(r["body"]):
+            stopped["継ぎ手の残った頭"] += 1
+            continue                       # 古い CSV から入れ直しても戻ってこないように
         status, _ = _moderate(r["body"])
         if status != "live":
             stopped[status] += 1
@@ -463,6 +488,32 @@ def place(rows, apply_):
     print(f"[たより] 宙へ置きました: 新規 {put}片（既にあったもの {len(keep) - put}片）")
 
 
+def retire(apply_):
+    """既に置いてある一節から、頭に継ぎ手の残ったものを降ろす（2026-08-02）。
+
+    消さずに sky_status を live から外すだけにする。本文も出典もそのまま残るので、
+    ふるいを直しすぎたと分かったときに戻せる（宙の読む道はどれも live しか見ない）。
+    行数が変われば探すの板は次の見回りで積み直る＝ここで何もしなくてよい。"""
+    db = _connect()
+    rows = db.execute("SELECT id, body FROM external_texts"
+                      " WHERE sky_status='live'").fetchall()
+    hit = [r["id"] for r in rows if dangling_head(r["body"])]
+    print(f"[たより] 降ろす一節 {len(hit)}片 / 宙にある {len(rows)}片")
+    for b in [r["body"] for r in rows if dangling_head(r["body"])][:5]:
+        print(f"    {b}")
+    if not apply_:
+        print("[たより] 下見（--apply で降ろします）")
+        return
+    with _WRITE_LOCK:
+        for i in range(0, len(hit), 500):
+            chunk = hit[i:i + 500]
+            db.execute("UPDATE external_texts SET sky_status='dropped'"
+                       " WHERE id IN (%s)" % ",".join("?" * len(chunk)), chunk)
+        db.commit()
+    _sky_cache_bust()
+    print(f"[たより] 降ろしました: {len(hit)}片（本文は消していません）")
+
+
 def remove(apply_):
     db = _connect()
     n = db.execute("SELECT COUNT(*) c FROM external_texts").fetchone()["c"]
@@ -491,10 +542,15 @@ def main():
     p.add_argument("--sample", type=int, default=0, help="下見用：全体から等間隔に抜く冊数")
     p.add_argument("--apply", action="store_true")
     p.add_argument("--remove", action="store_true")
+    p.add_argument("--retire-dangling", action="store_true",
+                   help="既に置いた一節から、頭に継ぎ手の残ったものを降ろす")
     a = p.parse_args()
     print(f"[たより] DB: {DB_PATH}")
     if a.remove:
         remove(a.apply)
+        return
+    if a.retire_dangling:
+        retire(a.apply)
         return
     if a.src:
         rows = extract(a.src, a.limit_works, a.sample)
