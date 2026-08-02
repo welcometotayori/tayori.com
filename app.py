@@ -1962,6 +1962,45 @@ def api_register():
                    email_verified=False, email_pending=email_pending,
                    onboarded=False)
 
+# ── 運営アカウントの見張り（2026-08-03）───────────────────────────
+# admin へのログインは、成功も失敗も、その場で運営の受信箱へ知らせる。
+# 管理画面は URL を隠しているだけ（admin_required は 404 で装う）なので、
+# 「鍵が開いた・こじ開けられかけた」を人間が知る道は、この通知だけ。
+ADMIN_ALERT_TO = os.environ.get("TAYORI_ADMIN_ALERT_TO", "tayoriletter@gmail.com")
+
+
+def _notify_admin_login(ok, username, note=""):
+    """admin ログインの通知。送信は別スレッド（ログインを待たせない）。
+    失敗しても本体は止めない。監査ログにも同じ事実を残す。"""
+    try:
+        ip = _client_ip()
+        ua = (request.headers.get("User-Agent") or "")[:200]
+        at = datetime.now().isoformat(timespec="seconds")
+        subject = ("tayori 管理者ログイン" if ok
+                   else "tayori 管理者ログイン失敗（パスワード不一致）")
+        body = (
+            f"admin アカウントへのログイン{'がありました' if ok else 'が失敗しました'}。\n\n"
+            f"日時: {at}\n"
+            f"名前: {username}\n"
+            f"IP: {ip}\n"
+            f"端末: {ua}\n"
+            + ("" if not note else f"補足: {note}\n")
+            + "\n心当たりがない場合は、TAYORI_ADMIN_PASSWORD を変えて再デプロイしてください。\n"
+        )
+        threading.Thread(target=send_email,
+                         args=(ADMIN_ALERT_TO, subject, body), daemon=True).start()
+        # 監査ログへも直に書く（_admin_log はセッション前提＝失敗時の actor が
+        # 緊急トークンの名「token」に化けるので、ここでは名乗られた名前を残す）
+        db = get_db()
+        db.execute(
+            "INSERT INTO admin_audit_log (actor_id, actor, action, target_id, note, at)"
+            " VALUES (?,?,?,?,?,?)",
+            (None, username, "login" if ok else "login_failed", None, ip, at))
+        db.commit()
+    except Exception as e:
+        print(f"[たより] 管理者ログイン通知に失敗（ログインは継続）: {e}", flush=True)
+
+
 @app.route("/api/login", methods=["POST"])
 def api_login():
     data = request.get_json(force=True)
@@ -1970,6 +2009,9 @@ def api_login():
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if not row or not check_password_hash(row["pw_hash"], password):
+        # admin を狙った失敗だけ知らせる（一般ユーザーの打ち間違いまで鳴らさない）
+        if row is not None and _row_flag(row, "is_admin"):
+            _notify_admin_login(False, username)
         return jsonify(error="名前かパスワードが違います。"), 401
     # 停止中は、正しいパスワードでも入れない。理由は書かない（運営に問い合わせてもらう）。
     if "suspended_at" in row.keys() and row["suspended_at"]:
@@ -1990,6 +2032,8 @@ def api_login():
         print(f"[たより] last_login_at 記録失敗（ログインは継続）: {e}", flush=True)
     session.permanent = True
     session["uid"] = row["id"]
+    if _row_flag(row, "is_admin"):
+        _notify_admin_login(True, row["username"])
     keys = row.keys()
     return jsonify(ok=True, username=row["username"],
                    is_admin=_row_flag(row, "is_admin"),
