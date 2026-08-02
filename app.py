@@ -4914,7 +4914,9 @@ def _drift_shore(db, room_ids, k, muted=(), day=None, nonce=""):
     シャッフル」）。**空のときは全員が同じ岸を見る**——遠景の地形は共有のままにして、
     降りた人の手元でだけ組み替わる形にしてある。宙の一日ごとの入れ替わりは変えていない
     （降りずに眺めているだけの人にも、日を追って別の一節が流れ着く）。"""
-    if k <= 0 or not room_ids:
+    # k は数でも、部屋ごとの数（dict）でもよい（2026-08-03・人のことばが無い島は厚く）
+    kof = k.get if isinstance(k, dict) else (lambda rid, _d=None: k)
+    if not room_ids or (not isinstance(k, dict) and k <= 0):
         return {}
     day = day or (datetime.now(JST) - timedelta(hours=4)).date().isoformat()
     if nonce:
@@ -4945,9 +4947,12 @@ def _drift_shore(db, room_ids, k, muted=(), day=None, nonce=""):
         return got
 
     for rid in room_ids:
-        got = draw("room_id = ?", (rid,), k, "shore:%s:%s" % (rid, day))
-        if len(got) < k:
-            got += draw("room_id IS NULL", (), k - len(got), "shore0:%s:%s" % (rid, day))
+        want = kof(rid, 0) or 0
+        if want <= 0:
+            continue
+        got = draw("room_id = ?", (rid,), want, "shore:%s:%s" % (rid, day))
+        if len(got) < want:
+            got += draw("room_id IS NULL", (), want - len(got), "shore0:%s:%s" % (rid, day))
         if got:
             out[rid] = got
     return out
@@ -5377,6 +5382,12 @@ _SKY_SHORE_K = int(_env_num("TAYORI_SKY_SHORE_K", 32, 0, 200))
 # 降りたときに _SKY_SHORE_K（32）で満たす。**降りたあとの見え方は変わらない。**
 # 遠景の紙の密度を戻したいときは TAYORI_SKY_CANVAS_SHORE_K を上げる（32 で元通り）。
 _SKY_CANVAS_SHORE_K = int(_env_num("TAYORI_SKY_CANVAS_SHORE_K", 12, 0, 200))
+# 人のことばが一通も無い部屋（気持ちの名の7室）だけは、岸を厚く積む（2026-08-03）。
+# 12片の島は半径364で、人の居る島（550〜640）より一回り小さいうえ、紙もまばらで、
+# 遠景では名前だけが暗がりに浮いて見えた——隣とのあいだが「岸」ではなく「空白」になる。
+# その部屋には本の一節が227〜3050片ある。少なく見せていたのは、人の居る島の**上乗せ**
+# として決めた数（12）を、中身がそれしか無い部屋にもそのまま当てていたから。
+_SKY_CANVAS_SHORE_EMPTY_K = int(_env_num("TAYORI_SKY_CANVAS_SHORE_EMPTY_K", 32, 0, 200))
 
 
 @app.route("/api/sky/canvas")
@@ -5533,7 +5544,11 @@ def _canvas_build(pool, muted):
     db = get_db()
     room_ids = [r["id"] for r in db.execute(
         "SELECT id FROM rooms WHERE deleted_at IS NULL ORDER BY COALESCE(position_index,1000000), id")]
-    for room_id, got in _drift_shore(db, room_ids, _SKY_CANVAS_SHORE_K, muted).items():
+    # 人のことばがまだ一通も無い部屋は、岸を厚く積む（島の姿が「空白」にならない厚さ）
+    filled = {w["room"] for w in words}
+    kmap = {rid: (_SKY_CANVAS_SHORE_K if rid in filled else _SKY_CANVAS_SHORE_EMPTY_K)
+            for rid in room_ids}
+    for room_id, got in _drift_shore(db, room_ids, kmap, muted).items():
         for e in got:
             pub, raw = e[0], e[2]
             ang = _canvas_seed(raw, "sa%s" % room_id) * 360.0

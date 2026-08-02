@@ -196,6 +196,23 @@ let ISL_GRAV=0.006;      // 宙の真ん中へ寄せる弱い重み（地図の�
    決めておいて、あとは**重なった組だけを押し分ける**。地図の遠近は薄まるが、
    隣り合わせ（誰の隣が誰か）は保たれる。押し分けと同時に、それぞれを地図の上の
    自分の場所へ弱く引き戻す＝ばらけた島が意味から離れていかない。 */
+/* 外周に居る島（凸包・反時計回り）。岸を一本に繋ぐために使う。
+   点は21前後なので、素直に総なめ（Andrew の単調鎖）で足りる。 */
+function hull(P){
+  if(P.length<3)return P.slice();
+  const p=P.slice().sort((a,b)=>(a.x-b.x)||(a.y-b.y));
+  const cross=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
+  const half=(pts)=>{
+    const out=[];
+    pts.forEach(q=>{
+      while(out.length>1&&cross(out[out.length-2],out[out.length-1],q)<=0)out.pop();
+      out.push(q);
+    });
+    out.pop();
+    return out;
+  };
+  return half(p).concat(half(p.slice().reverse()));
+}
 function placeIslands(rooms,counts){
   const placed=[];
   const R=r=>islandR(counts.get(r.id)||0);
@@ -226,6 +243,24 @@ function placeIslands(rooms,counts){
         const push=(need-d)/2/d;
         a.x-=dx*push; a.y-=dy*push; b.x+=dx*push; b.y+=dy*push;
         moved++;
+      }
+      /* 岸に立つ島は、隣の岸の島と手を繋ぐ（2026-08-03）。外周（凸包）を毎回引き直し、
+         隣り合う二島が離れすぎていたら、そのぶんだけ近づける。押し分けとは逆向きの、
+         弱い引き。これで陸の縁がひと続きになる——環に出た気持ちの名も、そこで陸と
+         隣り合う出来事の名も、同じ一本の岸に並ぶ。
+         7室だけで環を閉じることはできない（島の直径の和 5100 に対し、陸を囲む長さは
+         15700）。閉じるのは「外周に居る島ぜんぶ」＝陸の島と混ざった一本の岸。 */
+      if(t<180){
+        const h=hull(P);
+        for(let i=0;i<h.length;i++){
+          const a=h[i],b=h[(i+1)%h.length];
+          if(a===b)continue;
+          const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1e-6;
+          const want=a.R+b.R+ISL_GAP;
+          if(d<=want)continue;
+          const k=(d-want)/2/d*0.08;                    // 弱い引き（押し分けに勝たせない）
+          a.x+=dx*k; a.y+=dy*k; b.x-=dx*k; b.y-=dy*k;
+        }
       }
       /* 引き戻し（地図の上の自分の場所へ）＋ごく弱い重み（宙の真ん中へ）。
          重みが要るのは、地図には**空洞**があるから：意味の空間では「気持ちの名」と
