@@ -805,17 +805,52 @@ function cullWords(){
     });
   });
 }
+/* 倍率が動いている間（2026-08-03 スクロール）。ひきずり（translate）は合成の上で
+   済むが、倍率が変わると宙ぜんぶを**描き直す**——同じ「手がふれている」でも、
+   この二つの重さは桁が違う。だから別の旗にして、寄り引きの最中だけ塗りを落とす。 */
+let zoomT=0, zoomOn=false;
+function zooming(){
+  if(!zoomOn){ zoomOn=true; document.body.classList.add('zooming'); }
+  clearTimeout(zoomT);
+  zoomT=setTimeout(()=>{ zoomOn=false; document.body.classList.remove('zooming'); },700);
+}
 function zoomAt(cx,cy,factor){
   const k=Math.max(KMIN,Math.min(KMAX,K*factor));
+  if(k===K)return;                          // 端で止まっている時は、描き直さない
   const vw=VW/2, vh=VH/2;
   const wx=(cx-vw-PX)/K, wy=(cy-vh-PY)/K;   // カーソルの下の世界座標を動かさない
   PX=cx-vw-wx*k; PY=cy-vh-wy*k; K=k;
-  gesture();
+  gesture(); zooming();
   apply();
 }
+/* ── ホイールと二本指（2026-08-03・Kosei 確定「案A」）─────────────────────
+   これまでは、ホイールも二本指も、来たものは全部「寄る・引く」だった。だが宙で
+   いちばん重い仕事は倍率を変えることで（世界の800枚を描き直す）、いちばん軽いのは
+   ひきずること（合成の上の平行移動）。**いちばん気軽な指の動きに、いちばん重い仕事が
+   割り当たっていた**——机の指二本のひと振りで、40発のホイールが飛び、倍率は半分に
+   なる（実測 0.55→0.255）。その40コマぜんぶが、宙の描き直しだった。
+
+   だから地図の作法に揃える：
+     二本指スクロール／ホイール … ひきずる（deltaX・deltaY をそのまま平行移動）
+     つまみ（ctrl+wheel）・⌘+ホイール・実機のピンチ … 寄る・引く
+   trackpad のつまみは、ブラウザが ctrlKey を立てた wheel として渡してくる（合成の
+   ctrl であって、指はキーに触れていない）。実機の二本指ピンチは pointer 側が拾う。
+
+   刻みの寸法：deltaMode は行（1）や頁（2）で来ることがあるので px へ直す。
+   つまみの一発は ±50 で頭を押さえる——机のホイールに ctrl を添えた一段が
+   exp(-50*0.0075)=0.687 ＝ ＋／− をひと押し（1/1.45=0.690）と同じ段になる。 */
+const WHEEL_LINE=16;
 vp.addEventListener('wheel',e=>{
   e.preventDefault();
-  zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*0.0016));
+  const m=e.deltaMode===1?WHEEL_LINE:(e.deltaMode===2?VH:1);
+  if(e.ctrlKey||e.metaKey){
+    const d=Math.max(-50,Math.min(50,e.deltaY*m));
+    zoomAt(e.clientX,e.clientY,Math.exp(-d*0.0075));
+    return;
+  }
+  PX-=e.deltaX*m; PY-=e.deltaY*m;
+  gesture();
+  apply();
 },{passive:false});
 /* ＋−は押し続けられる（2026-08-03 操作性）。ひと押し＝一段、350ms押し続けたら
    そこから小刻みに寄り続ける。click ではなく pointerdown で受ける——click だと

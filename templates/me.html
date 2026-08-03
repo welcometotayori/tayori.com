@@ -76,10 +76,14 @@
      中央のまま横へ張り出す（負のマージン＝.doc の外へ静かにはみ出す）。 */
   .slips{margin:0;padding:0;list-style:none;columns:15em;column-gap:20px;
          width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
+  /* 影のぼけは 30px → 14px（2026-08-03 スクロール）。ぼかしは blur と同じ計算で、
+     一枚ごとに面積ぶんの塗りが要る——棚には紙が何十枚も敷き詰まるので、指で送る間
+     ずっとその塗りが続いていた。宙の紙片（.isl.sheet .w）は 7/31 に同じ理由で
+     14px へ落としてある。ここだけ古い寸法のまま残っていた。 */
   .slip{position:relative;break-inside:avoid;margin:0 0 20px;
         padding:var(--s3) var(--s3) var(--s2) calc(var(--s3) + 8px);
         background:var(--pp,#EDE9DF);border-radius:var(--edge);
-        box-shadow:0 1px 0 rgba(250,248,243,.05),0 14px 30px -20px rgba(0,0,0,.9)}
+        box-shadow:0 1px 0 rgba(250,248,243,.05),0 8px 14px -12px rgba(0,0,0,.92)}
   /* 紙の左に一本、そのことばの気分の色の糸（--slip は JS が差す） */
   .slip::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
                 background:var(--slip,rgba(30,27,33,.22));border-radius:1px}
@@ -137,6 +141,11 @@
   /* 登場のぼかし（filter）は 2026-07-31 に外した：マソンリーで枚数が増え、
      数十枚のぼかしアニメが同時に走ると読み込み直後が固まる（blur は一枚ごとに
      GPUの描画層を作る——宙で踏んだのと同じ穴）。薄さと持ち上がりだけで足りる。 */
+  /* 順番待ちの尾を切る（2026-08-03 スクロール）。--i は素の添字だったので、
+     棚に100枚あれば最後の一枚は**7秒後**に置かれ始める。つまり面を開いてから
+     数秒〜十数秒のあいだ、何十枚もが同時に動き続けている状態で指を送ることになる。
+     JS側で --i を12までに丸めた（下の renderWords / 書架も同じ）＝波は1秒足らずで
+     引く。「一枚ずつ、順に置かれる」という姿は、はじめの十数枚で既に伝わっている。 */
   @media (prefers-reduced-motion: no-preference){
     .slip{opacity:0;animation:slipIn .6s var(--ease) both;
           animation-delay:calc(var(--i,0) * 70ms)}
@@ -160,7 +169,7 @@
   .m-slip{position:relative;break-inside:avoid;margin:0 0 20px;
           padding:var(--s3) var(--s3) var(--s2) calc(var(--s3) + 8px);
           background:var(--pp,#EDE9DF);border-radius:var(--edge);
-          box-shadow:0 1px 0 rgba(250,248,243,.05),0 14px 30px -20px rgba(0,0,0,.9)}
+          box-shadow:0 1px 0 rgba(250,248,243,.05),0 8px 14px -12px rgba(0,0,0,.92)}
   .m-slip::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
                   background:var(--slip,rgba(30,27,33,.22));border-radius:1px}
   /* 題（v2.2 §3）。書架でも、ことばの上に小さく立つ（棚・辿ると同じ姿）。
@@ -242,6 +251,9 @@
 </div>
 
 <script>
+/* 一枚ずつ置かれる波の、いちばん後ろ（2026-08-03 スクロール）。棚も書架も同じ寸法で
+   丸める——面が違っても、置かれ方が違って見える理由が無い。12枚 × 70ms ＝ 0.84秒。 */
+const STAGGER_MAX=12;
 /* ══ タブ ═════════════════════════════════════════════════════
    面の切り替えだけを持つ。中身の読み込みは、開かれた時に一度だけ走らせる
    （書架は手紙の全部を引くので、棚を見に来た人を待たせない）。 */
@@ -433,7 +445,7 @@
     say('');
     words.forEach((w,i)=>{
       const li=document.createElement('li');li.className='slip';
-      li.style.setProperty('--i',i);
+      li.style.setProperty('--i',Math.min(i,STAGGER_MAX));   // 順番待ちの尾を切る
       li.innerHTML=(w.title?'<p class="slip-title">'+esc(w.title)+'</p>':'')+
         '<p class="slip-poem">'+esc(w.poem)+'</p>'+
         '<div class="slip-fusen-row"></div>'+
@@ -584,7 +596,7 @@
       const words=g.words.slice().sort((a,b)=>(a.hue==null)-(b.hue==null)||(a.hue||0)-(b.hue||0));
       words.forEach(w=>{
         const li=document.createElement('li');li.className='m-slip';
-        li.style.setProperty('--i',idx++);
+        li.style.setProperty('--i',Math.min(idx++,STAGGER_MAX));   // 順番待ちの尾を切る
         li.innerHTML=(w.title?'<p class="m-title"></p>':'')+'<p class="m-poem"></p>';
         if(w.title)li.querySelector('.m-title').textContent=w.title;
         li.querySelector('.m-poem').textContent=w.poem;
