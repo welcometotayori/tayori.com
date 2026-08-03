@@ -114,7 +114,12 @@
      書き換えると、その下の全要素（数百のことば）の計算済みスタイルが一斉に無効に
      なる——つまみ／ホイールのたび、宙ぜんぶの字を再計算していた。名は14枚しかない。
      14枚の葉に直接書くほうが、根に一度書くより圧倒的に軽い。 */
-  .isl{position:absolute;transform:translate(-50%,-50%)}
+  /* 島は、外の版面と縁を切る（2026-08-03 カクツキ）。島の中では字が一枚ずつ
+     書き直され（打鍵の再生）、紙になったり散らばりに戻ったりする。contain が無いと、
+     その一枚の変化が「宙ぜんぶの版面をもう一度組み直してよいか」の判定に混ざる。
+     `.isl` は既に position:absolute ＋ transform ＝ 包含ブロックでも重なりの文脈でも
+     あるので、layout/style を足しても位置も重なり順も変わらない（0寸のままでいる）。 */
+  .isl{position:absolute;transform:translate(-50%,-50%);contain:layout style}
   .isl-nm{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
           color:var(--ink-2);font-size:17px;letter-spacing:.22em;white-space:nowrap;
           text-shadow:0 0 9px rgba(8,8,13,.9);pointer-events:none;
@@ -156,13 +161,20 @@
        ・読んでいる間  … まわりの字は退き、名と灯だけが残る（一つの様式だけが残る）
      倍率（far/near）で分けないのが要点：しきい値は画面幅で破綻するし、
      「読む面かどうか」は倍率ではなく紙が敷かれたかどうかで決まっている。 */
-  .isl:not(.sheet) .isl-w{opacity:.3}
-  .isl.sheet .isl-w{opacity:1}
+  /* 退き方は**一枚ごとの薄さ**で言う（2026-08-03 カクツキ）。以前は束ねている箱
+     （.isl-w）に opacity を掛けていたが、透ける箱は「中身を一度どこかへ描いて、
+     それから薄めて重ねる」＝島ごとに描画の面を一枚よけいに立てることを意味する。
+     島は20あり、読む面に入る・出るたびに、その20枚が0.8秒かけて一斉に薄まっていた。
+     字は押し出し（relax）で重なっていないので、箱で薄めても一枚ずつ薄めても見え方は
+     同じ——なら、面を立てないほうを採る。--dim は継承する変数だが、書くのはCSSの
+     規則（.sheet / body.reading が変わった時だけ）で、毎フレームJSが書く類ではない。 */
+  .isl:not(.sheet) .isl-w{--dim:.3}
+  .isl.sheet .isl-w{--dim:1}
   /* 読んでいる間、まわりの島は**消さずに退く**（2026-08-02・0 → .14）。
      島の席を意味の地図に置いて間合いを詰めたので、隣の島はもう画面のすぐ外にいる。
      0 にすると、紙の束の縁からひと漕ぎしただけで何も無い闇に出てしまい、宙が
      ひとつづきに見えない。退いた字は読めないが、陸が続いていることだけは見える。 */
-  body.reading .isl:not(.sheet) .isl-w{opacity:.14;pointer-events:none}
+  body.reading .isl:not(.sheet) .isl-w{--dim:.14;pointer-events:none}
   /* ── 重さの修正（2026-07-31）──────────────────────────
      引いた宙（K<0.7）では、色の発光（text-shadow）も塗らない。遠景の字は
      小さく沈んでいて（.isl-w が 0.3）光暈はどのみち読めない——見えない光の
@@ -170,7 +182,7 @@
      inline style（散らばり用の色）より勝つ必要があるので !important。
      filter:none は保険（にじみが遠景に持ち越されないように）。 */
   body.crisp .w{filter:none!important;text-shadow:none!important}
-  .isl-w{transition:opacity .8s var(--ease)}
+  /* .isl-w の opacity 遷移は畳んだ（--dim へ移した＝薄まるのは .w 自身の .8s） */
   /* ことば：枠のないタイポグラフィの塊。濃さ＝沈降（--a はJSが書く） */
   /* width/height:max-content は必須。包含ブロック（.isl）は0寸なので、絶対配置の
      ことばは shrink-to-fit で min-content＝**1字ずつ**へ潰れる——縦書きが「右から
@@ -190,12 +202,12 @@
      writing-mode:vertical-rl;width:max-content;height:max-content;
      max-height:330px;max-width:22em;
      padding:10px;margin:-10px;cursor:pointer;
-     opacity:var(--a,.8);
+     opacity:calc(var(--a,.8) * var(--dim,1));
      transition:opacity .8s var(--ease),transform 1.1s var(--ease)}
   .w.h{writing-mode:horizontal-tb}
   /* 受け止め：その一枚だけ鮮明に。まわりは息をひそめる */
   .w.held{opacity:1!important;z-index:5;color:var(--chalk)}
-  .isl.hush .w:not(.held):not(.pull){opacity:calc(var(--a,.8)*.3)!important}
+  .isl.hush .w:not(.held):not(.pull){opacity:calc(var(--a,.8)*var(--dim,1)*.3)!important}
   .w.pull{opacity:1!important;z-index:4}
   /* 波紋：受け止めた場所から一度だけひらく（糸の色の輪） */
   /* 寸法（width/height）でひらくと、1.6秒のあいだ毎フレーム版面の計算が走る
@@ -365,8 +377,12 @@
       padding:20px 16px;border-radius:var(--edge);cursor:pointer;
       background:var(--pp,#EBE7DE);
       color:rgba(30,27,33,calc(.52 + .44*var(--a,.9)));
-      box-shadow:0 10px 20px -14px rgba(0,0,0,.95);
-      will-change:transform,opacity}
+      box-shadow:0 10px 20px -14px rgba(0,0,0,.95)}
+  /* will-change は**飛んでいる間だけ**（2026-08-03 カクツキ）。付けっぱなしにすると、
+     集まってきた片の枚数だけGPUに面が居座り続ける（探すの結果は数十枚ある）。
+     携帯ではそれだけで描画がソフトウェアへ落ちる——7/31 に filter:blur を全廃した
+     のと同じ理由。JSが飛ばし終わりにこの class を外す。 */
+  .gw.flying{will-change:transform,opacity}
   .gw.h{writing-mode:horizontal-tb;max-width:22em;max-height:none}
   .gw.pd{color:rgba(30,27,33,.62)}
   .gw.held{color:rgba(30,27,33,.96);
@@ -883,6 +899,13 @@
      グラデーション三枚を永久にGPUへ載せ続ける理由はない。 */
   body.near .isl.lit .isl-glow{animation:none}
   @media (prefers-reduced-motion: reduce){ .isl.lit .isl-glow{animation:none} }
+  /* 手がふれているあいだ、気配は息を止める（2026-08-03 カクツキ）。
+     島の灯は半径1.5倍の放射グラデーション三枚で、呼吸はその全画素の塗り直し。
+     つまむ・ひきずるの最中は、同じフレームで宙ぜんぶを描き直す仕事と鉢合わせる
+     ——一秒に何度も起きる「重なり」がガクツキそのものだった。手が離れれば戻る
+     （0.7秒後）。息が止まっていることに、動かしている手は気づかない。 */
+  body.gesturing .isl.lit .isl-glow,
+  body.gesturing .lantern.near{animation-play-state:paused}
   /* ── 狭い画面の頭の帯（2026-08-02）──────────────────────────────
      名・探す・書く・しるしの四つは、560px を切ると横に並びきらない。落とすのは
      名の添え（TAYORI）と「書く」の一語＝しるしと符だけが残る。探すの器は縮めない

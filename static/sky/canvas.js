@@ -309,6 +309,11 @@ function build(rooms,words){
   const counts=new Map();
   words.forEach(w=>counts.set(w.room,(counts.get(w.room)||0)+1));
   const seats=placeIslands(rooms.filter(r=>counts.get(r.id)||!r.archived),counts);
+  /* 立ち上がりは、生きている版面に一枚ずつ足さない（2026-08-03 カクツキ）。
+     島と数百のことばを appendChild で直に足すと、足すたびに宙の版面が汚れる。
+     先に手元（DocumentFragment）で全部組んでから、一度だけ差す。 */
+  const wfrag=new Map();
+  const ifrag=document.createDocumentFragment();
   seats.forEach(s=>{
     const isl=document.createElement('div');
     isl.className='isl';
@@ -334,13 +339,16 @@ function build(rooms,words){
     const wl=document.createElement('div'); wl.className='isl-w'; isl.appendChild(wl);
     const nm=document.createElement('div'); nm.className='isl-nm'; nm.textContent=s.room.name;
     isl.appendChild(nm);
-    world.appendChild(isl);
+    ifrag.appendChild(isl);
     islands.set(s.room.id,{el:isl,wordsEl:wl,nm:nm,cx:s.x,cy:s.y,R:s.R,words:[],room:s.room});
+    wfrag.set(s.room.id,document.createDocumentFragment());
   });
   words.forEach(w=>{
     const isl=islands.get(w.room); if(!isl)return;
-    mkWord(isl,w);
+    mkWord(isl,w,wfrag.get(w.room));
   });
+  islands.forEach((isl,id)=>{ const f=wfrag.get(id); if(f)isl.wordsEl.appendChild(f); });
+  world.appendChild(ifrag);
   // まず家の座標に置く（押し出しは描画後に一度だけ・relax()）
   islands.forEach(isl=>isl.words.forEach(el=>{
     el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
@@ -348,7 +356,7 @@ function build(rooms,words){
 }
 /* 一枚のことばを、島の上に建てる。build() から切り出した（2026-07-31）——
    島に降りるたびに岸を組み直すので、建てるのは立ち上がりの一度きりではなくなった。 */
-function mkWord(isl,w){
+function mkWord(isl,w,frag){
   const el=document.createElement('div');
   el.className='w'+(w.vertical?'':' h')+(w.pd?' pd':'');
   el.textContent=w.poem;
@@ -387,7 +395,7 @@ function mkWord(isl,w){
   el._hx=ux*(isl.R-70);
   el._hy=uy*(isl.R-70);
   el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
-  isl.wordsEl.appendChild(el);
+  (frag||isl.wordsEl).appendChild(el);
   isl.words.push(el);
   return el;
 }
@@ -437,6 +445,10 @@ function relax(){
      汚れるので、次の一枚を測るたびブラウザは版面を組み直す——数百回の強制レイアウト
      ＝立ち上がりで宙が数秒沈黙する。先に全部測り、計算し、最後にまとめて置く。 */
   const measured=new Map();
+  // 再生中の一枚は寸法を留めてある（playType の pin）。測る前に、まず外す
+  islands.forEach(isl=>isl.words.forEach(el=>{
+    if(el._pin){el._pin=0;el.style.width='';el.style.height='';}
+  }));
   islands.forEach(isl=>isl.words.forEach(el=>{
     const w=el.offsetWidth,h=el.offsetHeight;
     el._sw=w; el._sh=h;                // 散らばりの姿の寸法（画面外の間引きに使う）
@@ -517,11 +529,22 @@ function partnerDir(isl,el){
    楕円の選び方：段数 n を決めれば半短径 b が決まり、総丈（run）から半長径 a が
    決まる＝**中身でちょうど埋まる**楕円が一意に出る。あとはその中から、いまの
    画面にいちばん近い比のものを採るだけ。 */
-function sheetPlan(isl,maxW){
-  const items=isl.words
-    .filter(el=>!el.classList.contains('mutedout'))
-    .map(el=>({el:el,w:el.offsetWidth,h:el.offsetHeight}));
-  if(!items.length)return null;
+/* cached＝控えてある紙片の寸法（_pw/_ph）で組む（2026-08-03 カクツキ）。
+   紙片の寸法は倍率にも画面にも依らない（max-width:18em・max-height:330px の固定）
+   ので、一度測れば次からは測り直さなくてよい。これが効くのは fitK ——降りる先の
+   倍率を決めるために、島を一瞬だけ紙片の姿にして数百枚を測っていた。class を立てて
+   読んで戻す＝島を渡るたび、版面の強制的な組み直しが二度走っていた。 */
+function sheetPlan(isl,maxW,cached){
+  const live=isl.words.filter(el=>!el.classList.contains('mutedout'));
+  if(!live.length)return null;
+  let items;
+  if(cached){
+    items=live.map(el=>({el:el,w:el._pw,h:el._ph}));
+  }else{
+    // 再生中の一枚は寸法を留めてある（playType の pin）。測る前に、まず外す
+    live.forEach(el=>{ if(el._pin){el._pin=0;el.style.width='';el.style.height='';} });
+    items=live.map(el=>({el:el,w:el.offsetWidth,h:el.offsetHeight}));
+  }
   items.forEach(it=>{it.el._pw=it.w;it.el._ph=it.h;});   // 紙片の姿の寸法（間引きに使う）
   let tall=0,run=0;
   items.forEach(it=>{tall=Math.max(tall,it.h);run+=it.w+SHEET_GAP;});
@@ -601,10 +624,17 @@ function sheetLayout(isl,stagger){
   const ax=Math.max(pl.W/2,1), ay=Math.max(pl.H/2,1);
   pl.items.forEach(it=>{
     it.el._gx=it.x-it.w/2; it.el._gy=it.y-it.h/2;
-    if(stagger&&!REDUCED){
+    /* 画面の外へ並ぶ紙は、流れてこない（2026-08-03 カクツキ）。降りた島には数百枚
+       あるのに、束のうち画面に載るのは十数枚——残りの1.1秒の滑走は、誰にも見えない
+       ところで数百枚ぶんの動きを合成し続ける仕事でしかない。見えないものは、置く。
+       判定は着いた先の眺めで見る（flyTo は倍率も位置も先に書いてから滑るので、
+       ここでの onScreen は「到着した時にそこに見えるか」を答える）。 */
+    const seen=onScreen(isl.cx+it.el._gx,isl.cy+it.el._gy,it.w,it.h);
+    it.el.style.transitionDuration=seen?'':'.8s,0s';
+    if(stagger&&!REDUCED&&seen){
       const rho=Math.min(1,Math.hypot(it.x/ax,it.y/ay));
       it.el.style.transitionDelay='0s,'+(rho*0.42).toFixed(2)+'s';
-    }
+    }else it.el.style.transitionDelay='';
     it.el.style.transform=posOf(isl,it.el);
   });
 }
@@ -629,7 +659,9 @@ function sheet(isl){
   sheetLayout(isl,true);
   // 流れ着き終わったら遅れは畳む（残すと、受け止めや検索の応答まで遅れて見える）
   clearTimeout(isl._stgT);
-  isl._stgT=setTimeout(()=>isl.words.forEach(el=>{el.style.transitionDelay='';}),1700);
+  isl._stgT=setTimeout(()=>isl.words.forEach(el=>{
+    el.style.transitionDelay='';el.style.transitionDuration='';
+  }),1700);
   apply();
   reshore(isl);          // 降りるたび、岸には別のものが寄っている
 }
@@ -641,7 +673,15 @@ function unsheet(isl){
   if(typeof noteRoomURL==='function'&&sheetWant==null)noteRoomURL(null,false);
   isl.el.classList.remove('sheet');
   clearTimeout(isl._stgT);
-  isl.words.forEach(el=>{el.style.transform='';el.style.transitionDelay='';});
+  // 帰る先（家）が画面の外なら、動きは見えない＝置いて帰す（sheetLayout と同じ作法）
+  isl.words.forEach(el=>{
+    const w=el._sw||el._pw||0, h=el._sh||el._ph||0;
+    el.style.transitionDuration=(!w||onScreen(isl.cx+el._hx,isl.cy+el._hy,w,h))?'':'.8s,0s';
+    el.style.transform='';el.style.transitionDelay='';
+  });
+  isl._stgT=setTimeout(()=>isl.words.forEach(el=>{
+    el.style.transitionDuration='';
+  }),1400);
   apply();
 }
 /* 足元の一行＝いま居る場所の名。島に降りている間はその島の名、全景では面の名。
@@ -658,6 +698,17 @@ const KMIN=0.1, KMAX=2.4;
    書き直すと、指の速さぶんだけ余計に描き直しが積まれてつっかえる。
    rAF で束ね、最後の値だけを次のフレームで一度書く。 */
 let applyQ=false, ikLast=0, farOn=null, crispOn=null;
+/* 手がふれているあいだ（2026-08-03 カクツキ）。つまむ・ひきずる・ホイール・＋−の
+   最中は、宙を描き直す仕事だけで一フレームが埋まる——そこへ「気配の呼吸」や
+   「一枚の字の書き直し」が重なると、ちょうど手が動いている時にだけ引っかかる。
+   だから触れている間は、急がない仕事を止める。離して0.7秒で、静かに戻る。
+   時計は使わない（rAFと performance.now を混ぜない作法／2026-07-27 の轍）。 */
+let gesOn=false, gesT=0;
+function gesture(){
+  if(!gesOn){ gesOn=true; document.body.classList.add('gesturing'); }
+  clearTimeout(gesT);
+  gesT=setTimeout(()=>{ gesOn=false; document.body.classList.remove('gesturing'); },700);
+}
 function apply(){
   if(applyQ)return;
   applyQ=true;
@@ -759,6 +810,7 @@ function zoomAt(cx,cy,factor){
   const vw=VW/2, vh=VH/2;
   const wx=(cx-vw-PX)/K, wy=(cy-vh-PY)/K;   // カーソルの下の世界座標を動かさない
   PX=cx-vw-wx*k; PY=cy-vh-wy*k; K=k;
+  gesture();
   apply();
 }
 vp.addEventListener('wheel',e=>{
@@ -800,6 +852,7 @@ vp.addEventListener('pointermove',e=>{
   if(ptrs.size===1){
     PX+=e.clientX-p.x; PY+=e.clientY-p.y;
     moved+=Math.hypot(e.clientX-p.x,e.clientY-p.y);
+    gesture();
     apply();
   }
   p.x=e.clientX; p.y=e.clientY;
@@ -1104,14 +1157,28 @@ function playType(el,text,steps,done){
   /* 一コマごとに innerHTML を組み直すのはやめる（2026-07-31 夜）。
      字が一つ増えるたびに HTML を読み直させていた——筆先（tcaret）は一度だけ置き、
      以後は文字そのもの（テキストノード）の中身だけ差し替える。 */
+  /* 字が一つ増えるたび、紙の寸法そのものが変わっていた（2026-08-03 カクツキ）。
+     ことばの箱は width/height:max-content ＝ 中身で寸法が決まるので、一コマ進める
+     たびに縦組みの行取りを測り直し、島の版面を組み直し、影と紙の地を塗り直していた。
+     再生は8秒ごとに3枚・一枚あたり最大9秒＝**ほとんどいつも走っている**ので、
+     これは常時の重さになる。始める前に出来上がりの寸法を測って留めておけば、
+     中身が増えても箱は動かない（縦書きは右から埋まるので、見え方も変わらない）。
+     留めるのは宙のことば（.w）だけ——読む柱の本文は寸法が固定なので要らない。 */
+  let pinW=0,pinH=0;
+  if(el.classList.contains('w')){ pinW=el.offsetWidth; pinH=el.offsetHeight; }
   let i=0,last=null,e=0,fin=false;
   const tn=document.createTextNode(norm[0].v);
   const car=document.createElement('span'); car.className='tcaret';
+  // 留めを外すのは、いまも自分が筆を持っている時だけ（次の再生が始まっていたら触らない）
+  const unpin=()=>{ if(!pinW||!el._pin||el._run!==run)return; el._pin=0;
+                    el.style.width='';el.style.height=''; };
   const finish=()=>{
     if(fin)return; fin=true;
+    unpin();
     el.textContent=text; el.classList.remove('nijimi');
     if(done)done();
   };
+  if(pinW){ el._pin=1; el.style.width=pinW+'px'; el.style.height=pinH+'px'; }
   el.textContent=''; el.appendChild(tn); el.appendChild(car);
   setTimeout(()=>{ if(el._run===run&&el.isConnected&&last===null) finish(); },12000);
   requestAnimationFrame(function frame(now){
@@ -1178,8 +1245,12 @@ function screenPos(el){
    下限は「島に居る」の線（R*K>0.32*短辺）より上に置く——寄った拍子に島から
    追い出されては元も子もない。収める前に、まず居られること。 */
 function fitK(isl){
+  /* 控えが揃っているなら、島を紙片の姿にして測り直さない（2026-08-03 カクツキ）。
+     揃っていないのは、まだ一度も降りていない島と、あとから来た岸の漂流物だけ。 */
+  const warm=isl.words.length&&isl.words.every(el=>
+    el.classList.contains('mutedout')||(el._pw&&el._ph));
   const was=isl.el.classList.contains('sheet');
-  if(!was)isl.el.classList.add('sheet');
+  if(!warm&&!was)isl.el.classList.add('sheet');
   // 下限は、字が読めるところ（0.42）と、島から押し出されない線（出る線 0.20）の外側
   const lo=Math.max(0.42,0.21*Math.min(VW,VH)/isl.R);
   /* 束の形は倍率で変わり（幅の上限）、倍率は束の形で決まる。数回まわせば落ち着く
@@ -1187,7 +1258,7 @@ function fitK(isl){
   let k=1.05,pl=null;
   try{
     for(let t=0;t<5;t++){
-      pl=sheetPlan(isl,(VW*0.94)/k);
+      pl=sheetPlan(isl,(VW*0.94)/k,warm);
       if(!pl)break;
       const nk=Math.max(lo,Math.min(1.05,
         Math.min((VW*0.94)/Math.max(pl.W,1),((VH-SHEET_PAD)*0.94)/Math.max(pl.H,1))));
@@ -1195,7 +1266,7 @@ function fitK(isl){
       k=nk;
     }
   }catch(e){ pl=null; }
-  if(!was)isl.el.classList.remove('sheet');
+  if(!warm&&!was)isl.el.classList.remove('sheet');
   if(!pl)return Math.max(0.55,Math.min(1.1,Math.min(VW,VH)/(isl.R*1.12*2.15)));
   return k;
 }
@@ -1289,6 +1360,10 @@ function castLand(isl,poem,color,steps){
 setInterval(()=>{
   tick=(tick+1)%4;
   if(REDUCED||document.hidden||K<0.55)return;
+  /* 手が動いている間・島へ滑っている間は、字を書き直さない（2026-08-03 カクツキ）。
+     書き直しは一コマごとに一枚の版面を組み直す仕事で、宙を動かす仕事といちばん
+     混ざってはいけない。静かになってから始めればいい——8秒後にまた来る。 */
+  if(gesOn||document.body.classList.contains('flying'))return;
   const W=VW,H=VH;
   const due=[];
   islands.forEach(isl=>isl.words.forEach(el=>{
@@ -1404,6 +1479,7 @@ function gatherShow(q,words){
     return [el,s.x-(r.left+r.width/2),s.y-(r.top+r.height/2)];
   });
   flip.forEach(([el,dx,dy])=>{
+    el.classList.add('flying');       // GPUに面を持たせるのは、飛んでいる間だけ
     el.style.transition='none';
     el.style.opacity='0';
     el.style.transform='translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px) scale(.32)';
@@ -1416,6 +1492,8 @@ function gatherShow(q,words){
       el.style.opacity='';
       el.style.transform='';
     });
+    // 着いたら面は降ろす（1s の飛翔＋0.6s の遅れの外側で一度だけ）
+    setTimeout(()=>flip.forEach(([el])=>el.classList.remove('flying')),1800);
   },24);
 }
 function gatherHide(){
@@ -1814,7 +1892,19 @@ document.addEventListener('keydown',e=>{
      rAFで1フレームに束ねたが、フレームが来ない状態（裏タブ・非表示）だと予約が消化されず
      筆先が止まったままになるのを検証で踏んだ。測るだけで本文も選択も触らないので、
      二度描いても副作用はない＝素直に毎回描くほうが安全。 */
+  /* 一打鍵で三度描いていた（2026-08-03 カクツキ）。input・keyup・selectionchange は
+     どれも同じ一打鍵の別々の知らせで、しかも一回ごとに getComputedStyle と
+     Range の実測が走る。姿（本文・筆先の位置・向き）が前と同じなら、描くものは
+     何も変わらない——変わった時だけ描く。 */
+  let caretKey='';
   function drawCaret(){
+    const k=(horiz?'h':'v')+'|'+(document.activeElement===ta?'1':'0')
+            +'|'+caretIndex()+'|'+ta.textContent;
+    if(k===caretKey)return;
+    caretKey=k;
+    drawCaretNow();
+  }
+  function drawCaretNow(){
     // 横書きの間はネイティブのカーソルが素直に出るので、自前の横棒は出さない
     if(horiz||document.activeElement!==ta){vcaret.style.display='none';return;}
     const cs=getComputedStyle(ta);
@@ -1867,14 +1957,21 @@ document.addEventListener('keydown',e=>{
     vcaret.style.left=x.toFixed(1)+'px';
     vcaret.style.top=y.toFixed(1)+'px';
     vcaret.style.display='block';
-    // 打鍵の直後は必ず点いている状態から数え直す（書いている最中に消えていると不安になる）
-    vcaret.style.animation='none';void vcaret.offsetHeight;vcaret.style.animation='';
+    /* 打鍵の直後は必ず点いている状態から数え直す（書いている最中に消えていると不安になる）。
+       やり方は `animation:none` →**強制的に版面を確定させて**→戻す、だった。この
+       `offsetHeight` の一行は、一打鍵ごとに文書ぜんぶの版面を組み直させる合図で、
+       書く柱の下には宙の数百のことばがそのまま生きている。同じことは、時計を
+       頭へ戻すだけでできる（版面には触らない）。 */
+    const an=vcaret.getAnimations?vcaret.getAnimations():null;
+    if(an&&an.length){ an.forEach(a=>{ try{a.currentTime=0;}catch(_){} }); }
+    else{ vcaret.style.animation='none';void vcaret.offsetHeight;vcaret.style.animation=''; }
   }
   // 変換中も measure は読むだけなので、筆先は変換の字を追ってよい
   ['input','click','keyup','focus','scroll',
    'compositionstart','compositionupdate','compositionend']
     .forEach(ev=>ta.addEventListener(ev,drawCaret));
-  ta.addEventListener('blur',()=>{vcaret.style.display='none';});
+  // 自前で筆先を消した時は、控えも捨てる（次に同じ姿で戻ってきても、必ず描き直す）
+  ta.addEventListener('blur',()=>{vcaret.style.display='none';caretKey='';});
   document.addEventListener('selectionchange',()=>{if(document.activeElement===ta)drawCaret();});
   addEventListener('resize',()=>{if(document.activeElement===ta)drawCaret();});
 
@@ -2095,7 +2192,7 @@ document.addEventListener('keydown',e=>{
                   requestAnimationFrame(drawCaret);}   // 柱が立った直後から筆先を置く
   function shut(){pane.classList.remove('on');pane.setAttribute('aria-hidden','true');
                   document.body.classList.remove('casting');
-                  btn.classList.remove('away');vcaret.style.display='none';
+                  btn.classList.remove('away');vcaret.style.display='none';caretKey='';
                   btn.focus();}
   /* ── 告知の二段化（S7）────────────────────────────────────────
      常時見えているのは「匿名のまま漂い、いつか知らない誰かのもとへ。」の一行だけ。
@@ -2182,7 +2279,7 @@ document.addEventListener('keydown',e=>{
       b.setAttribute('tabindex',on?'0':'-1');   // radiogroup は焦点を一つだけ持つ
     });
     // 自前カーソルは縦書きのための細工。横書きではネイティブに返す
-    vcaret.style.display='none';
+    vcaret.style.display='none';caretKey='';
     if(!horiz)requestAnimationFrame(drawCaret);
     paintSum();
   }
