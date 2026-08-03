@@ -18,7 +18,11 @@ addEventListener('resize',()=>{
   clearTimeout(rsT);
   rsT=setTimeout(()=>{
     // 画面の向きが変われば紙片の敷き詰めも変わる（縦長は一行2〜3枚）
-    if(sheetId!=null&&islands.has(sheetId))sheetLayout(islands.get(sheetId));
+    if(sheetId!=null&&islands.has(sheetId)){
+      const isl=islands.get(sheetId);
+      isl._fitK=fitK(isl);     // 帯の形は新しい画面の比で引き直す
+      sheetLayout(isl);
+    }
     apply();
   },160);
 });
@@ -197,6 +201,42 @@ function paperOf(w){
   if(m&&+m[2]>=12)return 'hsl('+(+m[1])+',24%,90%)';
   if(w.pd)return '#E0DDD6';
   return ['#EFEBE1','#E9E5DC','#EFE7D9'][fnv(String(w.id||w.poem))%3];
+}
+/* ── 紙片の寸法規律（2026-08-03「ひとつづきの宙」1b）────────────────
+   これまで紙片は自然寸（中身の丈がそのまま紙の丈）だった——高さがばらばらなので
+   段の見積りと実物がずれ、下端で切れ、詰まって見えた。寸法を**字数から純関数で**
+   決める：幅は3値（1〜3列）、高さも3値。DOMを測らないので、島を一瞬紙片の姿に
+   して測る細工（fitK）も要らなくなる。
+   字送りの根拠：font 15px / line-height 2 ＝ 1列30px、letter-spacing .12em ＝
+   1字16.8px。padding は 24px 20px（縦48・横40）で box-sizing は全域 border-box。
+   高さの3値に少し裾を余らせてあるのは、字送りの丸めで最後の一字が折れないため。
+   入り切らないことば（3列×15字を超える）は3列×最大丈に固定し、行送り方向（左）へ
+   フェード＝「続きがある」。…は使わない（静けさを壊さないため）。全文は焦点レンズで。 */
+const SNAP_W=[70,100,130];        // 1列・2列・3列（列30px＋padding40）
+const SNAP_H=[152,236,304];       // 1列あたり 6字・11字・15字（＋padding48）
+const SNAP_CAP=[6,11,15];
+function sizeOf(w){
+  const lines=String(w.poem||'').split('\n').map(s=>s.length);
+  const n=lines.reduce((a,b)=>a+b,0);
+  // 望みの列数は総字数から（1列＝11字まで）。改行が列を強いる時はそのぶんまで許す
+  const lim=Math.min(3,Math.max(Math.ceil(n/SNAP_CAP[1])||1,lines.length));
+  for(let hi=0;hi<3;hi++){
+    let c=0;
+    lines.forEach(L=>{c+=Math.max(1,Math.ceil(L/SNAP_CAP[hi]));});
+    if(c<=lim)return {w:SNAP_W[c-1],h:SNAP_H[hi],ovf:false};
+  }
+  return {w:SNAP_W[2],h:SNAP_H[2],ovf:true};
+}
+/* 寸法を紙に書き留める。効くのは島に降りた姿（.isl.sheet .w が var を読む）だけで、
+   散らばりの姿は今までどおり自然寸。横書き（.h）は数えられないので測る作法のまま。 */
+function snapSize(el){
+  const w=el._w;
+  if(!w||!w.vertical)return;
+  const sz=sizeOf(w);
+  el.style.setProperty('--sw',sz.w+'px');
+  el.style.setProperty('--sh',sz.h+'px');
+  el.classList.toggle('ovf',sz.ovf);
+  el._pw=sz.w; el._ph=sz.h;          // 控え＝sheetPlan と間引きがそのまま読む
 }
 
 /* ── 島とことばを置く ──────────────────────────────
@@ -383,12 +423,13 @@ function mkWord(isl,w,frag){
   const c=tintOf(w.color);
   if(c){ el.style.color=c.text; el.style.textShadow='0 0 16px '+c.glow; }
   el.style.setProperty('--pp',paperOf(w));   // 島に降りた時の、紙の色
+  el._w=w;
+  snapSize(el);                              // 島に降りた時の、紙の寸法（3値スナップ）
   el.setAttribute('role','button'); el.setAttribute('tabindex','0');
   el.setAttribute('aria-label',(w.pd
     ? '流れ着いたことば：'+w.poem+'（'+w.author+'『'+w.work+'』より）'
     : 'tayori-たより- のことば：'+w.poem)
     +'。ひらくと、棚にとっておく ができます。');
-  el._w=w;
   // 家の座標：色相が方位、あとはハッシュ。**島の中心からの相対**で持つ——
   // .w の包含ブロックは .isl（もう島の位置に居る）なので、世界座標で書くと
   // 島の中心が二重に足されて、ことばが島の外へ筋になって流れ出す（初版で実際に起きた）
@@ -444,6 +485,7 @@ function reshore(isl){
       if(isl._flown){
         isl._flown=false;
         const k=fitK(isl);
+        isl._fitK=k;       // 岸が着いて束が育った——帯の形の物差しも引き直す
         if(Math.abs(k-K)>0.02){
           world.style.transition=REDUCED?'none':'transform .7s var(--ease)';
           K=k; PX=-isl.cx*K; PY=-isl.cy*K;
@@ -451,6 +493,8 @@ function reshore(isl){
         }
       }
       sheetLayout(isl,true);             // 新しい紙も、いまの束に混ぜて並べ直す
+      // 焦点レンズで読んでいる最中なら、動いた席へ照準を引き直す（紙を見失わない）
+      if(typeof lensAim==='function'&&lensEl&&lensEl._w.room===isl.room.id)lensAim(lensEl);
       apply();
     }).catch(()=>{shoreBusy=null;});
 }
@@ -514,10 +558,11 @@ function relax(){
    位置は transform で動かす＝家（_hx/_hy）は保ったまま。離れれば静かに帰る。
    寸法は紙片の姿（.sheet のpadding込み）で測るので、classを立ててから読む。
 
-   束の姿は**円**（正しくは、いま見えている画面と同じ比の楕円）。遠景で島が
-   丸い灯として見えるのだから、降りた先も丸い——姿がひとつづきになる。
-   真円にはしない：16:9 の画面に真円を置くと左右が三割空き、それは 7/31 に直した
-   「右が大きく空いて、そのぶん下へ伸びる」の再発でしかない。
+   束の姿は**水平の帯**（2026-08-03「ひとつづきの宙」1a。8/2 の円は降ろした）。
+   楕円は弦が段ごとに違うので「どこまで行けば次の段か」が姿から読めず、
+   下端の見積りもずれた。全段同じ幅・同じ丈の帯なら、横に動けば読み進む・
+   縦は段の乗り換え、が体で覚えられる。短冊は段の中心線に上下センター＝
+   丈の違いが「切れ」ではなく「揺れ」として読める。
 
    並びは「新しさ」ではなく「その部屋らしさ」（2026-08-02・Kosei確定）。
      中心 … この部屋にしかないことば（cr が大きい）
@@ -527,7 +572,6 @@ function relax(){
    決める代わりに、中心から外へ読む面になる。 */
 const SHEET_GAP=26;          // 紙と紙のあいだ
 const SHEET_PAD=150;         // 頭の帯と足元に譲る丈
-const CHORD_MIN=0.06;        // いちばん上下の段にも、一枚は置ける弦を残す
 const RUN_SLACK=1.06;        // 段の詰め残り（入らなかった一枚ぶん）の遊び
 let sheetId=null, sheetWant=null, sheetT=0;
 function posOf(isl,el){
@@ -545,9 +589,8 @@ function partnerDir(isl,el){
 /* 束を組む（席は決めるが、まだ動かさない）。倍率もこの寸法から決めるので、
    「どう並ぶか」と「どこまで寄るか」は同じ一つの計算から出る。
 
-   楕円の選び方：段数 n を決めれば半短径 b が決まり、総丈（run）から半長径 a が
-   決まる＝**中身でちょうど埋まる**楕円が一意に出る。あとはその中から、いまの
-   画面にいちばん近い比のものを採るだけ。 */
+   帯の選び方：段数 n を決めれば帯の幅（run/n）と総丈（n×段高）が決まる。
+   その姿がいまの画面の比にいちばん近い n を採るだけ。 */
 /* cached＝控えてある紙片の寸法（_pw/_ph）で組む（2026-08-03 カクツキ）。
    紙片の寸法は倍率にも画面にも依らない（max-width:18em・max-height:330px の固定）
    ので、一度測れば次からは測り直さなくてよい。これが効くのは fitK ——降りる先の
@@ -570,29 +613,20 @@ function sheetPlan(isl,maxW,cached){
   const rowH=tall+SHEET_GAP;
   run*=RUN_SLACK;
   const want=VW/Math.max(VH-SHEET_PAD,200);
-  let A=0,B=0,best=1e9;
+  let N=1,BW=run,best=1e9;
   for(let n=1;n<=24;n++){
-    const b=n*rowH/2;
-    let S=0;
-    for(let i=0;i<n;i++){
-      const y=(i+0.5)*rowH-b;
-      S+=Math.sqrt(Math.max(1-(y/b)*(y/b),CHORD_MIN));
-    }
-    const a=run/(2*S);
+    const bw=run/n;
     /* 画面より広い束は作らない（maxW）。中身が多くて一画面に入りきらない島では、
        溢れる向きを縦にする——横へ溢れると、縦書きの読み順（右→左）そのものが
-       画面の外へ出る。段を増やせば束は細く高くなるので、幅の収まる形の中から
+       画面の外へ出る。段を増やせば帯は細くなるので、幅の収まる形の中から
        いちばん画面の比に近いものを選ぶ。どれも収まらなければ、いちばん細いもの。 */
-    if(maxW&&2*a>maxW){ if(n<24||A)continue; A=a;B=b;break; }
-    const e=Math.abs(Math.log((a/b)/want));
-    if(e<best){best=e;A=a;B=b;}
+    if(maxW&&bw>maxW){ if(n<24||best<1e9)continue; N=n;BW=bw;break; }
+    const e=Math.abs(Math.log((bw/(n*rowH))/want));
+    if(e<best){best=e;N=n;BW=bw;}
   }
-  // 段＝楕円の弦。中心に近い段から埋める（中心がいちばん「その部屋のもの」）
+  // 段＝帯。中心に近い段から埋める（中心がいちばん「その部屋のもの」）
   const rows=[];
-  for(let y=-B+rowH/2;y<B;y+=rowH){
-    const t=Math.max(1-(y/B)*(y/B),CHORD_MIN);
-    rows.push({y:y,ch:2*A*Math.sqrt(t),items:[]});
-  }
+  for(let i=0;i<N;i++)rows.push({y:(i+0.5)*rowH-N*rowH/2,ch:BW,items:[]});
   rows.sort((p,q)=>Math.abs(p.y)-Math.abs(q.y));
   const q=items.slice().sort((x,y)=>
     (crossOf(y.el)-crossOf(x.el))                        // その部屋らしい順
@@ -604,15 +638,13 @@ function sheetPlan(isl,maxW,cached){
     while(i<q.length&&w+q[i].w+SHEET_GAP<=r.ch){ w+=q[i].w+SHEET_GAP; r.items.push(q[i]); i++; }
   });
   while(i<q.length)rows[rows.length-1].items.push(q[i++]);   // 余りは最も外の段へ
-  /* 段の丈は、その段に居る紙で決め直す（段ごとに詰める）。丈の見積り（rowH）は
-     いちばん長い一枚に合わせてあるので、短い紙ばかりの段——たいてい中心——に
-     一枚ぶんの空きが残る。楕円の姿は保ったまま、そこだけ詰める。 */
+  /* 段の丈は詰め直さない（2026-08-03 帯）。段高一定が帯の本体で、短冊は段の
+     中心線に上下センター＝丈の違いは「切れ」ではなく「揺れ」として読める。
+     空の段（中身が少ない島）だけ畳む。 */
   const line=rows.filter(r=>r.items.length).sort((p,q)=>p.y-q.y);
-  let H=0;
-  line.forEach(r=>{ r.h=0; r.items.forEach(it=>{r.h=Math.max(r.h,it.h);}); H+=r.h+SHEET_GAP; });
-  H-=SHEET_GAP;
+  const H=line.length*rowH-SHEET_GAP;
   let cur=-H/2;
-  line.forEach(r=>{ r.y=cur+r.h/2; cur+=r.h+SHEET_GAP; });
+  line.forEach(r=>{ r.y=cur+(rowH-SHEET_GAP)/2; cur+=rowH; });
   /* 段の中でも中心から外へ。またぐ一片は、相手の島のある側（右か左か）へ寄る。
      ただし片側が弦の半分を越えたら、寄せたい側でも反対へ回す——「みんな同じ方角へ
      掛かっている」島（隣が一つしか無い島では実際に起きる）で、束が片側だけ倍に
@@ -639,7 +671,13 @@ function sheetPlan(isl,maxW,cached){
    transition-property の並びは opacity, transform の二つ）。薄さまで遅らせると、
    闇に光る字が紙の上に居残って読めない瞬間ができる。 */
 function sheetLayout(isl,stagger){
-  const pl=sheetPlan(isl,(VW*0.94)/Math.max(K,0.08)); if(!pl)return;
+  /* 帯の形は**降りた時の眺め**（fitK）で決め、寄っても変えない（2026-08-03）。
+     幅の上限をいまの倍率から出すと、焦点レンズで寄った最中の敷き直し（岸の
+     組み替え）で上限が三百px台まで縮み、束が幅一枚ぶんの縦長の紐に化けた
+     （実測16段・丈5248——読んでいた島ごと画面から消えた）。 */
+  const kRef=isl._fitK!=null?isl._fitK:Math.max(K,0.08);
+  const pl=sheetPlan(isl,(VW*0.94)/Math.max(kRef,0.08)); if(!pl)return;
+  isl._bw=pl.W; isl._bh=pl.H;   // 束の箱（「島に居る」の物差し。帯は半径より縦に長い）
   const ax=Math.max(pl.W/2,1), ay=Math.max(pl.H/2,1);
   pl.items.forEach(it=>{
     it.el._gx=it.x-it.w/2; it.el._gy=it.y-it.h/2;
@@ -667,6 +705,8 @@ function moving(isl){
 }
 function sheet(isl){
   isl.sheeted=true;
+  // つまみで降りた時（flyTo を通らない道）も、帯の形の物差しを持つ
+  if(isl._fitK==null)isl._fitK=fitK(isl);
   moving(isl);
   // 読んでいる間、宙は一つの様式だけになる（まわりの島は名と灯＝地形に還る）
   document.body.classList.add('reading');
@@ -686,6 +726,8 @@ function sheet(isl){
 }
 function unsheet(isl){
   isl.sheeted=false;
+  isl._fitK=null;        // 次に降りる時の眺めで、帯の形は引き直す
+  lensClose(true);       // 席はこのあと自分でほどく＝組み直しは要らない
   moving(isl);
   document.body.classList.remove('reading');
   footNames(null);
@@ -726,7 +768,8 @@ let gesOn=false, gesT=0;
 function gesture(){
   if(!gesOn){ gesOn=true; document.body.classList.add('gesturing'); }
   clearTimeout(gesT);
-  gesT=setTimeout(()=>{ gesOn=false; document.body.classList.remove('gesturing'); },700);
+  gesT=setTimeout(()=>{ gesOn=false; document.body.classList.remove('gesturing');
+                        lensCheck(); },700);   // 焦点レンズの出入りは、手が落ち着いてから
 }
 function apply(){
   if(applyQ)return;
@@ -981,6 +1024,7 @@ function release(){
   if(isl){ isl.el.classList.remove('hush');
            isl.words.forEach(x=>{x.classList.remove('pull');x.style.transform=posOf(isl,x);}); }
   el.classList.remove('held');
+  lensClose();          // 焦点レンズも同じ一本で閉じる（開いていなければ何もしない）
 }
 /* 出典の刻印（§4.4）。触れて開いた、その一度だけ隅に刻む。外へ出る導線は作らない */
 function srcMark(){
@@ -1098,6 +1142,78 @@ async function toggleMute(el){
     whisper('いま、<wbr>届きませんでした。',6000);
   }
 }
+/* ── 焦点レンズ（2026-08-03「ひとつづきの宙」1d／近）───────────────
+   島に降りて（＝紙片の帯）、一枚に触れると、その紙が画面の中央へ滑って**全文へ**
+   ひらく。寸法の3値スナップで畳まれていたことばは、ここでだけ規律を解く。
+   まわりは息をひそめる（既存の hush がそのまま効く）。出典と行い（holdBox）は
+   滑走が済んでから、読み終わりの左に添う。
+   もうひとつの入り口は倍率：降りた島で一定より寄ると、画面中央にいちばん近い
+   一枚がひとりでに開く（寄る＝読む）。引けば閉じる。しきい値に遊びを持たせるのは
+   far/crisp と同じ作法。開閉の判定は手が離れて落ち着いてから（gesture の終い）——
+   つまみの最中に帯を組み直すと、それ自体が固まる原因になる。 */
+let lensEl=null, lensT=0, lensLo=0;
+const LENS_IN=1.30, LENS_OUT=1.10;
+function lensOpen(el){
+  const isl=islands.get(el._w.room);
+  if(!isl||!isl.sheeted||lensEl===el)return;
+  if(lensEl)lensEl.classList.remove('focus');
+  lensEl=el;
+  el.classList.add('focus');
+  document.body.classList.add('lens');
+  moving(isl);
+  sheetLayout(isl);          // 開いた実寸で帯を組み直す＝隣が滑って席を空ける
+  lensAim(el);
+}
+/* 開いた一枚の席の中心へ、静かに寄る（読める丈まで。手で寄せた倍率は退かない）。
+   照準を開くことから分けてあるのは、帯が敷き直された時（reshore＝岸の組み替え）に
+   席が動くから——席だけ動いてカメラが古い席を向いたままだと、読んでいた紙が
+   画面の外へ消える（実際に起きた）。敷き直した側が、もう一度これを呼ぶ。 */
+function lensAim(el){
+  const isl=islands.get(el._w.room); if(!isl)return;
+  const w=el._pw||0,h=el._ph||0;
+  const k=Math.max(K,Math.min(1.6,(VH-170)/Math.max(h,1)));
+  // 閉じる線は入った倍率から引く（丈の長い紙は 1.0 前後で開くこともある——
+  // 固定の線だと、開いたその倍率が既に線の下で、ひと撫でで閉じてしまう）
+  lensLo=Math.min(LENS_OUT,k*0.82);
+  const wx=isl.cx+(el._gx!=null?el._gx:el._hx)+w/2,
+        wy=isl.cy+(el._gy!=null?el._gy:el._hy)+h/2;
+  world.style.transition=REDUCED?'none':'transform .7s var(--ease)';
+  views=[[PX,PY,K],[-wx*k,-wy*k,k]];
+  K=k; PX=-wx*K; PY=-wy*K;
+  applyNow();
+  clearTimeout(lensT);
+  lensT=setTimeout(()=>{ world.style.transition=''; views=null; applyNow();
+                         if(held===el)placeHold(); },740);
+}
+/* quiet＝帯を組み直さない（unsheet が席をほどいた後に呼ぶ時） */
+function lensClose(quiet){
+  if(!lensEl)return;
+  const el=lensEl; lensEl=null;
+  el.classList.remove('focus');
+  document.body.classList.remove('lens');
+  // 滑走の途中で閉じられた時の後始末（flyTo はこの後で自分の滑走を敷き直す）
+  clearTimeout(lensT);
+  world.style.transition=''; views=null;
+  const isl=islands.get(el._w.room);
+  if(!quiet&&isl&&isl.sheeted){ moving(isl); sheetLayout(isl); apply(); }
+}
+/* 倍率の出入り（gesture の終いに一度だけ見る） */
+function lensCheck(){
+  const isl=sheetId!=null?islands.get(sheetId):null;
+  if(!isl||!isl.sheeted)return;
+  if(!lensEl&&K>LENS_IN){
+    let best=null,bd=1e9;
+    isl.words.forEach(el=>{
+      if(el.classList.contains('mutedout'))return;
+      const p=screenPos(el);
+      const d=Math.hypot(p.x+(el._pw||0)*K/2-VW/2,p.y+(el._ph||0)*K/2-VH/2);
+      if(d<bd){bd=d;best=el;}
+    });
+    if(best&&held!==best)hold(best);
+  }else if(lensEl&&K<lensLo){
+    release();
+  }
+}
 /* 受け止めるのは、島の上の一枚とは限らない（2026-08-02）。探して集まってきた片は
    どの島にも属さない面（.gather）の上に居るので、島が無くても通る道にしておく。 */
 function hold(el,tx,ty){
@@ -1122,7 +1238,9 @@ function hold(el,tx,ty){
   }
   noteTouch(el._w.room);              // 触れた気配（部屋の灯が呼吸する）
   renderHold();
-  placeHold(tx,ty);
+  // 島に降りている時は焦点レンズ＝中央へ滑って全文へ。行いは滑走の後に添う
+  if(isl.sheeted)lensOpen(el);
+  else placeHold(tx,ty);
   fetch('/api/sky/near?id='+encodeURIComponent(el._w.id))
     .then(r=>r.json()).then(d=>{
       if(held!==el||!d.ids)return;
@@ -1355,6 +1473,7 @@ function flyTo(isl){
   release();
   gatherHide();
   const k=fitK(isl);
+  isl._fitK=k;           // 帯の形の物差し（sheetLayout が読む）
   noteRoomURL(isl.room.id,true);
   sheetLock=isl.room.id;
   isl._flown=true;     // 岸が着いたら、もう一度だけ寸法を見直してよい印
@@ -1410,6 +1529,7 @@ function castLand(isl,poem,color,steps){
   el.setAttribute('aria-label','tayori-たより- のことば：'+poem);
   el._w={id:null,poem:poem,color:color,vertical:true,room:isl.room.id,sink:1};
   el.style.setProperty('--pp',paperOf(el._w));   // 紙片の紙の色（降りた島で使う）
+  snapSize(el);                                  // 紙片の寸法（3値スナップ）
   // 島の心の近く。種は本文＝置き直しても同じ場所（決定論の作法に合わせる）
   const aa=(fnv(poem)%360)*Math.PI/180, rr=40+(fnv(poem+'r')%60);
   el._hx=Math.cos(aa)*rr; el._hy=Math.sin(aa)*rr;
@@ -1451,9 +1571,21 @@ setInterval(()=>{
    無ければ宙の外から。宙の地形（位置の意味）はそのまま、読む場所だけを別に作る。 */
 let focusIsl=null;
 function seekWatch(){
+  const cx=(0-PX)/K, cy=(0-PY)/K;   // 画面中央の世界座標（worldの原点は画面中央）
+  /* 敷いてある島の懐は、半径ではなく**束の箱**で見る（2026-08-03 帯）。
+     帯は島の半径より縦に長いので、半径の物差し（1.6R）だと、上下の段や
+     焦点レンズへ寄っただけで「島を出た」ことになり、読んでいる最中に
+     島がほどけた（実際にレンズで起きた）。箱の中に居るかぎり、そこに居る。 */
+  const cur=sheetId!=null?islands.get(sheetId):null;
+  if(cur&&cur.sheeted&&cur._bw&&
+     Math.abs(cur.cx-cx)<cur._bw/2+300&&Math.abs(cur.cy-cy)<cur._bh/2+300&&
+     cur.R*K>0.20*Math.min(VW,VH)){
+    focusIsl={isl:cur,id:sheetId,d:Math.hypot(cur.cx-cx,cur.cy-cy)};
+    if(sheetWant!==sheetId){ sheetWant=sheetId; clearTimeout(sheetT); }
+    return;
+  }
   // 焦点の島＝画面の中心にいちばん近く、その懐（1.6R）に入っている島
   let best=null,bd=1e9;
-  const cx=(0-PX)/K, cy=(0-PY)/K;   // 画面中央の世界座標（worldの原点は画面中央）
   islands.forEach((isl,id)=>{
     const d=Math.hypot(isl.cx-cx,isl.cy-cy);
     if(d<bd){bd=d;best={isl,id,d};}

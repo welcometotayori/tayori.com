@@ -260,13 +260,28 @@
   .isl.sheet .w{background:var(--pp,#EBE7DE);
      color:rgba(30,27,33,calc(.52 + .44*var(--a,.8)))!important;
      text-shadow:none!important;filter:none!important;opacity:1;
+     /* 寸法の3値スナップ（2026-08-03「ひとつづきの宙」）。値はJSが --sw/--sh に書く。
+        横書き（.h）は書かないので自然寸のまま。clip は溢れの規律（左フェード）の前提 */
+     width:var(--sw,max-content);height:var(--sh,max-content);overflow:hidden;
      padding:24px 20px;margin:0;border-radius:var(--edge);
      /* 影は一本だけ・ぼけは浅く（2026-07-31 夜）。影のぼけは blur と同じ計算で、
         一枚ごとに面積ぶんの塗りが要る。紙が浮いて見えるのに30pxは要らない。 */
      box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
+  /* 入り切らないことばは、行送り方向（左）へフェード＝「続きがある」。…は使わない。
+     mask は一枚ごとに描画層を作るので、溢れた紙にだけ付ける（カクツキ作法） */
+  .isl.sheet .w.ovf{-webkit-mask-image:linear-gradient(to left,#000 72%,transparent 97%);
+     mask-image:linear-gradient(to left,#000 72%,transparent 97%)}
   .isl.sheet .w.pd{color:rgba(30,27,33,.6)!important}
   .isl.sheet .w.held{color:rgba(30,27,33,.96)!important;
      box-shadow:0 0 0 1px var(--rule-act),0 18px 34px -18px rgba(0,0,0,.95)}
+  /* 焦点レンズ（2026-08-03「ひとつづきの宙」1d）。開いた一枚だけ寸法の規律を解いて
+     全文へ。フェードも解く。寸法は遷移させない（開閉は一度で塗る＝v14の作法）。
+     まわりの息のひそめ方は既存の hush がそのまま効く。held より後に置く＝影はこちらが勝つ */
+  .isl.sheet .w.focus{width:max-content;height:max-content;
+     max-width:26em;max-height:min(78dvh,560px);
+     -webkit-mask-image:none;mask-image:none;
+     padding:28px 24px;z-index:6;
+     box-shadow:0 0 0 1px var(--rule-act),0 26px 60px -20px rgba(0,0,0,.95)}
   .isl.sheet .w .tcaret{background:rgba(30,27,33,.6)}
   /* ── 打鍵の実時間再生（mood.html と同じ筆先・同じにじみ） ── */
   .tcaret{display:inline-block;width:2px;height:1em;background:var(--thread);
