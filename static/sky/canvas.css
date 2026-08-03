@@ -140,9 +140,11 @@
   /* 押した瞬間に応える（離すのを待たない・Apple §1）。飛ぶのは1.1秒かけてでも、
      「受け取った」は指が触れたその場で言う。 */
   .isl:not(.sheet) .isl-nm:active{color:var(--chalk);opacity:.72}
-  .isl-glow{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;
+  /* 灯は島ごとに一枚（2026-08-03）。三つの色は多重背景で重ねる＝描画項目は島に一つ。
+     寸法と背景の位置は JS が書く（島の半径で決まるため）。円クリップは持たない。 */
+  .isl-glow{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
+            background-repeat:no-repeat;pointer-events:none;
             transition:opacity 1.2s var(--ease)}
-  .isl-glow span{position:absolute;border-radius:50%;transform:translate(-50%,-50%)}
   /* 近づいたら名と灯は退き、ことばが主役になる */
   body.near .isl-nm{opacity:.34}
   body.near .isl-glow{opacity:.25}
@@ -418,6 +420,7 @@
         backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
         opacity:0;pointer-events:none;visibility:hidden;
         transition:opacity .5s var(--ease),visibility 0s linear .5s}
+  .sent:not(.on){backdrop-filter:none;-webkit-backdrop-filter:none}   /* 畳んだ面はぼけも畳む */
   .sent.on{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .5s var(--ease)}
   .sent-1{margin:0;font-size:var(--t-lead);letter-spacing:var(--tr-lead);color:var(--ink-1);
           /* 立ち上がりは下から。放たれたものが昇る向きに合わせる */
@@ -505,6 +508,14 @@
            ぼけは最初から3pxで置いておき、渡すのは opacity だけ（GPUに載る）。 */
         backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
         transition:opacity .6s var(--ease),visibility 0s linear .6s}
+  /* 畳んでいる間は、ぼけそのものを外す（2026-08-03・遠景のカクツキ）。
+     backdrop-filter を宣言した要素は「背後の画面を取り込む面」で、閉じていても
+     ブラウザによっては合成の面が常駐する（iOS/Safari で顕著）。柱は宙の上に
+     ずっと畳まれているので、宙を動かすあいだ全画面ぶんの取り込みが毎フレーム
+     居座ることになる。ぼけが要るのは開いている間だけ。
+     半径は遷移させない作法（上のコメント）はそのまま——none→3px は class が
+     入れ替わる一瞬の切り替えで、opacity の 0.6 秒と同時に起きる。 */
+  .cast:not(.on){backdrop-filter:none;-webkit-backdrop-filter:none}
   .cast.on{opacity:1;pointer-events:auto;visibility:visible;
            transition:opacity .6s var(--ease),visibility 0s}
   /* 柱が立っているあいだ、宙の名（ロゴの戸）は退く。柱は画面より高くなることがあり、
@@ -918,6 +929,18 @@
      唯一の色で、これを落とすと寄るたびに宙が暗くなる。呼吸を止めるところまで。 */
   /* 受け止めている一枚（.held）の縁だけは残す——それは影ではなく、いま手の中に
      あることの合図で、倍率が動いても消えてはいけない。 */
+  /* ── 遠景で寄り引きしている間だけ、字は退く（2026-08-03・遠景のカクツキ）────
+     実測：遠景では間引きが一枚も効かない（784片ぜんぶ・島も21ぜんぶが画面に載る）。
+     つまり倍率が動く一フレームごとに、**784枚の縦組みのテキスト**を新しい寸法で
+     ラスタライズし直している——遠景の字は3px前後で、字形はもう誰にも読めない。
+     読めない字のために、いちばん詰まっているフレームで784枚を組み直す理由はない。
+     消すのは「遠景」かつ「倍率が動いている0.7秒」だけ：
+       ・ひきずり（gesturing）では消さない ── 平行移動は合成で済み、塗り直しが無い
+       ・近景・読む面では消さない ── そこでは字が主役
+     手を止めれば戻る。動いている間は画がそもそも流れているので、出入りは目に留まらない。
+     .isl-w ごと畳むので、cullWords が一枚ずつ書いた visibility とは喧嘩しない
+     （子は '' か 'hidden' しか書かない＝親の hidden を覆さない）。 */
+  body.far.zooming .isl-w{visibility:hidden}
   body.zooming .w:not(.held){text-shadow:none!important}
   body.zooming .isl.sheet .w:not(.held){box-shadow:none}
   body.zooming .gw:not(.held){box-shadow:none}

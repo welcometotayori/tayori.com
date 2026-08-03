@@ -150,7 +150,11 @@ function pollLantern(){
     if(!focusIsl){
       lantern.classList.remove('near');
       if(d.rooms){
-        const on=new Set(d.rooms);
+        /* 息をする灯は、多くて6島まで（2026-08-03 遠景のカクツキ）。呼吸は
+           島の半径1.5倍の放射グラデーションを 6.5 秒かけて薄め続ける仕事で、
+           息をする島の数だけ合成の面が常駐する。数は元々言わない仕様なので、
+           六つでも二十でも「気配がある」以上のことは何も変わらない。 */
+        const on=new Set(d.rooms.slice(0,6));
         islands.forEach((isl,id)=>isl.el.classList.toggle('lit',on.has(id)));
       }
     }
@@ -326,16 +330,31 @@ function build(rooms,words){
     // 一つしか無い灯は、三つ重なった灯より薄く見える（重なりぶんの明るさが無い）。
     // 数の少なさは「静かな部屋」として残しつつ、灯っていることは分かる濃さまで戻す。
     const a=[0,0.22,0.17,0.13][lit.length]||0.13;
-    lit.forEach((c,j)=>{
-      const g=document.createElement('span');
+    /* 三つの灯を、一枚の紙に重ねて描く（2026-08-03 遠景のカクツキ）。
+       旧実装は灯ひとつにつき span を一枚（21島×3＝実測49枚）。遠景ではその49枚が
+       全部画面に載り、重なって画面を一周ぶん以上塗る——寄り引きのたび、49回の
+       描画項目と49枚の円クリップ（border-radius:50%）を作り直していた。
+       放射グラデーションは背景を何枚でも重ねられるので、島ごとに一枚の箱へ畳む。
+       円クリップは要らない：`circle` の既定は farthest-corner ＝ 70% の停止点が
+       ちょうど箱の縁（0.495d）で、クリップは何も削っていなかった。 */
+    if(lit.length){
       const d=Math.round(s.R*(lit.length<2?1.7:1.5));
-      g.style.width=g.style.height=d+'px';
-      g.style.left=((j-(lit.length-1)/2)*s.R*0.35)+'px';
-      g.style.top=(lit.length<2?0:(j%2?s.R*0.2:-s.R*0.15))+'px';
-      g.style.background='radial-gradient(circle,'+glowOf(c,a)+' 0%,transparent 70%)';
-      glow.appendChild(g);
-    });
-    isl.appendChild(glow);
+      let hw=0,hh=0;
+      const seats=lit.map((c,j)=>{
+        const x=(j-(lit.length-1)/2)*s.R*0.35;
+        const y=(lit.length<2?0:(j%2?s.R*0.2:-s.R*0.15));
+        hw=Math.max(hw,Math.abs(x)+d/2); hh=Math.max(hh,Math.abs(y)+d/2);
+        return {c:c,x:x,y:y};
+      });
+      const GW=Math.round(hw*2), GH=Math.round(hh*2);
+      glow.style.width=GW+'px'; glow.style.height=GH+'px';
+      glow.style.backgroundImage=seats.map(p=>
+        'radial-gradient(circle,'+glowOf(p.c,a)+' 0%,transparent 70%)').join(',');
+      glow.style.backgroundSize=seats.map(()=>d+'px '+d+'px').join(',');
+      glow.style.backgroundPosition=seats.map(p=>
+        Math.round(GW/2+p.x-d/2)+'px '+Math.round(GH/2+p.y-d/2)+'px').join(',');
+      isl.appendChild(glow);
+    }
     const wl=document.createElement('div'); wl.className='isl-w'; isl.appendChild(wl);
     const nm=document.createElement('div'); nm.className='isl-nm'; nm.textContent=s.room.name;
     isl.appendChild(nm);
@@ -786,9 +805,20 @@ function cull(){
     }
   });
 }
+/* 遠景では、一枚ずつの間引きは一枚も当たらない（2026-08-03 実測 784/784）。
+   遠景の島は画面より小さいので、島が見えていれば中の字も全部見えている＝
+   毎フレーム784回の当たり判定は、必ず「見えている」と答えるためだけに走っていた。
+   だから遠景に入った一度だけ全部を戻して、あとは島の判定だけで済ませる。 */
 function cullWords(){
   islands.forEach(isl=>{
     if(isl.off)return;              // 島ごと畳んである（中は測らない）
+    if(farOn&&!isl.sheeted&&!isl._moving){
+      if(isl._allOn)return;
+      isl._allOn=true;
+      isl.words.forEach(el=>{ if(el._off){el._off=false;el.style.visibility='';} });
+      return;
+    }
+    isl._allOn=false;
     const mv=isl._moving, sh=isl.sheeted;
     isl.words.forEach(el=>{
       let off=false;
