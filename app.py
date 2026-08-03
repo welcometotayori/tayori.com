@@ -1820,8 +1820,10 @@ def api_get_onboarding():
 @app.route("/api/onboarding", methods=["POST"])
 @login_required
 def api_save_onboarding():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     incoming = data.get("answers") or {}
+    if not isinstance(incoming, dict):
+        incoming = {}          # 配列などが来たら .items() で落ちる前に受け流す
     db = get_db()
     row = db.execute("SELECT onboarding FROM users WHERE id=?", (uid(),)).fetchone()
     answers = _load_onboarding(row["onboarding"] if row else None)
@@ -1874,7 +1876,7 @@ def api_get_weekly():
 @login_required
 def api_answer_weekly():
     """今夜の問いへの答えを保存する。保存先は onboarding と同じ辞書（personaが自動で厚くなる）。"""
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     try:
         qid = int(data.get("qid"))
     except (ValueError, TypeError):
@@ -1916,12 +1918,21 @@ USERNAME_RE = re.compile(
 )
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+
+def _json_str(v):
+    """JSONの文字列欄を安全に受ける。文字列以外（数値・配列・辞書…）が来たら
+    「書かれていない」として空文字に落とす。str() で無理に文字列化はしない
+    ——{'x':1} が「{'x': 1}」ということばに化けて保存されてしまう。
+    数値を送ると .strip() や len() で AttributeError/TypeError＝500 に
+    なっていた箇所の共通の受け皿（2026-08-04）。"""
+    return v if isinstance(v, str) else ""
+
 @app.route("/api/register", methods=["POST"])
 def api_register():
-    data = request.get_json(force=True)
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-    email = (data.get("email") or "").strip()
+    data = request.get_json(force=True) or {}
+    username = _json_str(data.get("username")).strip()
+    password = _json_str(data.get("password"))
+    email = _json_str(data.get("email")).strip()
     if not USERNAME_RE.match(username):
         return jsonify(error="名前は2〜24文字で。漢字・かな・英数字と _ . - が使えます。"), 400
     if len(password) < 8:
@@ -1947,6 +1958,9 @@ def api_register():
              email or None, secrets.token_urlsafe(16)),
         )
         db.commit()
+    except sqlite3.IntegrityError:
+        # 確認と挿入の間に、同じ名前で同時に登録された（レース）。UNIQUE制約が守った。
+        return jsonify(error="その名前はもう使われています。"), 409
     except sqlite3.OperationalError as e:
         print(f"[たより] register 書き込み失敗（再試行可）: {e}", flush=True)
         return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
@@ -2003,9 +2017,9 @@ def _notify_admin_login(ok, username, note=""):
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
-    data = request.get_json(force=True)
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
+    data = request.get_json(force=True) or {}
+    username = _json_str(data.get("username")).strip()
+    password = _json_str(data.get("password"))
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if not row or not check_password_hash(row["pw_hash"], password):
@@ -2063,12 +2077,16 @@ def api_me():
 @app.route("/api/email", methods=["POST"])
 @login_required
 def api_set_email():
-    data = request.get_json(force=True)
-    email = (data.get("email") or "").strip()
+    data = request.get_json(force=True) or {}
+    email = _json_str(data.get("email")).strip()
     if email and not EMAIL_RE.match(email):
         return jsonify(error="メールアドレスの形式が正しくありません。"), 400
     db = get_db()
     if email:
+        # /api/register と同じ一意性の確認（ここが抜けていると、既に他の人が使っている
+        # アドレスへも変更できてしまい、確認メールの宛先が本人以外に化ける）。
+        if db.execute("SELECT 1 FROM users WHERE email=? AND id<>?", (email, uid())).fetchone():
+            return jsonify(error="そのメールアドレスはすでに使われています。"), 409
         _issue_email_verification(db, uid(), email, current_user()["username"])
         with _WRITE_LOCK:
             db.execute("UPDATE letters SET notify_attempts=0, notify_failed=0 WHERE user_id=?", (uid(),))
@@ -2084,7 +2102,7 @@ def api_set_email():
 @app.route("/api/account/name", methods=["POST"])
 @login_required
 def api_change_name():
-    new = (request.get_json(force=True).get("username") or "").strip()
+    new = _json_str((request.get_json(force=True) or {}).get("username")).strip()
     if not USERNAME_RE.match(new):
         return jsonify(error="名前は2〜24文字で。漢字・かな・英数字と _ . - が使えます。"), 400
     db = get_db()
@@ -2106,9 +2124,9 @@ def api_change_name():
 @app.route("/api/account/password", methods=["POST"])
 @login_required
 def api_change_password():
-    data = request.get_json(force=True)
-    current = data.get("current") or ""
-    new = data.get("new") or ""
+    data = request.get_json(force=True) or {}
+    current = _json_str(data.get("current"))
+    new = _json_str(data.get("new"))
     db = get_db()
     row = db.execute("SELECT pw_hash FROM users WHERE id=?", (uid(),)).fetchone()
     if not row or not check_password_hash(row["pw_hash"], current):
@@ -2145,9 +2163,9 @@ def api_account_delete():
     if _row_flag(row, "is_admin"):
         return jsonify(error="管理者アカウントは退会できません。"), 403
     # 取り返しがつかないので、二つ揃った時だけ通す（パスワード＋その場で書き写す一語）。
-    if not check_password_hash(row["pw_hash"], data.get("password") or ""):
+    if not check_password_hash(row["pw_hash"], _json_str(data.get("password"))):
         return jsonify(error="パスワードが違います。"), 401
-    if (data.get("confirm") or "").strip() != _DELETE_CONFIRM:
+    if _json_str(data.get("confirm")).strip() != _DELETE_CONFIRM:
         return jsonify(error=f"確かめのため、「{_DELETE_CONFIRM}」と書き写してください。"), 400
     # 自分のことばのidを先に押さえる（letters を消した後では引けない）
     lids = [r["id"] for r in db.execute("SELECT id FROM letters WHERE user_id=?", (me,))]
@@ -2969,8 +2987,15 @@ def _ip_geolocate(client_ip=None):
         return None
     import urllib.request
     def _is_public(ip):
+        # 172.16.0.0/12（プライベート）は 172.16.〜172.31. の16個。"172.2" を接頭辞に
+        # 使うと 172.2.x.x や 172.200.x.x〜172.255.x.x のような**公開**アドレスまで
+        # 誤って弾いてしまう（本人のIPが空文字に化け、サーバ側のIPで逆に測ってしまう）。
+        # 172.20.〜172.29. を明示して、意図した範囲だけに絞る。
         return ip and not (ip.startswith(("10.", "127.", "192.168.", "172.16.",
-                                          "172.17.", "172.18.", "172.19.", "172.2",
+                                          "172.17.", "172.18.", "172.19.",
+                                          "172.20.", "172.21.", "172.22.", "172.23.",
+                                          "172.24.", "172.25.", "172.26.", "172.27.",
+                                          "172.28.", "172.29.",
                                           "172.30.", "172.31.", "::1", "fc", "fd"))
                            or ip == "localhost")
     target = client_ip if _is_public(client_ip) else ""
@@ -3445,7 +3470,7 @@ def api_weather():
 @app.route("/api/locate", methods=["POST"])
 @login_required
 def api_locate():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     lat, lon = data.get("lat"), data.get("lon")
     if lat is None or lon is None:
         return jsonify(error="位置がありません"), 400
@@ -5210,10 +5235,14 @@ def _sky_get_cursor(db, viewer_id, room_id):
     if row:
         return row["cycle_seed"], row["position"], row["dealt_day"], row["dealt_ids"]
     seed = _new_cycle_seed()
-    db.execute(
-        "INSERT INTO sky_cursor (viewer_id, room_id, cycle_seed, position, updated_at)"
-        " VALUES (?,?,?,0,?)",
-        (viewer_id, room_id, seed, datetime.now().isoformat(timespec="seconds")))
+    # 他の書き込みと同じく _WRITE_LOCK 越しに（このロックを取らずに INSERT すると、
+    # 別スレッドの書き込みと競り合って sqlite3.OperationalError("database is locked")
+    # が呼び出し側の未捕捉のまま /api/sky を落としかねない）。
+    with _WRITE_LOCK:
+        db.execute(
+            "INSERT INTO sky_cursor (viewer_id, room_id, cycle_seed, position, updated_at)"
+            " VALUES (?,?,?,0,?)",
+            (viewer_id, room_id, seed, datetime.now().isoformat(timespec="seconds")))
     return seed, 0, None, None
 
 
@@ -6270,10 +6299,10 @@ def _letter_trace_ev(letter_id):
 @app.route("/api/letters", methods=["POST"])
 @login_required
 def api_create_letter():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     # 80字は固定の仕様（クライアントの maxlength と対）。
     # 行頭の字下げや空行は意図した余白として保ち、末尾の余りだけ落とす。空判定のみtrimで行う。
-    poem = (data.get("poem") or "")[:80].rstrip()
+    poem = _json_str(data.get("poem"))[:80].rstrip()
     if not poem.strip():
         poem = ""
     # 題（v2.2 §2.1）：10字以内・任意。無題のまま放ってよい
@@ -6324,10 +6353,10 @@ def api_create_letter():
 
     lid = secrets.token_hex(8)
     seal_env = json.dumps(data.get("seal_env")) if data.get("seal_env") else None
-    stamp = (data.get("stamp") or "")[:16] or None
+    stamp = _json_str(data.get("stamp"))[:16] or None
     # 封入する「その時」の記録：気分の色（カラー・ピッカー）と、便箋に透けていた問い
-    seal_color = (data.get("seal_color") or "").strip()[:32] or None
-    seal_q = (data.get("seal_q") or "").strip()[:80] or None
+    seal_color = _json_str(data.get("seal_color")).strip()[:32] or None
+    seal_q = _json_str(data.get("seal_q")).strip()[:80] or None
     # 色に「触れた」かどうか（2026-07-28）。触れていない既定色は色として発言させない
     # ＝air_distance の色項から外れる（_sky_rebuild 側）。色そのものは常に保存する。
     seal_color_chosen = 1 if data.get("color_chosen") else 0
@@ -6421,7 +6450,7 @@ def api_demo_arrive(lid):
         return jsonify(error="そのたよりは見つかりません。"), 404
     if not ("demo_mode" in row.keys() and row["demo_mode"]):
         return jsonify(error="デモ用のたよりではありません。"), 403
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     raw = data.get("demo_arrive_at")
     if raw:
         try:
@@ -6480,10 +6509,10 @@ def api_open_letter(lid):
     if not _is_arrived(row):
         return jsonify(error="まだ封の中です。届く日まで待ってください。"), 403
     
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
 
     open_env = json.dumps(data.get("open_env")) if data.get("open_env") else None
-    open_mood = (data.get("open_mood") or "").strip()[:40] or None
+    open_mood = _json_str(data.get("open_mood")).strip()[:40] or None
 
     with _WRITE_LOCK:
         already = row["opened_at"] if "opened_at" in row.keys() else None
@@ -6494,12 +6523,21 @@ def api_open_letter(lid):
                 "reflect_count=COALESCE(reflect_count,0)+1 WHERE id=? AND user_id=?",
                 (open_env, open_mood, now_iso, lid, uid()))
         else:
+            # 再訪（開封済みの読み直し）。渡された値だけを更新する。
+            # 以前は open_env を無条件に書いていた——いまの画面は body '{}' で
+            # 開きにくるので、二度目にひらいた瞬間、初回開封時に記録した
+            # 「開けた日の空気」（open_env）が NULL で上書きされて消えていた
+            # （過去の自分との対話が使う天気の文脈が、読み直しただけで失われる）。
+            sets, args = ["opened=1"], []
+            if open_env:
+                sets.append("open_env=?"); args.append(open_env)
             if open_mood:
-                get_db().execute("UPDATE letters SET opened=1, open_env=?, open_mood=? WHERE id=? AND user_id=?",
-                                 (open_env, open_mood, lid, uid()))
-            else:
-                get_db().execute("UPDATE letters SET opened=1, open_env=? WHERE id=? AND user_id=?",
-                                 (open_env, lid, uid()))
+                sets.append("open_mood=?"); args.append(open_mood)
+            # opened=1 は毎回書く（opened_at はあるのに opened が寝ている
+            # 古い行を、読み直しのついでに起こしておく）。
+            get_db().execute(
+                f"UPDATE letters SET {', '.join(sets)} WHERE id=? AND user_id=?",
+                (*args, lid, uid()))
         get_db().commit()
 
     keys = row.keys()
@@ -6525,7 +6563,7 @@ def api_set_open_color(lid):
         return jsonify(error="便りが見つかりません。"), 404
     if not _is_arrived(row):
         return jsonify(error="まだ封の中です。"), 403
-    color = (request.get_json(force=True).get("color") or "").strip()[:32] or None
+    color = _json_str((request.get_json(force=True) or {}).get("color")).strip()[:32] or None
     with _WRITE_LOCK:
         get_db().execute("UPDATE letters SET open_color=? WHERE id=? AND user_id=?",
                          (color, lid, uid()))
@@ -6541,7 +6579,7 @@ def api_set_open_mood(lid):
         return jsonify(error="便りが見つかりません。"), 404
     if not _is_arrived(row):
         return jsonify(error="まだ封の中です。"), 403
-    mood = (request.get_json(force=True).get("mood") or "").strip()[:40] or None
+    mood = _json_str((request.get_json(force=True) or {}).get("mood")).strip()[:40] or None
     
     with _WRITE_LOCK:
         get_db().execute("UPDATE letters SET open_mood=? WHERE id=? AND user_id=?", (mood, lid, uid()))
@@ -6556,7 +6594,7 @@ def api_set_emos(lid):
     if not row: return jsonify(error="便りが見つかりません。"), 404
     if not _is_arrived(row): return jsonify(error="まだ封の中です。"), 403
     
-    emos = request.get_json(force=True).get("emos", [])
+    emos = (request.get_json(force=True) or {}).get("emos", [])
     with _WRITE_LOCK:
         get_db().execute("UPDATE letters SET emos=? WHERE id=? AND user_id=?", (json.dumps(emos, ensure_ascii=False), lid, uid()))
         get_db().commit()
@@ -6573,7 +6611,7 @@ def api_like_letter(lid):
         return jsonify(error="便りが見つかりません。"), 404
     if not _letter_opened(row):
         return jsonify(error="まだ封の中です。"), 403
-    on = bool(request.get_json(force=True).get("on", True))
+    on = bool((request.get_json(force=True) or {}).get("on", True))
     liked_at = datetime.now().isoformat(timespec="seconds") if on else None
     with _WRITE_LOCK:
         get_db().execute("UPDATE letters SET liked_at=? WHERE id=? AND user_id=?",
@@ -7257,8 +7295,8 @@ def api_reply(lid):
     if not row: return jsonify(error="便りが見つかりません。"), 404
     if not _is_arrived(row): return jsonify(error="まだ封の中です。"), 403
 
-    data = request.get_json(force=True)
-    text = (data.get("text") or "").strip()
+    data = request.get_json(force=True) or {}
+    text = _json_str(data.get("text")).strip()
     if not text: return jsonify(error="空の返事です。"), 400
 
     # コメントの「その時」を継承する：時間帯（端末ローカルで確定済み）と気象スナップショット
@@ -7287,9 +7325,9 @@ NOTE_TEXT_MAX = 60
 @app.route("/api/notes", methods=["POST"])
 @login_required
 def api_create_note():
-    data = request.get_json(force=True)
-    color = (data.get("color") or "").strip()[:32] or None
-    text = (data.get("text") or "").strip()[:NOTE_TEXT_MAX]
+    data = request.get_json(force=True) or {}
+    color = _json_str(data.get("color")).strip()[:32] or None
+    text = _json_str(data.get("text")).strip()[:NOTE_TEXT_MAX]
     if not color and not text:
         return jsonify(error="色かことばを、ひとつ。"), 400
     env = json.dumps(data.get("env")) if data.get("env") else None
@@ -7378,12 +7416,12 @@ def api_trash_dissolve(tid):
 @app.route("/api/trash", methods=["POST"])
 @login_required
 def api_trash_save():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     # 便箋と同じ80字制約。行頭の字下げ・空行は書かれたまま保ち、末尾の余りだけ落とす。
-    content = (data.get("content") or "")[:80].rstrip()
+    content = _json_str(data.get("content"))[:80].rstrip()
     if not content.strip():
         return jsonify(error="白紙は握りつぶせません。"), 400
-    mood = (data.get("mood_color") or "").strip()[:32] or None
+    mood = _json_str(data.get("mood_color")).strip()[:32] or None
     vertical = 1 if data.get("vertical") else 0
     # 筆跡（TypeTrace）。letters と同じ流儀：JSON文字列で保存し、暴走サイズは捨てる。
     trace = data.get("trace")
@@ -7457,13 +7495,14 @@ def api_letters_bulk_discard():
     # 「一気に捨てる」：封の中（まだ届いていない）のたよりだけを、まとめて屑籠へ移す。
     # 恒久ルール「消せない屑籠」のとおり、行き先は unemptyable_trash。紙玉になった言葉は
     # 屑籠で読めるが、もう封には戻せない。届いてしまったたよりは歴史の一部なので対象外。
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     ids = data.get("ids")
     if not isinstance(ids, list) or not ids:
         return jsonify(error="捨てるたよりが選ばれていません。"), 400
     ids = [str(i)[:64] for i in ids][:100]
     db = get_db()
     moved = 0
+    any_sky = False
     try:
         with _WRITE_LOCK:
             for lid in ids:
@@ -7487,13 +7526,30 @@ def api_letters_bulk_discard():
                      (_now + UNRAVEL_AFTER).isoformat(timespec="seconds")))
                 db.execute("DELETE FROM thread WHERE letter_id=?", (lid,))
                 sem_forget(db, [lid])
-                db.execute("DELETE FROM muted WHERE letter_id=?", (lid,))
+                # 取り消し（api_mine_delete）と同じ掃除。ここが抜けていると、宙モードの
+                # 封の中のことばを捨てた時に sky_deliveries 等の行が孤児のまま残る
+                # （受け手側の JOIN からは黙って消えるが、行は永久にたまり続ける）。
+                for stmt in ("DELETE FROM letter_tags WHERE letter_id=?",
+                             "DELETE FROM sky_deliveries WHERE letter_id=?",
+                             "DELETE FROM sky_marks WHERE letter_id=?",
+                             "DELETE FROM sky_seen WHERE letter_id=?",
+                             "DELETE FROM sky_reaction WHERE letter_id=?",
+                             "DELETE FROM sky_cycle_seen WHERE letter_id=?",
+                             "DELETE FROM muted WHERE letter_id=?"):
+                    try:
+                        db.execute(stmt, (lid,))
+                    except sqlite3.OperationalError:
+                        pass          # 古いDBに無いテーブルは、無いままでよい
                 db.execute("DELETE FROM letters WHERE id=? AND user_id=?", (lid, uid()))
+                if _is_sky(row):
+                    any_sky = True
                 moved += 1
             db.commit()
     except sqlite3.OperationalError as e:
         print(f"[たより] 一気に捨てる 書き込み失敗（再試行可）: {e}", flush=True)
         return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
+    if any_sky:
+        _sky_cache_bust()     # 宙に出ていたことばは、共有キャッシュの15秒を待たせず降ろす
     return jsonify(ok=True, moved=moved)
 
 
@@ -8128,9 +8184,14 @@ def api_timeline():
                               photo=bool(d["photo"]), voice=bool(d["voice"]),
                               emos=d["emos"], opened=d["opened"], hidden=d["arrive_hidden"], sealed=False))
         else:
-            t_arrive = r["arrive_at"] or (r["arrive_date"] + "T00:00:00")
             nodes.append(dict(date=d["sent_date"], kind="sent", id=d["id"], poem=None, photo=False, voice=False, emos=[], opened=False, hidden=d["arrive_hidden"], sealed=True))
-            nodes.append(dict(date=t_arrive[:10], kind="future", id=d["id"], poem=None, photo=False, voice=False, emos=[], opened=False, hidden=d["arrive_hidden"], sealed=True))
+            # 宙へ放ったことばの降る日時は、本人にも見せない内部パラメータ
+            # （sealed_meta が arrive_at/seconds_left を伏せているのと同じ線）。
+            # ここだけ future ノードで日付を出していた＝手がかりの漏れ。手紙モードの
+            # 行（mode<>'sky'）に限って、従来どおり未来の目印を置く。
+            if not _is_sky(r):
+                t_arrive = r["arrive_at"] or (r["arrive_date"] + "T00:00:00")
+                nodes.append(dict(date=t_arrive[:10], kind="future", id=d["id"], poem=None, photo=False, voice=False, emos=[], opened=False, hidden=d["arrive_hidden"], sealed=True))
     nodes.sort(key=lambda n: n["date"])
     return jsonify(nodes=nodes)
 
@@ -8449,7 +8510,11 @@ def _run_backup_to_s3():
             keep = 14
         objs = s3.list_objects_v2(Bucket=cfg["bucket"], Prefix="backups/").get("Contents", [])
         objs.sort(key=lambda o: o["Key"])
-        for o in (objs[:-keep] if len(objs) > keep else []):
+        # keep<=0 は「1つも残さない」の意だが、objs[:-0] は Python では objs[:0]
+        # （空スライス）になり、0 を境に掃除が一件も走らなくなる（-0 == 0 の罠）。
+        # keep>0 の時だけ末尾から数えて切る。
+        to_delete = objs[:-keep] if keep > 0 else objs
+        for o in to_delete:
             s3.delete_object(Bucket=cfg["bucket"], Key=o["Key"])
         return True
     except Exception as e:
