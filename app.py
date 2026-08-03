@@ -3963,8 +3963,13 @@ _SEM_HIT_MIN_PD = _env_num("TAYORI_SEM_HIT_MIN_PD", 0.35, -1.0, 1.0)
 # 受け入れていた。実測：「海」で『絵の中の海が少し揺れて見えた。』が 0.193 で落ちる。
 # 探すのAI（TAYORI_SEARCH_AI）を立てると、捨てる仕事はAIが引き受ける。だから手前は
 # 広く拾ってよい——0.12 なら上の一通は残り、AIが本当に関わりのあるものだけを選ぶ。
-# 本の一節はこの線を使わない（母数10万では雑音が数百あり、AIに見せる枠を雑音が
-# 埋めて本物を押し出す）。緩めるのは人のことばだけ。
+#
+# 【2026-08-04・本の一節にもこの線を使う】ここには「本は使わない。母数10万では雑音が
+# 数百あり、AIに見せる枠を雑音が埋めて本物を押し出す」と書いてあった。押し出しは
+# 起きない。AIに見せる候補は sem_d の昇順＝**近い順の上位だけ**で、sem_hit_distance
+# は sim に対して単調だから、下限をどこに置いても上位の顔ぶれは一片も変わらない。
+# 下限が動かすのは並びの末尾だけ——効くのは「線を超える片が枠より少ないとき」で、
+# それは 0.35 で 120片しか通らない「海」のような語のこと。そこを塞ぐのが目的。
 _SEM_HIT_MIN_AI = _env_num("TAYORI_SEM_HIT_MIN_AI", 0.12, -1.0, 1.0)
 
 
@@ -4910,6 +4915,10 @@ def _in_room(pool, room_id):
 # 人の枠を削って混ぜないのは、漂流物が人のことばの代わりになってはいけないから
 # ——宙は本の抜き書き帳ではない。足すぶんだけ、静かに増える。
 _SKY_PD_K = _env_num("TAYORI_SKY_PD_K", 2, 0, 20, cast=int)
+# ただし**探すときだけは別の枠**（2026-08-04）。上の 2 は「その日ふらりと流れ着く数」で、
+# 漂いの静けさを決めている数字。探すのは能動で、しかも探しに来る人が欲しいのは
+# 表現の手がかりだから、本の一節が濃く出てよい。漂いの 2 は触らない。
+_SKY_SEARCH_PD_K = _env_num("TAYORI_SKY_SEARCH_PD_K", 5, 0, 20, cast=int)
 # 漂流物の齢。新着レーン（e[8] の小さい順）に決して入らないだけの大きさがあればよい。
 _PD_AGE_DAYS = 36500.0
 # 濃さ。齢から引くと最も薄いところ（0.32）に貼り付くが、それでは読めない。
@@ -5145,9 +5154,12 @@ def _drift_matrix(db):
     return None, None, None
 
 
-def _drift_scored(db, qv, now_air, room_id, muted, cand=240):
+def _drift_scored(db, qv, now_air, room_id, muted, cand=240, floor=None):
     """探すの候補になる漂流物を (遠さ, entry, air) の形で返す（多くて cand 件）。
-    人のことばと同じ形にして返すのは、そのあとの抽選を一本のままにするため。"""
+    人のことばと同じ形にして返すのは、そのあとの抽選を一本のままにするため。
+
+    floor は近さの下限。既定は本の線（_SEM_HIT_MIN_PD）で、AIが選別する時だけ
+    呼ぶ側が緩い線を渡す（2026-08-04・下の api_sky_search の節）。"""
     ids, rooms, mat = _drift_matrix(db)
     if mat is None or qv is None:
         return []
@@ -5167,7 +5179,8 @@ def _drift_scored(db, qv, now_air, room_id, muted, cand=240):
         # （岸に流れ着くのと同じ範囲。探すが眺めより広く出ることはない）。
         if room_id is not None and rooms[i] is not None and rooms[i] != room_id:
             continue
-        sd = sem_hit_distance(float(sims[i]), floor=_SEM_HIT_MIN_PD)
+        sd = sem_hit_distance(float(sims[i]),
+                              floor=_SEM_HIT_MIN_PD if floor is None else floor)
         if sd is None:
             break                    # 近い順に見ているので、切れたらそこで終わり
         if ids[i] in muted:
@@ -5729,7 +5742,13 @@ _SEARCH_Q_MAX = 80          # 放てることばと同じ長さまで
 #     本文は覚えない・ディスクにも書かない・プロセスが終われば消える
 _SEARCH_AI = bool(os.environ.get("TAYORI_SEARCH_AI"))
 _SEARCH_AI_H = _env_num("TAYORI_SEARCH_AI_H", 16, 1, 60, cast=int)   # 見せる人のことば
-_SEARCH_AI_D = _env_num("TAYORI_SEARCH_AI_D", 8, 0, 60, cast=int)    # 見せる本の一節
+# 本の一節の枠は 8 → 20（2026-08-04）。20万片のうち下限を超えるのが数百あっても、
+# AIの目に触れるのは常に上位8片で、画面に出るのは2片だった——「20万あるのに同じ
+# ものしか出ない」の正体は板の大きさではなく、この出口の細さ。
+# 24（下の _SEARCH_AI_MAX＝ポリシーの約束）を超えないのは、**人を先に採ってから
+# 余りを本で埋める**から（_search_ai_filter）。人が16通いれば本は8、人が居なければ
+# 本が20。抽選の前に「人の空き枠は本が埋める」のと同じ順序を、選別の手前でも守る。
+_SEARCH_AI_D = _env_num("TAYORI_SEARCH_AI_D", 20, 0, 60, cast=int)   # 見せる本の一節
 _SEARCH_AI_TIMEOUT = _env_num("TAYORI_SEARCH_AI_TIMEOUT", 6.0, 1.0, 30.0)
 # 選別に使う版。lite は速いが「でたらめな語」に甘い（実測：qqqzzz で2件を選んだ）。
 # 探すは人が待っている経路なので、速さと厳しさの折り合いはここで替えられるようにする。
@@ -5787,15 +5806,22 @@ def _search_ai_filter(q, h_scored, d_scored, fallback=None):
     if not _search_ai_on() or not (h_scored or d_scored):
         return back
     # 意味の近い順に上位だけを見せる（画面へ出すのは、このあとの抽選が決める）。
+    # 人を先に採り、24（_SEARCH_AI_MAX）までの余りを本が埋める（2026-08-04）。
+    # 先に H と D で切ってから 24 で落とすと、人が3通しか居ない宙でも本は8片で
+    # 止まり、11片しかAIに見せないまま13枠を空けて捨てていた。
     h = sorted(h_scored, key=lambda t: t[2]["sem_d"])[:_SEARCH_AI_H]
     d = sorted(d_scored, key=lambda t: t[2]["sem_d"])[:_SEARCH_AI_D]
-    cands = []
-    for _dst, e, _air in h + d:
-        text = " ".join((e[0].get("poem") or "").split())[:_SEARCH_AI_TEXT_MAX]
-        if text:
-            cands.append((e[0]["id"], text))
-    if len(cands) > _SEARCH_AI_MAX:
-        cands = cands[:_SEARCH_AI_MAX]
+
+    def _texts(picked):
+        out = []
+        for _dst, e, _air in picked:
+            text = " ".join((e[0].get("poem") or "").split())[:_SEARCH_AI_TEXT_MAX]
+            if text:
+                out.append((e[0]["id"], text))
+        return out
+
+    cands = _texts(h)[:_SEARCH_AI_MAX]
+    cands += _texts(d)[:max(0, _SEARCH_AI_MAX - len(cands))]
     if not cands:
         return back
     # 探しことばは、原文のままでは持たない（ポリシー第4項「入力されたことばは計算の
@@ -5912,8 +5938,7 @@ def api_sky_search():
     # 2026-07-31：漂流物はプールに居ないので、別の道で候補を作る（_drift_scored）。
     # 分けて引く理由は変わらない——一つの山から引くと、18万片が数十通の人のことばを
     # 押し出す。探しているのは人のことばで、本の一節はその傍らに流れ着くもの。
-    d_scored = _drift_scored(get_db(), qv, now_air, room_id,
-                             _muted_ids(get_db(), reader) if reader else set())
+    #
     # AIの選別（既定OFF・上の節）。ここに置くのは、両方の山が揃ってからでないと
     # 「人が近いのに本で埋まる」の見え方まで直せないから。空き枠を数えるより前。
     #
@@ -5921,19 +5946,38 @@ def api_sky_search():
     # 0.22 は「選ぶ者がいなかった時代」の線で、雑音を入れないために recall を
     # 捨てていた。実際「海」では『絵の中の海が少し揺れて見えた。』が 0.193 で
     # 落ちていた——本文に海と書いてあるのに。捨てる係をAIが引き受けたのだから、
-    # 手前は広く拾ってよい。AIに届かなかった時のために、厳しい線で選んだ山
-    # （h_scored）はそのまま残して fallback に渡す。
-    if _search_ai_on():
+    # 手前は広く拾ってよい。AIに届かなかった時のために、厳しい線で選んだ山は
+    # そのまま残して fallback に渡す。
+    # 2026-08-04：本の一節も同じ線で拾う（_SEM_HIT_MIN_AI の節）。板を掛けるのは
+    # 一度だけにして、厳しい線の山はそこから切り出す——同じ並びの前半だから、
+    # 掛け算をもう一度払う理由がない。
+    ai = _search_ai_on()
+    d_scored = _drift_scored(get_db(), qv, now_air, room_id,
+                             _muted_ids(get_db(), reader) if reader else set(),
+                             floor=_SEM_HIT_MIN_AI if ai else None)
+    if ai:
+        # 緩い線で測った遠さのまま、厳しい線を通る片だけを取り出す境目。
+        # sem_d = (1-sim)/(1-lo) なので、sim ≥ _SEM_HIT_MIN_PD はこの値以下。
+        d_cut = (1.0 - _SEM_HIT_MIN_PD) / max(1e-6, 1.0 - _SEM_HIT_MIN_AI)
+        d_strict = [t for t in d_scored if t[2]["sem_d"] <= d_cut]
+        # **一片も厳しい線を越えない語は、緩い線も開けない**（2026-08-04）。
+        # 実測：`music`（表に無い語）で 0.35超が0片。緩めると 240片が拾えてしまい、
+        # いちばん近い一片でさえ 0.28＝でたらめが20枠を埋めてAIに差し出される。
+        # 本物の語は本の一節に 0.45〜0.81 で当たる（海0.545 炭鉱0.811）ので、
+        # 「最も近い一片すら 0.35 に届かない」は、線の置き場所ではなく**無い**ということ。
+        # 拾い直しが効くのは「越える片が枠より少ない語」で、そこは d_strict が空でない。
+        if not d_strict:
+            d_scored = []
         h_scored, d_scored = _search_ai_filter(
             q, score_human(floor=_SEM_HIT_MIN_AI), d_scored,
-            fallback=(h_scored, d_scored))
+            fallback=(h_scored, d_strict))
     # 人のことばの空き枠は、本の一節が埋める（2026-08-02・Kosei判断）。
-    # 出す総数は _SKY_N + _SKY_PD_K で変わらない——変わるのは中の比だけ。
-    # 人が9通いれば今までどおり 9＋2、3通しかいなければ 3＋8、0通なら 0＋11。
+    # 出す総数は _SKY_N + _SKY_SEARCH_PD_K で変わらない——変わるのは中の比だけ。
+    # 人が9通いれば 9＋5、3通しかいなければ 3＋11、0通なら 0＋14。
     # 順序の思想（人のことばを先に採る）は保つ：埋めるのは**採り終えた後の余り**で、
     # 本が人を押し出すことはない。
     h_chosen = draw(h_scored, _SKY_N)
-    chosen = h_chosen + draw(d_scored, _SKY_PD_K + (_SKY_N - len(h_chosen)))
+    chosen = h_chosen + draw(d_scored, _SKY_SEARCH_PD_K + (_SKY_N - len(h_chosen)))
     if not chosen:
         # 宙のどこにも近いものが無かった。件数の顔は見せず words=[] だけ返す
         # （画面は「まだここにありません」の一行を置いて、漂いをそのまま続ける）。
