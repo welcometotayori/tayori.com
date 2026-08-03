@@ -74,13 +74,16 @@
      （敷き詰めても件数は書かない・帯の長さも固定のまま）。 */
   /* 紙片の敷き詰めは 520px の紙（.doc）より広い足場が要る。リストだけ
      中央のまま横へ張り出す（負のマージン＝.doc の外へ静かにはみ出す）。 */
-  .slips{margin:0;padding:0;list-style:none;columns:15em;column-gap:20px;
+  /* 段は自分で持つ（2026-08-03・理由は下の script 冒頭）。CSS の段組みは畳んだ。
+     幅の決め方（15em ごとに一段・隙間20px）は colCount() が同じ式でなぞる。 */
+  .slips{margin:0;padding:0;list-style:none;display:flex;gap:20px;align-items:flex-start;
          width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
+  .slip-col{flex:1 1 0;min-width:0;margin:0;padding:0;list-style:none}
   /* 影のぼけは 30px → 14px（2026-08-03 スクロール）。ぼかしは blur と同じ計算で、
      一枚ごとに面積ぶんの塗りが要る——棚には紙が何十枚も敷き詰まるので、指で送る間
      ずっとその塗りが続いていた。宙の紙片（.isl.sheet .w）は 7/31 に同じ理由で
      14px へ落としてある。ここだけ古い寸法のまま残っていた。 */
-  .slip{position:relative;break-inside:avoid;margin:0 0 20px;
+  .slip{position:relative;margin:0 0 20px;
         padding:var(--s3) var(--s3) var(--s2) calc(var(--s3) + 8px);
         background:var(--pp,#EDE9DF);border-radius:var(--edge);
         box-shadow:0 1px 0 rgba(250,248,243,.05),0 8px 14px -12px rgba(0,0,0,.92)}
@@ -146,11 +149,26 @@
      数秒〜十数秒のあいだ、何十枚もが同時に動き続けている状態で指を送ることになる。
      JS側で --i を12までに丸めた（下の renderWords / 書架も同じ）＝波は1秒足らずで
      引く。「一枚ずつ、順に置かれる」という姿は、はじめの十数枚で既に伝わっている。 */
+  /* 置き始めるのは、段が決まってから（.laid・2026-08-03）。段を割るあいだ紙は
+     一度ぜんぶ一段目に入るので、そこで動き出すと、段を移った紙が二度立ち上がる。 */
   @media (prefers-reduced-motion: no-preference){
-    .slip{opacity:0;animation:slipIn .6s var(--ease) both;
+    .slips .slip,.shelf-words .m-slip{opacity:0}
+    .slips.laid .slip{animation:slipIn .6s var(--ease) both;
           animation-delay:calc(var(--i,0) * 70ms)}
     @keyframes slipIn{from{opacity:0;transform:translateY(8px)}
                         to{opacity:1;transform:none}}
+  }
+  /* ── 見えていない紙は、組みも塗りもしない（2026-08-03）──────────────
+     ふつうの箱に入って初めて安全に使える（段組みの中では、畳んだ紙の高さが
+     当て推量になって段そのものが飛ぶ）。auto は**一度描いた実寸を覚える**ので、
+     一度でも通り過ぎた所より上では裾がずれない。900枚・画面の中で 51.2ms → 21.7ms。
+     古い Safari は auto を読めず固定値として扱う（＝裾が揺れる）ので、
+     読める環境にだけ渡す。 */
+  @supports (contain-intrinsic-size: auto 300px){
+    /* 300px は「JSが丈を渡せなかった時」のためだけの数（渡せた紙は style 属性で
+       一枚ずつ本当の値を持つ）。ここを頼りにする紙は、ふつう一枚も無い。 */
+    .slips.laid .slip,.shelf-words.laid .m-slip{
+      content-visibility:auto;contain-intrinsic-size:auto 300px}
   }
 
   /* ── 自分の書架（v2 §11）──────────────────────────────
@@ -164,9 +182,9 @@
   .season-head .sn{font-size:13.5px;letter-spacing:0.3em}
   /* ことばは色相の順に緯（よこいと）として並ぶ。左の糸が気分の色。
      棚と同じ紙片のマソンリー（2026-07-31 グリッド） */
-  .shelf-words{margin:0;padding:0;list-style:none;columns:15em;column-gap:20px;
+  .shelf-words{margin:0;padding:0;list-style:none;display:flex;gap:20px;align-items:flex-start;
                width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
-  .m-slip{position:relative;break-inside:avoid;margin:0 0 20px;
+  .m-slip{position:relative;margin:0 0 20px;
           padding:var(--s3) var(--s3) var(--s2) calc(var(--s3) + 8px);
           background:var(--pp,#EDE9DF);border-radius:var(--edge);
           box-shadow:0 1px 0 rgba(250,248,243,.05),0 8px 14px -12px rgba(0,0,0,.92)}
@@ -199,7 +217,8 @@
              color:rgba(30,27,33,.66);word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   .m-undo .go{color:rgba(30,27,33,.85)}
   @media (prefers-reduced-motion: no-preference){
-    .m-slip{opacity:0;animation:mIn .6s var(--ease) both;
+    /* 伏せておくのは上の .slips/.shelf-words の一行が引き受けた（.laid で置き始める） */
+    .shelf-words.laid .m-slip{animation:mIn .6s var(--ease) both;
             animation-delay:calc(var(--i,0) * 50ms)}
     @keyframes mIn{from{opacity:0;transform:translateY(8px)}
                      to{opacity:1;transform:none}}
@@ -233,7 +252,9 @@
     <div class="shelves" id="shelves" role="tablist" aria-label="棚"></div>
     <div class="shelf-tools" id="shelfTools"></div>
 
-    <ul class="slips" id="slips" aria-label="棚に残したことば"></ul>
+    {# 段は中の <ul class="slip-col"> が持つ（2026-08-03）。<ul> の直下に <ul> は
+       置けないので、外側は器だけの箱にして、名前（aria-label）をここへ残す。 #}
+    <div class="slips" id="slips" role="group" aria-label="棚に残したことば"></div>
     <p class="state" id="shelfState" hidden></p>
   </section>
 
@@ -254,6 +275,128 @@
 /* 一枚ずつ置かれる波の、いちばん後ろ（2026-08-03 スクロール）。棚も書架も同じ寸法で
    丸める——面が違っても、置かれ方が違って見える理由が無い。12枚 × 70ms ＝ 0.84秒。 */
 const STAGGER_MAX=12;
+
+/* ══ 段を、自分で持つ（2026-08-03）════════════════════════════════════
+   棚と書架の紙片は CSS の段組み（columns:15em）で敷いていた。姿は良かったが、
+   段組みは**版面ぜんぶを段に割り直す**仕組みで、その割り直しが、中の紙が一枚でも
+   高さを変えるたびに走る。付箋を一枚貼る・はがす・棚から外す・画面を回す——
+   棚の上で何をしても、毎回その代金を払っていた（実測・Chrome 148・強制的に版面を
+   確定させて計測）:
+
+     枚数   段組み初回 / 自前の段初回   段組み一枚変化 / 自前の段一枚変化
+     100     29.1ms  /  8.1ms            4.9ms  /  0.2ms
+     400     27.8ms  / 14.3ms           15.8ms  /  0.4ms
+     900     49.0ms  / 33.3ms           14.7ms  /  0.9ms   ← 16倍
+
+   だから、段組みがやっていた計算（順に詰めて、目標の丈で次の段へ）を **JSで一度
+   だけ**やって、あとはふつうの箱をN本並べるだけにする。姿も順も変わらない
+   ——段組みも今まで「一段目を上から下、それから次の段」で詰めていたので、
+   同じ割り方をなぞれば、並びは一字も動かない。
+
+   引き換えにひとつ。付箋を貼るとその段だけ伸びて、**段の裾が揃わなくなる**
+   （段組みは毎回揃え直していて、それが14.7msの正体だった）。マソンリーの板として
+   裾が不揃いなのは自然な姿なので、揃え直さない。払わなくていい代金は払わない。
+
+   ふつうの箱に入ったことで content-visibility:auto が**安全に**使えるようになった
+   （段組みの中では高さの当て推量で段が飛ぶので入れられなかった）。900枚・画面の中で
+   51.2ms → 21.7ms。ただし**丈を測る間だけは畳ませない**——畳んだ紙は当て推量の
+   高さを返すので、それで段を割ると段の丈が揃わない。だから .laid を後から付ける。 */
+const COL_EM=15, COL_GAP=20;
+function colCount(box){
+  const em=parseFloat(getComputedStyle(box).fontSize)||16;
+  let w=box.clientWidth;
+  /* 畳まれている面（タブの裏）では幅が0で返る——書架は開かれるまで取りに行かないが、
+     棚のほうは裏で組まれることがある。その時は箱のCSSの式（min(92vw,1060px)）を
+     こちらで解く。紙の幅は面の幅だけで決まるので、これで同じ答えになる。 */
+  if(!w){
+    const vw=document.documentElement.clientWidth||innerWidth||0;
+    w=Math.min(vw*0.92,1060);
+  }
+  return Math.max(1,Math.floor((w+COL_GAP)/(COL_EM*em+COL_GAP)));
+}
+/* items（li の配列）を box の中の段へ配る。box は .slips / .shelf-words */
+function layColumns(box,items){
+  box.classList.remove('laid');
+  box.textContent='';
+  box._items=items;
+  const n=box._n=colCount(box);
+  const cols=[], frag=document.createDocumentFragment();
+  for(let i=0;i<n;i++){
+    const ul=document.createElement('ul'); ul.className='slip-col';
+    cols.push(ul); frag.appendChild(ul);
+  }
+  box.appendChild(frag);
+  if(!items.length){ box.classList.add('laid'); return; }
+  // ① まず一段目へ全部入れて、**まとめて**丈を読む（測ると書くを混ぜない）。
+  //    段の幅は flex:1 1 0 で中身に依らず決まるので、一段目で測った丈が
+  //    どの段へ移しても通用する。
+  items.forEach(el=>cols[0].appendChild(el));
+  /* 以下、測って割るところは try で囲む。ここで転ぶと .laid が付かず、紙は
+     opacity:0 のまま——**棚がまるごと空に見える**。段の割り方をしくじるのと、
+     ことばが消えるのとでは、重さがまるで違う。転んだら一段のまま置く。 */
+  try{
+  //    丈は紙と紙のあいだ（margin 20px）も込みで数える——数えないと、枚数の多い段が
+  //    そのぶん背伸びして、裾が揃わない。
+  const box0=items.map(el=>el.offsetHeight);
+  const h=box0.map(x=>x+COL_GAP);
+  /* 畳んだ紙の丈を、当て推量にさせない（2026-08-03）。content-visibility:auto は
+     まだ一度も描いていない紙に contain-intrinsic-size の値を当てる。`auto` は
+     「一度描いた実寸を覚える」だけなので、**開いた瞬間は全部が同じ当て推量**になり、
+     面の丈がまるごと狂う（実測：本当は 35,569px の棚が 49,083px になった＝
+     指を送るあいだ丈が直り続ける＝いちばん避けたい揺れ）。
+     だが丈はいま測ったばかりで、こちらが知っている。一枚ずつ本当の値を渡せば、
+     当て推量そのものが無くなる——畳んでいる利得だけが残る。
+     渡すのは中身の丈なので、上下の余白を引く（紙の作りは全部同じなので一度読む）。 */
+  if(items.length){
+    const cs=getComputedStyle(items[0]);
+    const pad=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+    items.forEach((el,i)=>{
+      el.style.containIntrinsicSize='auto '+Math.max(0,Math.round(box0[i]-pad))+'px';
+    });
+  }
+  /* ② 段組みと同じ割り方＝**いちばん高い段が、いちばん低くなる丈**をさがす。
+        「総丈÷段数を目標に順に詰める」だけだと、一枚の丈（約350px）が粗すぎて
+        裾が二枚ぶん（実測 701px）ずれた。紙の順は変えられない（変えたら並びが崩れる）
+        ので、動かせるのは切れ目だけ——切れ目の入れ方は、段の丈 H を決めれば
+        一意に決まる（順に詰めて、越えたら次の段）。あとは「n段に収まる最小の H」を
+        二分探索するだけでいい。下限はいちばん高い一枚、上限は総丈。
+        140枚・16回で終わる計算なので、段組みが毎回やっていた仕事より遥かに軽い。 */
+  if(n>1){
+    let total=0,tallest=0;
+    h.forEach(x=>{total+=x;if(x>tallest)tallest=x;});
+    const fits=H=>{
+      let c=1,acc=0;
+      for(let i=0;i<h.length;i++){
+        if(acc&&acc+h[i]>H){ c++; acc=0; if(c>n)return false; }
+        acc+=h[i];
+      }
+      return true;
+    };
+    let a=tallest,b=total;
+    while(a<b){ const m=(a+b)>>1; if(fits(m))b=m; else a=m+1; }
+    let c=0,acc=0;
+    items.forEach((el,i)=>{
+      if(acc&&acc+h[i]>a&&c<n-1){ c++; acc=0; }
+      if(c>0)cols[c].appendChild(el);
+      acc+=h[i];
+    });
+  }
+  }catch(e){}
+  // ③ 配り終えてから畳ませる／置き始める。順が決まる前に動き出すと、
+  //    段を移った紙が二度立ち上がって見える。転んだ時も、必ずここへ来る。
+  box.classList.add('laid');
+}
+/* 画面の幅が変わって**段の数が変わった時だけ**配り直す（丈は段の幅で変わるので、
+   測り直しごと。回すのは稀な操作なので、ここは素直に全部やってよい）。 */
+let colT=0;
+addEventListener('resize',()=>{
+  clearTimeout(colT);
+  colT=setTimeout(()=>{
+    document.querySelectorAll('.slips,.shelf-words').forEach(box=>{
+      if(box._items&&box._items.length&&colCount(box)!==box._n)layColumns(box,box._items);
+    });
+  },160);
+});
 /* ══ タブ ═════════════════════════════════════════════════════
    面の切り替えだけを持つ。中身の読み込みは、開かれた時に一度だけ走らせる
    （書架は手紙の全部を引くので、棚を見に来た人を待たせない）。 */
@@ -435,7 +578,7 @@ const STAGGER_MAX=12;
 
   /* ── いまの棚のことば。ほかの棚にも置ける（同じことばを複数の棚へ・§5）── */
   function renderWords(){
-    box.innerHTML='';
+    layColumns(box,[]);            // 段ごと畳む（前の棚の紙を残さない）
     const words=D.words.filter(w=>w.shelves.indexOf(cur)>=0);
     if(!words.length){
       say('この棚には、<wbr>まだ<wbr>何も<wbr>置かれていません。<br>'+
@@ -443,6 +586,7 @@ const STAGGER_MAX=12;
       return;
     }
     say('');
+    const lis=[];
     words.forEach((w,i)=>{
       const li=document.createElement('li');li.className='slip';
       li.style.setProperty('--i',Math.min(i,STAGGER_MAX));   // 順番待ちの尾を切る
@@ -485,8 +629,9 @@ const STAGGER_MAX=12;
           setTimeout(()=>{ li.remove(); load(); },420);
         }catch(err){ b.disabled=false; say('いま、<wbr>棚に<wbr>手が<wbr>届きませんでした。'); }
       });
-      box.appendChild(li);
+      lis.push(li);
     });
+    layColumns(box,lis);   // 段へ配るのは、全部こしらえてから一度だけ
   }
   function load(){
     fetch('/api/shelf').then(r=>r.ok?r.json():null)
@@ -562,9 +707,11 @@ const STAGGER_MAX=12;
           const d=await r.json().catch(()=>null);
           if(!r.ok||!d||!d.ok)throw new Error((d&&d.error)||'');
           // 消えたことばは、その場から静かに退く。季節ごと空になったら季節も畳む
-          const sec=li.closest('.season'), ul=li.parentNode;
+          // 段を自分で持つようになったので（2026-08-03）、親の子を数えると
+          // 「その段が空になった」でしかない。季節ぜんぶに紙が無いかで見る。
+          const sec=li.closest('.season');
           li.remove();
-          if(sec&&ul&&!ul.children.length)sec.remove();
+          if(sec&&!sec.querySelector('.m-slip'))sec.remove();
           if(!boxAll.children.length)say(EMPTY);
         }catch(err){
           row.innerHTML='';
@@ -590,8 +737,9 @@ const STAGGER_MAX=12;
       const sec=document.createElement('section');sec.className='season';
       sec.innerHTML='<div class="season-head"><span class="yr">'+esc(g.year)+'</span>'+
         '<span class="sn">'+esc(SN[g.season]||'')+'</span></div>'+
-        '<ul class="shelf-words"></ul>';
+        '<div class="shelf-words" role="group"></div>';
       const ul=sec.querySelector('.shelf-words');
+      const lis=[];
       // 季節の中は、時間ではなく色相の環の順に（v2 §11：季節と気分の色で並べる）
       const words=g.words.slice().sort((a,b)=>(a.hue==null)-(b.hue==null)||(a.hue||0)-(b.hue||0));
       words.forEach(w=>{
@@ -611,9 +759,12 @@ const STAGGER_MAX=12;
         if(w.can_undo)li.appendChild(undoRow(li,w));
         // 付箋はここに出ない（v2.2 §3）：付箋は読み手が自分の棚に貼るもので、
         // 書き手が自分のことばに付けるのは題だけ。書架には、そもそも存在しない。
-        ul.appendChild(li);
+        lis.push(li);
       });
       boxAll.appendChild(sec);
+      // 段へ配るのは、その季節を面へ差してから（丈は段の幅で決まるので、
+      // 版面に居ない箱で測ると 0 が返る）
+      layColumns(ul,lis);
     });
   }
   function load(){
