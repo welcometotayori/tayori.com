@@ -120,8 +120,9 @@
      `.isl` は既に position:absolute ＋ transform ＝ 包含ブロックでも重なりの文脈でも
      あるので、layout/style を足しても位置も重なり順も変わらない（0寸のままでいる）。 */
   .isl{position:absolute;transform:translate(-50%,-50%);contain:layout style}
+  /* 名の字は旧宙の部屋一覧の姿（2026-08-05・19px／.16em に戻した）。 */
   .isl-nm{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
-          color:var(--ink-2);font-size:17px;letter-spacing:.22em;white-space:nowrap;
+          color:var(--ink-2);font-size:19px;letter-spacing:.16em;white-space:nowrap;
           text-shadow:0 0 9px rgba(8,8,13,.9);pointer-events:none;
           transition:opacity .8s var(--ease),color .3s var(--ease)}
   /* 島へ滑って降りる1.1sのあいだは、名も同じ時間をかけて寸法を変える
@@ -133,25 +134,36 @@
      「名と灯」だけになった——見えているのが名しかないのに押せない、では戸に見えない。
      **紙を敷いていない島の名は、いつでも戸**。降りている島（.sheet）の名だけは
      指を受けない：そこは読む面で、主役は紙。名が紙のタップを横取りしてはいけない。
-     的は44px（v14の作法）＝17pxの字に上下14px・左右16pxの余白を負のマージンで足す。 */
+     的は44px（v14の作法）＝19pxの字に上下14px・左右16pxの余白を負のマージンで足す。 */
   .isl:not(.sheet) .isl-nm{pointer-events:auto;cursor:pointer;
                            padding:14px 16px;margin:-14px -16px}
   .isl:not(.sheet) .isl-nm:hover{color:var(--chalk)}
   /* 押した瞬間に応える（離すのを待たない・Apple §1）。飛ぶのは1.1秒かけてでも、
      「受け取った」は指が触れたその場で言う。 */
   .isl:not(.sheet) .isl-nm:active{color:var(--chalk);opacity:.72}
-  /* 灯は島ごとに一枚（2026-08-03）。三つの色は多重背景で重ねる＝描画項目は島に一つ。
-     寸法と背景の位置は JS が書く（島の半径で決まるため）。円クリップは持たない。 */
-  .isl-glow{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
-            background-repeat:no-repeat;pointer-events:none;
-            transition:opacity 1.2s var(--ease)}
+  /* 名の下に罫を一本（2026-08-05・旧宙の部屋一覧の姿）。カードやピルにはしない
+     ——物質のメタファーは罫一本まで。読む面（.sheet）の名は素のまま。 */
+  .isl:not(.sheet) .isl-nm::after{content:'';display:block;height:1px;margin-top:9px;
+                                  background:var(--rule);opacity:.5}
+  /* 部屋の灯（2026-08-05・旧宙の部屋一覧の「炎」へ戻した）。名のまわりに、
+     その部屋にいまあることばの封の色が最大3粒。芯は白に寄せ、外へ向かって色に
+     なって消える（単色の玉だと染みに見える）。ぼかし（filter）は使わない——
+     一枚ごとにGPUの層が立つ（7/31の教訓）。やわらかさは放射の裾で言う。
+     名の中に居るので、逆スケールも名と同じ一枚の transform に乗る。 */
+  .fire{position:absolute;z-index:-1;width:36px;height:36px;
+        left:var(--fx);top:var(--fy);transform:translate(-50%,-50%);
+        background:radial-gradient(circle at 50% 50%,
+                   color-mix(in srgb,var(--c) 62%,#fffdf6) 0%,
+                   var(--c) 26%,
+                   color-mix(in srgb,var(--c) 45%,transparent) 52%,
+                   transparent 74%);
+        opacity:.6;pointer-events:none;
+        transition:opacity 2.2s var(--ease)}
   /* 近づいたら名と灯は退き、ことばが主役になる */
   body.near .isl-nm{opacity:.34}
-  body.near .isl-glow{opacity:.25}
-  /* 紙片の面（読む面）に灯は要らない（2026-07-31 夜）。降りた島の灯は直径が
-     島の1.5倍＝画面いっぱいの放射グラデーション三枚で、寄る・引くのたびに
-     全画素を塗り直していた。紙を敷いたらそれは消す——読む面の背は、ただの闇。 */
-  .isl.sheet .isl-glow{display:none}
+  body.near .fire{opacity:.22}
+  /* 紙片の面（読む面）に灯は要らない（2026-07-31 夜）——読む面の背は、ただの闇。 */
+  .isl.sheet .fire{display:none}
   /* ── 一枚の画面に、一つの読み方（2026-07-31 夜・利用者FB）────────────
      「途中でフォーマットが変わる」「暗い字が黒に沈む」「重さが片側に寄る」の三つは、
      どれも同じ一因だった——**読む面（紙片）と地形（散らばりの字）が同居していた**。
@@ -172,6 +184,12 @@
      規則（.sheet / body.reading が変わった時だけ）で、毎フレームJSが書く類ではない。 */
   .isl:not(.sheet) .isl-w{--dim:.3}
   .isl.sheet .isl-w{--dim:1}
+  /* 引いた宙では、字を出さない（2026-08-05・旧宙の部屋一覧の姿へ）。
+     全景は「部屋の名と灯」だけの面に戻す——字の粒は、島に寄ってから現れる。
+     消し方は --dim（薄さ0）＝畳む面を立てない作法のまま（薄まり方も .w 自身の .8s）。
+     指も受けない：見えない字が、名の戸のタップを横取りしない。
+     探すの寄せ（.gw）は別の層なので、遠景でも今までどおり集まる。 */
+  body.far .isl:not(.sheet) .isl-w{--dim:0;pointer-events:none}
   /* 読んでいる間、まわりの島は**消さずに退く**（2026-08-02・0 → .14）。
      島の席を意味の地図に置いて間合いを詰めたので、隣の島はもう画面のすぐ外にいる。
      0 にすると、紙の束の縁からひと漕ぎしただけで何も無い闇に出てしまい、宙が
@@ -420,7 +438,7 @@
   @media (prefers-reduced-motion: reduce){
     .w{transition:opacity .3s ease}
     .ripple{animation:none;opacity:0}
-    .isl-nm,.isl-glow,.isl-w{transition:none}
+    .isl-nm,.fire,.isl-w{transition:none}
     .tcaret{animation:none}
     .hold{transition:opacity .2s ease;scale:1}
   }
@@ -917,20 +935,20 @@
   .lantern.deep{opacity:.55;animation:lanternDeep 4.2s var(--ease,ease-in-out) 1}
   @keyframes lanternDeep{0%,100%{transform:scale(1)}42%{transform:scale(1.6)}}
   @media (prefers-reduced-motion: reduce){ .lantern{transition:opacity 1s ease} .lantern.deep{animation:none} }
-  /* 灯の気配（?rooms=1）：気配のある島の灯が、宙ぜんぶで一つの息づかいに */
-  .isl.lit .isl-glow{animation:islBreath 6.5s var(--ease,ease-in-out) infinite}
-  @keyframes islBreath{0%,100%{opacity:1}50%{opacity:.55}}
-  /* 息をするのは遠景だけ（2026-07-31 夜）。近景では灯はもう .25 まで退いていて、
-     6.5秒の呼吸は誰にも見えない——見えない息のために、島の半径1.5倍の放射
-     グラデーション三枚を永久にGPUへ載せ続ける理由はない。 */
-  body.near .isl.lit .isl-glow{animation:none}
-  @media (prefers-reduced-motion: reduce){ .isl.lit .isl-glow{animation:none} }
+  /* 灯の気配（?rooms=1）：気配のある島の炎が、明るくなって呼吸する
+     （2026-08-05・旧宙の部屋一覧の fireBreath へ戻した） */
+  .isl.lit .fire{opacity:.95;animation:fireBreath 6.5s var(--ease,ease-in-out) infinite}
+  @keyframes fireBreath{0%,100%{transform:translate(-50%,-50%) scale(1)}
+                        50%{transform:translate(-50%,-50%) scale(1.16)}}
+  /* 息をするのは遠景だけ（2026-07-31 夜）。近景では灯はもう退いていて、
+     6.5秒の呼吸は誰にも見えない——見えない息をGPUへ載せ続ける理由はない。 */
+  body.near .isl.lit .fire{animation:none}
+  @media (prefers-reduced-motion: reduce){ .isl.lit .fire{animation:none} }
   /* 手がふれているあいだ、気配は息を止める（2026-08-03 カクツキ）。
-     島の灯は半径1.5倍の放射グラデーション三枚で、呼吸はその全画素の塗り直し。
      つまむ・ひきずるの最中は、同じフレームで宙ぜんぶを描き直す仕事と鉢合わせる
      ——一秒に何度も起きる「重なり」がガクツキそのものだった。手が離れれば戻る
      （0.7秒後）。息が止まっていることに、動かしている手は気づかない。 */
-  body.gesturing .isl.lit .isl-glow,
+  body.gesturing .isl.lit .fire,
   body.gesturing .lantern.near{animation-play-state:paused}
   /* ── 倍率が動いている間だけ、ぼけた塗りを畳む（2026-08-03・案B）────────────
      ひきずり（translate）は合成の上で済むので、見え方は何も変えない。変えるのは

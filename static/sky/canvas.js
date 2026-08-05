@@ -23,6 +23,7 @@ addEventListener('resize',()=>{
       isl._fitK=fitK(isl);     // 帯の形は新しい画面の比で引き直す
       sheetLayout(isl);
     }
+    if(islands.size)KFIT=homeFit();  // 全景＝手で引ける下限も画面の寸法から引き直す
     apply();
   },160);
 });
@@ -180,22 +181,6 @@ function tintOf(c){
 /* 紙片の紙の色（2026-07-31）。選ばれた色は手染めの紙に淡く染み、
    無彩（サーバの _AIR_GRAY_S=12 と同じ線）は生成り〜灰白の三種から
    本文のハッシュで一つ——同じことばは、いつ来ても同じ紙。漂流物は灰の紙。 */
-/* 灯の色に薄さを足す（2026-08-03）。色は二通りの書き方で来る：人が選んだ色は
-   hsl(…)、本の一節に付いた気分の色は本番では **#RRGGBB**（気分7色のhex）。
-   旧実装は 'hsl(' の置換しかしておらず、hex はそのまま通って**真っ白に不透明な玉**に
-   なった（本番で発覚。手元のDBは hsl だったので出なかった）。 */
-function glowOf(c,a){
-  const s=String(c||'').trim();
-  const h=/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s);
-  if(h){
-    let x=h[1];
-    if(x.length===3)x=x[0]+x[0]+x[1]+x[1]+x[2]+x[2];
-    return 'rgba('+parseInt(x.slice(0,2),16)+','+parseInt(x.slice(2,4),16)+','
-      +parseInt(x.slice(4,6),16)+','+a+')';
-  }
-  if(s.indexOf('hsl(')===0)return s.replace('hsl(','hsla(').replace(')',','+a+')');
-  return 'rgba(232,230,224,'+a+')';        // 読めない書き方の色は、生成りの灯にする
-}
 function paperOf(w){
   const m=/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%/.exec(w.color||'');
   if(m&&+m[2]>=12)return 'hsl('+(+m[1])+',24%,90%)';
@@ -244,110 +229,38 @@ function snapSize(el){
    固定した同じ手順で解くので、同じ宙は誰の画面でもほぼ同じ地形になる。 */
 let islands=new Map();   // room_id -> {el,wordsEl,cx,cy,R,words:[]}
 function islandR(n){ return 150+62*Math.sqrt(n); }
-const ISL_GAP=150;       // 島と島のあいだ（岸から岸まで）。ここを詰めると陸は繋がる
-let ISL_GRAV=0.006;      // 宙の真ん中へ寄せる弱い重み（地図の空洞を埋めるぶんだけ）
-/* 島の席（2026-08-02 に「生まれた順の渦」から「意味の地図」へ）。
-   サーバが部屋の重心から二次元の地図（mx,my）を配る。画面はそれを寸法へ直し、
-   重なりだけを解く。
-
-   一様な倍率だけで重なりを避けようとすると破綻する：いちばん近い二島（心と生活は
-   0.215）に合わせると倍率は6200になり、いちばん遠い島（お金）は原点から11700
-   ——地図は正しいのに、誰も隣に見えない宙になる。だから中ほどの隔たりで寸法を
-   決めておいて、あとは**重なった組だけを押し分ける**。地図の遠近は薄まるが、
-   隣り合わせ（誰の隣が誰か）は保たれる。押し分けと同時に、それぞれを地図の上の
-   自分の場所へ弱く引き戻す＝ばらけた島が意味から離れていかない。 */
-/* 外周に居る島（凸包・反時計回り）。岸を一本に繋ぐために使う。
-   点は21前後なので、素直に総なめ（Andrew の単調鎖）で足りる。 */
-function hull(P){
-  if(P.length<3)return P.slice();
-  const p=P.slice().sort((a,b)=>(a.x-b.x)||(a.y-b.y));
-  const cross=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
-  const half=(pts)=>{
-    const out=[];
-    pts.forEach(q=>{
-      while(out.length>1&&cross(out[out.length-2],out[out.length-1],q)<=0)out.pop();
-      out.push(q);
-    });
-    out.pop();
-    return out;
-  };
-  return half(p).concat(half(p.slice().reverse()));
-}
+const ISL_GAP=150;       // 島と島のあいだ（岸から岸まで）。輪の半径はここと島の大きさから出る
+/* 島の席（2026-08-05・Kosei指示で 7/27 の同心円へ戻した）。
+   8/2 の「意味の地図」と 8/3 の「手つなぎの岸」を上書きする——地図の遠近より、
+   「あの部屋はあそこ」と体で覚えられる輪の席を採る（サーバの mx/my は読まない）。
+   歩き方は旧宙（mood.html）の roomSeat と同じ：12時から時計回り、輪は 6,12,18…席、
+   奇数の輪は半コマずらす。席は生まれた順（payload の並び＝元からある部屋→作られた順）。
+   半径だけは旧の 105+70×ring では足りない——名前だけの席だったところに、いまは
+   ことばを抱えた島が座る。だから輪ごとに「隣の席と重ならない」「内の輪とも
+   重ならない」の二つの下限から半径を出す。 */
 function placeIslands(rooms,counts){
-  const placed=[];
-  const R=r=>islandR(counts.get(r.id)||0);
-  const map=rooms.filter(r=>r.mx!=null&&r.my!=null);
-  if(map.length>1){
-    /* 寸法は「ほとんどの組が押し分けを要らなくなる」ところに置く（要る倍率の95%目）。
-       中ほど（中央値）で決めると半分の組が重なり、押し分けが地図を作り直してしまう
-       ——実測で、地図の上では隣どうしの恋愛と友達が、画面では宙の反対側に飛んだ。
-       隣三つがどれだけ残るかで測った：中央値34% / 九割目76% / 95%目92% / 全部100%。
-       全部（＝押し分けが一度も要らない寸法）に合わせると宙は25000まで広がって、
-       今度は誰も隣に見えない。92%と、いまの宙より少し広いだけの5300を採る。 */
-    const need=[];
-    map.forEach((a,i)=>map.forEach((b,j)=>{
-      if(j>i)need.push((R(a)+R(b)+ISL_GAP)/Math.max(Math.hypot(a.mx-b.mx,a.my-b.my),1e-3));
-    }));
-    need.sort((p,q)=>p-q);
-    const s=need[Math.min(need.length-1,Math.floor(need.length*0.95))];
-    const P=map.map(r=>({x:r.mx*s,y:r.my*s,R:R(r),room:r,ax:r.mx*s,ay:r.my*s}));
-    for(let t=0;t<220;t++){
-      let moved=0;
-      for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){
-        const a=P[i],b=P[j];
-        let dx=b.x-a.x,dy=b.y-a.y;
-        let d=Math.hypot(dx,dy);
-        if(d<1e-6){ dx=(i+1)*0.37; dy=(j+1)*0.29; d=Math.hypot(dx,dy); }
-        const need=a.R+b.R+ISL_GAP;
-        if(d>=need)continue;
-        const push=(need-d)/2/d;
-        a.x-=dx*push; a.y-=dy*push; b.x+=dx*push; b.y+=dy*push;
-        moved++;
-      }
-      /* 岸に立つ島は、隣の岸の島と手を繋ぐ（2026-08-03）。外周（凸包）を毎回引き直し、
-         隣り合う二島が離れすぎていたら、そのぶんだけ近づける。押し分けとは逆向きの、
-         弱い引き。これで陸の縁がひと続きになる——環に出た気持ちの名も、そこで陸と
-         隣り合う出来事の名も、同じ一本の岸に並ぶ。
-         7室だけで環を閉じることはできない（島の直径の和 5100 に対し、陸を囲む長さは
-         15700）。閉じるのは「外周に居る島ぜんぶ」＝陸の島と混ざった一本の岸。 */
-      if(t<180){
-        const h=hull(P);
-        for(let i=0;i<h.length;i++){
-          const a=h[i],b=h[(i+1)%h.length];
-          if(a===b)continue;
-          const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1e-6;
-          const want=a.R+b.R+ISL_GAP;
-          if(d<=want)continue;
-          const k=(d-want)/2/d*0.08;                    // 弱い引き（押し分けに勝たせない）
-          a.x+=dx*k; a.y+=dy*k; b.x-=dx*k; b.y-=dy*k;
-        }
-      }
-      /* 引き戻し（地図の上の自分の場所へ）＋ごく弱い重み（宙の真ん中へ）。
-         重みが要るのは、地図には**空洞**があるから：意味の空間では「気持ちの名」と
-         「出来事の名」が遠くに離れていて、そのまま置くと二つの大陸のあいだに
-         誰も居ない海ができる。真ん中へ寄せておいて、重なりだけ押し分ける。
-         引き戻しは途中まで（最後は押し分けだけ＝綱引きのまま終わって重なりが残らない）。 */
-      if(t<180)P.forEach(p=>{
-        p.x+=(p.ax-p.x)*0.04-p.x*ISL_GRAV; p.y+=(p.ay-p.y)*0.04-p.y*ISL_GRAV;
-      });
-      else if(!moved)break;
-    }
-    P.forEach(p=>placed.push({x:Math.round(p.x),y:Math.round(p.y),R:p.R,room:p.room}));
-  }
-  // 黄金角の渦（地図を持たない部屋の席）。先客と重ならない最初の空きに座る
-  rooms.forEach(r=>{
-    if(r.mx!=null&&r.my!=null&&map.length>1)return;
-    const rr=R(r);
-    let t=placed.length?1.2:0;
-    let x=0,y=0;
-    for(;;){
-      x=64*t*Math.cos(t*2.39996); y=64*t*Math.sin(t*2.39996)*0.86;
-      if(placed.every(p=>Math.hypot(x-p.x,y-p.y)>p.R+rr+ISL_GAP))break;
-      t+=0.18;
-    }
-    placed.push({x:x,y:y,R:rr,room:r});
+  const seats=rooms.map((r,i)=>{
+    let n=i,ring=0;
+    while(n>=6*(ring+1)){n-=6*(ring+1);ring++;}
+    return {room:r,R:islandR(counts.get(r.id)||0),ring:ring,slot:n,slots:6*(ring+1)};
   });
-  return placed;
+  const maxR=[];
+  seats.forEach(s=>{maxR[s.ring]=Math.max(maxR[s.ring]||0,s.R);});
+  const radii=[];
+  maxR.forEach((m,ring)=>{
+    // 隣席との弦 2r·sin(π/席数) が、いちばん大きい二島＋間合いぶん開くように
+    const byChord=(2*m+ISL_GAP)/(2*Math.sin(Math.PI/(6*(ring+1))));
+    const byRing=ring?radii[ring-1]+maxR[ring-1]+m+ISL_GAP:0;
+    radii[ring]=Math.max(byChord,byRing);
+  });
+  return seats.map(s=>{
+    const off=(s.ring%2)?Math.PI/s.slots:0;
+    const t=off+s.slot*(2*Math.PI/s.slots);
+    // 席の揺らぎ（旧 SEAT_JITTER=8/105 と同じ割合）。輪が定規で引いた円に見えない程度
+    const j=1+(((fnv('seat:'+s.room.id)%2001)/2000)*2-1)*0.076;
+    const r=radii[s.ring]*j;
+    return {x:Math.round(Math.sin(t)*r),y:Math.round(-Math.cos(t)*r),R:s.R,room:s.room};
+  });
 }
 function build(rooms,words){
   const counts=new Map();
@@ -362,41 +275,27 @@ function build(rooms,words){
     const isl=document.createElement('div');
     isl.className='isl';
     isl.style.left=s.x+'px'; isl.style.top=s.y+'px';
-    // 灯の気配（部屋の灯の色・最大3）。遠景で島を見分ける唯一の色
-    const glow=document.createElement('div'); glow.className='isl-glow';
-    // 灯は島の心を挟んで並ぶ。一つしか無い部屋（人のことばがまだ無い島）でも
-    // 島の真ん中に灯るように、数で中心をとる（旧実装は j-1 固定で、一つだと左上に寄った）
-    const lit=(s.room.lights||[]).slice(0,3);
-    // 一つしか無い灯は、三つ重なった灯より薄く見える（重なりぶんの明るさが無い）。
-    // 数の少なさは「静かな部屋」として残しつつ、灯っていることは分かる濃さまで戻す。
-    const a=[0,0.22,0.17,0.13][lit.length]||0.13;
-    /* 三つの灯を、一枚の紙に重ねて描く（2026-08-03 遠景のカクツキ）。
-       旧実装は灯ひとつにつき span を一枚（21島×3＝実測49枚）。遠景ではその49枚が
-       全部画面に載り、重なって画面を一周ぶん以上塗る——寄り引きのたび、49回の
-       描画項目と49枚の円クリップ（border-radius:50%）を作り直していた。
-       放射グラデーションは背景を何枚でも重ねられるので、島ごとに一枚の箱へ畳む。
-       円クリップは要らない：`circle` の既定は farthest-corner ＝ 70% の停止点が
-       ちょうど箱の縁（0.495d）で、クリップは何も削っていなかった。 */
-    if(lit.length){
-      const d=Math.round(s.R*(lit.length<2?1.7:1.5));
-      let hw=0,hh=0;
-      const seats=lit.map((c,j)=>{
-        const x=(j-(lit.length-1)/2)*s.R*0.35;
-        const y=(lit.length<2?0:(j%2?s.R*0.2:-s.R*0.15));
-        hw=Math.max(hw,Math.abs(x)+d/2); hh=Math.max(hh,Math.abs(y)+d/2);
-        return {c:c,x:x,y:y};
-      });
-      const GW=Math.round(hw*2), GH=Math.round(hh*2);
-      glow.style.width=GW+'px'; glow.style.height=GH+'px';
-      glow.style.backgroundImage=seats.map(p=>
-        'radial-gradient(circle,'+glowOf(p.c,a)+' 0%,transparent 70%)').join(',');
-      glow.style.backgroundSize=seats.map(()=>d+'px '+d+'px').join(',');
-      glow.style.backgroundPosition=seats.map(p=>
-        Math.round(GW/2+p.x-d/2)+'px '+Math.round(GH/2+p.y-d/2)+'px').join(',');
-      isl.appendChild(glow);
-    }
     const wl=document.createElement('div'); wl.className='isl-w'; isl.appendChild(wl);
     const nm=document.createElement('div'); nm.className='isl-nm'; nm.textContent=s.room.name;
+    /* 部屋の灯（2026-08-05・旧宙の部屋一覧の「炎」へ戻した。8/3 の一枚畳みを上書き）。
+       島の半径いっぱいの放射ではなく、名のまわりに封の色の粒が最大3つ。
+       名の中に置くので、倍率に抗う逆スケール（scaleNames）も名と同じ一枚の
+       transform に乗る＝寄り引きでの仕事は増えない。席は旧 FIRE_SEATS＝
+       左上・右中・中下（%）＋部屋idのハッシュで±6%。
+       色は hsl(…) と #RRGGBB の二通りで来る（本番の本の一節は hex——8/3 に
+       ここを取りこぼして真っ白な玉が出た）。どちらもそのまま CSS の色として通す。 */
+    (s.room.lights||[]).slice(0,3).forEach((c,k)=>{
+      const cs=String(c||'').trim();
+      if(!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cs)&&cs.indexOf('hsl(')!==0)return;
+      const seat=[{x:4,y:26},{x:96,y:56},{x:52,y:88}][k];
+      const h=fnv('fire:'+s.room.id+':'+k);
+      const f=document.createElement('i');
+      f.className='fire';
+      f.style.setProperty('--c',cs);
+      f.style.setProperty('--fx',(seat.x+(h%13)-6)+'%');
+      f.style.setProperty('--fy',(seat.y+((h>>5)%13)-6)+'%');
+      nm.appendChild(f);
+    });
     isl.appendChild(nm);
     ifrag.appendChild(isl);
     islands.set(s.room.id,{el:isl,wordsEl:wl,nm:nm,cx:s.x,cy:s.y,R:s.R,words:[],room:s.room});
@@ -753,7 +652,17 @@ function footNames(name){
 }
 /* ── 寄る・引く・つまむ ─────────────────────────── */
 let K=0.5, PX=0, PY=0;             // 倍率と、世界の原点の画面上の位置
-const KMIN=0.1, KMAX=2.4;
+/* KMIN は「全景（同心円の輪ぜんぶ）が画面に入る」ところまで引ける値（2026-08-05）。
+   輪の席は意味の地図（〜5300）より広い（外の輪まで置くと半径4000超）——0.1 のままだと
+   全景の式（min(VW,VH)/(mx·2.15)）が下限に噛んで、輪の外側が永遠に画面の外だった。
+   ただし手で引ける下限は KFIT（＝全景そのもの）。0.02 まで素で引けると、輪が
+   豆粒になった暗闇へ出られてしまうし、そこから戻る操作も長い。 */
+const KMIN=0.02, KMAX=2.4;
+let KFIT=0.1;                      // 全景の倍率。島を置いた後と resize 後に実測で更新
+function homeFit(){
+  let mx=0; islands.forEach(i=>{ mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R); });
+  return Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/((mx||900)*2.15)));
+}
 /* カクツキ修正（2026-07-31）その1：描き替えは1フレームに1度だけ。
    wheel も pointermove もフレームより速く飛んでくる——来た数だけ style を
    書き直すと、指の速さぶんだけ余計に描き直しが積まれてつっかえる。
@@ -803,7 +712,11 @@ function applyNow(){
    名の要素（14枚）へ直に書く。継承する変数を world に書く旧法は、数百のことばの
    スタイルを毎フレーム無効にしていた。 */
 function scaleNames(){
-  const ik=Math.min(4.5,Math.max(1,0.62/K));
+  /* 逆スケールの頭（2026-08-05 に 4.5→24 へ）。輪の全景は K≈0.03〜0.05 まで引く——
+     4.5 で頭を押さえると、そこから先は名も灯も倍率と一緒に縮んで読めなくなる。
+     0.62/K のまま伸ばせば、画面上の名は常に 19px×0.62≒12px。名は21枚しか無いので、
+     大きく描き直しても字の総量は知れている（数百のことばとは桁が違う）。 */
+  const ik=Math.min(24,Math.max(1,0.62/K));
   const ch=Math.abs(ik-ikLast)>0.004;
   if(ch)ikLast=ik;
   const t='translate(-50%,-50%) scale('+ikLast.toFixed(3)+')';
@@ -888,7 +801,8 @@ function zooming(){
   zoomT=setTimeout(()=>{ zoomOn=false; document.body.classList.remove('zooming'); },700);
 }
 function zoomAt(cx,cy,factor){
-  const k=Math.max(KMIN,Math.min(KMAX,K*factor));
+  // 手で引ける下限＝全景（KFIT）。既にそれより引いている時は、そこから寄るのは許す
+  const k=Math.max(Math.min(KFIT,K),Math.min(KMAX,K*factor));
   if(k===K)return;                          // 端で止まっている時は、描き直さない
   const vw=VW/2, vh=VH/2;
   const wx=(cx-vw-PX)/K, wy=(cy-vh-PY)/K;   // カーソルの下の世界座標を動かさない
@@ -1494,8 +1408,7 @@ function flyTo(isl){
 function overview(){
   release();
   gatherHide();
-  let mx=0; islands.forEach(i=>{ mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R); });
-  const k=Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/((mx||900)*2.15)));
+  const k=homeFit();
   noteRoomURL(null,true);
   world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
   document.body.classList.add('flying');
@@ -2819,6 +2732,7 @@ Promise.all([
 ]).then(([rd,wd])=>{
   ROOMS=rd.rooms||[];
   build(ROOMS,wd.words||[]);
+  KFIT=homeFit();    // 島の席が決まった＝手で引ける下限（全景）もここで決まる
   fillMenuRooms();   // 戸の中のジャンル（見えていない島への道）
   fetchMine();   // 自分の棚の控え（棚にあります の札のため）
   requestAnimationFrame(()=>{ relax();
