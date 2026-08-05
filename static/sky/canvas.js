@@ -1022,9 +1022,25 @@ function renderHold(){
    （旧実装は置けない時に画面の端まで飛ばしていて、触れた場所と行いが遠く離れた
      ＝「押しても何も出ない」に見えた原因）
    30px は霞の張り出し（::before の -34px）とほぼ同じ＝闇の縁が紙の際で止まる寸法。 */
+/* 札の実寸（2026-08-06）。畳んでいる間は hidden で 0 になるので、測るあいだだけ開ける。
+   焦点レンズはこの寸法を先に知って、そのぶん下を空けてから寄る（→ lensAim）。 */
+function holdSize(){
+  const was=holdBox.hidden;
+  holdBox.hidden=false;
+  const b={w:holdBox.offsetWidth,h:holdBox.offsetHeight};
+  holdBox.hidden=was;
+  return b;
+}
+/* 札が踏んではいけない下の線（2026-08-06）。足元の帯（＋−・宙へもどる・灯）は
+   fixed で常にそこに居るので、画面の下端まで使うと札が帯の字に重なる。 */
+function holdFloor(){
+  const d=document.getElementById('dock');
+  const h=d?d.offsetHeight:0;
+  return innerHeight-12-Math.min(h,innerHeight*0.22);
+}
 function placeHold(tx,ty){
   if(!held)return;
-  const r=held.getBoundingClientRect(), W=innerWidth, H=innerHeight;
+  const r=held.getBoundingClientRect(), W=innerWidth, H=innerHeight, F=holdFloor();
   holdBox.hidden=false;
   holdBox.classList.remove('on');
   // 寸法は offsetWidth/Height で測る：畳んでいる間は scale(.97) が掛かっていて、
@@ -1034,17 +1050,21 @@ function placeHold(tx,ty){
   if(r.left-b.width-30>=12&&r.bottom-b.height>=12){   // ① 左脇・下そろえ（本命）
     x=r.left-b.width-30; y=r.bottom-b.height;
     ax=r.left; oy=b.height;                          // 立ち上がりの起点＝紙の左下の角
-  }else if(r.bottom+30+b.height<=H-12){              // ② 左に無ければ真下・左端そろえ
+  }else if(r.bottom+30+b.height<=F){                 // ② 左に無ければ真下・左端そろえ
     x=r.left; y=r.bottom+30; ax=r.left; oy=0;
   }else if(tx!=null&&ty!=null){                      // ③ 紙が画面より高い＝触れた指の下
-    y=(ty+20+b.height<=H-12)?ty+20:ty-20-b.height;
+    y=(ty+20+b.height<=F)?ty+20:ty-20-b.height;
     x=tx-b.width/2; ax=tx; oy=0;
-  }else{                                             // 触れた場所が分からない時（鍵盤から）
-    x=r.left+r.width/2-b.width/2; y=Math.max(12,r.top-b.height-6);
-    ax=r.left+r.width/2; oy=0;
+  }else{                                             // どこにも入らない時は、帯の**上**へ
+    /* 2026-08-06：ここは長らく「紙の上へ回り込む」だった（r.top-b.height）。
+       机の上では①が必ず通るので誰も見なかったが、携帯では①（左の幅）も②（下の空き）も
+       通らないので**毎回ここへ落ちて**、いま読んでいる字の頭に「棚にとっておく」が
+       乗っていた。行いが本文より上に立つのは、この宙の読み順（右上→左下）の逆走でもある。
+       上へは行かせない——入らないなら下に沿わせる（レンズの側も下を空けて寄る）。 */
+    x=r.left; y=F-b.height; ax=r.left+Math.min(r.width,b.width)/2; oy=0;
   }
   x=Math.min(Math.max(12,x),Math.max(12,W-b.width-12));
-  y=Math.min(Math.max(12,y),Math.max(12,H-b.height-12));
+  y=Math.min(Math.max(12,y),Math.max(12,F-b.height));
   holdBox.style.left=x+'px'; holdBox.style.top=y+'px';
   holdBox.style.transformOrigin=(ax-x)+'px '+oy+'px';
   setTimeout(()=>{ if(held)holdBox.classList.add('on'); },16);
@@ -1053,9 +1073,9 @@ function placeHold(tx,ty){
    ＝触れた場所との関係を崩さない）。収まっている時は何もしない。 */
 function keepInView(){
   if(holdBox.hidden)return;
-  const b=holdBox.getBoundingClientRect(), H=innerHeight;
-  if(b.bottom<=H-12)return;
-  const top=Math.max(12,Math.min(b.top,H-12-b.height));
+  const b=holdBox.getBoundingClientRect(), F=holdFloor();
+  if(b.bottom<=F)return;
+  const top=Math.max(12,Math.min(b.top,F-b.height));
   holdBox.style.top=top+'px';
 }
 function paintAct(sel,on,onTxt,offTxt){
@@ -1079,7 +1099,9 @@ async function toggleKeep(el){
     // 残した、その場に付箋の紙片が開く（貼らずに閉じてよい・v2.2 §3）
     if(on&&d&&d.id&&held===el){
       fusenPad(holdBox,d.id,[]);wherePad(holdBox,d.id,d.shelf,d.shelves);
-      keepInView();   // 付箋と置き場所のぶん丈が伸びる。画面の外へはみ出させない
+      /* 付箋と置き場所のぶん、札の丈が倍ほどに伸びる。レンズで開いている紙は
+         そのぶん退いて場所をつくる（札を上へ逃がすと、また本文の上に乗る）。 */
+      if(lensEl===el)lensAim(el); else keepInView();
     }
   }catch(e){
     dropPad(holdBox);
@@ -1136,15 +1158,23 @@ function lensOpen(el){
 function lensAim(el){
   const isl=islands.get(el._w.room); if(!isl)return;
   const w=el._pw||0,h=el._ph||0;
-  const k=Math.max(K,Math.min(1.6,(VH-170)/Math.max(h,1)));
+  const fit=r=>Math.max(K,Math.min(1.6,(VH-170-r)/Math.max(h,1)));
+  /* 行いの札の場所を、寄る**前に**勘定する（2026-08-06）。
+     札の本命は紙の左脇（placeHold ①）だが、携帯には左に入る幅が無い。左が駄目なら
+     下へ回るしかないので、そのぶんを空けて寄る——空けずに寄ると紙が画面を縦に
+     使い切り、札は行き場を失って本文の上に乗っていた（携帯でだけ起きる姿）。
+     左に入るなら room は 0＝机の上の見え方は一切変えない。 */
+  const b=holdSize();
+  const room=(b.w&&(VW-w*fit(0))/2<b.w+42)?b.h+42:0;
+  const k=fit(room);
   // 閉じる線は入った倍率から引く（丈の長い紙は 1.0 前後で開くこともある——
   // 固定の線だと、開いたその倍率が既に線の下で、ひと撫でで閉じてしまう）
   lensLo=Math.min(LENS_OUT,k*0.82);
   const wx=isl.cx+(el._gx!=null?el._gx:el._hx)+w/2,
         wy=isl.cy+(el._gy!=null?el._gy:el._hy)+h/2;
   world.style.transition=REDUCED?'none':'transform .7s var(--ease)';
-  views=[[PX,PY,K],[-wx*k,-wy*k,k]];
-  K=k; PX=-wx*K; PY=-wy*K;
+  views=[[PX,PY,K],[-wx*k,-wy*k-room/2,k]];
+  K=k; PX=-wx*K; PY=-wy*K-room/2;
   applyNow();
   clearTimeout(lensT);
   lensT=setTimeout(()=>{ world.style.transition=''; views=null; applyNow();
@@ -1330,7 +1360,10 @@ function playType(el,text,steps,done){
   el.textContent=''; el.appendChild(tn); el.appendChild(car);
   setTimeout(()=>{ if(el._run===run&&el.isConnected&&last===null) finish(); },12000);
   requestAnimationFrame(function frame(now){
-    if(el._run!==run||!el.isConnected){el.classList.remove('nijimi');return;}
+    /* 降ろされた時も、筆を渡した相手に「終わった」と言う（2026-08-06）。
+       言わずに黙ると rotateOne の _typing が立ったまま残り、その一枚だけ
+       二度と書き直されない紙になる。 */
+    if(el._run!==run||!el.isConnected){el.classList.remove('nijimi');if(done)done();return;}
     if(fin)return;
     if(last===null)last=now;
     e+=Math.min(Math.max(0,now-last),100);   // 止まっていた間は「無かったこと」に（iOSの詰まり対策）
@@ -1578,9 +1611,15 @@ function castLand(isl,poem,color,steps){
   else{ el.textContent=poem; el._sw=el.offsetWidth; el._sh=el.offsetHeight; }
   playType(el,poem,steps,()=>{});
 }
+/* 書き直しの下限は、島に降りた時の倍率より**下**に置く（2026-08-06）。
+   0.55 は散らばりの姿だった頃の線で、島に降りると K は 1.0 前後だった。いまは
+   紙片の帯（8/3）で、降りた先の倍率は fitK が決める——その下限は「字が読めるところ」
+   ＝0.42 で、実測でもどの島も 0.42 に貼りついている（携帯でも机の上でも）。
+   つまり**島に降りても 0.55 に届かず、書き直しは一度も始まっていなかった**。
+   線は fitK の下限のさらに下（0.40）へ。手で引いて字が読めなくなる手前で止まる。 */
 setInterval(()=>{
   tick=(tick+1)%4;
-  if(REDUCED||document.hidden||K<0.55)return;
+  if(REDUCED||document.hidden||K<0.40)return;
   /* 手が動いている間・島へ滑っている間は、字を書き直さない（2026-08-03 カクツキ）。
      書き直しは一コマごとに一枚の版面を組み直す仕事で、宙を動かす仕事といちばん
      混ざってはいけない。静かになってから始めればいい——8秒後にまた来る。 */

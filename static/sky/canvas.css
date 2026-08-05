@@ -650,8 +650,12 @@
   /* S5：二択を同時に見せる。姿は「罫一本」だけ——選択中は墨が立って罫が引かれ、
      非選択は退く。塗りも角丸の器も作らない（作法1-2）。各44px。 */
   .cast-dir{display:inline-flex;align-items:center;gap:var(--s2)}
-  .cast-opt-row .cast-dir button{min-width:var(--touch);text-align:center;
-                  color:var(--ink-4);border-bottom:1px solid transparent}
+  /* 2026-08-06：選んでいないほうが「罫なし・--ink-4」＝ただの添え書きに見えて、
+     押せることが姿に出ていなかった（作法：押せるものには罫が一本ある）。
+     退いた側にも罫は引く——ただし --rule-faint（22%）で、選んだ側の --thread とは
+     ひと目で違う。「選ばれていないものを空気にしない」の線もこれで守れる。 */
+  .cast-opt-row .cast-dir button{min-width:56px;text-align:center;
+                  color:var(--ink-3);border-bottom:1px solid var(--rule-faint)}
   .cast-opt-row .cast-dir button[aria-checked="true"]{color:var(--ink-1);
                   border-bottom-color:var(--thread)}
   .cast-opt-row .cast-dir button:active{opacity:.62}
@@ -737,15 +741,25 @@
      ・向き   … それ自体が行為なので、この行で直接切り替える（castDir をここへ移設） */
   .cast-opt-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;
                 /* 間は --s3。--s4(32px) だと 375px 幅で計 309px＞行幅 305px となり
-                   4px だけ溢れて二行に折れた（実測 2026-07-28）。一行に沈めるのが主題 */
-                gap:2px var(--s3);margin:0}
+                   4px だけ溢れて二行に折れた（実測 2026-07-28）。一行に沈めるのが主題。
+                   2026-08-06 に的を広げた後の実測（375px 幅）：題 96 + 間 20 + 縦横 124
+                   ＝240px で、まだ一行に収まる。折り返した時のために行間だけ持たせる。 */
+                gap:var(--s2) var(--s3);margin:0}
+  /* 2026-08-06（利用者の指摘：題と向きが押しにくい）。
+     字は 11.5px・墨は --ink-4（数字と控えの段）・罫は透明——つまり「押せるもの」の
+     合図が一つも出ていない、ただの薄い添え書きだった。指の的は 44px あったので、
+     押しにくいのは寸法ではなく**姿**のほう。
+     字を --t-meta（12px）へ、墨を --ink-2（操作の主）へ、罫は常時 --rule-act
+     （＝この宙で「押せる」を意味する唯一の罫）。塗りも角丸の器も作らない。 */
   .cast-opt-row button{background:none;border:none;font-family:inherit;cursor:pointer;
-                       min-height:var(--touch);padding:11px 4px;
-                       font-size:11.5px;letter-spacing:0.2em;color:var(--ink-4);
-                       border-bottom:1px solid transparent;transition:color .2s var(--ease)}
-  .cast-opt-row button:hover,
-  .cast-opt-row button[aria-expanded="true"]{color:var(--ink-3)}
-  .cast-opt-row button[aria-expanded="true"]{border-bottom-color:var(--rule)}
+                       min-height:var(--touch);padding:12px 10px;
+                       font-size:var(--t-meta);letter-spacing:0.18em;color:var(--ink-2);
+                       border-bottom:1px solid var(--rule-act);
+                       transition:color .2s var(--ease),border-color .2s var(--ease)}
+  .cast-opt-row button:hover{color:var(--ink-1)}
+  .cast-opt-row button:active{opacity:.62}
+  .cast-opt-row button[aria-expanded="true"]{color:var(--ink-1);
+                       border-bottom-color:var(--thread)}
   /* 中身が入っている引き金は、閉じていても分かるように点を一つ添える */
   .cast-opt-row button[data-filled="1"]::after{content:"・";color:var(--ink-3)}
   .cast-opt{display:flex;flex-direction:column;align-items:flex-start;
