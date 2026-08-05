@@ -335,8 +335,10 @@ function build(rooms,words){
   }));
   /* 順点灯（2026-08-05・旧一覧の 120+i*70ms を戻した）。名と炎は一斉にポンと
      出ない——輪の内から外へ、順に灯る。inline の 0 を外すだけ＝あとは CSS の
-     遷移（.8s）が .82 まで運ぶ。炎は名の中に居るので、親と一緒に現れる。 */
-  seats.forEach((s,i)=>{
+     遷移（.8s）が .82 まで運ぶ。炎は名の中に居るので、親と一緒に現れる。
+     動きを望まない人には、ただ在るだけ（REDUCED では .8s のフェードも消えるので、
+     順に外すと「一つずつポンと出る」＝一斉より動きの多い面になってしまう）。 */
+  if(!REDUCED)seats.forEach((s,i)=>{
     const isl=islands.get(s.room.id); if(!isl)return;
     isl.nm.style.opacity='0';
     setTimeout(()=>{ isl.nm.style.opacity=''; },120+i*70);
@@ -410,17 +412,29 @@ function reshore(isl){
       d.words.forEach(w=>mkWord(isl,w));
       /* 岸が着くと束は一回り大きくなる（実測 46片→66片）。降りる時に測った倍率は
          その手前の寸法なので、そのままだと紙が画面から溢れる。**滑って来た時だけ**
-         倍率を引き直す（自分でつまんで寄せた人の手は取らない）。 */
+         倍率を引き直す（自分でつまんで寄せた人の手は取らない）。
+         読んでいる最中（レンズが開いている）なら、カメラには触れない——岸が着いた
+         というだけの理由で、読んでいる紙を中央から引き剥がしてはいけない。
+         比べるのは道中の過渡の K ではなく**落ち着いた先**（glideK）。掃引が的を
+         通過する数十msに岸が返ると、乗り換えを取りこぼして帯だけ広く組まれる。 */
+      const reading=lensEl&&lensEl._w.room===isl.room.id;
+      /* カメラを動かしてよいのは、**この島がいまの行き先である時だけ**（2026-08-05 夜）。
+         岸の fetch は数百ms〜2秒かかる——その間に人が別の島や全景へ向かっていたら、
+         返ってきた岸は「もう誰も見ていない島」のものだ。それで倍率を引き直すと、
+         押した先へ着けずに元の島へ引き戻される。全景へ引き返している最中（行き先は
+         「どの島でもない」＝sheetLock は null）も同じ。飛んでいない時は、いま居る
+         島の話なので今までどおり引き直してよい。 */
+      const mine=(!flightT||sheetLock===isl.room.id);
       if(isl._flown){
         isl._flown=false;
         const k=fitK(isl);
         isl._fitK=k;       // 岸が着いて束が育った——帯の形の物差しも引き直す
         // 詰め直しも glide で（滑走の途中に岸が着いたら、そのまま新しい的へ乗り換える）
-        if(Math.abs(k-K)>0.02)glide(k,-isl.cx*k,-isl.cy*k,700);
+        if(mine&&!reading&&Math.abs(k-glideK())>0.02)glide(k,-isl.cx*k,-isl.cy*k,700,true);
       }
       sheetLayout(isl,true);             // 新しい紙も、いまの束に混ぜて並べ直す
       // 焦点レンズで読んでいる最中なら、動いた席へ照準を引き直す（紙を見失わない）
-      if(typeof lensAim==='function'&&lensEl&&lensEl._w.room===isl.room.id)lensAim(lensEl);
+      if(reading&&typeof lensAim==='function')lensAim(lensEl);
       apply();
     }).catch(()=>{shoreBusy=null;});
 }
@@ -834,7 +848,7 @@ function zooming(){
   zoomT=setTimeout(()=>{ zoomOn=false; document.body.classList.remove('zooming'); },700);
 }
 function zoomAt(cx,cy,factor){
-  glideN++;            // ホイール・＋−も同じ：手が動いたら滑走は止まる
+  handTakes();         // ホイール・＋−も同じ：手が動いたら滑走は止まる
   // 手で引ける下限＝全景（KFIT）。既にそれより引いている時は、そこから寄るのは許す
   const k=Math.max(Math.min(KFIT,K),Math.min(KMAX,K*factor));
   if(k===K)return;                          // 端で止まっている時は、描き直さない
@@ -869,6 +883,8 @@ vp.addEventListener('wheel',e=>{
     zoomAt(e.clientX,e.clientY,Math.exp(-d*0.0075));
     return;
   }
+  handTakes();   // ひきずり（二本指スクロール）も手＝滑走は譲る。glide は PX/PY を
+                 // 毎フレーム丸ごと書き直すので、譲らせないと指の動きは捨てられる
   PX-=e.deltaX*m; PY-=e.deltaY*m;
   gesture();
   apply();
@@ -897,7 +913,7 @@ vp.addEventListener('wheel',e=>{
 const ptrs=new Map(); let moved=0, pinchD=0;
 vp.addEventListener('pointerdown',e=>{
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  glideN++;            // 手が触れたら、滑走は手に譲る（Kの取り合いをしない・Apple §1）
+  handTakes();         // 手が触れたら、滑走は手に譲る（Kの取り合いをしない・Apple §1）
   moved=0; vp.classList.add('drag');
   // 指を捕まえる（紙の外へ滑ってもひきずりを見失わない）。捕まえられない指も
   // 稀にある（合成のイベント・端末の癖）——そこで落とすと、以後の受け止めが全部死ぬ
@@ -1429,18 +1445,39 @@ function noteRoomURL(id,push){
    毎フレームの仕事は applyNow ＝つまみ（pinch）一回ぶんと同じで、実測済みの道。
    時計は rAF の引数だけを使う（performance.now と混ぜない——7/27 の轍）。
    rAF の止まる環境の保険はタイマ：ms+180 で必ず到着の値を書く。 */
-let glideN=0, glideLive=0;
+/* 滑走は**一人**（2026-08-05 夜）。道中の眺めを毎フレーム晒すようになった以上、
+   「いま滑っているか」「どこへ向かっているか」を、下流の誰もが問えなければならない。
+   glideAim ＝ いま向かっている倍率（reshore の詰め直しは、道中の過渡の K ではなく
+   **この的**と比べる。素の K と比べると、掃引が的を通過する数十msに fetch が返った
+   時だけ乗り換えを取りこぼし、帯だけ広く組まれて紙が画面から溢れる）。 */
+let glideN=0, glideLive=0, glideAim=0;
 function glideBusy(){ return glideLive!==0&&glideLive===glideN; }
-function glide(k1,px1,py1,ms){
+function glideK(){ return glideBusy()?glideAim:K; }   // 「落ち着いた先の倍率」
+/* 手が触れた＝滑走は手に譲る。飛行そのものも、そこで終わる——譲ったのに flying が
+   残ると、Escape も 0 も効かない窓（実測1.2秒）ができる。行き先の約束（sheetLock）も
+   一緒に降ろす：ここから先は、手で寄せた倍率だけで「島に居るか」を見る。
+   飛んでいない時は何もしない（ホイールの一刻みごとに宙を描き直さない）。 */
+function handTakes(){
+  glideN++; glideLive=0;
+  if(flightT)flightEnd(flightN);
+}
+function glide(k1,px1,py1,ms,keepLens){
   ms=ms||1100;
   const id=++glideN;
-  glideLive=id;
+  glideLive=id; glideAim=k1;
   const fin=()=>{ if(id!==glideN)return; glideLive=0; glideN++;
                   K=k1; PX=px1; PY=py1; applyNow();
-                  // 滑走の間はレンズの出入りを見送っている——着いたらここで見直す
-                  // （見送りの唯一の呼び口は「手が落ち着いた700ms後」で、再訪が無い）
-                  if(typeof lensCheck==='function')lensCheck(); };
+                  /* 滑走の間、島の敷き替えは行き先だけに絞ってある（seekWatch）。
+                     着いたら、ここでもう一度ふつうの目で見直す。 */
+                  if(typeof seekWatch==='function')seekWatch();
+                  /* レンズ（開いた一枚）の出入りも滑走中は見送っている。ただし
+                     **開いているレンズは閉じない**——閉じてよいのは、その滑走が
+                     レンズを捨てて出ていく時（flyTo/overview）だけで、岸の詰め直しの
+                     ような小さな寄り直しで読んでいる紙を取り上げてはいけない。
+                     どちらかは呼ぶ側が言う（keepLens）。 */
+                  if(!keepLens&&typeof lensCheck==='function')lensCheck(); };
   if(REDUCED){ fin(); return; }
+  world.style.transition='';   // レンズの .7s が残っていると、毎フレーム書きが泥になる
   const k0=K, w0x=-PX/K, w0y=-PY/K, w1x=-px1/k1, w1y=-py1/k1;
   let t0=null;
   requestAnimationFrame(function step(ts){
@@ -1457,21 +1494,40 @@ function glide(k1,px1,py1,ms){
   });
   setTimeout(fin,ms+180);
 }
+/* 飛行の後始末は、**その飛行のもの**（2026-08-05 夜）。旧実装は 1300ms の裸の
+   タイマで、次の飛行が始まっても前のタイマは生きていた——K は glideN の乗り換えで
+   守られていたが、sheetLock・views・flying は前の飛行が無差別に畳んでいた。
+   行き先を連打する（戸の一覧・名を続けてタップ・戻るを連打）と、二つ目の飛行の
+   道中で一つ目のタイマが sheetLock を落とし、入る線が 0.20→0.32 へ跳ね上がって
+   ——降り立った島に、紙が永遠に敷かれないまま置き去りになる。
+   1500ms は滑走 1100 ＋ 保険 180 ＋ 敷き替えの遊び 140 の外側。 */
+let flightN=0, flightT=0;
+function flightBegin(ms){
+  clearTimeout(flightT);
+  document.body.classList.add('flying');
+  const id=++flightN;
+  flightT=setTimeout(()=>flightEnd(id),ms||1500);
+  return id;
+}
+function flightEnd(id){
+  if(id!==flightN)return;            // もう次の飛行が始まっている＝畳むのは自分の役ではない
+  clearTimeout(flightT); flightT=0;
+  document.body.classList.remove('flying');
+  sheetLock=null;                    // ここから先は、敷かれているかどうかだけで見る
+  views=null; applyNow(); markMenuRoom();
+}
 function flyTo(isl){
   release();
   gatherHide();
   const k=fitK(isl);
   isl._fitK=k;           // 帯の形の物差し（sheetLayout が読む）
   noteRoomURL(isl.room.id,true);
+  flightBegin();
   sheetLock=isl.room.id;
   isl._flown=true;     // 岸が着いたら、もう一度だけ寸法を見直してよい印
-  document.body.classList.add('flying');
   // 滑走の間は「出発の眺め」と「到着の眺め」の二つで間引く（通り道が消えないように）
   views=[[PX,PY,K],[-isl.cx*k,-isl.cy*k,k]];
   glide(k,-isl.cx*k,-isl.cy*k);
-  setTimeout(()=>{ document.body.classList.remove('flying');
-                   sheetLock=null;   // ここから先は、敷かれているかどうかだけで見る
-                   views=null; applyNow(); markMenuRoom(); },1300);
 }
 /* ── 宙へもどる（全景）──────────────────────────────────
    島に降りたあと、引き返す道が「つまむ・−を何度も」しか無かった。
@@ -1481,11 +1537,10 @@ function overview(){
   gatherHide();
   const k=homeFit();
   noteRoomURL(null,true);
-  document.body.classList.add('flying');
+  flightBegin();
+  sheetLock=null;        // 行き先は「どの島でもない」＝道中でほどけてよい
   views=[[PX,PY,K],[0,0,k]];
   glide(k,0,0);
-  setTimeout(()=>{ document.body.classList.remove('flying');
-                   views=null; applyNow(); markMenuRoom(); },1300);
 }
 (function(){
   const b=document.getElementById('skyHome');
@@ -1560,8 +1615,12 @@ function seekWatch(){
      帯は島の半径より縦に長いので、半径の物差し（1.6R）だと、上下の段や
      焦点レンズへ寄っただけで「島を出た」ことになり、読んでいる最中に
      島がほどけた（実際にレンズで起きた）。箱の中に居るかぎり、そこに居る。 */
+  /* ただし、行き先が別にあるなら留まらない（2026-08-05 夜）。束の箱は島の間合い
+     （輪では700〜1300）より広いことがあるので、隣へ飛んでも「まだ前の島の懐に
+     居る」と読めてしまう——そのままだと着いた島がいつまでも敷かれない。 */
   const cur=sheetId!=null?islands.get(sheetId):null;
   if(cur&&cur.sheeted&&cur._bw&&
+     !(sheetLock!=null&&sheetLock!==sheetId)&&
      Math.abs(cur.cx-cx)<cur._bw/2+300&&Math.abs(cur.cy-cy)<cur._bh/2+300&&
      cur.R*K>0.20*Math.min(VW,VH)){
     focusIsl={isl:cur,id:sheetId,d:Math.hypot(cur.cx-cx,cur.cy-cy)};
@@ -1582,7 +1641,23 @@ function seekWatch(){
   // ちらつきも消える）。sheetLock は滑走中（まだ敷かれていない）の行き先。
   const stay=best&&(best.id===sheetId||best.id===sheetLock);
   const big=best&&best.isl.R*K>(stay?0.20:0.32)*Math.min(VW,VH);
-  const f=(best&&big&&best.d<best.isl.R*1.6)?best:null;
+  let f=(best&&big&&best.d<best.isl.R*1.6)?best:null;
+  /* 滑走の道中で「ここに居る」と言えるのは、**行き先だけ**（2026-08-05 夜）。
+     K を毎フレーム運ぶようになって、島から島へ飛ぶ1.1秒のあいだ、通り道の島が
+     次々と焦点の条件を満たすようになった——数百枚を測って帯に敷き、140ms後に
+     ほどく、を通過のたびにやる（実測：21島の総当たり420組のうち164組で成立）。
+     足元の名もURLも一瞬その島になり、要らない岸のfetchまで飛ぶ。
+     **焦点そのもの（focusIsl）を抑える**のが要点：敷き替えだけを抑えても、
+     焦点は「いま居る場所」として他からも読まれている——書く柱を開いた時の
+     置き場所（castRoom）と、気配の問い合わせ（?here=）がそれで決まる。
+     通りすがっただけの部屋に、ことばが置かれてはいけない。
+     行き先（sheetLock）と「どの島でもない」は通す＝降りる・出るは今までどおり。 */
+  if(glideBusy()&&f&&f.id!==sheetLock){
+    f=(sheetWant!=null&&islands.has(sheetWant))
+      ?{isl:islands.get(sheetWant),id:sheetWant,
+        d:Math.hypot(islands.get(sheetWant).cx-cx,islands.get(sheetWant).cy-cy)}
+      :null;
+  }
   focusIsl=f;
   // 降りた島は紙片の敷き詰めに、離れた島は散らばりの家へ（2026-07-31）。
   // 出入りは140ms落ち着いてから：しきい値の上でつまみが揺れると、一回のジェスチャの
@@ -2612,17 +2687,25 @@ document.addEventListener('keydown',e=>{
     if(held)return;
     if(menu&&!menu.hasAttribute('hidden'))return;
     if(veil&&veil.classList.contains('on'))return;
-    if(sheetId!=null&&!document.body.classList.contains('flying'))overview();
+    // 飛んでいる最中でも引き返せる（0 と同じ理由・2026-08-05 夜）。行き先を
+    // 間違えたと気づいた一押しが、1.5秒黙って捨てられるのが以前のふるまいだった。
+    if(sheetId!=null||sheetLock!=null)overview();
     return;
   }
   const step=120;
+  // 矢印のひきずりも手（wheel・つまみと同じ）。滑走に上書きさせない
+  const pan=d=>{ handTakes(); d(); apply(); };
   switch(e.key){
-    case 'ArrowLeft':  PX+=step; apply(); e.preventDefault(); break;
-    case 'ArrowRight': PX-=step; apply(); e.preventDefault(); break;
-    case 'ArrowUp':    PY+=step; apply(); e.preventDefault(); break;
-    case 'ArrowDown':  PY-=step; apply(); e.preventDefault(); break;
+    case 'ArrowLeft':  pan(()=>{PX+=step;}); e.preventDefault(); break;
+    case 'ArrowRight': pan(()=>{PX-=step;}); e.preventDefault(); break;
+    case 'ArrowUp':    pan(()=>{PY+=step;}); e.preventDefault(); break;
+    case 'ArrowDown':  pan(()=>{PY-=step;}); e.preventDefault(); break;
     case '+': case '=': zoomAt(VW/2,VH/2,1.3); e.preventDefault(); break;
     case '-': case '_': zoomAt(VW/2,VH/2,1/1.3); e.preventDefault(); break;
+    /* 0＝全景。飛んでいる最中でも受ける（2026-08-05 夜）。飛行に世代を持たせた今、
+       途中で次の飛行を始めても前の飛行は自分の役ではないと知って黙る——押した瞬間に
+       応えられるのに黙る理由はもう無い（同じ鍵盤の ＋− は zoomAt→handTakes で
+       即座に応えている。「−は効くが0は効かない」を残さない）。 */
     case '0': overview(); e.preventDefault(); break;
   }
 },true);
@@ -2817,8 +2900,13 @@ Promise.all([
       fx=i.cx; fy=i.cy; fr=i.R*1.12; k0=fitK(i); i._flown=true;
       // 滑って降りた時と同じ扱い（＝「居る」）にしておく。束に合わせた倍率は
       // 入る線を割ることがあるので、行き先を告げずに置くと紙が敷かれないまま始まる。
+      /* 立ち上がりも「飛行」として世代に入れる（2026-08-05 夜）。裸のタイマだった
+         ころは、読み込みから1.2秒以内に別の島へ飛ぶと、この後始末が**その飛行の**
+         行き先を落としていた——入る線が 0.20→0.32 へ跳ね、束の大きい島は着いても
+         紙が敷かれないまま名だけの島に降ろされる。世代を持たせれば、後から始まった
+         飛行が親になり、こちらの後始末は自分の役ではないと知って黙る。 */
+      flightBegin(1200);
       sheetLock=i.room.id;
-      setTimeout(()=>{ sheetLock=null; },1200);
     };
     if(START_ROOM&&islands.has(+START_ROOM)){ land(islands.get(+START_ROOM)); }
     else{

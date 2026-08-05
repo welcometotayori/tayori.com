@@ -985,7 +985,14 @@
      手を止めれば戻る。動いている間は画がそもそも流れているので、出入りは目に留まらない。
      .isl-w ごと畳むので、cullWords が一枚ずつ書いた visibility とは喧嘩しない
      （子は '' か 'hidden' しか書かない＝親の hidden を覆さない）。 */
-  body.far.zooming .isl-w{visibility:hidden}
+  /* transition:none が要る（2026-08-05）。遠景の字を畳む規則（body.far …）に
+     visibility の .8s 遅延を付けた日から、この「即時に畳む」が同じ .8s 待たされて
+     いた——far を跨いだ直後のいちばん詰まっているフレームで、塞いだはずの
+     784枚のラスタライズがそのまま通っていた。ここは待たない。
+     選び方を far の規則と同じ形まで伸ばしてあるのは詳細度のため（body.far …
+     .isl:not(.sheet) .isl-w が (0,4,1)。素の body.far.zooming .isl-w では負ける）。 */
+  body.far.zooming .isl:not(.sheet) .isl-w{visibility:hidden;transition:none}
+  body.far.zooming .isl-w{visibility:hidden;transition:none}
   body.zooming .w:not(.held){text-shadow:none!important}
   body.zooming .isl.sheet .w:not(.held){box-shadow:none}
   body.zooming .gw:not(.held){box-shadow:none}
