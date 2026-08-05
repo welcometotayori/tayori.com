@@ -100,13 +100,16 @@
       <span class="nm">メールアドレス</span><span class="now" id="nowMail"></span>
     </button>
     <div class="set-body" id="bodyMail" hidden>
+      {# 2026-08-06：確認リンクの門をやめた（→ app.py _register_email）。
+         変えたその場で宛先になり、そのアドレスへ一通だけお知らせが届く。
+         打ち間違えても、この画面へ戻ってもう一度直せる。 #}
       <p class="set-note">帰ってきた<wbr>ことばの<wbr>お知らせは、<wbr>ここへ<wbr>届きます。<br>
-         変えると<wbr>確認の<wbr>メールを<wbr>送ります。<wbr><b>確認が<wbr>済むまで<wbr>お知らせは<wbr>止まります。</b><br>
-         打ち間違えた<wbr>まま<wbr>確認できないと、<wbr>ことばは<wbr>帰る<wbr>先を<wbr>失います<wbr>——<wbr>送信の<wbr>前に、<wbr>もう一度<wbr>お確かめください。</p>
+         変えると<wbr>その場で<wbr>宛先が<wbr>変わり、<wbr>新しい<wbr>アドレスへ<wbr>一通<wbr>お知らせを<wbr>送ります。<br>
+         打ち間違えても、<wbr>ここで<wbr>いつでも<wbr>直せます。</p>
       <input class="set-field" id="fMail" type="email" maxlength="120" autocomplete="email"
              placeholder="あたらしいメールアドレス" aria-label="あたらしいメールアドレス">
       <div class="set-row">
-        <button class="set-do" id="doMail" type="button">確認メールを送る</button>
+        <button class="set-do" id="doMail" type="button">この宛先にする</button>
         <button class="set-do set-cancel" type="button" data-close>やめる</button>
       </div>
       <p class="set-say" id="sayMail" hidden></p>
@@ -234,7 +237,7 @@
     if(!v)return say($('sayMail'),'あたらしいメールアドレスを書いてください。');
     busy($('doMail'),true);
     try{ await post('/api/email',{email:v});
-         say($('sayMail'),'確認のメールを送りました。届いたリンクを開くまで、お知らせは止まっています。');
+         say($('sayMail'),'この宛先にしました。いま、そちらへお知らせを一通送りました。');
          $('fMail').value=''; load(); }
     catch(e){ say($('sayMail'),e.message); }
     finally{ busy($('doMail'),false); }

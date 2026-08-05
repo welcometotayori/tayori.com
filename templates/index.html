@@ -319,7 +319,8 @@
       gateRemember('login');
       // admin でログインしたら、通常アプリではなく管理ダッシュボードへ
       if(res.is_admin){window.location.href='/admin.welcometotayori';return;}
-      if(res.email_pending)flash('確認メールを送りました。リンクを開くと通知が有効になります。');
+      // 確認リンクの門は 2026-08-06 に畳んだ（→ app.py _register_email）。
+      // 入れたアドレスはその場で宛先になるので、ここで待たせる報せは要らない。
       // ログインのあとに着地するのは宙（2026-07-25）。
       // 初回だけ、この道具の哲学を読んでから宙へ送る（conceptGo が /mood へ進める）。
       if(res.onboarded===false){showConcept();return;}

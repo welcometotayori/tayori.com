@@ -257,6 +257,33 @@ except ValueError:
     _GZIP_LEVEL = 1
 
 
+# ── どの応答にも付ける、最低限の守り（2026-08-06・一般公開の前に）──────────
+# 実測（本番 https://www.tayori-letter.com）では、この4つがどれも出ていなかった。
+# Cloudflare は素通しなので、付けるのはこちらの仕事。
+#   nosniff … text/plain で置いたものを script として実行させない
+#   SAMEORIGIN … 他所の枠に嵌めて上から透明な板を重ねる手（クリックジャック）を塞ぐ
+#   Referrer-Policy … /open/<id> や /verify/<token> は URL そのものが鍵。外へ出る時に
+#                     path を漏らさない（origin だけ渡す）
+#   HSTS … 本番だけ。http で来た最初の一回を刈り取られない
+# CSP はここに置かない：宙は inline の script/style で出来ていて、いま入れると
+# 白紙になる。入れるなら nonce を通す改修とセットで（宿題として残す）。
+_SEC_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+
+
+@app.after_request
+def _security_headers(resp):
+    for k, v in _SEC_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    if os.environ.get("TAYORI_PRODUCTION"):
+        resp.headers.setdefault("Strict-Transport-Security",
+                                "max-age=15552000; includeSubDomains")
+    return resp
+
+
 @app.after_request
 def _finalize_response(resp):
     try:
@@ -1966,14 +1993,12 @@ def api_register():
         return jsonify(error="いま少し混み合っています。数秒おいて、もう一度お試しください。"), 503
     finally:
         _WRITE_LOCK.release()
-    email_pending = False
     if email:
-        _issue_email_verification(db, new_id, email, username)
-        email_pending = True
+        _register_email(db, new_id, email, username)
     session.permanent = True
     session["uid"] = new_id
     return jsonify(ok=True, username=username, email=email or None,
-                   email_verified=False, email_pending=email_pending,
+                   email_verified=bool(email), email_pending=False,
                    onboarded=False)
 
 # ── 運営アカウントの見張り（2026-08-03）───────────────────────────
@@ -2087,11 +2112,11 @@ def api_set_email():
         # アドレスへも変更できてしまい、確認メールの宛先が本人以外に化ける）。
         if db.execute("SELECT 1 FROM users WHERE email=? AND id<>?", (email, uid())).fetchone():
             return jsonify(error="そのメールアドレスはすでに使われています。"), 409
-        _issue_email_verification(db, uid(), email, current_user()["username"])
+        _register_email(db, uid(), email, current_user()["username"])
         with _WRITE_LOCK:
             db.execute("UPDATE letters SET notify_attempts=0, notify_failed=0 WHERE user_id=?", (uid(),))
             db.commit()
-        return jsonify(ok=True, email=email, email_verified=False, email_pending=True)
+        return jsonify(ok=True, email=email, email_verified=True, email_pending=False)
     
     with _WRITE_LOCK:
         db.execute("UPDATE users SET email=NULL, email_verified=0, email_token=NULL, email_token_at=NULL WHERE id=?", (uid(),))
@@ -2806,23 +2831,41 @@ EMAIL_TOKEN_TTL = timedelta(days=7)
 MAX_NOTIFY_ATTEMPTS = 5
 
 
-def _issue_email_verification(db, user_id, email, username):
-    token = secrets.token_urlsafe(24)
+def _register_email(db, user_id, email, username):
+    """入れたその場で、そのアドレスを通知の宛先にする（2026-08-06・Kosei 判断）。
+
+    それまでは email_verified=0 で預かり、確認リンクを踏むまで一通も送らなかった。
+    けれど**踏まれないまま止まる**のがいちばん多い姿で、その人には「ことばが帰って
+    きました」が永久に届かない——確認は、守っている当人を締め出していた。
+    打ち間違いは設定画面（→ /settings）でいつでも直せるし、どのお知らせにも
+    配信停止のリンクと List-Unsubscribe ヘッダが付いている。だから確認は門ではなく
+    **知らせ**にする：入れた直後にその宛先へ一通送り、「ここへ送ります・違うなら
+    設定で変えられます・止めるならここ」とだけ言う。届かなければ、それが答え。
+
+    トークンは発行しない（門が無いのだから鍵も要らない）。古い確認リンクは
+    /verify がまだ受け付ける＝途中の人を宙ぶらりんにしない。"""
     with _WRITE_LOCK:
         db.execute(
-            "UPDATE users SET email=?, email_verified=0, email_token=?, email_token_at=?, notify_enabled=1 WHERE id=?",
-            (email, token, datetime.now().isoformat(timespec="seconds"), user_id),
+            "UPDATE users SET email=?, email_verified=1, email_token=NULL, email_token_at=NULL,"
+            " notify_enabled=1 WHERE id=?",
+            (email, user_id),
         )
         db.commit()
-    verify_url = f"{BASE_URL}/verify/{token}"
-    subject = "tayori-たより- — メールアドレスの確認"
+    row = db.execute("SELECT unsub_token FROM users WHERE id=?", (user_id,)).fetchone()
+    unsub = row["unsub_token"] if row and "unsub_token" in row.keys() else None
+    unsub_url = f"{BASE_URL}/unsubscribe/{unsub}" if unsub else None
+    subject = "tayori-たより- — このアドレスに、お知らせを送ります"
     body = (
         f"{username} さんへ。\n"
-        "tayori-たより- の通知メールを、このアドレスで受け取る設定をしました。\n"
-        "下のリンクを開いて、確認を完了してください（7日間有効）。\n"
-        f"{verify_url}\n"
+        "このアドレスを tayori-たより- のお知らせの宛先にしました。\n"
+        "あなたが宙へ放ったことばが、いつか帰ってくる頃に、そっとお知らせが届きます。\n\n"
+        "宛先を変えるときは、設定からいつでも直せます。\n"
+        f"{BASE_URL}/settings\n"
+        "\ntayori ーたより\n"
+        + (f"\n通知を止めるには: {unsub_url}\n" if unsub_url else "")
     )
-    threading.Thread(target=send_email, args=(email, subject, body), daemon=True).start()
+    threading.Thread(target=send_email, args=(email, subject, body),
+                     kwargs={"unsubscribe_url": unsub_url}, daemon=True).start()
     return True
 
 
@@ -2856,6 +2899,9 @@ def _landing_page(title, message, ok=True):
 
 @app.route("/verify/<token>")
 def verify_email(token):
+    """新しい確認リンクはもう発行しない（2026-08-06・→ _register_email）。
+    それでもこの経路は残す——受信箱に眠っている古いリンクを踏んだ人を、
+    「無効です」の紙で迎えないため。踏めば今までどおり確認済みになる。"""
     if not re.fullmatch(r"[A-Za-z0-9_\-]{10,80}", token or ""):
         return _landing_page("確認", "リンクが正しくありません。", ok=False), 400
     db = get_db()
@@ -8577,21 +8623,42 @@ def _run_backup_to_s3():
 @app.route("/admin.welcometotayori/backup")
 @admin_required
 def admin_backup():
+    """手で引く控え。流しながら送る（2026-08-06）。
+    ここは 8/2 に日次バックアップで潰したのと同じ穴が残っていた——`fh.read()` は
+    DB まるごと（実測202MB）をメモリへ載せ、Response がもう一部屋抱える。
+    Render Starter は 512MB なので、この釦を押した瞬間に落ちる側だった。
+    1MBずつ読んで送れば、抱えるのは常にその1MBだけ。"""
     _admin_log("backup")
     fd, tmp = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:
         _make_db_snapshot(tmp)
-        with open(tmp, "rb") as fh:
-            data = fh.read()
-    finally:
+        size = os.path.getsize(tmp)
+    except Exception:
         try:
             os.remove(tmp)
         except OSError:
             pass
+        raise
+
+    def _stream():
+        try:
+            with open(tmp, "rb") as fh:
+                while True:
+                    chunk = fh.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
     fname = "tayori-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".db"
-    return Response(data, mimetype="application/octet-stream",
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    return Response(_stream(), mimetype="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"',
+                             "Content-Length": str(size)})
 
 
 def _admin_metrics(db):
