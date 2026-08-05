@@ -238,26 +238,46 @@ const ISL_GAP=150;       // 島と島のあいだ（岸から岸まで）。輪�
    半径だけは旧の 105+70×ring では足りない——名前だけの席だったところに、いまは
    ことばを抱えた島が座る。だから輪ごとに「隣の席と重ならない」「内の輪とも
    重ならない」の二つの下限から半径を出す。 */
+/* ただし、席を決める時の島の大きさには頭を押さえる（SEAT_CAP・2026-08-05）。
+   ことばの多い島は islandR で半径1200を超える。その実寸で輪を開くと最外の輪は
+   5000を超え、全景がどこまでも広がる——名の逆スケールが上限に噛んで字が縮み、
+   7/27 の一覧（名と名の間合いがひと目に入る）から遠ざかる。
+   遠景ではもう字を出していないのだから、見えない島の円で輪を開く理由はない。
+   輪が測るべきは**名と灯の間合い**だけ。260 で止めると輪は実測 651/1334/2066
+   ＝参照スクショ（7/27）の詰まり方にいちばん近い。
+   散らばりの字は実半径のまま（isl.R は触らない）ので、中間の倍率では隣の島の
+   字と混ざるが、そこは既に一島が画面の大半を占める寄りで、緩みは目に立たない。 */
+const SEAT_CAP=260;
 function placeIslands(rooms,counts){
   const seats=rooms.map((r,i)=>{
     let n=i,ring=0;
     while(n>=6*(ring+1)){n-=6*(ring+1);ring++;}
-    return {room:r,R:islandR(counts.get(r.id)||0),ring:ring,slot:n,slots:6*(ring+1)};
+    const R=islandR(counts.get(r.id)||0);
+    return {room:r,R:R,seatR:Math.min(SEAT_CAP,R),ring:ring,slot:n,slots:6*(ring+1)};
   });
+  /* 埋まらなかった輪は、居る数で一周を割り直す（2026-07-28 の 8261b73 と同じ判断）。
+     席を詰めたままだと、いちばん外の輪は「一箇所に固まった弧」になる——輪の定員は
+     18でも実際に座るのは7つ、という時に、その7つが隣り合って名も灯も重なる。
+     輪は席の数え方であって、並び方の縛りではない。 */
+  const cnt=[];
+  seats.forEach(s=>{cnt[s.ring]=(cnt[s.ring]||0)+1;});
+  seats.forEach(s=>{s.slots=cnt[s.ring];});
   const maxR=[];
-  seats.forEach(s=>{maxR[s.ring]=Math.max(maxR[s.ring]||0,s.R);});
+  seats.forEach(s=>{maxR[s.ring]=Math.max(maxR[s.ring]||0,s.seatR);});
   const radii=[];
   maxR.forEach((m,ring)=>{
     // 隣席との弦 2r·sin(π/席数) が、いちばん大きい二島＋間合いぶん開くように
-    const byChord=(2*m+ISL_GAP)/(2*Math.sin(Math.PI/(6*(ring+1))));
+    const byChord=cnt[ring]>1?(2*m+ISL_GAP)/(2*Math.sin(Math.PI/cnt[ring])):0;
     const byRing=ring?radii[ring-1]+maxR[ring-1]+m+ISL_GAP:0;
     radii[ring]=Math.max(byChord,byRing);
   });
   return seats.map(s=>{
     const off=(s.ring%2)?Math.PI/s.slots:0;
     const t=off+s.slot*(2*Math.PI/s.slots);
-    // 席の揺らぎ（旧 SEAT_JITTER=8/105 と同じ割合）。輪が定規で引いた円に見えない程度
-    const j=1+(((fnv('seat:'+s.room.id)%2001)/2000)*2-1)*0.076;
+    /* 席の揺らぎ（旧 SEAT_JITTER=8/105＝7.6% を 3% へ）。輪が定規で引いた円に
+       見えないための飾りだが、7.6% だと外の輪で ±390 も径が動き、内の輪の名と
+       縦に重なった（実測：狭い画面で3組）。3% なら輪の間合いに負けない。 */
+    const j=1+(((fnv('seat:'+s.room.id)%2001)/2000)*2-1)*0.03;
     const r=radii[s.ring]*j;
     return {x:Math.round(Math.sin(t)*r),y:Math.round(-Math.cos(t)*r),R:s.R,room:s.room};
   });
@@ -292,8 +312,10 @@ function build(rooms,words){
       const f=document.createElement('i');
       f.className='fire';
       f.style.setProperty('--c',cs);
+      // >>> であって >> ではない：fnv は 2^31 を超える。符号付きで畳むと剰余が
+      // 負に出て、縦の揺らぎだけ -18〜+6% に偏る（上へ吊り上がる）
       f.style.setProperty('--fx',(seat.x+(h%13)-6)+'%');
-      f.style.setProperty('--fy',(seat.y+((h>>5)%13)-6)+'%');
+      f.style.setProperty('--fy',(seat.y+((h>>>5)%13)-6)+'%');
       nm.appendChild(f);
     });
     isl.appendChild(nm);
@@ -311,6 +333,14 @@ function build(rooms,words){
   islands.forEach(isl=>isl.words.forEach(el=>{
     el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
   }));
+  /* 順点灯（2026-08-05・旧一覧の 120+i*70ms を戻した）。名と炎は一斉にポンと
+     出ない——輪の内から外へ、順に灯る。inline の 0 を外すだけ＝あとは CSS の
+     遷移（.8s）が .82 まで運ぶ。炎は名の中に居るので、親と一緒に現れる。 */
+  seats.forEach((s,i)=>{
+    const isl=islands.get(s.room.id); if(!isl)return;
+    isl.nm.style.opacity='0';
+    setTimeout(()=>{ isl.nm.style.opacity=''; },120+i*70);
+  });
 }
 /* 一枚のことばを、島の上に建てる。build() から切り出した（2026-07-31）——
    島に降りるたびに岸を組み直すので、建てるのは立ち上がりの一度きりではなくなった。 */
@@ -385,11 +415,8 @@ function reshore(isl){
         isl._flown=false;
         const k=fitK(isl);
         isl._fitK=k;       // 岸が着いて束が育った——帯の形の物差しも引き直す
-        if(Math.abs(k-K)>0.02){
-          world.style.transition=REDUCED?'none':'transform .7s var(--ease)';
-          K=k; PX=-isl.cx*K; PY=-isl.cy*K;
-          setTimeout(()=>{world.style.transition='';applyNow();},760);
-        }
+        // 詰め直しも glide で（滑走の途中に岸が着いたら、そのまま新しい的へ乗り換える）
+        if(Math.abs(k-K)>0.02)glide(k,-isl.cx*k,-isl.cy*k,700);
       }
       sheetLayout(isl,true);             // 新しい紙も、いまの束に混ぜて並べ直す
       // 焦点レンズで読んでいる最中なら、動いた席へ照準を引き直す（紙を見失わない）
@@ -583,8 +610,9 @@ function sheetLayout(isl,stagger){
     /* 画面の外へ並ぶ紙は、流れてこない（2026-08-03 カクツキ）。降りた島には数百枚
        あるのに、束のうち画面に載るのは十数枚——残りの1.1秒の滑走は、誰にも見えない
        ところで数百枚ぶんの動きを合成し続ける仕事でしかない。見えないものは、置く。
-       判定は着いた先の眺めで見る（flyTo は倍率も位置も先に書いてから滑るので、
-       ここでの onScreen は「到着した時にそこに見えるか」を答える）。 */
+       判定は着いた先の眺めで見る（滑走の間は views に出発と到着の二つの眺めが
+       入っている＝glide で K が道中の値でも、onScreen は「到着した時にそこに
+       見えるか」を答えられる）。 */
     const seen=onScreen(isl.cx+it.el._gx,isl.cy+it.el._gy,it.w,it.h);
     it.el.style.transitionDuration=seen?'':'.8s,0s';
     if(stagger&&!REDUCED&&seen){
@@ -659,9 +687,14 @@ let K=0.5, PX=0, PY=0;             // 倍率と、世界の原点の画面上の
    豆粒になった暗闇へ出られてしまうし、そこから戻る操作も長い。 */
 const KMIN=0.02, KMAX=2.4;
 let KFIT=0.1;                      // 全景の倍率。島を置いた後と resize 後に実測で更新
+/* 全景の物差しは**席の輪**（2026-08-05）。島の半径（islandR＝ことばの数で1500超）
+   ではない——遠景で字を隠したいま、島の外周は誰にも見えていないのに、その見えない
+   円を画面に収めようとして、名の輪は画面の6割ほどしか使えていなかった。
+   名は逆スケールで画面上の大きさが一定なので、輪が小さいほど名どうしが重なる。
+   余白 1.35 は、外の輪に立つ名が画面の縁からはみ出さないためのぶん。 */
 function homeFit(){
-  let mx=0; islands.forEach(i=>{ mx=Math.max(mx,Math.hypot(i.cx,i.cy)+i.R); });
-  return Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/((mx||900)*2.15)));
+  let mx=0; islands.forEach(i=>{ mx=Math.max(mx,Math.hypot(i.cx,i.cy)); });
+  return Math.max(KMIN,Math.min(1.2,Math.min(VW,VH)/((mx||900)*2*1.35)));
 }
 /* カクツキ修正（2026-07-31）その1：描き替えは1フレームに1度だけ。
    wheel も pointermove もフレームより速く飛んでくる——来た数だけ style を
@@ -801,6 +834,7 @@ function zooming(){
   zoomT=setTimeout(()=>{ zoomOn=false; document.body.classList.remove('zooming'); },700);
 }
 function zoomAt(cx,cy,factor){
+  glideN++;            // ホイール・＋−も同じ：手が動いたら滑走は止まる
   // 手で引ける下限＝全景（KFIT）。既にそれより引いている時は、そこから寄るのは許す
   const k=Math.max(Math.min(KFIT,K),Math.min(KMAX,K*factor));
   if(k===K)return;                          // 端で止まっている時は、描き直さない
@@ -863,6 +897,7 @@ vp.addEventListener('wheel',e=>{
 const ptrs=new Map(); let moved=0, pinchD=0;
 vp.addEventListener('pointerdown',e=>{
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  glideN++;            // 手が触れたら、滑走は手に譲る（Kの取り合いをしない・Apple §1）
   moved=0; vp.classList.add('drag');
   // 指を捕まえる（紙の外へ滑ってもひきずりを見失わない）。捕まえられない指も
   // 稀にある（合成のイベント・端末の癖）——そこで落とすと、以後の受け止めが全部死ぬ
@@ -1383,6 +1418,45 @@ function noteRoomURL(id,push){
     else history.replaceState({room:id},'',u);
   }catch(e){}
 }
+/* 滑走は K そのものを rAF で運ぶ（2026-08-05）。それまでは K を先に到着へ書き、
+   world の transform だけを 1.1s の transition で滑らせていた——K が一瞬で飛ぶので
+   逆スケール（ik）も一瞬で到着値になり、画面上の名の寸法 K(t)×ik は道中で山なりに
+   膨らむ。上限4.5の頃は1.3倍で見えなかったが、全景（ik≈9〜15）まで引ける今は
+   3倍を超えて、滑走のたび21の名と炎が一斉に脈打った。
+   毎フレーム K を書き、scaleNames に逆を取らせれば、名は道中も 12px のまま。
+   倍率は**対数**で、画面の中心が指す世界座標は線形で運ぶ（積 K×ik が道中も
+   一定なのは対数だけ。素の線形だと、遠くから寄る滑走の前半が全部すっ飛ぶ）。
+   毎フレームの仕事は applyNow ＝つまみ（pinch）一回ぶんと同じで、実測済みの道。
+   時計は rAF の引数だけを使う（performance.now と混ぜない——7/27 の轍）。
+   rAF の止まる環境の保険はタイマ：ms+180 で必ず到着の値を書く。 */
+let glideN=0, glideLive=0;
+function glideBusy(){ return glideLive!==0&&glideLive===glideN; }
+function glide(k1,px1,py1,ms){
+  ms=ms||1100;
+  const id=++glideN;
+  glideLive=id;
+  const fin=()=>{ if(id!==glideN)return; glideLive=0; glideN++;
+                  K=k1; PX=px1; PY=py1; applyNow();
+                  // 滑走の間はレンズの出入りを見送っている——着いたらここで見直す
+                  // （見送りの唯一の呼び口は「手が落ち着いた700ms後」で、再訪が無い）
+                  if(typeof lensCheck==='function')lensCheck(); };
+  if(REDUCED){ fin(); return; }
+  const k0=K, w0x=-PX/K, w0y=-PY/K, w1x=-px1/k1, w1y=-py1/k1;
+  let t0=null;
+  requestAnimationFrame(function step(ts){
+    if(id!==glideN)return;             // 新しい滑走（reshore の詰め直し等）に譲った
+    if(t0===null)t0=ts;
+    const p=Math.min(1,(ts-t0)/ms);
+    if(p>=1){ fin(); return; }
+    const e=1-Math.pow(1-p,3);         // var(--ease) と同じ、出て早く・着いて静か
+    K=k0*Math.pow(k1/k0,e);
+    const cx=w0x+(w1x-w0x)*e, cy=w0y+(w1y-w0y)*e;
+    PX=-cx*K; PY=-cy*K;
+    applyNow();
+    requestAnimationFrame(step);
+  });
+  setTimeout(fin,ms+180);
+}
 function flyTo(isl){
   release();
   gatherHide();
@@ -1391,16 +1465,13 @@ function flyTo(isl){
   noteRoomURL(isl.room.id,true);
   sheetLock=isl.room.id;
   isl._flown=true;     // 岸が着いたら、もう一度だけ寸法を見直してよい印
-  world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
   document.body.classList.add('flying');
   // 滑走の間は「出発の眺め」と「到着の眺め」の二つで間引く（通り道が消えないように）
   views=[[PX,PY,K],[-isl.cx*k,-isl.cy*k,k]];
-  K=k; PX=-isl.cx*K; PY=-isl.cy*K;
-  applyNow();
-  setTimeout(()=>{ world.style.transition='';
-                   document.body.classList.remove('flying');
+  glide(k,-isl.cx*k,-isl.cy*k);
+  setTimeout(()=>{ document.body.classList.remove('flying');
                    sheetLock=null;   // ここから先は、敷かれているかどうかだけで見る
-                   views=null; applyNow(); markMenuRoom(); },1200);
+                   views=null; applyNow(); markMenuRoom(); },1300);
 }
 /* ── 宙へもどる（全景）──────────────────────────────────
    島に降りたあと、引き返す道が「つまむ・−を何度も」しか無かった。
@@ -1410,14 +1481,11 @@ function overview(){
   gatherHide();
   const k=homeFit();
   noteRoomURL(null,true);
-  world.style.transition=REDUCED?'none':'transform 1.1s var(--ease)';
   document.body.classList.add('flying');
   views=[[PX,PY,K],[0,0,k]];
-  K=k; PX=0; PY=0;
-  applyNow();
-  setTimeout(()=>{ world.style.transition='';
-                   document.body.classList.remove('flying');
-                   views=null; applyNow(); markMenuRoom(); },1200);
+  glide(k,0,0);
+  setTimeout(()=>{ document.body.classList.remove('flying');
+                   views=null; applyNow(); markMenuRoom(); },1300);
 }
 (function(){
   const b=document.getElementById('skyHome');
@@ -1461,7 +1529,10 @@ setInterval(()=>{
   /* 手が動いている間・島へ滑っている間は、字を書き直さない（2026-08-03 カクツキ）。
      書き直しは一コマごとに一枚の版面を組み直す仕事で、宙を動かす仕事といちばん
      混ざってはいけない。静かになってから始めればいい——8秒後にまた来る。 */
-  if(gesOn||document.body.classList.contains('flying'))return;
+  // 滑走中（glide）はレンズを開かない：lens は world に transition を掛ける別経路で、
+  // 毎フレームの transform 書きと重なると尻尾の250msほどが泥になる（flying の解除
+  // 1300ms より、岸の詰め直しの glide 700ms が後まで走ることがある）
+  if(gesOn||glideBusy()||document.body.classList.contains('flying'))return;
   const W=VW,H=VH;
   const due=[];
   islands.forEach(isl=>isl.words.forEach(el=>{
