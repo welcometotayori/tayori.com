@@ -210,11 +210,27 @@ def _load_secret():
     return key
 
 
+# ── ここは本番か（2026-08-06）─────────────────────────────────────
+# 守りの全部が TAYORI_PRODUCTION ひとつに賭けられていた。そして本番（Render）に
+# その一つが**入っていなかった**——実測で、本番の Set-Cookie に Secure が付いておらず
+# （http で来た最初の一回にセッションが平文で乗る）、HSTS も出ず、さらに admin の
+# パスワードが起動のたび既定値へ戻る枝に入っていた。render.yaml には書いてあるので、
+# サービスを手で作った時に取り込まれなかったのだと思う。
+# 入れ忘れひとつで守りが全部落ちる作りをやめる：クラウドの上に居ることは、そこの
+# 実行環境が自分で名乗っている（Render は RENDER、Fly は FLY_APP_NAME）。
+# TAYORI_PRODUCTION は「手元で本番のふるまいを試す」ための上乗せとして残す。
+IS_PRODUCTION = bool(
+    os.environ.get("TAYORI_PRODUCTION")
+    or os.environ.get("RENDER")
+    or os.environ.get("RENDER_SERVICE_ID")
+    or os.environ.get("FLY_APP_NAME")
+)
+
 app.secret_key = _load_secret()
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=bool(os.environ.get("TAYORI_PRODUCTION")),
+    SESSION_COOKIE_SECURE=IS_PRODUCTION,
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     MAX_CONTENT_LENGTH=10 * 1024 * 1024, # 16MB -> 10MBに変更 (メモリ保護)
 )
@@ -278,7 +294,7 @@ _SEC_HEADERS = {
 def _security_headers(resp):
     for k, v in _SEC_HEADERS.items():
         resp.headers.setdefault(k, v)
-    if os.environ.get("TAYORI_PRODUCTION"):
+    if IS_PRODUCTION:
         resp.headers.setdefault("Strict-Transport-Security",
                                 "max-age=15552000; includeSubDomains")
     return resp
@@ -1342,11 +1358,18 @@ def init_db():
                 )
 
         # Admin アカウントの担保
+        # 既定値（admin.welcometotayori）へ落ちてよいのは手元だけ。判定を
+        # TAYORI_PRODUCTION=="1" の一致から IS_PRODUCTION へ移す（2026-08-06）——
+        # 本番にその変数が無かったので、外の世界に立ちながら**既定のパスワードへ
+        # 起動のたび戻る**枝に入っていた。管理画面の URL は隠しているだけで、
+        # 名前も既定値も、この公開リポジトリに書いてある。
         admin_pw = os.environ.get("TAYORI_ADMIN_PASSWORD")
         if not admin_pw:
-            if os.environ.get("TAYORI_PRODUCTION") == "1":
+            if IS_PRODUCTION:
                 admin_pw = secrets.token_urlsafe(16)
-                print(f"[警告] TAYORI_ADMIN_PASSWORD が未設定です。ランダムパスワードを設定しました: {admin_pw}")
+                print("[警告] TAYORI_ADMIN_PASSWORD が未設定です。"
+                      f"この起動かぎりのランダムパスワードを設定しました: {admin_pw}", flush=True)
+                print("[警告] 次の再起動でまた変わります。Render の環境変数に入れてください。", flush=True)
             else:
                 admin_pw = "admin.welcometotayori"
 
