@@ -27,13 +27,16 @@
               margin-left:10px}
   .top-mid{flex:0 1 460px;min-width:0;display:flex;justify-content:center}
   .top-right{flex:1 1 0;display:flex;align-items:center;justify-content:flex-end;gap:var(--s1)}
-  /* しるし＝戸。三つの粒はロゴそのもの（黒地のPNGは白い紙の上で黒い四角になるので、
-     同じ形を字の色で描く＝どんな地の上でも消えない）。 */
+  /* しるし＝戸。三つの粒はロゴそのもの（tayori.png）。ただし黒地のPNGをそのまま貼ると
+     白い紙片の上で黒い四角になる——形を型（mask）として使い、塗りは字の色にする。
+     こうすればどんな地の上でも消えず、hover も active も字の色に連れて動く。 */
   .logo-mark{display:grid;place-items:center;width:var(--touch);height:var(--touch);
         padding:0;background:none;border:none;border-radius:50%;color:var(--ink-1);
         filter:drop-shadow(0 0 8px rgba(8,8,13,.92));
         transition:background .2s var(--ease),opacity .2s var(--ease)}
-  .logo-mark svg{width:30px;height:27px;display:block}
+  .logo-glyph{width:32px;height:26px;display:block;background:currentColor;
+        -webkit-mask:url(/static/img/logo-mark.png) center/contain no-repeat;
+                mask:url(/static/img/logo-mark.png) center/contain no-repeat}
   .logo-mark:hover{background:rgba(250,248,243,.08)}
   .logo-mark:active{opacity:.62}
   .logo-mark[aria-expanded="true"]{background:rgba(250,248,243,.10)}

@@ -69,11 +69,8 @@ function bootOr(k,url){
     <div class="menu">
       <button class="logo-mark" id="logoBtn" type="button" aria-expanded="false"
               aria-controls="logoMenu" aria-label="メニュー">
-        <svg viewBox="0 0 40 36" aria-hidden="true" fill="currentColor">
-          <ellipse cx="7.6" cy="26" rx="5" ry="7.2" transform="rotate(-32 7.6 26)"/>
-          <ellipse cx="19" cy="20.5" rx="7.4" ry="10.4" transform="rotate(-24 19 20.5)"/>
-          <ellipse cx="32" cy="14.6" rx="8.4" ry="13.2" transform="rotate(-19 32 14.6)"/>
-        </svg>
+        {# 三つの粒はロゴそのもの（tayori.png の形）。地は透かし、形だけを字の色で塗る #}
+        <span class="logo-glyph" aria-hidden="true"></span>
       </button>
       <div class="menu-list" id="logoMenu" hidden>
         {# ジャンルの名。見えていない島へも、読んでいる最中でも、ここから降りられる #}
