@@ -1579,6 +1579,23 @@ function overview(){
   const b=document.getElementById('skyHome');
   if(b)b.addEventListener('click',()=>overview());
 })();
+/* 左上の名＝家の印（2026-08-06）。「宙へもどる」は島に降りている間しか立たないので、
+   探した結果や読む柱の中からは帰る道が無かった。名はいつでもそこに在る。
+   道の上で開いているものは畳んでいく——順は Escape の段と同じ（開いている姿を
+   先に閉じ、最後に宙を引く）。ただし Escape と違って一押しで済ませる：家の印は
+   「一段だけ戻る」ではなく「帰る」で、二度三度押させるものではない。
+   書いている間（body.casting）は頭の帯ごと退いているので、ここには届かない。 */
+(function(){
+  const b=document.getElementById('brandHome');
+  if(!b)return;
+  b.addEventListener('click',()=>{
+    menuClose();
+    const rc=document.getElementById('readClose'), rp=document.getElementById('readPane');
+    if(rc&&rp&&rp.classList.contains('on'))rc.click();   // 柱は柱の戸から閉じる
+    seekReset();     // 探した語も置いていく（面だけ畳んで語が器に残ると、×だけが宙に立つ）
+    overview();      // 受け止めはこの中で放される
+  });
+})();
 /* 戻る＝ひとつ前の眺めへ。島のidが載っていればその島へ、無ければ全景へ。 */
 addEventListener('popstate',e=>{
   const r=(e.state&&typeof e.state.room==='number')?e.state.room:urlRoom();

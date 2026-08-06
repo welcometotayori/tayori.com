@@ -47,7 +47,10 @@ function bootOr(k,url){
    しるしへ移した。下辺の帯に集めていた三つのうち、残るのは ＋− だけ。
    探すが常に見えていること・戸がどの状態からでも開くことの二つが、この配置の目的。 #}
 <header>
-  <p class="brand">たより <small>TAYORI</small></p>
+  {# 名は家の印でもある（2026-08-06）。押せば、どこに居ても宙の全景へ帰る。
+     押せるのは名の字だけ——外側の p は宙を掴む手を塞がない #}
+  <p class="brand"><button class="brand-home" id="brandHome" type="button"
+     aria-label="宙の全景へもどる">たより <small>TAYORI</small></button></p>
   {# 探す：畳んだ一語ではなく、はじめから入力そのものを置く（押して開く手順を無くす） #}
   <div class="top-mid">
     <div class="seek" id="seek">

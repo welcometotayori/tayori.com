@@ -25,6 +25,15 @@
         text-shadow:0 0 10px rgba(8,8,13,.92),0 0 24px rgba(8,8,13,.72)}
   .brand small{color:var(--thread);font-size:var(--t-mono);letter-spacing:var(--tr-mono);
               margin-left:10px}
+  /* 名を押せば全景へ（2026-08-06）。器は作らない——押せるのは字そのもの。
+     p の側に寸法を残したままなのは、名の右の余白まで押せる面にしないため
+     （そこは宙を掴んで動かす面で、頭の帯は指を受けないと決めてある）。 */
+  .brand-home{display:inline-flex;align-items:center;
+        min-height:var(--touch);padding:0;margin:0;background:none;border:none;
+        font:inherit;color:inherit;letter-spacing:inherit;text-shadow:inherit;
+        cursor:pointer;transition:opacity .22s var(--ease)}
+  .brand-home:hover{opacity:.82}
+  .brand-home:active{opacity:.62}
   .top-mid{flex:0 1 460px;min-width:0;display:flex;justify-content:center}
   .top-right{flex:1 1 0;display:flex;align-items:center;justify-content:flex-end;gap:var(--s1)}
   /* しるし＝戸。三つの粒はロゴそのもの（tayori.png）。ただし黒地のPNGをそのまま貼ると
