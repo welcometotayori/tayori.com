@@ -15,3 +15,9 @@ venv/
 
 # ローカルのツール設定
 .claude/
+
+# 意味の板（2026-08-04）。20万片×256次元＝205MB は git に置くものではない。
+# 手元で作って（scripts/embed_gemini.py → pack_gemini_plate.py）R2 へ上げ、
+# 本番はビルド時に落とす。束（shard）は33時間ぶんの元手なので手元に残す。
+seed/gemini/
+semantic/plate/
