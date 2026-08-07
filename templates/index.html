@@ -65,8 +65,9 @@
   .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   html{-webkit-text-size-adjust:100%}
   body{background:var(--ground);color:var(--ink);font-family:var(--font-body);line-height:1.7;min-height:100vh;overflow-x:hidden}
-  /* 書体の二本は宙と同じ約束（_sky_tokens.html §3.3）：ことばは明朝、道具はゴシック。
-     ここで書き直すのは、この面が自前の body 規則を持っていてトークンの一行に勝つため。 */
+  /* 書体は宙と同じ約束（_sky_tokens.html）＝明朝一本。ここで書き直すのは、
+     この面が自前の body 規則を持っていてトークンの一行に勝つため（フォーム要素は
+     font-family を継承しないので、書かないと端末のサンセリフに落ちる）。 */
   button,input,select{font-family:var(--font-ui)}
   textarea{font-family:var(--font-body)}
   /* ---- 日本語の折り返し ----

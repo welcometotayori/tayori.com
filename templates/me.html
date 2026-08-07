@@ -126,7 +126,9 @@
   .slip-fusen-in::placeholder{color:rgba(30,27,33,.45)}
   .slip-fusen-in:focus{border-bottom-color:rgba(30,27,33,.6)}
   .slip-foot{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3)}
-  /* 日付は道具の側（§3.3）。数字は等幅で——並ぶ紙の日付の桁が、行ごとに揺れない */
+  /* 日付。tabular-nums は残すが、2026-08-07 夜に書体を明朝一本へ戻して以降は
+     効いていない（Shippori Mincho は等幅の数字を持たない・実測 20px で 1.17px 差）。
+     桁は行ごとにごく僅かに揺れる。明朝が落ちた端末では等幅に戻る。 */
   .slip-when{font-family:var(--font-ui);font-size:var(--t-mono);
              font-variant-numeric:tabular-nums;
              letter-spacing:0.18em;color:rgba(30,27,33,.5)}
