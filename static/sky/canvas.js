@@ -727,6 +727,64 @@ function gesture(){
   gesT=setTimeout(()=>{ gesOn=false; document.body.classList.remove('gesturing');
                         lensCheck(); },700);   // 焦点レンズの出入りは、手が落ち着いてから
 }
+/* ── 宙の縁（2026-08-07 Kosei「端にある紙の片は端に当たる」）──────────────
+   これまで宙は引きずり放題で、いちばん外の島を越えた先の、何も無い闇まで出られた
+   ——そこには戻る道が無い（「宙へもどる」を知っていれば別だが、知らない人には
+   ただの行き止まりの暗がりだった）。
+
+   留める線は**島の席**（cx,cy）で引く。半径や束の箱で引いてはいけない：「画面が
+   世界の箱の外へ出ない」にすると、いちばん外の島を画面の**中央に呼べなくなる**
+   ——机の画面では VW/2 が島の見かけの半径より大きいので、flyTo が着いた先を
+   縁の規律が押し戻してしまう（実測 1400×800 で 364px ずれる）。
+   席で引けば、どの島も中央に来られて、なお「いちばん外の島の席は画面の外へ出ない」。
+   ＝いちばん端の紙は、画面の端まで押せて、そこで当たって止まる。
+
+   欲しい不等式は二本だけ：
+     PX + x1·K ≧ pad        （いちばん右の席が、左の縁より内側に居る）
+     PX + x0·K ≦ VW − pad   （いちばん左の席が、右の縁より内側に居る）
+   これを PX について解くと a・b の二つの境になる。min/max で挟めば一行で済む。
+
+   手がふれている間は、越えたぶんに抵抗をかけて**少しだけ**通す（ゴム）。
+   縁でぴたりと止まると「壊れた」に見えるが、抵抗があると「ここが端だ」と手に伝わる
+   ——Apple §1 の作法。離せば、封蝋が戻るのと同じ滑走で縁まで帰る。 */
+const EDGE_PAD=56;          // 縁の余白。席が画面の縁に貼り付くと、島が半分に切れて見える
+let edgeSoft=false;         // 手がふれているか（ゴムを効かせてよいか）
+function worldBox(){
+  let x0=1/0,y0=1/0,x1=-1/0,y1=-1/0;
+  islands.forEach(i=>{
+    if(i.cx<x0)x0=i.cx; if(i.cx>x1)x1=i.cx;
+    if(i.cy<y0)y0=i.cy; if(i.cy>y1)y1=i.cy;
+  });
+  return isFinite(x0)?{x0:x0,y0:y0,x1:x1,y1:y1}:null;
+}
+/* 越えたぶんは、ここまでしか行かない（漸近）。M は画面の2割強 */
+function edgeRub(d,M){ return M*(1-1/(1+d/M)); }
+function edgeHold(v,a,b,soft){
+  const lo=Math.min(a,b), hi=Math.max(a,b);
+  if(v>=lo&&v<=hi)return v;
+  if(!soft)return v<lo?lo:hi;
+  const M=Math.min(VW,VH)*0.22;
+  return v<lo?lo-edgeRub(lo-v,M):hi+edgeRub(v-hi,M);
+}
+function clampPan(soft){
+  const b=worldBox(); if(!b)return;
+  PX=edgeHold(PX,EDGE_PAD-b.x1*K,VW-EDGE_PAD-b.x0*K,soft);
+  PY=edgeHold(PY,EDGE_PAD-b.y1*K,VH-EDGE_PAD-b.y0*K,soft);
+}
+/* 縁を越えたまま指を離した時だけ、縁まで帰る（越えていなければ何もしない）。
+   帰る道中もゴムを効かせたままにする——ここで硬く留めると、最初の1フレームで
+   境の値に飛んで、戻る動きそのものが消える。 */
+let edgeSettleT=0;
+function edgeSettle(){
+  const b=worldBox(); if(!b)return;
+  const px=edgeHold(PX,EDGE_PAD-b.x1*K,VW-EDGE_PAD-b.x0*K,false);
+  const py=edgeHold(PY,EDGE_PAD-b.y1*K,VH-EDGE_PAD-b.y0*K,false);
+  if(Math.abs(px-PX)<0.5&&Math.abs(py-PY)<0.5)return;
+  edgeSoft=true;
+  clearTimeout(edgeSettleT);
+  edgeSettleT=setTimeout(()=>{ edgeSoft=false; },560);
+  glide(K,px,py,320,true);   // 読んでいる紙は取り上げない（keepLens）
+}
 function apply(){
   if(applyQ)return;
   applyQ=true;
@@ -734,6 +792,7 @@ function apply(){
 }
 function applyNow(){
   applyQ=false;
+  clampPan(edgeSoft);
   world.style.transform='translate('+PX+'px,'+PY+'px) scale('+K+')';
   /* その2（2026-07-31 夜に改訂）：しきい値をまたぐ class の付け外しには**遊び**を持たせる。
      .far/.crisp は宙ぜんぶの字の見え方を変える class なので、付け外しのたびに数百枚の
@@ -914,6 +973,8 @@ const ptrs=new Map(); let moved=0, pinchD=0;
 vp.addEventListener('pointerdown',e=>{
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   handTakes();         // 手が触れたら、滑走は手に譲る（Kの取り合いをしない・Apple §1）
+  edgeSoft=true;       // 手の間だけ、宙の縁はゴムになる（clampPan）
+  clearTimeout(edgeSettleT);
   moved=0; vp.classList.add('drag');
   // 指を捕まえる（紙の外へ滑ってもひきずりを見失わない）。捕まえられない指も
   // 稀にある（合成のイベント・端末の癖）——そこで落とすと、以後の受け止めが全部死ぬ
@@ -970,7 +1031,11 @@ function tapAt(x,y){
 function ptrUp(e){
   const had=ptrs.has(e.pointerId);
   ptrs.delete(e.pointerId); pinchD=0;
-  if(!ptrs.size)vp.classList.remove('drag');
+  if(!ptrs.size){
+    vp.classList.remove('drag');
+    edgeSoft=false;
+    edgeSettle();      // 縁を越えたまま離していたら、縁まで帰る
+  }
   // ひきずった指は受け止めではない（6px未満＝置いて、離しただけ）
   if(e.type==='pointerup'&&had&&!ptrs.size&&moved<=6)tapAt(e.clientX,e.clientY);
 }
