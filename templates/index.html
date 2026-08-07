@@ -120,6 +120,21 @@
   .gate-note b{color:var(--seal);font-weight:600}
   .gate-tab:active{opacity:0.62}
   .gate-submit:active{transform:scale(0.99);transition-duration:.1s}
+  /* 入れなくなったら（2026-08-07）。器は作らない——押せるのは一語だけ。
+     開くところは「畳んだ面は visibility も畳む」の作法（[[tayori-v4-usability]]）に
+     従って hidden 属性で消す＝畳んでいる間、読み上げにも指にも当たらない。 */
+  .gate-link{display:block;margin:14px auto 0;min-height:var(--touch);
+        background:transparent;border:0;cursor:pointer;color:var(--ink-mute);
+        font-family:var(--font-ui);font-size:12px;letter-spacing:0.1em;
+        text-decoration:underline;text-underline-offset:3px;padding:12px 6px}
+  .gate-link:hover{color:var(--ink)}
+  .gate-link:active{opacity:0.62}
+  .gate-link[hidden]{display:none}
+  .forgot{margin-top:6px;padding-top:18px;border-top:1px solid var(--rule);text-align:left}
+  .forgot[hidden]{display:none}
+  .forgot-lead{font-family:var(--font-ui);font-size:11.5px;line-height:1.9;
+        letter-spacing:0.04em;color:var(--ink-mute);margin-bottom:16px;
+        word-break:keep-all;overflow-wrap:anywhere}
 
   /* ══ 門と導入は「宙」の色で（2026-07-25 v11.1）══════════════════
      たよりのはじまりは /mood の宙。そこから来て、そこへ帰る画面なので、
@@ -223,6 +238,22 @@
       {# 入れ違いは、読み上げにも必ず届くようにする（見えている人にだけ出る文にしない）。
          role=alert は中身が変わった時だけ読まれるので、空のまま置いておける。 #}
       <div class="gate-err" id="gErr" role="alert" aria-live="assertive"></div>
+      {# ── 入れなくなったら（2026-08-07）──────────────────────────
+         門は名前とパスワードしか受け付けないので、どちらかを忘れた人はそこで
+         行き止まりだった（/contact も「設定から変えられます」としか言えず、
+         その設定にはログインが要る＝閉じた輪）。ここが、その唯一の出口。
+         畳んでおくのは、迷っていない人の目に入れないため——押した人にだけ開く。 #}
+      <button type="button" class="gate-link" id="forgotOpen">入れなくなったら</button>
+      <div class="forgot" id="forgot" hidden>
+        <p class="forgot-lead">登録した<wbr>メールアドレスへ、<wbr>入り直すための<wbr>一通を<wbr>送ります。<br>
+           名前を<wbr>忘れた<wbr>ときも、<wbr>同じ<wbr>一通に<wbr>書いてあります。</p>
+        <div class="gate-field">
+          <label for="fEmail">登録したメールアドレス</label>
+          <input type="email" id="fEmail" autocomplete="email" placeholder="you@example.com">
+        </div>
+        <button class="gate-submit" id="fSubmit" type="button">送る</button>
+        <div class="gate-err" id="fErr" role="alert" aria-live="assertive"></div>
+      </div>
       <!-- 門の足元。18pxしかなく指で押せなかったので、余白だけを広げて44pxにした（v14） -->
       {# 宙は誰でも見られる（門の向こうにあるのは「放つ」だけ）。未ログインで / に来た人が
          行き止まらないよう、宙への道をここに開けておく。/ → /mood の内部リンクでもある。 #}
@@ -334,6 +365,40 @@
   }
   gSubmit.addEventListener('click',doAuth);
   gPass.addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
+
+  /* ── 入れなくなったら（2026-08-07）──────────────────────────────
+     サーバは**どんな時も同じ答え**を返す（登録の有無を漏らさないため）。だから
+     ここも「送りました」ではなく「登録があれば送りました」と書く——嘘をつかずに、
+     アドレスが在るとも無いとも言わない一文。 */
+  const forgot=document.getElementById('forgot'),forgotOpen=document.getElementById('forgotOpen'),
+        fEmail=document.getElementById('fEmail'),fErr=document.getElementById('fErr'),
+        fSubmit=document.getElementById('fSubmit');
+  if(forgotOpen)forgotOpen.addEventListener('click',()=>{
+    forgot.hidden=false; forgotOpen.hidden=true;
+    // 名前の欄に @ が入っていたら、それは打つ場所を間違えていた人のアドレス
+    if(!fEmail.value&&/@/.test(gUser.value))fEmail.value=gUser.value.trim();
+    fEmail.focus();
+  });
+  async function doForgot(){
+    fErr.style.color='';fErr.textContent='';
+    const em=fEmail.value.trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){fErr.textContent='メールアドレスの形式が正しくありません。';return;}
+    const orig=fSubmit.textContent;
+    fSubmit.disabled=true;fSubmit.textContent='送信中…';
+    const res=await api('/api/account/forgot',{method:'POST',body:JSON.stringify({email:em})});
+    fSubmit.textContent=orig;
+    if(res&&res.ok){
+      fErr.style.color='var(--ink-mute)';
+      fErr.textContent='そのアドレスの登録があれば、一通お送りしました。届かないときは、迷惑メールもご確認ください。';
+      return;
+    }
+    fSubmit.disabled=false;
+    fErr.textContent=(res&&res.error)||'うまくいきませんでした。もう一度お試しください。';
+  }
+  if(fSubmit){
+    fSubmit.addEventListener('click',doForgot);
+    fEmail.addEventListener('keydown',e=>{if(e.key==='Enter')doForgot();});
+  }
   gUser.addEventListener('keydown',e=>{if(e.key==='Enter')gPass.focus();});
   // 登録の時はメールが最後の欄。ここで Enter が効かないと、指を離してボタンを探すことになる
   // （同じ形のものは同じに振る舞う／Apple §16 familiarity）

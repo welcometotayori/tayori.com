@@ -936,6 +936,13 @@ def init_db():
             "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT",
             "ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT",
             "ALTER TABLE users ADD COLUMN plan_updated_at TEXT",
+            # ── 入り直す道（2026-08-07）────────────────────────────────
+            # 名前かパスワードを忘れた人は、それまで**永久に入れなかった**（門は名前と
+            # パスワードしか受け付けず、問い合わせても本人確認の手立てが無い）。
+            # メールアドレスは登録時に必ず預かっているので、そこを本人確認の一本にする。
+            # 使い捨ての鍵：一度使うか60分経つと無効（api_account_reset で NULL に戻す）。
+            "ALTER TABLE users ADD COLUMN reset_token TEXT",
+            "ALTER TABLE users ADD COLUMN reset_token_at TEXT",
         ):
             try:
                 db.execute(stmt)
@@ -1958,6 +1965,7 @@ def robots_txt():
         "Disallow: /admin.welcometotayori\n"
         "Disallow: /verify/\n"
         "Disallow: /unsubscribe/\n"
+        "Disallow: /reset/\n"
         f"Sitemap: {SITE_URL}/sitemap.xml\n"
     )
     resp = Response(body, mimetype="text/plain")
@@ -2193,18 +2201,74 @@ def _notify_admin_login(ok, username, note=""):
         print(f"[たより] 管理者ログイン通知に失敗（ログインは継続）: {e}", flush=True)
 
 
+# ── 力ずくを、ただ待たせる（2026-08-07・一般公開の前に）──────────────────
+# ログインの試行回数に上限が無かった（docs/overview-brief.md §7「運用・耐久」）。
+# 8文字のパスワードでも、秒間何十回と試せる相手には時間の問題でしかない。
+#
+# 数えるのは**失敗だけ**で、鍵は (IP, 名前) の組。IP だけで数えると、同じ職場や
+# 学校から来た他人まで巻き添えで締め出される。名前だけで数えると、誰かの名前を
+# わざと間違え続けてその人を締め出せる（嫌がらせが成立する）。組なら、どちらも起きない。
+# ただし「名前を総当たりする」相手は組では止まらないので、IP ごとの上限も別に持つ。
+#
+# 通すのは gunicorn の worker が1つだから（Dockerfile / render.yaml で固定）。
+# 増やす日が来たら、この辞書は DB か外の数え役へ移すこと。
+_LOGIN_FAILS = {}                  # (ip, name) / ip -> [失敗した時刻…]
+_LOGIN_GATE_LOCK = threading.Lock()
+_LOGIN_WINDOW = timedelta(minutes=15)
+_LOGIN_MAX_PER_NAME = 8            # 同じ名前へ、同じところから
+_LOGIN_MAX_PER_IP = 40             # 名前を変えながらの総当たりの側
+
+
+def _login_gate(ip, name, record=False):
+    """True を返したら**通してはいけない**。record=True でその一回を失敗として数える。
+    窓（15分）から出た記録はその場で捨てるので、辞書は伸び続けない。"""
+    now = datetime.now()
+    keys = ((ip, (name or "").lower()), ip)
+    lim = (_LOGIN_MAX_PER_NAME, _LOGIN_MAX_PER_IP)
+    with _LOGIN_GATE_LOCK:
+        if len(_LOGIN_FAILS) > 20000:      # 掃除のしそこないの保険（暴走時だけ効く）
+            _LOGIN_FAILS.clear()
+        blocked = False
+        for k, n in zip(keys, lim):
+            hits = [t for t in _LOGIN_FAILS.get(k, ()) if now - t < _LOGIN_WINDOW]
+            if record:
+                hits.append(now)
+            if hits:
+                _LOGIN_FAILS[k] = hits
+            else:
+                _LOGIN_FAILS.pop(k, None)
+            if len(hits) > n:
+                blocked = True
+        return blocked
+
+
+def _login_gate_clear(ip, name):
+    """通れた人の記録は消す（打ち間違いを、次に来た時まで数えない）。"""
+    with _LOGIN_GATE_LOCK:
+        _LOGIN_FAILS.pop((ip, (name or "").lower()), None)
+
+
 @app.route("/api/login", methods=["POST"])
 def api_login():
     data = request.get_json(force=True) or {}
     username = _json_str(data.get("username")).strip()
     password = _json_str(data.get("password"))
+    ip = _client_ip()
+    if _login_gate(ip, username):
+        # 「合っているのに待たされている」のか「そもそも無い名前」なのかは言わない。
+        # 待つ道と、入り直す道（/forgot）の両方を、ここで一度に見せる。
+        return jsonify(error="しばらく待ってから、もう一度お試しください。"
+                             "名前かパスワードを忘れたときは、下の「入れなくなったら」から。",
+                       throttled=True), 429
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if not row or not check_password_hash(row["pw_hash"], password):
+        _login_gate(ip, username, record=True)
         # admin を狙った失敗だけ知らせる（一般ユーザーの打ち間違いまで鳴らさない）
         if row is not None and _row_flag(row, "is_admin"):
             _notify_admin_login(False, username)
         return jsonify(error="名前かパスワードが違います。"), 401
+    _login_gate_clear(ip, username)
     # 停止中は、正しいパスワードでも入れない。理由は書かない（運営に問い合わせてもらう）。
     if "suspended_at" in row.keys() and row["suspended_at"]:
         return jsonify(error="このアカウントは現在ご利用いただけません。"), 403
@@ -2238,17 +2302,216 @@ def api_logout():
     session.pop("uid", None)
     return jsonify(ok=True)
 
+
+# ══ 入れなくなった人が、入り直す道（2026-08-07）══════════════════════════
+# それまで門は名前とパスワードしか受け付けず、どちらを忘れても**永久に入れなかった**
+# ——問い合わせ先の /contact も「設定からご自分で変えられます」としか言えず、
+# 設定へ入るのにログインが要る、という閉じた輪になっていた。
+#
+# 本人確認はメールアドレス一本。登録のときに必ず預かっていて、そのアドレスは
+# 「あなたのことばが帰ってくる先」として本人が現に受け取っているものだから。
+#
+# 忘れたのが**名前**のこともある（門は名前で入る）。だから送る一通には、鍵だけでなく
+# **その人の名前も書く**。名前を思い出せば、鍵を使わずにそのまま入れる。
+_FORGOT_SENT = {}                   # ip / email -> [送った時刻…]
+_FORGOT_LOCK = threading.Lock()
+_FORGOT_WINDOW = timedelta(hours=1)
+_FORGOT_MAX_PER_EMAIL = 3           # 同じ宛先へ、1時間に
+_FORGOT_MAX_PER_IP = 8              # 同じところから、1時間に
+RESET_TOKEN_TTL = timedelta(minutes=60)
+
+
+def _forgot_gate(ip, email):
+    """True なら送らない。数えるのは**送った時**だけ（宛先が無い時は数えない
+    ——存在しないアドレスを叩いて枠を潰す、という嫌がらせを成立させない）。"""
+    now = datetime.now()
+    with _FORGOT_LOCK:
+        if len(_FORGOT_SENT) > 20000:
+            _FORGOT_SENT.clear()
+        over = False
+        for k, n in ((ip, _FORGOT_MAX_PER_IP), ("m:" + email, _FORGOT_MAX_PER_EMAIL)):
+            hits = [t for t in _FORGOT_SENT.get(k, ()) if now - t < _FORGOT_WINDOW]
+            if len(hits) >= n:
+                over = True
+            hits.append(now)
+            _FORGOT_SENT[k] = hits
+        return over
+
+
+@app.route("/api/account/forgot", methods=["POST"])
+def api_account_forgot():
+    """入り直すための一通を送る。
+
+    **どんな時も同じ答えを返す**（ok）。「そのアドレスは登録されていません」と答えた
+    瞬間に、ここは「このメールアドレスは tayori を使っているか」を誰でも問い合わせられる
+    窓口になる——匿名を約束している場所で、それはいちばん渡してはいけない一つ。"""
+    data = request.get_json(force=True) or {}
+    email = _json_str(data.get("email")).strip()
+    ok_answer = jsonify(ok=True)
+    if not EMAIL_RE.match(email):
+        return jsonify(error="メールアドレスの形式が正しくありません。"), 400
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, username FROM users WHERE lower(email)=lower(?)"
+        "   AND suspended_at IS NULL AND COALESCE(is_seed,0)=0",
+        (email,)).fetchall()
+    if not rows:
+        return ok_answer
+    if _forgot_gate(_client_ip(), email.lower()):
+        return ok_answer          # 数えるだけで、黙って送らない（答えは変えない）
+    now = datetime.now().isoformat(timespec="seconds")
+    parts = []
+    with _WRITE_LOCK:
+        for r in rows:
+            tok = secrets.token_urlsafe(32)
+            db.execute("UPDATE users SET reset_token=?, reset_token_at=? WHERE id=?",
+                       (tok, now, r["id"]))
+            parts.append(f"名前: {r['username']}\n"
+                         f"パスワードを変える: {BASE_URL}/reset/{tok}\n")
+        db.commit()
+    body = (
+        "tayori-たより- に入り直すための、一通です。\n\n"
+        "このアドレスで登録されているアカウントは、次のとおりです。\n"
+        "名前を思い出せたなら、いまのパスワードのまま入れます。\n\n"
+        + "\n".join(parts)
+        + "\nこのリンクは60分で切れます。一度使うと、もう使えません。\n"
+          "心当たりがない場合は、この一通を捨ててください。"
+          "リンクを踏まないかぎり、パスワードは変わりません。\n"
+          "\ntayori ーたより\n"
+    )
+    threading.Thread(target=send_email,
+                     args=(email, "tayori-たより- — 入り直すための一通", body),
+                     daemon=True).start()
+    return ok_answer
+
+
+def _reset_row(token):
+    """鍵に当たる人を引く。期限切れは、その場で鍵を捨てて None を返す。"""
+    if not re.fullmatch(r"[A-Za-z0-9_\-]{20,90}", token or ""):
+        return None
+    db = get_db()
+    row = db.execute("SELECT id, username, reset_token_at FROM users"
+                     " WHERE reset_token=? AND suspended_at IS NULL", (token,)).fetchone()
+    if not row:
+        return None
+    try:
+        at = datetime.fromisoformat(row["reset_token_at"]) if row["reset_token_at"] else None
+    except (TypeError, ValueError):
+        at = None
+    if at is None or datetime.now() - at > RESET_TOKEN_TTL:
+        with _WRITE_LOCK:
+            db.execute("UPDATE users SET reset_token=NULL, reset_token_at=NULL WHERE id=?",
+                       (row["id"],))
+            db.commit()
+        return None
+    return row
+
+
+@app.route("/reset/<token>")
+def reset_page(token):
+    """メールから踏んで着く紙。作りは /verify・/unsubscribe と同じ一枚もの
+    （_landing_page の写し）で、そこに欄が二つ増えただけ。宙の様式は持ち込まない
+    ——ここはまだ門の外で、canvas の 200KB を読ませる場所ではない。"""
+    row = _reset_row(token)
+    if not row:
+        return _landing_page(
+            "入り直す",
+            "このリンクは切れています。<br>もう一度、門の「入れなくなったら」からお試しください。",
+            ok=False), 410
+    name = html.escape(row["username"])
+    return (
+        "<!doctype html><html lang=ja><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<meta name=color-scheme content=dark><meta name=robots content='noindex,nofollow'>"
+        "<title>入り直す — tayori-たより-</title><style>"
+        f"html,body{{background:{_MAIL_BG}}}"
+        f"body{{color:{_MAIL_INK};font-family:'Hiragino Mincho ProN','Yu Mincho',serif;"
+        "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}"
+        f".card{{max-width:380px;width:100%;background:{_MAIL_CARD};"
+        f"border:1px solid {_MAIL_RULE};border-radius:4px;padding:34px 28px}}"
+        "h1{font-size:32px;letter-spacing:.18em;margin:0;text-align:center}"
+        f".who{{text-align:center;color:{_MAIL_INK_FAINT};font-size:12.5px;"
+        "letter-spacing:.12em;margin:14px 0 26px;line-height:2}"
+        f"label{{display:block;font-size:11.5px;letter-spacing:.14em;color:{_MAIL_INK_FAINT};"
+        "margin:0 0 6px}"
+        f"input{{width:100%;box-sizing:border-box;min-height:44px;background:transparent;"
+        f"border:0;border-bottom:1px solid {_MAIL_RULE};color:{_MAIL_INK};font-size:16px;"
+        "padding:10px 2px;letter-spacing:.04em}"
+        f"input:focus{{outline:none;border-bottom-color:{_MAIL_THREAD}}}"
+        f"button{{width:100%;min-height:44px;margin-top:22px;background:transparent;"
+        f"color:{_MAIL_INK};border:1px solid {_MAIL_RULE};border-radius:2px;cursor:pointer;"
+        "font-family:inherit;font-size:14px;letter-spacing:.22em;padding:13px}"
+        f"button:hover{{border-color:{_MAIL_THREAD}}}"
+        f".m{{min-height:20px;margin-top:14px;font-size:12.5px;line-height:1.9;"
+        f"letter-spacing:.04em;color:{_MAIL_WARN};text-align:center}}"
+        f"a{{color:{_MAIL_THREAD}}}</style></head><body><div class=card>"
+        "<h1>たより</h1>"
+        f"<p class=who>{name} さんの、あたらしいパスワードを。</p>"
+        "<label for=p1>あたらしいパスワード</label>"
+        "<input id=p1 type=password autocomplete=new-password placeholder='8文字以上'>"
+        "<div style='height:18px'></div>"
+        "<label for=p2>もう一度</label>"
+        "<input id=p2 type=password autocomplete=new-password>"
+        "<button id=go type=button>これにする</button>"
+        "<div class=m id=msg role=alert aria-live=assertive></div>"
+        "</div><script>"
+        "(function(){var p1=document.getElementById('p1'),p2=document.getElementById('p2'),"
+        "go=document.getElementById('go'),msg=document.getElementById('msg');"
+        "function send(){"
+        " if(p1.value.length<8){msg.textContent='パスワードは8文字以上にしてください。';return;}"
+        " if(p1.value!==p2.value){msg.textContent='二つが揃っていません。';return;}"
+        " go.disabled=true;msg.textContent='';"
+        " fetch('/api/account/reset',{method:'POST',credentials:'same-origin',"
+        "  headers:{'Content-Type':'application/json'},"
+        f"  body:JSON.stringify({{token:{json.dumps(token)},password:p1.value}})}})"
+        " .then(function(r){return r.json().catch(function(){return {};});})"
+        " .then(function(d){ if(d&&d.ok){location.href='/mood';return;}"
+        "   go.disabled=false;msg.textContent=(d&&d.error)||'うまくいきませんでした。';})"
+        " .catch(function(){go.disabled=false;msg.textContent='サーバーに接続できません。';});}"
+        "go.addEventListener('click',send);"
+        "p2.addEventListener('keydown',function(e){if(e.key==='Enter')send();});"
+        "})();</script></body></html>"
+    )
+
+
+@app.route("/api/account/reset", methods=["POST"])
+def api_account_reset():
+    """鍵と、あたらしいパスワード。通ったらそのまま入れる（もう一度門をくぐらせない
+    ——忘れた人に、直したばかりのパスワードをすぐ打ち直させる理由が無い）。
+    鍵はその場で捨てる：同じリンクを二度は使えない。"""
+    data = request.get_json(force=True) or {}
+    token = _json_str(data.get("token"))
+    password = _json_str(data.get("password"))
+    if len(password) < 8:
+        return jsonify(error="パスワードは8文字以上にしてください。"), 400
+    row = _reset_row(token)
+    if not row:
+        return jsonify(error="このリンクは切れています。もう一度お試しください。"), 410
+    db = get_db()
+    with _WRITE_LOCK:
+        db.execute("UPDATE users SET pw_hash=?, reset_token=NULL, reset_token_at=NULL"
+                   " WHERE id=?", (_hash_pw(password), row["id"]))
+        db.commit()
+    _login_gate_clear(_client_ip(), row["username"])
+    session.permanent = True
+    session["uid"] = row["id"]
+    return jsonify(ok=True, username=row["username"])
+
 @app.route("/api/me")
 def api_me():
     u = current_user()
     if not u:
         return jsonify(auth=False, weather_enabled=NETWORK_ENABLED)
     keys = u.keys()
+    plan = u["plan"] if "plan" in keys and u["plan"] in _PLAN_FEATURES else "free"
     return jsonify(auth=True, username=u["username"],
                    is_admin=_row_flag(u, "is_admin"),
                    email=u["email"] if "email" in keys else None,
                    email_verified=bool(u["email_verified"]) if "email_verified" in keys else False,
                    onboarded=bool(u["onboarded"]) if "onboarded" in keys else True,
+                   # プランと、その人に効いている限度（収益モデル v1・2026-08-07）。
+                   # 画面はこれを見て器の形を決める＝限度を画面側に書き写さない。
+                   plan=plan, features=_PLAN_FEATURES[plan],
                    weather_enabled=NETWORK_ENABLED)
 
 
