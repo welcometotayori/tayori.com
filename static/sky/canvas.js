@@ -187,30 +187,107 @@ function paperOf(w){
   if(w.pd)return '#E0DDD6';
   return ['#EFEBE1','#E9E5DC','#EFE7D9'][fnv(String(w.id||w.poem))%3];
 }
-/* ── 紙片の寸法規律（2026-08-03「ひとつづきの宙」1b）────────────────
+/* ── 紙片の寸法規律（2026-08-03「ひとつづきの宙」1b／2026-08-07 に紙を広げた）──
    これまで紙片は自然寸（中身の丈がそのまま紙の丈）だった——高さがばらばらなので
    段の見積りと実物がずれ、下端で切れ、詰まって見えた。寸法を**字数から純関数で**
-   決める：幅は3値（1〜3列）、高さも3値。DOMを測らないので、島を一瞬紙片の姿に
+   決める：幅は列数、高さは1列あたりの字数。DOMを測らないので、島を一瞬紙片の姿に
    して測る細工（fitK）も要らなくなる。
    字送りの根拠：font 15px / line-height 2 ＝ 1列30px、letter-spacing .12em ＝
    1字16.8px。padding は 24px 20px（縦48・横40）で box-sizing は全域 border-box。
-   高さの3値に少し裾を余らせてあるのは、字送りの丸めで最後の一字が折れないため。
-   入り切らないことば（3列×15字を超える）は3列×最大丈に固定し、行送り方向（左）へ
-   フェード＝「続きがある」。…は使わない（静けさを壊さないため）。全文は焦点レンズで。 */
-const SNAP_W=[70,100,130];        // 1列・2列・3列（列30px＋padding40）
-const SNAP_H=[152,236,304];       // 1列あたり 6字・11字・15字（＋padding48）
-const SNAP_CAP=[6,11,15];
+   丈の値に少し裾を余らせてあるのは、字送りの丸めで最後の一字が折れないため。
+
+   ── 2026-08-07 Kosei「影があって途中から読めない」──────────────────
+   旧実装は3列×15字＝45字で打ち止めで、それを超える紙は3列に固定して行送り方向へ
+   フェードさせていた。ことばは80字まで書けるので、**半分近くが途中で切れていた**
+   ——切れた紙にだけ薄れる影がかかり、それが「読めない」の正体。
+   紙のほうを広げて、切れる紙そのものを無くす：列は4本まで（書く面の4罫と同じ＝
+   80字はちょうど4列に収まる）、丈は20字まで。フェードは全面的に廃止した。
+   3列に収まることば（45字まで）の姿は**一字も変えていない**——先に旧来の3値で
+   探し、そこで収まらなかったものだけを広い側へ回す。
+   有料会員の120字（収益モデル v1）を開ける日は、SNAP_W に列を足すだけで届く。 */
+const SNAP_W=[70,100,130,160,190,220];  // 1〜6列（列30px＋padding40）
+const SNAP_H=[152,236,304,388];         // 1列あたり 6字・11字・15字・20字（＋padding48）
+const SNAP_CAP=[6,11,15,20];
+const SNAP_COLS=4;                      // 紙の列は4本まで（書く面の4罫＝80字）
+function _snapFit(lines,maxC){
+  for(let hi=0;hi<SNAP_H.length;hi++){
+    let c=0;
+    lines.forEach(L=>{c+=Math.max(1,Math.ceil(L/SNAP_CAP[hi]));});
+    if(c<=maxC)return {w:SNAP_W[c-1],h:SNAP_H[hi]};
+  }
+  return null;
+}
 function sizeOf(w){
   const lines=String(w.poem||'').split('\n').map(s=>s.length);
   const n=lines.reduce((a,b)=>a+b,0);
   // 望みの列数は総字数から（1列＝11字まで）。改行が列を強いる時はそのぶんまで許す
   const lim=Math.min(3,Math.max(Math.ceil(n/SNAP_CAP[1])||1,lines.length));
-  for(let hi=0;hi<3;hi++){
-    let c=0;
-    lines.forEach(L=>{c+=Math.max(1,Math.ceil(L/SNAP_CAP[hi]));});
-    if(c<=lim)return {w:SNAP_W[c-1],h:SNAP_H[hi],ovf:false};
+  // ① 旧来の3値（45字まで）。ここで決まる紙は 8/3 の姿のまま
+  const near=_snapFit(lines,lim);
+  if(near)return near;
+  // ② 収まらなかったことばは、列を足して全部を見せる（4列＝80字）
+  const wide=_snapFit(lines,SNAP_COLS);
+  if(wide)return wide;
+  // ③ 改行だらけで列がそれ以上要る紙（漂流物にだけ起きうる）。列だけ伸ばして切らない
+  return _snapFit(lines,SNAP_W.length)||{w:SNAP_W[SNAP_W.length-1],h:SNAP_H[SNAP_H.length-1]};
+}
+/* ── 読む面の紙の寸法（2026-08-07 Kosei「紙片内のバランスが悪すぎる。二列にしてもいい」）──
+   島の紙片（sizeOf）と同じ考えを、読む面（並べて読む・棚）へも降ろす：
+   **寸法はことばの長さから純関数で決める**。狙いは二列。
+
+   1列に入れる字数を四段から選び、**二列に折れるいちばん浅い丈**を採る。二列で
+   収まらない長いことばだけ、丈は最大のまま列を増やす。改行は書き手の形なので、
+   行ごとに列を数える（島と同じ）。列の下限は二——一列の紙は、足（棚にとっておく）
+   より細くなってしまう。
+   字送りの根拠：本文 font 15px / line-height 2.5 ＝ 1列 37.5px、
+   letter-spacing .06em ＝ 縦1字 15.9px。丈の +8px は丸めの遊び。 */
+const RS_COLW=37.5, RS_CHH=15.9;
+/* 1列あたりの字数（丈の四段）。上限を19に留めてあるのは、紙の丈の散らばりを
+   抑えるため——22まで許すと、いちばん高い紙が低い紙の2.1倍になり、段の下に
+   大きな空きが残る。19なら1.8倍で、長いことばは丈ではなく**列**のほうへ伸びる。 */
+const RS_CAP=[7,11,15,19];
+function rsSize(poem){
+  const lines=String(poem||'').split('\n').map(s=>s.length);
+  const cols=cap=>lines.reduce((a,L)=>a+Math.max(1,Math.ceil(L/cap)),0);
+  for(const cap of RS_CAP){ if(cols(cap)<=2)return {cap:cap,cols:2}; }
+  /* 二列に折れないことば。ここで丈をいちばん深いものに決め打つと、行を三つに
+     分けて書かれた24字の紙が「三列 × 22字」の背高の紙になり、また八割が空く。
+     列がいちばん少なくなる丈のうち、**いちばん浅いもの**を採る。 */
+  let best=RS_CAP[RS_CAP.length-1], n=cols(best);
+  for(const cap of RS_CAP){ if(cols(cap)<=n){ n=cols(cap); best=cap; break; } }
+  return {cap:best,cols:Math.max(2,Math.min(6,n))};
+}
+/* 紙に寸法を書き留める。題があれば、その一列ぶん（＋行間）を幅に足す。
+   漂流物は三列を下限にする——奥付（「— 誰々『何々』より」）だけは横に寝ている一行で、
+   二列の紙（版面75px）では五行にも折れて、紙が629pxの塔になった（実測）。 */
+function rsFit(li,w){
+  const sz=rsSize(w&&w.poem);
+  li.style.setProperty('--rcol',String(w&&w.pd?Math.max(3,sz.cols):sz.cols));
+  li.style.setProperty('--vh',Math.ceil(sz.cap*RS_CHH+8)+'px');
+  li.style.setProperty('--rtl',(w&&w.title)?'34px':'0px');
+}
+/* ── 読む面の紙も、切らずに伸ばす（2026-08-07 Kosei「影があって途中から読めない」）──
+   「並べて読む」と棚の紙は丈が固定（--vh）で、入り切らない列は紙の外へ出ていた。
+   そこに掛けていた左フェードを廃止した以上、**丈のほうを足す**しかない。
+   縦書きは丈が「1列に何字入るか」を決めるので、列が溢れる＝丈が足りない、という
+   ことでしかない。要る丈は、はみ出した幅の比でほぼ一発で出る（列数 ∝ 1/丈）。
+   測る→書く を二巡まで。丸めと題のぶんの遊びを足しておく。 */
+function fitTall(cells,sel){
+  const MAXV=1600;   // 際限なく伸ばさない（改行だらけの漂流物の保険）
+  for(let pass=0;pass<2&&cells.length;pass++){
+    const need=[];
+    cells.forEach(li=>{                       // ── 測る（書かない）
+      const v=li&&li.querySelector&&li.querySelector(sel);
+      if(!v||v.clientWidth<1)return;
+      const r=v.scrollWidth/v.clientWidth;
+      if(r<=1.01)return;
+      const cur=parseFloat(getComputedStyle(li).getPropertyValue('--vh'))||v.clientHeight;
+      need.push([li,Math.min(MAXV,Math.ceil(cur+v.clientHeight*(r-1)+16))]);
+    });
+    if(!need.length)return;
+    need.forEach(([li,h])=>{ li.style.setProperty('--vh',h+'px'); });   // ── 書く
+    cells=need.map(x=>x[0]);
   }
-  return {w:SNAP_W[2],h:SNAP_H[2],ovf:true};
 }
 /* 寸法を紙に書き留める。効くのは島に降りた姿（.isl.sheet .w が var を読む）だけで、
    散らばりの姿は今までどおり自然寸。横書き（.h）は数えられないので測る作法のまま。 */
@@ -220,7 +297,6 @@ function snapSize(el){
   const sz=sizeOf(w);
   el.style.setProperty('--sw',sz.w+'px');
   el.style.setProperty('--sh',sz.h+'px');
-  el.classList.toggle('ovf',sz.ovf);
   el._pw=sz.w; el._ph=sz.h;          // 控え＝sheetPlan と間引きがそのまま読む
 }
 
@@ -3393,6 +3469,7 @@ Promise.all([
       li.style.setProperty('--pp',paperOf(w));
       if(w.pd)li.classList.add('pd');
       if(LOGGED_IN&&w.id)li.classList.add('act');   // 足を一段ぶん伸ばす（下の CSS）
+      rsFit(li,w);          // 紙の寸法は、ことばの長さから（狙いは二列）
       li.innerHTML='<div class="rsheet-v">'+
         (w.title?'<p class="rsheet-title"></p>':'')+'<p class="rsheet-poem"></p></div>'+
         (w.pd?'<p class="rsheet-src"></p>':'')+keepFoot(w);
@@ -3407,12 +3484,12 @@ Promise.all([
       frag.appendChild(li);
     }
     grid.appendChild(frag);
-    /* 溢れた紙にだけ左フェードを付ける（島の .w.ovf と同じ規律）。
+    /* 溢れた紙は、薄れさせずに**丈を伸ばす**（2026-08-07 Kosei「影があって途中から
+       読めない」）。縦書きは丈が決まって初めて列に折り返せるので、列が紙からはみ出す
+       ＝丈が足りない、ということ。要る丈は「いま溢れている幅の比」でほぼ一発で出る。
        読むのは**足したぶんだけ**・書くのはそのあとで一度に——測ると書くを混ぜると、
        一枚ごとに版面を組み直させることになる（2026-08-03 カクツキの作法）。 */
-    const vs=[...grid.children].slice(more?shown:0).map(li=>li.querySelector('.rsheet-v'));
-    const ovf=vs.map(v=>v&&v.scrollWidth>v.clientWidth+2);
-    vs.forEach((v,i)=>{ if(v&&ovf[i])v.classList.add('ovf'); });
+    fitTall([...grid.children].slice(more?shown:0),'.rsheet-v');
     shown=upto;
     moreBox.hidden=shown>=list.length;
   }

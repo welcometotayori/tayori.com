@@ -348,17 +348,19 @@
   .isl.sheet .w{background:var(--pp,#EBE7DE);
      color:rgba(30,27,33,calc(.52 + .44*var(--a,.8)))!important;
      text-shadow:none!important;filter:none!important;opacity:1;
-     /* 寸法の3値スナップ（2026-08-03「ひとつづきの宙」）。値はJSが --sw/--sh に書く。
-        横書き（.h）は書かないので自然寸のまま。clip は溢れの規律（左フェード）の前提 */
-     width:var(--sw,max-content);height:var(--sh,max-content);overflow:hidden;
+     /* 寸法スナップ（2026-08-03「ひとつづきの宙」／2026-08-07 に 4列＝80字まで広げた）。
+        値はJSが --sw/--sh に書く。横書き（.h）は書かないので自然寸のまま。
+        clip は残す（丸めの一字が縁からはみ出さないため）が、切れる紙はもう作らない。
+        max-height を解くのは必須：散らばりの姿の 330px（行長の縛り）が、伸ばした
+        紙の丈（最大388px）を黙って切り戻す——列が一本はみ出す形で現れた。 */
+     width:var(--sw,max-content);height:var(--sh,max-content);
+     max-height:none;max-width:none;overflow:hidden;
      padding:24px 20px;margin:0;border-radius:var(--edge);
      /* 影は一本だけ・ぼけは浅く（2026-07-31 夜）。影のぼけは blur と同じ計算で、
         一枚ごとに面積ぶんの塗りが要る。紙が浮いて見えるのに30pxは要らない。 */
      box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
-  /* 入り切らないことばは、行送り方向（左）へフェード＝「続きがある」。…は使わない。
-     mask は一枚ごとに描画層を作るので、溢れた紙にだけ付ける（カクツキ作法） */
-  .isl.sheet .w.ovf{-webkit-mask-image:linear-gradient(to left,#000 72%,transparent 97%);
-     mask-image:linear-gradient(to left,#000 72%,transparent 97%)}
+  /* 2026-08-07：溢れた紙に掛けていた左フェード（.ovf）は廃止。紙のほうを 4列＝80字
+     まで広げたので、途中で切れる紙そのものが無い（canvas.js の sizeOf を見よ）。 */
   .isl.sheet .w.pd{color:rgba(30,27,33,.6)!important}
   .isl.sheet .w.held{color:rgba(30,27,33,.96)!important;
      box-shadow:0 0 0 1px var(--rule-act),0 18px 34px -18px rgba(0,0,0,.95)}
@@ -367,7 +369,6 @@
      まわりの息のひそめ方は既存の hush がそのまま効く。held より後に置く＝影はこちらが勝つ */
   .isl.sheet .w.focus{width:max-content;height:max-content;
      max-width:26em;max-height:min(78dvh,560px);
-     -webkit-mask-image:none;mask-image:none;
      padding:28px 24px;z-index:6;
      box-shadow:0 0 0 1px var(--rule-act),0 26px 60px -20px rgba(0,0,0,.95)}
   .isl.sheet .w .tcaret{background:rgba(30,27,33,.6)}
@@ -536,26 +537,47 @@
      決まって初めて列に折り返せる）、幅は中身にまかせて短冊のように中央へ置く。
      色が選ばれていないことばは生成り〜灰白の三種（paperOf が本文のハッシュで選ぶ）＝
      **選ばれていない色は空気にしない**（2026-07-28 の恒久ルール）。 */
-  .rsheet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(16em,1fr));
-          gap:var(--s2);margin:0 auto;padding:var(--s2) 0 0;
+  /* 紙は自分の幅を持つので、**枠（grid の等幅トラック）に入れない**（2026-08-07）。
+     一度 auto-fill の grid で組んだが、150pxのトラックに 176px の紙が入らず
+     max-width:100% で切り戻されて、三列の紙が11枚とも溢れた——等幅の枠と
+     可変幅の紙は、そもそも噛み合わない。
+     並べるのは flex の折り返しで。丈がまちまちなので頭で揃える（下は不揃いのまま
+     ——紙を並べた面はそれでいい）。 */
+  .rsheet-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;
+          gap:var(--s3) var(--s2);margin:0 auto;padding:var(--s2) 0 0;
           list-style:none;max-width:1240px}
-  /* 紙の丈はこちらで決める（--vh）。縦書きは「どこで折り返すか」が丈で決まるので、
-     中身まかせにすると一列のまま画面の外へ伸びていく。
-     携帯を低く（190px）するのは、そこでは紙が横いっぱいに広がるから——丈を高く
-     取ると一列だけの字の左に、紙の八割が空いたまま残る。低く広い紙にすると、
-     80字が7列に折れて紙をちょうど埋める（1列32px・12字/列）。
-     机では紙が295pxと細いので、逆に丈を取る（340px＝22字/列・80字で4列）。 */
-  /* --fh … 足（棚にとっておく）の高さ。丈は「読める字数（--vh）＋足」で、足のぶんは
-     版面から削らずに紙のほうを伸ばす＝押せるものが増えても、読める量は変わらない。
+  /* ── 紙の寸法は、ことばの長さから（2026-08-07 Kosei「紙片内のバランスが悪すぎる。
+     二列にしてもいいと思う」）─────────────────────────────────────────
+     旧実装は「丈は面が決め、幅は段（1fr）が決める」だった。段が295pxまで広がるのに
+     字は一列38px——**紙の四分の一しか使っていなかった**（実測：埋まり率の中央値0.25、
+     最小0.13）。「丈を高く取ると一列だけの字の左に、紙の八割が空いたまま残る」と
+     旧コメント自身が書いていた症状が、机の画面でそのまま出ていた。
+
+     直し方は島の紙片と同じ——**寸法を字数から純関数で決める**（canvas.js の rsSize）。
+     狙いは二列：1列に入れる字数を四段（7・11・16・22）から選び、**二列に折れる
+     いちばん浅い丈**を採る。二列で入らない長いことばだけ、列のほうを増やす。
+     幅は「列数×1列の幅＋題の列＋余白」で、JSが --rcol / --rtl に書く。
+       ・--rcw … 本文1列の幅（font 15px × line-height 2.5 ＝ 37.5px）
+       ・--rtl … 題の列（題があるときだけ。無ければ 0）
+     列は**二列を下限**にする：一列の紙は足（棚にとっておく）より細くなってしまう。
+
+     --fh … 足の高さ。丈は「読める字数（--vh）＋足」で、足のぶんは版面から削らずに
+     紙のほうを伸ばす＝押せるものが増えても、読める量は変わらない。
      入っていない人（.act が付かない）の紙は 0 のまま＝空の足を持たない。 */
-  .rsheet-cell{--vh:190px;--fh:0px;
+  .rsheet-cell{--vh:190px;--fh:0px;--sh:0px;--rcol:2;--rcw:37.5px;--rtl:0px;
+          flex:none;                      /* 紙は縮まない（幅は寸法規律が決めている） */
           display:flex;flex-direction:column;align-items:flex-end;
-          height:calc(var(--vh) + var(--fh) + var(--s3) * 2);
+          width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s3) * 2);
+          max-width:100%;
+          height:calc(var(--vh) + var(--fh) + var(--sh) + var(--s3) * 2);
           padding:var(--s3);border-radius:var(--edge);
           background:var(--pp,#EBE7DE);color:rgba(30,27,33,.9);
           box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
-  /* 漂流物は色を持たない灰の紙で、字も一段薄い（島の .isl.sheet .w.pd と同じ） */
-  .rsheet-cell.pd{color:rgba(30,27,33,.7)}
+  /* 漂流物は色を持たない灰の紙で、字も一段薄い（島の .isl.sheet .w.pd と同じ）。
+     --sh は奥付（出どころの一行）のぶん。足（--fh）と同じ約束で、**版面からは削らず
+     紙のほうを伸ばす**——削ると、丈から決まっている1列の字数が足りなくなって、
+     計算した列数に収まらなくなる（実測：43字の一節が三列に入らず切れた）。 */
+  .rsheet-cell.pd{color:rgba(30,27,33,.7);--sh:52px}
   /* 縦の版面。題が右、本文がその左（縦書きの読み順）。
      幅は中身なりで、**紙の右端に寄せる**（中央ではなく）。理由は二つ：
      ・縦書きは右から始まるので、どの紙でも一列目が同じ場所にある＝目が迷わない
@@ -564,15 +586,17 @@
         右端に寄せるだけで済む——増えるのは左へだけ） */
   .rsheet-v{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
           flex:1;min-height:0;height:100%;max-width:100%;overflow:hidden}
-  /* 入り切らないことばは、行送り方向（左）へフェード＝「続きがある」。…は使わない
-     （島の .w.ovf と同じ規律）。mask は一枚ごとに描画層を作るので、溢れた紙にだけ。 */
-  .rsheet-v.ovf{-webkit-mask-image:linear-gradient(to left,#000 72%,transparent 97%);
-          mask-image:linear-gradient(to left,#000 72%,transparent 97%)}
+  /* 2026-08-07：入り切らないことばに掛けていた左フェードは廃止（Kosei「影があって
+     途中から読めない」）。薄れる代わりに、紙の丈のほうを伸ばして全文を入れる
+     ——JS が溢れを測って --vh を書き足す（島の紙片を広げたのと同じ判断）。 */
   .rsheet-cell.act{--fh:var(--touch)}
+  /* 机の画面では余白だけ広げる。丈（--vh）は画面ではなく**ことばの長さ**が決めるので、
+     ここで上書きしない（2026-08-07。旧実装の 340px 固定がバランスを崩していた張本人）。 */
   @media (min-width:640px){
-    .rsheet-grid{gap:var(--s3);padding-top:var(--s3)}
-    .rsheet-cell{--vh:340px;padding:var(--s4);
-            height:calc(var(--vh) + var(--fh) + var(--s4) * 2)}
+    .rsheet-grid{gap:var(--s4) var(--s3);padding-top:var(--s3)}
+    .rsheet-cell{padding:var(--s4);
+            width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s4) * 2);
+            height:calc(var(--vh) + var(--fh) + var(--sh) + var(--s4) * 2)}
   }
   /* 紙の上の字はすべて墨の濃淡で（闇用の --ink-* は紙では読めない）。
      余白は論理方向で書く——縦書きでは block-end が「左」、inline-start が「上」。
@@ -607,14 +631,19 @@
      ものを増やすと、目は必ずそちらへ行く、はこの一つを足したうえでも守る線）。
      字は端末のゴシック（§3.3・押すものはUIの側）で、色は紙に載る墨——闇用の --ink-*
      は紙の上では読めない（.rsheet-title / -src と同じ扱い）。 */
+  /* 2026-08-07：紙の幅がことばの長さで決まるようになり（rsSize）、二列の紙では
+     版面が75pxしかない。足の一語（棚にとっておく＝11px×7字＋印）は110px要るので、
+     nowrap のままだと紙の右へ食み出して切れていた。**足は紙の幅を決める側ではない**
+     ——道具のほうを折り返させる（丈は --touch のぶん既に取ってある）。 */
   .rsheet-foot{flex:none;align-self:stretch;display:flex;align-items:center;
-          height:var(--touch);margin-block-start:calc(var(--s1) * -1)}
-  .rsheet-keep{display:inline-flex;align-items:center;gap:8px;
+          height:var(--touch);overflow:hidden;margin-block-start:calc(var(--s1) * -1)}
+  .rsheet-keep{display:inline-flex;align-items:center;gap:6px;
           min-height:var(--touch);margin-inline-start:-2px;padding:11px 2px;
-          background:none;border:none;cursor:pointer;
-          font-family:var(--font-ui);font-size:11px;letter-spacing:0.14em;
-          white-space:nowrap;color:rgba(30,27,33,.5);
+          background:none;border:none;cursor:pointer;text-align:left;
+          font-family:var(--font-ui);font-size:11px;letter-spacing:0.1em;line-height:1.55;
+          color:rgba(30,27,33,.5);
           transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .rsheet-keep .txt{min-width:0}
   .rsheet-keep:hover{color:rgba(30,27,33,.78)}
   .rsheet-keep:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
   .rsheet-keep.on{color:rgba(30,27,33,.8)}
