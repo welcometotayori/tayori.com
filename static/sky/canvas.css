@@ -853,8 +853,16 @@
            transition:opacity .6s var(--ease),visibility 0s}
   /* 柱が立っているあいだ、宙の名（ロゴの戸）は退く。柱は画面より高くなることがあり、
      その時「とじる」（柱の左上・S6）はロゴとちょうど同じ場所に来る——押せるものが
-     二つ重なり、上に居るロゴが必ず勝つ。書いている間だけ、名は引く。 */
-  body.casting header{opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
+     二つ重なり、上に居るロゴが必ず勝つ。書いている間だけ、名は引く。
+     ── 2026-08-08 Kosei「この閉じるボタンが機能していない」──────────────
+     **退いていたのは姿だけだった。** pointer-events は、親が none と言っても
+     子が auto と言えばそこだけ復活する——帯の子（header a / button / input）は
+     まさにそう書いてあるので、姿の消えた「たより」（.brand-home・左上44px）が
+     「とじる」の真上に居座り、指を全部さらっていた。押しても何も起きない、の正体。
+     帯は z-index 20、柱は 12 なので、上に居るのは常に帯のほう。
+     子まで含めて指を止める（`header *` は `header button` より強い＝!important は要らない）。 */
+  body.casting header{opacity:0;transition:opacity .35s var(--ease)}
+  body.casting header,body.casting header *{pointer-events:none}
   @media (prefers-reduced-transparency: reduce){
     .cast.on{background:rgba(8,8,13,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
   }
