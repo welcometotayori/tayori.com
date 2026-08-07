@@ -908,7 +908,10 @@
   .cast .ctext{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
         line-break:strict;white-space:pre-wrap;outline:none;cursor:text;
         /* +3px は「20字目が1px足りずに次の列へ落ちる」のを防ぐ遊び（字送りの端数のため） */
-        width:calc(var(--cw) * 4);height:calc(var(--cch) * (var(--fs) + 0.14em) + 3px);
+        /* 罫の本数はプランで決まる（--ccol／収益モデル v1・2026-08-07）。既定は4本＝
+           無料会員の80字（1列20字）。有料会員は6本＝120字。罫そのものは下の
+           repeating-linear-gradient が幅なりに引くので、変えるのはこの一つだけ。 */
+        width:calc(var(--cw) * var(--ccol,4));height:calc(var(--cch) * (var(--fs) + 0.14em) + 3px);
         background:none;border:none;color:var(--chalk);
         /* ここはことばそのものが入る枠なので明朝（§3.3）。contenteditable の div で
            textarea ではないから、トークン側の一行では拾われない——名指しで書く。 */
@@ -924,7 +927,7 @@
      字の流れが直交して打ちにくい——向きは書く人が決める。罫は横罫に倒し、
      自前カーソルも縦棒に戻す（ネイティブのカーソルは横書きなら素直に出る）。 */
   .cast .ctext.h{writing-mode:horizontal-tb;-webkit-writing-mode:horizontal-tb;
-        width:calc(var(--cw) * 4 + 6em);height:auto;min-height:calc(var(--cw) * 4);
+        width:calc(var(--cw) * var(--ccol,4) + 6em);height:auto;min-height:calc(var(--cw) * var(--ccol,4));
         line-height:2.2;caret-color:var(--thread);
         background-image:repeating-linear-gradient(180deg,
               transparent,transparent calc(2.2em - 1px),

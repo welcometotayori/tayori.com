@@ -64,6 +64,14 @@
   .leave-list{margin:0 0 var(--s3);padding:0;list-style:none}
   .leave-list li{font-size:11.5px;line-height:2.1;letter-spacing:0.1em;color:var(--ink-3);
                  padding-left:1.1em;text-indent:-1.1em;word-break:keep-all;overflow-wrap:anywhere}
+  /* プランの限度は、箱にも表にもしない——行と行のあいだの罫だけで数える
+     （v3.10 の物質メタファー：カードも錠剤も作らない） */
+  .plan-list{margin:0 0 var(--s3);padding:0;list-style:none}
+  .plan-list li{display:flex;justify-content:space-between;gap:var(--s2);
+                padding:9px 0;border-bottom:1px solid var(--rule-faint);
+                font-size:12px;line-height:1.9;letter-spacing:0.1em;color:var(--ink-3)}
+  .plan-list li:last-child{border-bottom:0}
+  .plan-list li b{font-weight:400;color:var(--ink-1);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -72,7 +80,9 @@
 
   <h1>設定<span class="romaji">settings</span></h1>
 
-  <p class="quiet">名前と<wbr>メールと<wbr>パスワード、<wbr>それと<wbr>退会。<br>
+  {# 「それだけです」は、プランの節が立った日には嘘になる。中身が増えたらこの一行も
+     書き換える（下の plan() が差し替える）——紙が実装より遅れないように。 #}
+  <p class="quiet" id="setLead">名前と<wbr>メールと<wbr>パスワード、<wbr>それと<wbr>退会。<br>
      ここに<wbr>あるのは<wbr>それだけです。</p>
 
   <div class="rule"></div>
@@ -135,6 +145,36 @@
     </div>
   </section>
 
+  {# ── プラン（収益モデル v1・2026-08-07）───────────────────────────
+     戸が閉じている間（新規300人まで）は、この節そのものを出さない。値段を並べて
+     「もうすぐ」と書くのは、売れないものを売り込んでいるのと同じ。
+     ただし**契約を持っている人には常に出す**——止める道（Portal）が消えるのは、
+     いちばんやってはいけないこと。判断は全部サーバ（/api/billing/plans）が返す。
+     いま契約している人の限度（棚の数・保存数・字数）は、ここで一度だけ言う。
+     宙の中では言わない：書く柱に「残り◯件」を出すと、書く前に数を数えはじめる。 #}
+  <section class="setting" id="planSec" hidden>
+    <button class="set-head" type="button" data-open="plan" aria-expanded="false" aria-controls="bodyPlan">
+      <span class="nm">プラン</span><span class="now" id="nowPlan"></span>
+    </button>
+    <div class="set-body" id="bodyPlan" hidden>
+      <p class="set-note" id="planNote"></p>
+      <ul class="plan-list" id="planList"></ul>
+      <div class="set-row" id="planBuy" hidden>
+        <button class="set-do" data-buy="premium:month" type="button">有料会員（月々）</button>
+        <button class="set-do" data-buy="premium:year" type="button">有料会員（年）</button>
+      </div>
+      <div class="set-row" id="planSupport" hidden>
+        <button class="set-do" data-buy="supporter:month" type="button">サポーター（月々）</button>
+        <button class="set-do" data-buy="supporter:year" type="button">サポーター（年）</button>
+      </div>
+      <p class="set-note" id="planSupportNote" hidden>サポーターは<wbr>有料会員と<wbr>まったく<wbr>同じ<wbr>ものです。<wbr>できることは<wbr>一つも<wbr>増えません<wbr>——<wbr>多めに<wbr>払いたい<wbr>人の<wbr>ための<wbr>受け皿です。</p>
+      <div class="set-row" id="planManage" hidden>
+        <button class="set-do" id="doPortal" type="button">契約を見る・止める</button>
+      </div>
+      <p class="set-say" id="sayPlan" hidden></p>
+    </div>
+  </section>
+
   <!-- 退会（v2.2 §4：問い合わせ窓口ではなく、ここで閉じられる） -->
   <section class="setting leave">
     <button class="set-head" type="button" data-open="leave" aria-expanded="false" aria-controls="bodyLeave">
@@ -167,7 +207,8 @@
 (function(){
   'use strict';
   const $=id=>document.getElementById(id);
-  const bodies={name:$('bodyName'),mail:$('bodyMail'),pw:$('bodyPw'),leave:$('bodyLeave')};
+  const bodies={name:$('bodyName'),mail:$('bodyMail'),pw:$('bodyPw'),
+                plan:$('bodyPlan'),leave:$('bodyLeave')};
 
   /* 開くのは一つだけ（設定は並べて見比べるものではない）。押した所がその場で開く */
   function open(key){
@@ -219,6 +260,59 @@
     }).catch(()=>{});
   }
   load();
+
+  /* ── プラン（収益モデル v1・2026-08-07）──────────────────────────
+     値段も限度も、ここには一つも書き写さない。全部 /api/billing/plans が返す
+     ——サーバの表（_PLAN_FEATURES / _PLAN_PRICES）を唯一の出どころにするため。 */
+  const PLAN_NAME={free:'無料会員',premium:'有料会員',supporter:'サポーター'};
+  const yen=n=>'¥'+String(n).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  (function plan(){
+    fetch('/api/billing/plans').then(r=>r.ok?r.json():null).then(d=>{
+      if(!d||!d.ok)return;
+      // 戸が閉じていて、契約も持っていない人には、この節そのものを出さない
+      if(!d.open&&!d.has_billing)return;
+      $('planSec').hidden=false;
+      $('setLead').textContent='名前とメールとパスワード、プラン、それと退会。ここにあるのはそれだけです。';
+      $('nowPlan').textContent=PLAN_NAME[d.plan]||d.plan;
+      const f=d.features[d.plan]||{};
+      $('planNote').textContent=d.paid
+        ? 'いまのプランでできること。止めるときは、下から Stripe の画面へ。'
+        : 'いまは無料会員です。できることは、次のとおり。';
+      $('planList').innerHTML='';
+      [['ことばの字数',f.poem_max+'字'],
+       ['棚の数',f.shelves+'つ'],
+       ['棚の合計保存数',f.saved+'件'],
+       ['題をつける',f.title?'あり':'なし'],
+       ['探す範囲',f.search_wide?'拡大':'標準']].forEach(([k,v])=>{
+        const li=document.createElement('li');
+        li.appendChild(document.createTextNode(k));
+        const b=document.createElement('b');b.textContent=v;li.appendChild(b);
+        $('planList').appendChild(li);
+      });
+      // 買える口は、Stripe に Price が在る組み合わせだけ立てる
+      document.querySelectorAll('[data-buy]').forEach(btn=>{
+        const [p,i]=btn.dataset.buy.split(':');
+        const price=(d.prices[p]||{})[i];
+        if(!d.open||d.paid||d.available.indexOf(btn.dataset.buy)<0||!price){ btn.remove(); return; }
+        btn.textContent=btn.textContent+'　'+yen(price)+(i==='year'?' / 年':' / 月');
+        btn.addEventListener('click',async()=>{
+          busy(btn,true);
+          try{ const r=await post('/api/billing/checkout',{plan:p,interval:i});
+               location.href=r.url; }
+          catch(e){ say($('sayPlan'),e.message); busy(btn,false); }
+        });
+      });
+      $('planBuy').hidden=!$('planBuy').querySelector('[data-buy]');
+      $('planSupport').hidden=!$('planSupport').querySelector('[data-buy]');
+      $('planSupportNote').hidden=$('planSupport').hidden;
+      $('planManage').hidden=!d.has_billing;
+    }).catch(()=>{});
+  })();
+  $('doPortal').addEventListener('click',async()=>{
+    busy($('doPortal'),true);
+    try{ const r=await post('/api/billing/portal',{}); location.href=r.url; }
+    catch(e){ say($('sayPlan'),e.message); busy($('doPortal'),false); }
+  });
 
   // ── 名前 ──
   $('doName').addEventListener('click',async()=>{

@@ -1419,27 +1419,119 @@ def current_user():
     ).fetchone()
 
 
-# ── 収益モデル v1（2026-08-07）─────────────────────────────────────
+# ══ 収益モデル v1（2026-08-07）══════════════════════════════════════
 # plan は 'free' / 'premium' / 'supporter' の3値。premium と supporter は機能フラグが
-# 完全に同一なので、判定コードはどこも「free かどうか」だけを見る＝
-# supporter を新設しても、この2つの表を書き換えるだけで済む。
-_FREE_POST_HOURLY_MAX = 5
-_SHELF_MAX_BY_PLAN = {"free": 50, "premium": 200, "supporter": 200}
-_SHELVES_MAX_BY_PLAN = {"free": 3, "premium": 10, "supporter": 10}
+# **完全に同一**（価格だけが違う＝支える気持ちの受け皿／Are.na の Supporter と同じ
+# 設計思想）なので、判定コードはどこも「free かどうか」だけを見る。
+#
+# 差の在りかを一枚の表にまとめてある。ここが唯一の情報源で、各機能はここを引くだけ
+# ——「どこかに書き忘れた分岐」で無料の人に有料の機能が漏れる、を構造で防ぐ。
+# 表を足すときは、必ず free / premium / supporter の三行そろえて足すこと。
+_PLAN_FEATURES = {
+    # 無料会員：試して分かるところまでは開ける。投稿数そのものは無制限で、
+    # 締めるのは「集める」側（棚）だけ——課金対象を「書く」から「集める」へ移した
+    # のがこの収益モデルの本体（docs/overview-brief.md §6）。
+    "free": {
+        "poem_max": 80,        # ことばの字数上限
+        "shelves": 3,          # 棚の数
+        "saved": 50,           # 棚の合計保存数（トライアルとして体感できる上限）
+        "title": False,        # 題（10字）を付けられるか
+        "search_wide": False,  # 探すの出口の広さ（下の _search_slots）
+        "grid": False,         # グリッドの見え方を自分で決められるか（未実装・枠だけ）
+        "export": True,        # 一括エクスポート（下の【未決】を見よ）
+        "beta": False,         # 新しいものへ先に触れられるか（未実装・枠だけ）
+    },
+    "premium": {
+        "poem_max": 120, "shelves": 10, "saved": 200,
+        "title": True, "search_wide": True, "grid": True, "export": True, "beta": True,
+    },
+    # サポーターは premium と一字一句同じにすること（価格だけが違う）
+    "supporter": {
+        "poem_max": 120, "shelves": 10, "saved": 200,
+        "title": True, "search_wide": True, "grid": True, "export": True, "beta": True,
+    },
+}
+# 【未決・2026-08-07】一括エクスポート（/api/export）を有料機能にするかは保留のまま、
+# いまは**全プランで開けてある**（上の表の free.export=True）。理由は二つ：
+#   ・実装が先に在り、宙v1仕様書 §9 で「終了時期を決めない代わりの、唯一の保険」と
+#     位置づけて公開してある。あとから鍵をかけるのは、書いた約束を取り下げること。
+#   ・Are.na も全プランで開けていて、「いつでも持ち出せる」を信頼の証に使っている。
+# 有料に寄せると決めたら、この一行（free の export）を False にするだけで閉じる。
+_FREE_POST_HOURLY_MAX = 5      # スパム対策のレート制限（無料会員だけ・1時間に5件）
 
 
 def _plan_of(db, user_id):
     r = db.execute("SELECT COALESCE(plan,'free') AS plan FROM users WHERE id=?",
                    (user_id,)).fetchone()
-    return r["plan"] if r and r["plan"] in _SHELF_MAX_BY_PLAN else "free"
+    return r["plan"] if r and r["plan"] in _PLAN_FEATURES else "free"
+
+
+def _feat(plan, key):
+    """プランの機能を一箇所から引く。知らないプランは無料会員として扱う
+    （webhook が壊れた・DBに手で妙な値が入った、のどちらでも安全側へ倒れる）。"""
+    return _PLAN_FEATURES.get(plan, _PLAN_FEATURES["free"])[key]
 
 
 def _shelf_max(plan):
-    return _SHELF_MAX_BY_PLAN.get(plan, 50)
+    return _feat(plan, "saved")
 
 
 def _shelves_max(plan):
-    return _SHELVES_MAX_BY_PLAN.get(plan, 3)
+    return _feat(plan, "shelves")
+
+
+def _poem_max(plan):
+    return _feat(plan, "poem_max")
+
+
+# いちばん長い上限。クライアントが何を送ってきても、まずここで切ってから数える
+# （プランを引く前に本文を触る場所があっても、青天井にはならない）。
+_POEM_MAX_EVER = max(f["poem_max"] for f in _PLAN_FEATURES.values())
+
+
+# ── 課金の戸を、いつ開けるか（2026-08-07 Kosei）──────────────────────
+# 「新規ユーザーが300人を超えたら入れられるようにしたい。実装できる準備だけ進めて
+# おく」。だから**仕組みは全部そろえて、入口だけを閉じておく**。
+# 閉じている間、限度（棚3つ・50件・80字）はそのまま効く——ここを緩めて後から
+# 締め直すと、増えた棚を運営の都合で取り上げることになる。
+#
+# 数えるのは「新規ユーザー」＝人のアカウントだけ（種のことばの著者と運営を除く）。
+# 数え直しは60秒に一度でいい：この数字は毎秒動くものではないし、投稿のたびに
+# COUNT(*) を打つ理由もない。
+# （_env_num はこの行より後ろで定義されるので、ここは素で読む）
+try:
+    _BILLING_MIN_USERS = max(0, int(os.environ.get("TAYORI_BILLING_MIN_USERS") or 300))
+except ValueError:
+    _BILLING_MIN_USERS = 300
+# 'auto'（既定・300人で自動的に開く） / 'on'（今すぐ開ける） / 'off'（数に関わらず閉じる）
+_BILLING_MODE = (os.environ.get("TAYORI_BILLING") or "auto").strip().lower()
+_billing_cache = {"at": 0.0, "n": 0}
+
+
+def _user_count(db):
+    """人のアカウントの数（60秒キャッシュ）。"""
+    now = time.time()
+    if now - _billing_cache["at"] < 60:
+        return _billing_cache["n"]
+    try:
+        n = db.execute(
+            "SELECT COUNT(*) AS c FROM users"
+            " WHERE COALESCE(is_seed,0)=0 AND COALESCE(is_admin,0)=0").fetchone()["c"]
+    except sqlite3.Error:
+        n = 0
+    _billing_cache["at"] = now
+    _billing_cache["n"] = n
+    return n
+
+
+def _billing_open(db=None):
+    """課金の戸が開いているか。鍵（Stripe）が無ければ、数に関わらず閉じている
+    ——「入れるのに決済できない」画面を人に見せないため。"""
+    if _BILLING_MODE == "off" or not STRIPE_SECRET_KEY:
+        return False
+    if _BILLING_MODE == "on":
+        return True
+    return _user_count(db or get_db()) >= _BILLING_MIN_USERS
 
 
 ONBOARDING_QUESTIONS = [
@@ -3748,6 +3840,11 @@ def _boot_payload(logged_in):
     boot = {"rooms": _rooms_payload(), "canvas": _canvas_payload()}
     if logged_in:
         db, me = get_db(), session.get("uid")
+        # プランの限度は、立ち上がりに同梱して渡す（収益モデル v1・2026-08-07）。
+        # 書く柱は開いた瞬間に器の形（字数の罫・題の欄）を決めるので、そこで
+        # fetch を一往復させると、一瞬だけ無料の形で立ち上がってから組み直る。
+        boot["plan"] = _plan_of(db, me)
+        boot["features"] = _PLAN_FEATURES[boot["plan"]]
         boot["mine"] = {"kept": [{"src": r["src"], "ref": r["ref_id"]} for r in db.execute(
             "SELECT src, ref_id FROM saved_words WHERE user_id=?", (me,))]}
         rows = db.execute(
@@ -5041,6 +5138,19 @@ _SKY_PD_K = _env_num("TAYORI_SKY_PD_K", 2, 0, 20, cast=int)
 # 漂いの静けさを決めている数字。探すのは能動で、しかも探しに来る人が欲しいのは
 # 表現の手がかりだから、本の一節が濃く出てよい。漂いの 2 は触らない。
 _SKY_SEARCH_PD_K = _env_num("TAYORI_SKY_SEARCH_PD_K", 5, 0, 20, cast=int)
+# 「探す範囲：拡大」（有料会員／収益モデル v1・2026-08-07）。広げるのは**出口**だけ。
+# 2.0＝人9→18・本5→10。倍にしても _SEARCH_AI_H(16)+_SEARCH_AI_D(20)=36 の内側なので、
+# AIへ差し出す件数（プライバシー第4の2項の「最大24件」）は一切増えない
+# ——外へ出る量は変わらないまま、返す量だけが変わる。
+_SEARCH_WIDE_MULT = _env_num("TAYORI_SEARCH_WIDE_MULT", 2.0, 1.0, 4.0)
+
+
+def _search_slots(plan):
+    """探すの定員（人の枠・本の枠）。無料は標準、有料は拡大。"""
+    if not _feat(plan, "search_wide"):
+        return _SKY_N, _SKY_SEARCH_PD_K
+    return (int(round(_SKY_N * _SEARCH_WIDE_MULT)),
+            int(round(_SKY_SEARCH_PD_K * _SEARCH_WIDE_MULT)))
 # 漂流物の齢。新着レーン（e[8] の小さい順）に決して入らないだけの大きさがあればよい。
 _PD_AGE_DAYS = 36500.0
 # 濃さ。齢から引くと最も薄いところ（0.32）に貼り付くが、それでは読めない。
@@ -6160,8 +6270,13 @@ def api_sky_search():
     # 人が9通いれば 9＋5、3通しかいなければ 3＋11、0通なら 0＋14。
     # 順序の思想（人のことばを先に採る）は保つ：埋めるのは**採り終えた後の余り**で、
     # 本が人を押し出すことはない。
-    h_chosen = draw(h_scored, _SKY_N)
-    chosen = h_chosen + draw(d_scored, _SKY_SEARCH_PD_K + (_SKY_N - len(h_chosen)))
+    # 探す範囲（収益モデル v1・2026-08-07）。「拡大」の実体は**出口の枠**を広げること
+    # ——精度は板（索引）の大きさではなく出口の細さで決まる、が 8/4 に分かっている
+    # （[[tayori-search-funnel]]）。だから広げるのはここ一箇所でいい。
+    # 選び方・順序の思想（人のことばを先に採り、余りを本が埋める）は両プランで同じ。
+    n_h, n_pd = _search_slots(_plan_of(get_db(), reader) if reader else "free")
+    h_chosen = draw(h_scored, n_h)
+    chosen = h_chosen + draw(d_scored, n_pd + (n_h - len(h_chosen)))
     if not chosen:
         # 宙のどこにも近いものが無かった。件数の顔は見せず words=[] だけ返す
         # （画面は「まだここにありません」の一行を置いて、漂いをそのまま続ける）。
@@ -6528,13 +6643,19 @@ def _letter_trace_ev(letter_id):
 @login_required
 def api_create_letter():
     data = request.get_json(force=True) or {}
-    # 80字は固定の仕様（クライアントの maxlength と対）。
+    db_check = get_db()
+    plan = _plan_of(db_check, uid())
+    # 字数はプランで決まる（無料80字・有料120字／収益モデル v1）。クライアントの
+    # maxlength と対だが、**ここが本当の線**——切るのはサーバの仕事で、画面の
+    # maxlength は「これ以上は打てない」を手に伝えるためだけのもの。
     # 行頭の字下げや空行は意図した余白として保ち、末尾の余りだけ落とす。空判定のみtrimで行う。
-    poem = _json_str(data.get("poem"))[:80].rstrip()
+    poem = _json_str(data.get("poem"))[:_POEM_MAX_EVER][:_poem_max(plan)].rstrip()
     if not poem.strip():
         poem = ""
-    # 題（v2.2 §2.1）：10字以内・任意。無題のまま放ってよい
-    title = _clean_title(data.get("title"))
+    # 題（v2.2 §2.1）：10字以内・任意。無題のまま放ってよい。
+    # 2026-08-07：題は有料会員の機能になった。無料会員が送ってきたら**断らずに落とす**
+    # ——放つ行いそのものは止めない（ことばは通す。飾りだけが付かない）。
+    title = _clean_title(data.get("title")) if _feat(plan, "title") else None
     # フェーズ5（2026-07-28）：photo / voice の受け口を閉じた。手紙モードの遺物で、
     # 宙に写真や声は流れない（決定済み事項）。クライアントが送ってきても受け取らない。
     # letters の列は DROP しない（SQLite の制約と過去データ互換のため、列だけ残す）。
@@ -6549,7 +6670,6 @@ def api_create_letter():
         room_id = int(data.get("room"))
     except (TypeError, ValueError):
         return jsonify(error="どこへ放つか、えらんでください。", room_required=True), 400
-    db_check = get_db()
     room = _room_row(db_check, room_id)
     if not room:
         return jsonify(error="それは見つかりません。"), 404
@@ -6559,7 +6679,7 @@ def api_create_letter():
     # スパム対策の軽いレート制限（収益モデル v1・2026-08-07）。投稿数そのものは
     # 無料会員も無制限——ここで見ているのは「1時間あたり」の勢いだけ。
     # 有料・サポーターは対象外（"探す範囲拡大" 等と同じく、詰まるのは無料会員だけでいい）。
-    if _plan_of(db_check, uid()) == "free":
+    if plan == "free":
         cutoff = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
         c = db_check.execute(
             "SELECT COUNT(*) AS c FROM letters WHERE user_id=? AND sent_date>=?",
@@ -7392,13 +7512,33 @@ _STRIPE_PRICES = {
 }
 # Price id → plan の逆引き。webhook が「どのプランになったか」をここだけで知る。
 _STRIPE_PRICE_TO_PLAN = {v: k[0] for k, v in _STRIPE_PRICES.items() if v}
+# 画面に出す値段（円・税込表示）。**Stripe の Price が本体**で、ここはあくまで
+# 「見せる字」——両方を直さないと、書いてある値段と請求が食い違う。
+# 年払いはどちらも「10か月ぶん」＝2か月ぶん安い（2026-08-07 Kosei：月払いも年払いも
+# 用意し、年払いを少しだけ安くする。サポーターの年一括限定は採らない）。
+_PLAN_PRICES = {
+    "premium": {"month": 790, "year": 7900},
+    "supporter": {"month": 1200, "year": 12000},
+}
+# 値上げの手順（2026-08-07 確定・Are.na 方式）：
+#   ① 事前にアンケートを取る ② 理由を明文化して公表する ③ **既存会員は据え置き**
+# ③ は Stripe 側で「古い Price のまま残す」ことで守る＝この表を書き換えても、
+# すでに契約している人の Subscription が指す Price は変わらない。新しい Price を
+# 足して _STRIPE_PRICES の環境変数を差し替えること（古い id を消さない）。
 
 
 def _stripe():
-    """遅延 import（boto3/anthropic と同じ流儀）。鍵が無い環境でも起動だけはできる。"""
+    """遅延 import（boto3/anthropic と同じ流儀）。鍵が無い環境でも起動だけはできる。
+    2026-08-07：**鍵は在るのにライブラリが無い**環境（開発機・requirements を
+    入れ直す前のデプロイ）で ImportError がそのまま 500 になっていた。決済が
+    使えないことは障害ではなく状態なので、鍵が無い時と同じ「お休み中」に倒す。"""
     if not STRIPE_SECRET_KEY:
         return None
-    import stripe
+    try:
+        import stripe
+    except ImportError:
+        print("[たより] STRIPE_SECRET_KEY はあるのに stripe が入っていません", flush=True)
+        return None
     stripe.api_key = STRIPE_SECRET_KEY
     return stripe
 
@@ -7455,6 +7595,10 @@ def api_billing_checkout():
     stripe = _stripe()
     if not stripe:
         return jsonify(error="決済はいまお休み中です。"), 503
+    # 戸が開いていない間は、ここも通さない（2026-08-07・300人の門）。画面を隠すだけでは
+    # 隠しているにすぎない——URLを叩けば契約できてしまうなら、それは閉じていない。
+    if not _billing_open():
+        return jsonify(error="まだ受け付けていません。", closed=True), 403
     data = request.get_json(force=True) or {}
     plan = data.get("plan")
     interval = data.get("interval") or "month"
@@ -7483,6 +7627,31 @@ def api_billing_checkout():
         print(f"[たより] Stripe Checkout 作成に失敗: {e}", flush=True)
         return jsonify(error="決済の準備に失敗しました。少し時間をおいてお試しください。"), 502
     return jsonify(ok=True, url=cs.url)
+
+
+@app.route("/api/billing/plans")
+@login_required
+def api_billing_plans():
+    """いまのプランと、選べるプランの一覧。画面はこれ一つを見て組む
+    ——値段も限度も分岐も、サーバの表（_PLAN_FEATURES / _PLAN_PRICES）が唯一の出どころ。
+
+    open=False のときは「まだ受け付けていません」の一行だけを出すこと。値段を並べて
+    「もうすぐ」と書くのは、売れないものを売り込んでいるのと同じで、この場に合わない。"""
+    db = get_db()
+    plan = _plan_of(db, uid())
+    row = db.execute("SELECT stripe_customer_id FROM users WHERE id=?", (uid(),)).fetchone()
+    return jsonify(
+        ok=True,
+        open=_billing_open(db),
+        plan=plan,
+        paid=plan != "free",
+        # 契約を持っている人には、開いていなくても Portal（解約・カード更新）は要る
+        has_billing=bool(row and row["stripe_customer_id"]),
+        features=_PLAN_FEATURES,
+        prices=_PLAN_PRICES,
+        # いま選べる組み合わせ（Stripe に Price を作っていないものは出さない）
+        available=sorted(f"{p}:{i}" for (p, i), v in _STRIPE_PRICES.items() if v),
+    )
 
 
 @app.route("/api/billing/portal", methods=["POST"])
@@ -7864,8 +8033,10 @@ def api_trash_dissolve(tid):
 @login_required
 def api_trash_save():
     data = request.get_json(force=True) or {}
-    # 便箋と同じ80字制約。行頭の字下げ・空行は書かれたまま保ち、末尾の余りだけ落とす。
-    content = _json_str(data.get("content"))[:80].rstrip()
+    # 便箋と同じ字数制約。ここはプランで分けない——屑籠は「書いたものを捨てる」場所で、
+    # 書けたものが入らないほうがおかしい（上限はいちばん長いプランに合わせる）。
+    # 行頭の字下げ・空行は書かれたまま保ち、末尾の余りだけ落とす。
+    content = _json_str(data.get("content"))[:_POEM_MAX_EVER].rstrip()
     if not content.strip():
         return jsonify(error="白紙は握りつぶせません。"), 400
     mood = _json_str(data.get("mood_color")).strip()[:32] or None
@@ -7964,7 +8135,7 @@ def api_letters_bulk_discard():
                        (id,user_id,content,mood_color,vertical,random_x,random_y,created_at,trace,unravel_at)
                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
                     (secrets.token_hex(8), uid(),
-                     (row["poem"] or "")[:80].rstrip(),
+                     (row["poem"] or "")[:_POEM_MAX_EVER].rstrip(),
                      row["seal_color"] if "seal_color" in keys else None,
                      row["vertical"] if ("vertical" in keys and row["vertical"]) else 0,
                      random.uniform(8, 92), random.uniform(10, 90),

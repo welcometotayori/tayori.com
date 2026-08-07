@@ -72,4 +72,10 @@ services:
       - key: STRIPE_PRICE_SUPPORTER_MONTHLY
         sync: false
       - key: STRIPE_PRICE_SUPPORTER_YEARLY
-        sync: false                   # サポーター年額は「年一括限定にするか検討中」。作るまでは空でよい
+        sync: false                   # ¥12,000/年（2026-08-07 確定：年一括限定にはしない）
+      # 課金の戸（2026-08-07 Kosei「新規300人を超えたら入れられるように」）。
+      # 既定は auto＝人数で自動的に開く。鍵（STRIPE_SECRET_KEY）が無い間は数に関わらず閉じたまま。
+      - key: TAYORI_BILLING
+        value: auto                   # auto / on（今すぐ開ける）/ off（開けない）
+      - key: TAYORI_BILLING_MIN_USERS
+        value: "300"

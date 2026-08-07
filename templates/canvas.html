@@ -182,7 +182,10 @@ function bootOr(k,url){
            data-placeholder="いま思っていることを、ひとこと。" aria-label="tayori-たより- へ放つことば"></div>
       <!-- 縦書き用の自前カーソル（ネイティブは字面まで縮み、位置も定まらないため） -->
       <div class="vcaret" id="castCaret"></div>
-      <div class="cast-count" id="castCountBox"><span id="castCount">0</span> / 80<span
+      {# 分母はプランで変わる（無料80字・有料120字／収益モデル v1・2026-08-07）。
+         サーバの表を写した _boot_payload の features がそのまま入る。 #}
+      <div class="cast-count" id="castCountBox"><span id="castCount">0</span> / <span
+           id="castCap">80</span><span
            class="trace-dot" id="traceDot" hidden aria-hidden="true"></span></div>
 
       {# 置き場所（2026-07-27）：書いたあとに選ぶ。書く前に決めさせない——

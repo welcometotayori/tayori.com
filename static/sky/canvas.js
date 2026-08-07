@@ -6,6 +6,16 @@
 'use strict';
 const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const vp=document.getElementById('vp'), world=document.getElementById('world');
+/* ── プランで変わるもの（収益モデル v1・2026-08-07）───────────────────
+   限度は**サーバの表（app.py の _PLAN_FEATURES）が唯一の出どころ**で、ここは写しを
+   受け取るだけ。画面側に数字を書き写すと、値を変えた日にどちらかが古いまま残る。
+   立ち上がりに同梱してある（_boot_payload）＝書く柱が開いた瞬間から正しい形で立つ。
+   bootTake ではなく直に読むのは、この値を後から何度も引くため（消してはいけない）。 */
+const FEATURES=Object.assign(
+  {poem_max:80, title:false, shelves:3, saved:50, search_wide:false, grid:false,
+   export:true, beta:false},
+  (typeof BOOT==='object'&&BOOT&&BOOT.features)||{});
+const PLAN=(typeof BOOT==='object'&&BOOT&&BOOT.plan)||'free';
 /* 画面の寸法は測って持っておく（2026-07-31 カクツキ修正）。clientWidth を
    毎フレーム読むと、そのたびレイアウトの確定を強いることがある——寸法が
    変わるのは resize の時だけなのだから、その時だけ測り直す。 */
@@ -2183,6 +2193,7 @@ document.addEventListener('keydown',e=>{
   const pane=document.getElementById('castPane'),btn=document.getElementById('castBtn'),
         ta=document.getElementById('castText'),cnt=document.getElementById('castCount'),
         cntBox=document.getElementById('castCountBox'),
+        capEl=document.getElementById('castCap'),
         send=document.getElementById('castSend'),close=document.getElementById('castClose'),
         hueBar=document.getElementById('hueBar'),hueKnob=document.getElementById('hueKnob'),
         toneBar=document.getElementById('toneBar'),toneKnob=document.getElementById('toneKnob'),
@@ -2528,7 +2539,11 @@ document.addEventListener('keydown',e=>{
      折返しがすでに列を送っているので二重には送らない——これは決めごとではなく
      ブラウザの実測（20字＋改行＋字 の字は2列目に立つ／3列目ではない）に合わせてある。
      字送りは書記素ではなくコードポイントで進める（サロゲートペアを割らない）。 */
-  const CH_PER_COL=20, MAX_COL=4;
+  /* 罫は1本20字。本数はプランで決まる（無料80字＝4本／有料120字＝6本）。
+     紙の幅（CSSの --ccol）と、打鍵を止める線（MAX_COL）は同じ数から出す
+     ——別々に持つと、片方だけ直した日に「罫はあるのに打てない」紙ができる。 */
+  const CH_PER_COL=20, MAX_COL=Math.max(1,Math.ceil(FEATURES.poem_max/CH_PER_COL));
+  ta.style.setProperty('--ccol',MAX_COL);
   function fitText(t){
     let col=0,run=0,i=0;
     for(const ch of t){
@@ -2574,6 +2589,7 @@ document.addEventListener('keydown',e=>{
        これまでの見え方は何も変わらない。 */
   function paintCast(){
     const n=fitText(ta.textContent).slots, cap=CH_PER_COL*MAX_COL;
+    if(capEl&&capEl.textContent!==String(cap))capEl.textContent=cap;
     cnt.textContent=n;
     cntBox.classList.toggle('near',n>=cap-12&&n<cap);
     cntBox.classList.toggle('full',n>=cap);
@@ -2793,7 +2809,9 @@ document.addEventListener('keydown',e=>{
   send.addEventListener('click',async()=>{
     const poem=ta.textContent.replace(/\s+$/,'');
     if(!poem.trim())return;                  // ここへは来ない（空のあいだ send は押せない）
-    const title=castTitle.value.trim();      // 題は任意。無いまま放ってよい（v2.2 §2.1）
+    // 題は任意。無いまま放ってよい（v2.2 §2.1）。無料会員には欄そのものが無い
+    // （2026-08-07・収益モデル v1）ので、ここは空のまま送る＝サーバ側も落とす。
+    const title=(FEATURES.title&&castTitle)?castTitle.value.trim():'';
     send.disabled=true;
     const color=cssOf(toneColor(H,T));   // 放たれることばには必ず色がのる（v12）
     const steps=(trace.length>1?{fmt:'ev1',ev:trace.slice()}:null);
@@ -2815,7 +2833,7 @@ document.addEventListener('keydown',e=>{
         showSent();   // ひと呼吸。退いた時には、自分のことばがもう昇っている
         ta.textContent='';normalizeEmpty();H=H0;T=T0;colorTouched=false;trace=[];traceLast=0;tracePrev='';paint();drawCaret();
         traceDot.hidden=true;   // 放った＝記録は流れ終わった。点も一緒に消える
-        castTitle.value='';
+        if(castTitle)castTitle.value='';
         if(window.resetCastOpt) window.resetCastOpt();   // 任意の三つを畳み直す（2026-07-28）
         if(d.care)setTimeout(showCareNote,1600);
       }else{
@@ -2836,6 +2854,15 @@ document.addEventListener('keydown',e=>{
 (function(){
   const row=document.getElementById('castOptRow');
   if(!row) return;
+  /* 題は有料会員の機能（収益モデル v1・2026-08-07）。無料会員には**引き金ごと出さない**
+     ——押せない語や鍵のしるしを並べると、書く柱が「まだ買っていない」の一覧になる。
+     ここは書く場所で、売り場ではない。案内は設定の中だけに置く。
+     欄そのものも畳んでおく（サーバも無料会員の題は黙って落とす＝二重に閉じてある）。 */
+  if(!FEATURES.title){
+    const b=row.querySelector('[data-opt="castOptTitle"]'), box=document.getElementById('castOptTitle');
+    if(b) b.remove();
+    if(box) box.remove();
+  }
   row.addEventListener('click',function(e){
     const b=e.target.closest('button[data-opt]');
     if(!b) return;
