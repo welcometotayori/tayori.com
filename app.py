@@ -5651,10 +5651,65 @@ def _canvas_cross(pool):
             for i in range(len(V))}
 
 
+# ══ 収蔵数（2026-08-07 §3.1）═════════════════════════════════════
+# 「この一文は◯つの棚に収められています」——集計の数**だけ**を宙へ返す。
+# 誰の棚か・いつ入れられたか・どの棚かは作らない（作れば、そこから人が見える）。
+#
+# 【数える単位を「棚」ではなく「人」にした理由】棚は一人で10まで編めて、同じことばを
+# いくつの棚へ置いてもよい（§5）。棚の数をそのまま数えると、それは棚の整理の癖を
+# 数えていることになり、一人で10まで押し上げられる。数えるのは人——一人が何度置いても
+# 一。画面に出る語は「◯つの棚に」のままでよい：読む人にとって、ひとりの手元は一つの棚。
+#
+# 【書き手には返さないまま】この数は読む側の面にしか出ない。書き手の /me にも
+# メールにも出さない＝宙v1 §5「一度きりの報せ」から先は、今も何も返らない。
+# 自分のことばが宙で自分に降ることは無いので、書き手がこの数を自分の分について
+# 見る経路も無い（src='mine' を数から外してあるのも同じ理由）。
+_KEPT_TTL = _env_num("TAYORI_KEPT_TTL", 300.0, 30.0, 3600.0)   # 5分。厳密さは要らない
+_kept_cache = {"t": 0.0, "map": {}}
+_kept_lock = threading.Lock()
+
+
+def _kept_counts(db):
+    """公開id → その一片を手元に持っている人の数。1以上のものだけを持つ。
+
+    棚は数百件の規模なので全件を一度に数えて構わない（索引 idx_shelf_items_saved と
+    別に saved_words を走査するが、それでも一回あたりミリ秒）。TTL を置くのは
+    正確さのためではなく、15秒ごとの宙の組み直しに毎回ぶら下がらないため。"""
+    now = time.time()
+    with _kept_lock:
+        if _kept_cache["map"] and now - _kept_cache["t"] < _KEPT_TTL:
+            return _kept_cache["map"]
+    # 【二つの入口を先にまとめてから数える】同じ一片が、控えの上では二つの姿を持つ：
+    #   src='drift' … 宙で触れて棚へ入れた（ref_id ＝ 公開id）。人のことばもここを通る
+    #                 ——_shelf_source の 'drift' は _sky_lookup で人の手紙も引き当てる
+    #   src='sky'   … 降りてきたのを読む柱から棚へ入れた（ref_id ＝ 配達id）
+    # 同じ人が同じことばを両方の道から入れると行は二つになるので、SQL で別々に
+    # 数えて足すと、ひとりが二つに化ける。人のidを先に集合へ入れてから、最後に数える。
+    who = {}
+    try:
+        for r in db.execute(
+                "SELECT w.ref_id AS k, w.user_id AS u"
+                "  FROM saved_words w WHERE w.src='drift'"):
+            who.setdefault(r["k"], set()).add(r["u"])
+        for r in db.execute(
+                "SELECT d.letter_id AS lid, w.user_id AS u"
+                "  FROM saved_words w JOIN sky_deliveries d ON d.id = w.ref_id"
+                " WHERE w.src='sky'"):
+            who.setdefault(_sky_public_id(r["lid"]), set()).add(r["u"])
+    except sqlite3.Error as e:
+        print(f"[収蔵数: 数えられませんでした（出さずに続けます）] {e}", flush=True)
+        return {}
+    got = {k: len(u) for k, u in who.items() if u}
+    with _kept_lock:
+        _kept_cache.update(t=now, map=got)
+    return got
+
+
 def _canvas_build(pool, muted):
     words = []
     pds = []
     cross = _canvas_cross(pool)
+    kept = _kept_counts(get_db())
     for e in pool:
         pub, air, raw, decay, _uid, _title, room_id, flare, _age, _sem = e
         if pub.get("pd"):
@@ -5682,6 +5737,10 @@ def _canvas_build(pool, muted):
             "x": round(math.cos(math.radians(ang)) * rad, 4),
             "y": round(math.sin(math.radians(ang)) * rad, 4),
         }
+        # 収蔵数（§3.1）。0 の時は列そのものを持たせない——「0つの棚」を見せない
+        # という約束を、画面ではなく配る形のところで守る（送る量も減る）。
+        if kept.get(pub["id"]):
+            w["k"] = kept[pub["id"]]
         cr = cross.get(raw)
         if cr:
             # cr … 大きいほど「この部屋のもの」（島に降りた時の中心）
@@ -5708,14 +5767,17 @@ def _canvas_build(pool, muted):
             pub, raw = e[0], e[2]
             ang = _canvas_seed(raw, "sa%s" % room_id) * 360.0
             rr = 1.0 + 0.12 * _canvas_seed(raw, "sr%s" % room_id)   # 岸＝島の縁のすこし外
-            words.append({
+            sw = {
                 "id": pub["id"], "poem": pub["poem"], "color": pub["color"],
                 "vertical": True, "room": room_id, "pd": True,
                 "author": pub["author"], "work": pub["work"],
                 "sink": 0.62,             # 紙に染みた濃さ。沈みも浮きもしない（時を持たない）
                 "x": round(math.cos(math.radians(ang)) * rr, 4),
                 "y": round(math.sin(math.radians(ang)) * rr, 4),
-            })
+            }
+            if kept.get(pub["id"]):
+                sw["k"] = kept[pub["id"]]
+            words.append(sw)
     return {"words": words}
 
 

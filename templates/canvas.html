@@ -124,6 +124,27 @@ function bootOr(k,url){
   </div>
   <div class="gather-field" id="gatherField"><div class="gather-in" id="gatherIn"></div></div>
 </div>
+{# ── 並べて読む（2026-08-07 §3.2）─────────────────────────────────
+   島に降りた時の紙片は「漂っているものを眺める」姿で、読み通すためのものではない。
+   同じ部屋のことばを、色も傾きも落として、一枚の紙の上に並べる面をその上に重ねる。
+   宙は置き換えない——畳めば島はそのまま、同じ場所に残っている。 #}
+<div class="rsheet" id="rsheet" hidden aria-hidden="true" role="dialog" aria-modal="true"
+     aria-label="並べて読む">
+  <div class="rsheet-top">
+    <p class="rsheet-lead" id="rsheetLead"></p>
+    <div class="rsheet-set" id="rsheetSort" role="group" aria-label="並び">
+      <button type="button" class="rsheet-opt on" data-s="up" aria-pressed="true">浮かんでいる順</button>
+      <button type="button" class="rsheet-opt" data-s="rand" aria-pressed="false">ランダム</button>
+    </div>
+    <button class="rsheet-close" id="rsheetClose" type="button">とじる</button>
+  </div>
+  <div class="rsheet-field" id="rsheetField">
+    <ul class="rsheet-grid" id="rsheetGrid"></ul>
+    <div class="rsheet-more" id="rsheetMore" hidden>
+      <button type="button" class="rsheet-mb" id="rsheetMoreBtn">つづきを、めくる</button>
+    </div>
+  </div>
+</div>
 <div id="vp"><div id="world"></div></div>
 <div class="hold" id="holdBox" hidden></div>
 <p class="whisper" id="whisper" aria-live="polite"></p>
@@ -291,6 +312,11 @@ function bootOr(k,url){
     {# 島に降りている間だけ立つ、引き返す語（2026-08-03 操作性）。
        出る道が「つまむ・−の連打」しか無かった。押せば全景へ滑って戻る。 #}
     <button class="sky-home" id="skyHome" type="button">宙へもどる</button>
+    {# 並べて読む（2026-08-07 §3.2）。島に降りている間だけ立つ——「宙へもどる」と
+       同じ条件で現れ、同じ条件で消える。頭の帯（書く・戸）へ置かなかったのは、
+       あそこはどの状態でも同じものが同じ場所に在る帯だから：島に降りた時だけ増える
+       一語を混ぜると、島へ降りるたびに帯の中身が動く。 #}
+    <button class="sky-home sky-read" id="skyRead" type="button">並べて読む</button>
   </div>
   <p class="foot">ひとつづきの宙</p>
   <!-- 灯（宙v1 §4.2）：いま、誰かが宙のことばに触れた気配。数えない・誰かは言わない -->

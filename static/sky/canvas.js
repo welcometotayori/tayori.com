@@ -996,18 +996,29 @@ function srcMark(){
   if(!held||!held._w.pd)return '';
   return '<p class="hold-src">— '+esc(held._w.author)+'『'+esc(held._w.work)+'』より</p>';
 }
+/* 収蔵数（2026-08-07 §3.1）。「◯つの棚に収められています」——数だけ。
+   誰の棚かも、いつ入ったかも言わない。0 のときは行ごと出さない（サーバが列を
+   持たせない＝「0つの棚」という寂しさを、画面の条件分岐ではなく形で消す）。
+   数は宙を組み直す版に乗って来るので、触れた瞬間にもう手元にある＝往復しない
+   （Apple §1：押してから数えに行く経路を作らない）。 */
+function keptMark(){
+  if(!held)return '';
+  const n=held._w.k|0;
+  if(n<1)return '';
+  return '<p class="hold-kept"><span class="n">'+n+'</span>つの棚に、収められています</p>';
+}
 const IC_SHELF='<span class="ic ic-shelf" aria-hidden="true"><span class="p"></span><span class="b"></span></span>';
 const T_KEEP_OFF='棚にとっておく', T_KEEP_ON='棚にあります',
       T_MUTE_OFF='もう見ない',     T_MUTE_ON='また見る';
 function renderHold(){
   if(!held)return;
   if(!LOGGED_IN){
-    holdBox.innerHTML=srcMark()+'<p class="hold-note">このことばを、<wbr>'+
+    holdBox.innerHTML=srcMark()+keptMark()+'<p class="hold-note">このことばを、<wbr>'+
       '自分の<wbr>棚に<wbr>とっておけます。<br><a href="/?start=1&amp;new=1">はじめる</a></p>';
     return;
   }
   const s=kept.has('drift:'+held._w.id), mu=muted.has(held._w.id);
-  holdBox.innerHTML=srcMark()+
+  holdBox.innerHTML=srcMark()+keptMark()+
     '<button type="button" class="hold-act keep'+(s?' on':'')+'" aria-pressed="'+(s?'true':'false')+'">'+
       IC_SHELF+'<span class="txt">'+(s?T_KEEP_ON:T_KEEP_OFF)+'</span></button>'+
     '<button type="button" class="hold-act sub mute'+(mu?' on':'')+'" aria-pressed="'+(mu?'true':'false')+'">'+
@@ -3168,4 +3179,173 @@ Promise.all([
     }
     requestAnimationFrame(frame);
   });
+})();
+
+/* ══ 並べて読む（2026-08-07 §3.2・§3.4）═══════════════════════════
+   島に降りている間だけ開ける、読むための一枚。宙は置き換えない——畳めば島は
+   同じ場所にそのまま在る（この面は上に重ねるだけで、何も壊さない）。
+
+   出すのは題と本文と、漂流物なら出どころ。棚も印も「もう見ない」も出さない：
+   読む面に押せるものを増やすと、目は必ずそちらへ行く（行いは島の紙片の側にある）。
+
+   【並びを「新しい順」と呼ばない理由】宙のことばは日付を持って降りてこない
+   ——「だれの、いつのことばかは、だれにもわかりません」がこの世界の約束で、
+   canvas の配り物にも日付は入れていない。持っているのは沈降（sink）だけで、
+   これは人のことばなら新しいほど浅いが、漂流物は時を持たない（常に一定）。
+   だから字のとおり「浮かんでいる順」と呼ぶ。棚（/me）の側は saved_at＝
+   その人が残した日を本当に持っているので、あちらだけが「新しい順」と言える。 */
+(function(){
+  const pane=document.getElementById('rsheet');
+  if(!pane)return;
+  const lead=document.getElementById('rsheetLead'),
+        grid=document.getElementById('rsheetGrid'),
+        field=document.getElementById('rsheetField'),
+        sortBox=document.getElementById('rsheetSort'),
+        moreBox=document.getElementById('rsheetMore'),
+        moreBtn=document.getElementById('rsheetMoreBtn'),
+        closeBtn=document.getElementById('rsheetClose'),
+        openBtn=document.getElementById('skyRead');
+  const PAGE=50;                 // 一度に並べる枚数（§5）。数は画面に出さない
+  let list=[], shown=0, sort='up', rseed=1, back=null;
+
+  /* ── 打った過程は、ここでも流れる（v2追補 §1・2026-08-07）──────────
+     宙で漂っている紙片は8秒ごとに書き直される（rotateOne）。読む面でそれを
+     落とすと、「打った過程がそのまま宙に流れます」という約束がこの面にだけ無い
+     ことになる——だから残す。ただし、流し方は宙とは変える：
+
+     ・**目に入ったその一度だけ**書く（IntersectionObserver）。読み終えた字が
+       もう一度ほどけて書き直されるのは、眺める面では気配でも、読む面では邪魔。
+     ・**同時に3枚まで**（宙のローテーションと同じ数）。机では最初の画面に十枚
+       以上が入るので、全部いっぺんに走らせると読む前に画面が騒がしくなる。
+     ・**漂流物には当てない**。本から拾った一節に打鍵は無く、合成の打鍵を当てると
+       「誰も打っていないためらい」が生える（サーバ側 api_sky_word_trace も
+       同じ理由で pd を塞いでいる）。字はそのまま置く。 */
+  const TYPE_AT_ONCE=3;
+  let typing=0; const queue=[];
+  function pump(){
+    while(typing<TYPE_AT_ONCE&&queue.length){
+      const el=queue.shift();
+      if(!el||!el.isConnected)continue;
+      typing++;
+      const w=el._w, done=()=>{ typing--; pump(); };
+      getTrace(w.id).then(tr=>{
+        if(!el.isConnected){done();return;}
+        playType(el,w.poem||'',tr,done);
+      }).catch(done);
+    }
+  }
+  /* root は巻物（.rsheet-field）。下端の 15% は「まだ読んでいない所」なので、
+     そこへ入った時ではなく、そこを越えて本当に目へ入った時に書きはじめる。 */
+  const watch=('IntersectionObserver' in window)?new IntersectionObserver(es=>{
+    es.forEach(e=>{
+      if(!e.isIntersecting)return;
+      watch.unobserve(e.target);
+      const el=e.target;
+      if(el._played)return;
+      el._played=1;
+      queue.push(el); pump();
+    });
+  },{root:field,rootMargin:'0px 0px -15% 0px'}):null;
+
+  /* ランダムの並び（§3.4）。押した時に種を一つ決めて、その種で混ぜる——
+     めくるたびに引き直すと、続きをめくった時に前の50枚がもう一度出てくる。 */
+  function shuffled(a,seed){
+    a=a.slice(); let s=seed>>>0||1;
+    for(let i=a.length-1;i>0;i--){
+      s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;   // xorshift32
+      const j=s%(i+1), t=a[i];a[i]=a[j];a[j]=t;
+    }
+    return a;
+  }
+  function order(ws){
+    if(sort==='rand')return shuffled(ws,rseed);
+    // 浮かんでいる順＝沈んでいないものから。同じ深さは id で決めて、開くたびに揺れない
+    return ws.slice().sort((a,b)=>(b.sink-a.sink)||(a.id<b.id?-1:1));
+  }
+  function paint(more){
+    if(!more){ queue.length=0; grid.textContent=''; shown=0; field.scrollTop=0; }
+    const upto=Math.min(list.length,shown+PAGE);
+    const frag=document.createDocumentFragment();
+    for(let i=shown;i<upto;i++){
+      const w=list[i], li=document.createElement('li');
+      li.className='rsheet-cell';
+      /* 紙の色は島の紙片と同じ paperOf を通す＝同じことばは、島でも読む面でも同じ紙。
+         色が選ばれていないことば（彩度12未満・サーバの _AIR_GRAY_S と同じ線）は
+         生成り〜灰白の三種、漂流物は灰の紙——どちらも paperOf の中で決まる。 */
+      li.style.setProperty('--pp',paperOf(w));
+      if(w.pd)li.classList.add('pd');
+      li.innerHTML='<div class="rsheet-v">'+
+        (w.title?'<p class="rsheet-title"></p>':'')+'<p class="rsheet-poem"></p></div>'+
+        (w.pd?'<p class="rsheet-src"></p>':'');
+      if(w.title)li.querySelector('.rsheet-title').textContent=w.title;
+      const pe=li.querySelector('.rsheet-poem');
+      pe.textContent=w.poem||'';
+      if(w.pd)li.querySelector('.rsheet-src').textContent=
+        '— '+(w.author||'')+'『'+(w.work||'')+'』より';
+      // 打鍵の再生は人のことばだけ（上の watch の節）。漂流物は置くだけ。
+      if(watch&&!w.pd&&w.id){ pe._w=w; watch.observe(pe); }
+      frag.appendChild(li);
+    }
+    grid.appendChild(frag);
+    /* 溢れた紙にだけ左フェードを付ける（島の .w.ovf と同じ規律）。
+       読むのは**足したぶんだけ**・書くのはそのあとで一度に——測ると書くを混ぜると、
+       一枚ごとに版面を組み直させることになる（2026-08-03 カクツキの作法）。 */
+    const vs=[...grid.children].slice(more?shown:0).map(li=>li.querySelector('.rsheet-v'));
+    const ovf=vs.map(v=>v&&v.scrollWidth>v.clientWidth+2);
+    vs.forEach((v,i)=>{ if(v&&ovf[i])v.classList.add('ovf'); });
+    shown=upto;
+    moreBox.hidden=shown>=list.length;
+  }
+  function collect(isl){
+    // 『もう見ない』にした紙は、この面にも出さない（島の上と同じ宙を見せる）
+    return isl.words.filter(el=>!el.classList.contains('mutedout'))
+                    .map(el=>el._w).filter(w=>w&&(w.poem||'').trim());
+  }
+  function open(){
+    const isl=(typeof sheetId!=='undefined'&&sheetId!=null)?islands.get(sheetId):null;
+    if(!isl)return;
+    if(typeof release==='function')release();   // 受け止めていたことばは、紙が出る前に放す
+    back=document.activeElement;
+    list=order(collect(isl));
+    lead.innerHTML='<b>'+esc(isl.room.name)+'</b>の、ことば';
+    paint(false);
+    pane.hidden=false;
+    pane.setAttribute('aria-hidden','false');
+    document.body.classList.add('rsheet-on');
+    // hidden を外したそのフレームでは遷移が始まらない（表示と同時に終値になる）
+    requestAnimationFrame(()=>pane.classList.add('on'));
+    closeBtn.focus();
+  }
+  function shut(){
+    if(!pane.classList.contains('on'))return;
+    queue.length=0;              // 書き待ちの列は持ち越さない（次に開くのは別の島かもしれない）
+    pane.classList.remove('on');
+    pane.setAttribute('aria-hidden','true');
+    document.body.classList.remove('rsheet-on');
+    setTimeout(()=>{ if(!pane.classList.contains('on'))pane.hidden=true; },360);
+    // 開いた場所へ戻す（他の面と同じ作法）
+    const b=back;back=null;
+    if(b&&b.isConnected&&typeof b.focus==='function')b.focus();
+  }
+  openBtn&&openBtn.addEventListener('click',open);
+  closeBtn.addEventListener('click',shut);
+  moreBtn.addEventListener('click',()=>paint(true));
+  sortBox.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-s]'); if(!b||b.dataset.s===sort)return;
+    sort=b.dataset.s;
+    if(sort==='rand')rseed=(Math.random()*0x7fffffff)>>>0||1;   // 二度押せば別の並び
+    sortBox.querySelectorAll('[data-s]').forEach(x=>{
+      const on=x.dataset.s===sort;
+      x.classList.toggle('on',on); x.setAttribute('aria-pressed',on?'true':'false');
+    });
+    list=order(list);
+    paint(false);
+  });
+  /* Escape はいちばん上の面が引き受ける（この面は宙より上に立っている）。
+     捕捉段で受けて止めるのは、宙側の Escape が全景へ飛ばしてしまわないため。 */
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&pane.classList.contains('on')){ e.stopPropagation(); shut(); }
+  },true);
+  // 島から離れたら（全景へ戻った・別の島へ渡った）、開いたままの紙は畳む
+  addEventListener('popstate',shut);
 })();

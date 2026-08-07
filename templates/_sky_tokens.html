@@ -28,6 +28,20 @@
      呼び出していた——そのために書体をもう一段まるごと配るのは釣り合わない。 */
   b,strong{font-weight:600}
   :root{
+    /* ── 書体の二本（2026-08-07 §3.3）──────────────────────────
+       ことばは明朝、道具はゴシック。二つの役を字の形そのもので分ける＝
+       「これは誰かが書いたことばか、この面の仕組みか」を読む前に見分けられる。
+       これまでは面ぜんぶが明朝で、ボタンの語も、放たれたことばも、同じ顔をしていた。
+
+       【UIの側に webfont を足さない理由】明朝（Shippori）は Google Fonts が字ごとに
+       120枚ほどへ割ってくれるので、その面に出ている字の分しか落ちてこない。だが
+       ゴシックまで同じことをすると、往復も落とす量も二倍になる——本番は日本の接続を
+       Cloudflare が Seattle で受けており、1往復が約400ms（上のコメント）。
+       道具の字は端末が最初から持っているものでよい：Apple §15「まず platform の
+       system font を使う。上書きは理由のある時だけ」。ここに理由は無い。 */
+    --font-body:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+    --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',
+              'Noto Sans JP','Yu Gothic Medium','Yu Gothic',Meiryo,system-ui,sans-serif;
     /* ── 素材：闇と、紙の白と、封の糸の三色しかない ── */
     --space:#08080D; --chalk:#FAF8F3; --thread:#B38F6F;
     /* ── 文字の四段 ── */
@@ -70,7 +84,7 @@
   }
   *{box-sizing:border-box}
   body{background:var(--space);color:var(--ink-1);
-       font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+       font-family:var(--font-body);
        -webkit-font-smoothing:antialiased;line-break:strict}
        /* 闇は時刻でごく僅かに移ろう（下の script が --space を書き換える）。
           かつては transition:background-color 60s で渡していたが、これは
@@ -82,19 +96,30 @@
   /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。
      ここで一度だけ継承させる。個別に font-family:inherit を書く運用だと、
      新しい部品を足すたびに書き漏らして一箇所だけ書体が変わる（2026-07-26 部屋UIで実際に起きた）。 */
-  button,input,textarea,select{font-family:inherit}
+  /* 道具はゴシック。**textarea だけ明朝のまま**——そこに入るのはことばそのもので、
+     便箋（#castBody）も宙で書く一枚も textarea だから。この一行が §3.3 の境界線：
+     「字を打ち込む枠は本文、それ以外の押すもの・選ぶもの・記入する名前は道具」。
+     一語の名前（棚の名・付箋）は input なので道具の側に入る——あれは見出しであって
+     ことばではない。 */
+  button,input,select{font-family:var(--font-ui)}
+  textarea{font-family:var(--font-body)}
   button,a{touch-action:manipulation}
   button{cursor:pointer}
   :where(button,a,[tabindex]):focus-visible{outline:1px solid var(--rule);outline-offset:5px}
   /* 罫を一本ひいた語＝この世界で「押せる」ことの唯一の合図 */
   .ruled{background:none;border:none;border-bottom:1px solid var(--rule-act);
-         color:var(--ink-2);font-family:inherit;font-size:var(--t-meta);
+         color:var(--ink-2);font-family:var(--font-ui);font-size:var(--t-meta);
          letter-spacing:var(--tr-meta);
          transition:color .22s var(--ease),border-color .22s var(--ease),opacity .22s var(--ease)}
   .ruled:hover{color:var(--ink-1);border-color:var(--thread)}
   .ruled:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
   /* 日本語の折り返しは文節で。ユーザーの本文には介入しない */
   .jp{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+  /* 押せもしないし打ち込めもしない、ただの添え書き（日付・件数・状態）を道具の側へ。
+     form 要素ではないので上の一行では拾えない——ここに貼る。
+     数字を並べる所には .num を重ねる（等幅の数字＝桁が揺れない・Apple §7 craft）。 */
+  .ui{font-family:var(--font-ui)}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 </style>
 <script>
 /* ── 宙の闇は、時刻でごく僅かに移ろう（2026-07-29）────────────────────

@@ -28,6 +28,18 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&display=swap">
+{# 書体の二本（2026-08-07 §3.3）。ことばは明朝、道具はゴシック。
+   **_sky_tokens.html と必ず同じ二行にすること**——上の <link> と同じ約束で、
+   宙を通る面（tokens）と紙の面（この head）の両方から同じ名前が引けるようにする。
+   宙は _sky_tokens を、門（/）と規約・ポリシーはこの head だけを通る。
+   ゴシックは端末が持っているものを使う（webfont は足さない・理由は tokens 側に）。 #}
+<style>
+  :root{
+    --font-body:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;
+    --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',
+              'Noto Sans JP','Yu Gothic Medium','Yu Gothic',Meiryo,system-ui,sans-serif;
+  }
+</style>
 
 <meta property="og:site_name" content="tayori-たより-">
 <meta property="og:locale" content="ja_JP">

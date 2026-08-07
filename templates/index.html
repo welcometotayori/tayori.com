@@ -64,15 +64,17 @@
   /* 視覚非表示（見た目は変えずクローラー/スクリーンリーダーにだけ伝える） */
   .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   html{-webkit-text-size-adjust:100%}
-  body{background:var(--ground);color:var(--ink);font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;line-height:1.7;min-height:100vh;overflow-x:hidden}
-  /* フォーム要素は font-family を継承しない（UA既定＝端末のサンセリフになる）。ここで一度だけ継承 */
-  button,input,textarea,select{font-family:inherit}
+  body{background:var(--ground);color:var(--ink);font-family:var(--font-body);line-height:1.7;min-height:100vh;overflow-x:hidden}
+  /* 書体の二本は宙と同じ約束（_sky_tokens.html §3.3）：ことばは明朝、道具はゴシック。
+     ここで書き直すのは、この面が自前の body 規則を持っていてトークンの一行に勝つため。 */
+  button,input,select{font-family:var(--font-ui)}
+  textarea{font-family:var(--font-body)}
   /* ---- 日本語の折り返し ----
      定型文は文節の切れ目（<wbr>・句読点の後）でだけ折り返し、語の途中で切らない。 */
   body{line-break:strict}
   .concept-body p,.gate-tag,.gate-note,.gate-err{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   h1{font-family:'Shippori Mincho',serif;font-weight:600;font-size:42px;letter-spacing:0.14em;margin-bottom:6px}
-  .romaji{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
+  .romaji{font-family:var(--font-body);font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
 
   /* auth gate */
@@ -86,34 +88,34 @@
   .gate-form{position:relative;background:transparent;border:0;border-radius:0;padding:30px 2px 0;box-shadow:none}
   .gate-form::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:var(--rule)}
   .gate-tabs{display:flex;gap:26px;justify-content:center;margin-bottom:26px;border-bottom:1px solid var(--rule)}
-  .gate-tab{flex:0 0 auto;min-height:var(--touch);background:transparent;border:0;cursor:pointer;font-family:'Shippori Mincho',serif;font-size:14px;letter-spacing:0.14em;color:var(--ink-mute);padding:12px 8px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s}
+  .gate-tab{flex:0 0 auto;min-height:var(--touch);background:transparent;border:0;cursor:pointer;font-family:var(--font-ui);font-size:14px;letter-spacing:0.14em;color:var(--ink-mute);padding:12px 8px;margin-bottom:-1px;box-shadow:inset 0 -2px 0 transparent;transition:color .25s,box-shadow .25s}
   .gate-tab:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
   .gate-tab.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--seal)}
   .gate-field{text-align:left;margin-bottom:16px}
-  .gate-field label{display:block;font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.1em;color:var(--ink-mute);margin-bottom:6px}
+  .gate-field label{display:block;font-family:var(--font-ui);font-size:12px;letter-spacing:0.1em;color:var(--ink-mute);margin-bottom:6px}
   .gate-field input{width:100%;min-height:var(--touch);background:transparent;border:0;border-bottom:1px solid var(--rule);border-radius:0;padding:11px 2px;
-        font-family:'Shippori Mincho',serif;font-size:16px;color:var(--ink);letter-spacing:0.04em}
+        font-family:var(--font-ui);font-size:16px;color:var(--ink);letter-spacing:0.04em}
   .gate-field input:focus{outline:none;border-bottom-color:var(--seal)}
   .gate-field input::placeholder{color:var(--ink-faint)}
   .pw-wrap{position:relative}
   .pw-wrap input{padding-right:54px;width:100%}
   .pw-toggle{position:absolute;right:2px;top:50%;transform:translateY(-50%);
         min-height:var(--touch);background:transparent;border:0;cursor:pointer;
-        font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.08em;color:var(--ink-mute);padding:10px 8px}
+        font-family:var(--font-ui);font-size:12px;letter-spacing:0.08em;color:var(--ink-mute);padding:10px 8px}
   .pw-toggle:active{opacity:0.62}
   .pw-toggle:hover{color:var(--seal)}
-  .gate-submit{width:100%;min-height:var(--touch);background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:'Shippori Mincho',serif;
+  .gate-submit{width:100%;min-height:var(--touch);background:var(--ink);color:var(--paper);border:0;cursor:pointer;font-family:var(--font-ui);
         font-size:14px;letter-spacing:0.22em;padding:14px;margin-top:8px;transition:background .25s}
   .gate-submit:hover{background:var(--seal-hover)}
   .gate-submit:disabled{opacity:0.5;cursor:default;pointer-events:none}
-  .gate-err{font-family:'Shippori Mincho',serif;font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
+  .gate-err{font-family:var(--font-ui);font-size:12px;color:var(--seal);min-height:18px;margin-top:12px;letter-spacing:0.04em}
   /* 門の足元（v14）：44pxの帯として押せるように。行の見た目は変えない */
   .gate-hint{display:flex;flex-wrap:wrap;justify-content:center;gap:0 18px;margin-top:10px;
-        font-family:'Shippori Mincho',serif;font-size:12px;letter-spacing:0.06em;color:var(--ink-mute);opacity:0.8}
+        font-family:var(--font-ui);font-size:12px;letter-spacing:0.06em;color:var(--ink-mute);opacity:0.8}
   .gate-hint a{display:inline-flex;align-items:center;justify-content:center;
         min-height:var(--touch);padding:0 2px;color:inherit;text-decoration:underline;text-underline-offset:3px}
   .gate-hint a:active{opacity:0.62}
-  .gate-note{font-family:'Shippori Mincho',serif;font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-mute);margin-top:9px;padding:9px 11px;border:1px solid var(--rule);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-sunk)}
+  .gate-note{font-family:var(--font-ui);font-size:11.5px;line-height:1.75;letter-spacing:0.03em;color:var(--ink-mute);margin-top:9px;padding:9px 11px;border:1px solid var(--rule);border-left:3px solid var(--seal);border-radius:3px;background:var(--paper-sunk)}
   .gate-note b{color:var(--seal);font-weight:600}
   .gate-tab:active{opacity:0.62}
   .gate-submit:active{transform:scale(0.99);transition-duration:.1s}
@@ -238,7 +240,7 @@
        封蝋の印も郵便のメタファー（JP/Post）だったので、いまの唯一の行いへ差し替える。
        文言を足す時は文節に <wbr> を入れること（[[tayori-jp-linebreak]]）。 #}
     <div class="concept-mark">ことばを<br>放つ</div>
-    <h2 class="concept-title"><span style="font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:13px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
+    <h2 class="concept-title"><span style="font-family:var(--font-body);font-size:13px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase">tayori</span><br><span style="font-size:30px;letter-spacing:0.3em">— たより —</span></h2>
     <div class="concept-body">
       <p>ここは、<wbr>行き先を<wbr>決めずに<wbr>ことばを<wbr>放つ<wbr>場所です。<wbr>名前の<wbr>ついた<wbr>集まりが<wbr>いくつも<wbr>あり、<wbr>どこへ<wbr>放つかだけを、<wbr>あなたが<wbr>選びます。</p>
       <p>放たれた<wbr>ことばは、<wbr>そこを<wbr>漂います。<wbr>だれかが<wbr>偶然<wbr>ひらくかもしれないし、<wbr>だれにも<wbr>読まれないまま<wbr>漂い続けるかもしれない。<wbr>いつ・<wbr>だれに<wbr>届いたかは、<wbr>放った<wbr>あなたにも<wbr>分かりません。</p>
@@ -267,7 +269,7 @@
   };
   function flash(msg,ms){const n=document.createElement('div');n.textContent=msg;
     n.style.cssText='position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#12121A;color:#FAF8F3;'+
-      'font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
+      'font-family:var(--font-ui);font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:30px;'+
       'z-index:99;box-shadow:0 8px 24px -10px rgba(0,0,0,0.5);opacity:0;transition:opacity .3s;text-align:center;max-width:80%';
     document.body.appendChild(n);requestAnimationFrame(()=>n.style.opacity='1');
     setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),300);},ms||2200);}

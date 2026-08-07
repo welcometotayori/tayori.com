@@ -18,7 +18,7 @@
      箱もカードも作らない（v3.10）。開いていない設定は、ただの一行に見える。 */
   .setting{border-bottom:1px solid var(--rule-faint)}
   .setting:last-of-type{border-bottom:0}
-  .set-head{width:100%;background:none;border:none;font-family:inherit;text-align:left;
+  .set-head{width:100%;background:none;border:none;font-family:var(--font-ui);text-align:left;
             cursor:pointer;padding:var(--s3) 2px;min-height:var(--touch);
             display:flex;align-items:baseline;gap:var(--s3);
             transition:color .22s var(--ease)}
@@ -36,14 +36,14 @@
             color:var(--ink-4);word-break:keep-all;overflow-wrap:anywhere}
   /* 入力は罫一本。宙の書く柱・棚の名前入力と同じ姿にそろえる */
   .set-field{display:block;width:100%;max-width:340px;background:none;border:none;
-             border-bottom:1px solid var(--rule);color:var(--ink-1);font-family:inherit;
+             border-bottom:1px solid var(--rule);color:var(--ink-1);font-family:var(--font-ui);
              font-size:13px;letter-spacing:0.1em;padding:12px 2px;min-height:var(--touch);
              outline:none;margin-bottom:var(--s2);
              transition:border-color .22s var(--ease)}
   .set-field::placeholder{color:var(--ink-4)}
   .set-field:focus{border-bottom-color:var(--ink-4)}
   .set-row{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s4);margin-top:var(--s2)}
-  .set-do{background:none;border:none;font-family:inherit;cursor:pointer;color:var(--ink-2);
+  .set-do{background:none;border:none;font-family:var(--font-ui);cursor:pointer;color:var(--ink-2);
           font-size:12px;letter-spacing:0.24em;padding:12px 2px;min-height:var(--touch);
           border-bottom:1px solid var(--rule-act);
           transition:color .22s var(--ease),opacity .22s var(--ease)}

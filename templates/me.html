@@ -19,7 +19,7 @@
      ・タブは箱にしない。選ばれている方だけが明るく、下に罫が一本立つ
      ・書架は開かれるまで取りに行かない（開いてもいない面のために待たせない） */
   .me-tabs{display:flex;justify-content:center;gap:var(--s5);margin:0 0 var(--s4)}
-  .me-tab{background:none;border:0;font-family:inherit;cursor:pointer;
+  .me-tab{background:none;border:0;font-family:var(--font-ui);cursor:pointer;
           color:var(--ink-4);font-size:13px;letter-spacing:0.24em;
           padding:12px 4px 10px;min-height:var(--touch);
           transition:color .26s var(--ease)}
@@ -42,7 +42,7 @@
      読み返す場所なので、読みやすさを取る。
      一枚ずつが「付箋」。箱は作らず、左の色糸と下の罫だけで区切る。 */
   .shelves{display:flex;flex-wrap:wrap;gap:2px var(--s5);margin:0 0 var(--s2)}
-  .shelf-tab{background:none;border:none;font-family:inherit;text-align:left;cursor:pointer;
+  .shelf-tab{background:none;border:none;font-family:var(--font-ui);text-align:left;cursor:pointer;
              padding:10px 2px 12px;min-height:var(--touch);color:var(--ink-3);
              transition:color .22s var(--ease)}
   .shelf-tab .nm{display:block;font-size:13px;letter-spacing:0.16em;word-break:keep-all}
@@ -55,14 +55,14 @@
   /* 棚を編む・名前を変える・手放す（本人の道具なので、静かに置くが隠さない） */
   .shelf-tools{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s4);
                margin:0 0 var(--s3)}
-  .shelf-tool{background:none;border:none;font-family:inherit;cursor:pointer;
+  .shelf-tool{background:none;border:none;font-family:var(--font-ui);cursor:pointer;
               color:var(--ink-4);font-size:11.5px;letter-spacing:0.18em;
               padding:11px 2px;min-height:var(--touch);
               border-bottom:1px solid transparent;
               transition:color .22s var(--ease),border-color .22s var(--ease)}
   .shelf-tool:hover{color:var(--ink-2);border-bottom-color:var(--rule-act)}
   .shelf-name-input{background:none;border:none;border-bottom:1px solid var(--rule);
-              font-family:inherit;font-size:12.5px;letter-spacing:0.1em;color:var(--ink-2);
+              font-family:var(--font-ui);font-size:12.5px;letter-spacing:0.1em;color:var(--ink-2);
               padding:10px 2px;outline:none;max-width:12em}
   .shelf-name-input::placeholder{color:var(--ink-4)}
   .shelf-name-input:focus{border-bottom-color:var(--ink-4)}
@@ -78,6 +78,9 @@
      幅の決め方（15em ごとに一段・隙間20px）は colCount() が同じ式でなぞる。 */
   .slips{margin:0;padding:0;list-style:none;display:flex;gap:20px;align-items:flex-start;
          width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
+  /* 畳んだ面は display も畳む（v4作法）。display:flex は hidden 属性より強いので、
+     これが無いと「並べて読む」の下に、紙のままの棚がそのまま残って二重に出る。 */
+  .slips[hidden]{display:none}
   .slip-col{flex:1 1 0;min-width:0;margin:0;padding:0;list-style:none}
   /* 影のぼけは 30px → 14px（2026-08-03 スクロール）。ぼかしは blur と同じ計算で、
      一枚ごとに面積ぶんの塗りが要る——棚には紙が何十枚も敷き詰まるので、指で送る間
@@ -111,23 +114,25 @@
   .slip-fusen-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 var(--s2)}
   .slip-fusen{display:inline-flex;align-items:center;gap:6px;max-width:100%;
               background:rgba(30,27,33,.05);border:1px solid rgba(30,27,33,.28);border-radius:1px;
-              font-family:inherit;font-size:11px;letter-spacing:0.14em;color:rgba(30,27,33,.66);
+              font-family:var(--font-ui);font-size:11px;letter-spacing:0.14em;color:rgba(30,27,33,.66);
               padding:7px 10px;min-height:32px;cursor:pointer;
               transition:color .22s var(--ease),background .22s var(--ease)}
   .slip-fusen:active{color:rgba(30,27,33,.9);background:rgba(30,27,33,.1)}
   .slip-fusen .x{color:rgba(30,27,33,.45);font-size:13px;line-height:1}
   .slip-fusen.add{background:none;border-style:dashed;color:rgba(30,27,33,.5)}
   .slip-fusen-in{background:none;border:none;border-bottom:1px solid rgba(30,27,33,.35);
-                 font-family:inherit;font-size:11.5px;letter-spacing:0.1em;color:rgba(30,27,33,.8);
+                 font-family:var(--font-ui);font-size:11.5px;letter-spacing:0.1em;color:rgba(30,27,33,.8);
                  padding:9px 2px;min-height:36px;outline:none;max-width:14em}
   .slip-fusen-in::placeholder{color:rgba(30,27,33,.45)}
   .slip-fusen-in:focus{border-bottom-color:rgba(30,27,33,.6)}
   .slip-foot{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3)}
-  .slip-when{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:var(--t-mono);
+  /* 日付は道具の側（§3.3）。数字は等幅で——並ぶ紙の日付の桁が、行ごとに揺れない */
+  .slip-when{font-family:var(--font-ui);font-size:var(--t-mono);
+             font-variant-numeric:tabular-nums;
              letter-spacing:0.18em;color:rgba(30,27,33,.5)}
   /* 外すのは「棚から降ろす」だけ。ことばそのものは宙にも配達にも残る */
   .slip-off{min-height:var(--touch);background:none;border:none;border-bottom:1px solid transparent;
-            color:rgba(30,27,33,.6);font-family:inherit;font-size:11.5px;letter-spacing:0.18em;
+            color:rgba(30,27,33,.6);font-family:var(--font-ui);font-size:11.5px;letter-spacing:0.18em;
             padding:13px 2px;transition:color .22s var(--ease),
             border-color .22s var(--ease),opacity .22s var(--ease)}
   .slip-off:hover{color:rgba(30,27,33,.9);border-bottom-color:rgba(30,27,33,.45)}
@@ -135,7 +140,7 @@
   /* ほかの棚にも置く（同じことばを複数の棚に・v2 §5）。小さな付箋のかたち */
   .slip-put{display:inline-flex;align-items:center;min-height:36px;max-width:100%;
             background:none;border:1px solid rgba(30,27,33,.28);border-radius:1px;
-            font-family:inherit;font-size:10.5px;letter-spacing:0.14em;color:rgba(30,27,33,.55);
+            font-family:var(--font-ui);font-size:10.5px;letter-spacing:0.14em;color:rgba(30,27,33,.55);
             padding:6px 9px;cursor:pointer;
             transition:color .22s var(--ease),border-color .22s var(--ease)}
   .slip-put.on{color:rgba(30,27,33,.85);border-color:rgba(30,27,33,.5)}
@@ -171,13 +176,130 @@
       content-visibility:auto;contain-intrinsic-size:auto 300px}
   }
 
+  /* ══ 並べて読む（2026-08-07 §3.2・§3.3）══════════════════════════
+     棚には二つの見え方がある。
+       紙のまま … 一枚ずつが気分の色に染まった紙で、付箋も置き外しも紙の上にある
+       並べて読む … 色も道具も落として、**一枚の紙に文字だけ**を並べる
+
+     後者で捨てるものを先に決める：気分の色・紙の影・傾き・左の色糸・付箋・
+     「ほかの棚へ」・「この棚から、外す」。残すのは題と本文と日付だけ。
+     手入れの道具が要るときは紙のままへ戻ればいい——**同じ面で両方をやろうとすると、
+     読む面が結局いまの棚に戻ってしまう**（道具は必ず字より目立つ）。
+
+     **地は闇のまま**（2026-08-07 Kosei）。一度は紙の白を敷いたが、白い一枚は
+     たとえ一枚でも「別の場所へ移った」になる——この面は棚の中の見え方の一つで、
+     別の部屋ではない。落とすのは紙のほう：紙片（器・影・色・左の糸）をぜんぶ外すと、
+     闇の上に字だけが残る。それが「並べて読む」の姿。
+     区切りは罫一本だけ。器（カード）も影も作らない＝闇の上に組まれた版面。 */
+  /* 足場は紙（.slips / .sheet）と同じ幅にそろえる。.doc（520px）の右端に置くと、
+     切り替えの語だけが版面の内側に取り残されて、何の右上なのか分からなくなる。 */
+  .view-pick{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+             gap:2px var(--s4);margin:0 0 var(--s3);
+             width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2)}
+  .view-pick[hidden]{display:none}
+  .view-set{display:flex;align-items:center;gap:0 var(--s3)}
+  /* 畳んだ面は display も畳む（v4作法）。display:flex は hidden 属性より強い */
+  .view-set[hidden]{display:none}
+  .view-opt{background:none;border:none;cursor:pointer;
+            font-family:var(--font-ui);font-size:11.5px;letter-spacing:0.18em;
+            color:var(--ink-4);padding:12px 2px 10px;min-height:var(--touch);
+            transition:color .22s var(--ease)}
+  .view-opt:hover{color:var(--ink-2)}
+  .view-opt:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
+  .view-opt.on{color:var(--ink-1)}
+  .view-opt::after{content:'';display:block;height:1px;margin-top:8px;
+                   background:var(--rule);opacity:0;
+                   transition:opacity .22s var(--ease)}
+  .view-opt.on::after{opacity:.7}
+  .view-opt.sub{font-size:11px;letter-spacing:0.14em}
+  .view-opt.sub.on{color:var(--ink-2)}
+  /* 足場は棚の紙片と同じ（.slips と同じ幅・同じ中央寄せ）。面の幅が変わると
+     「別の場所へ来た」に見えるので、切り替えの前後で版面の外形は動かさない。
+     地は敷かない——背景を持たせた時点で、それは闇の上に置かれた**器**になる。 */
+  .sheet{width:min(92vw,1060px);margin-left:calc((100% - min(92vw,1060px))/2);
+         padding:var(--s3) var(--s3) var(--s4)}
+  .sheet[hidden]{display:none}
+  /* 段は auto-fill。1段の下限を 19em に置くと、机で3段・板で2段・携帯で1段になる
+     （§3.2 の「1行に3〜4列・モバイルは1〜2列」を、断点ではなく字の幅で決める）。
+     断点で数えないのは、この面の幅が .slips と同じ min(92vw,1060px) で、
+     画面幅そのものではないから——窓の幅で数えると、実際の段数と必ずずれる。 */
+  .sheet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(16em,1fr));
+              gap:var(--s2);margin:0;padding:0;list-style:none}
+  /* ── 一片ずつ枠で囲む（2026-08-07 Kosei）───────────────────────────
+     最初は横罫一本だけで区切っていたが、携帯は必ず一段になるので、罫だけだと
+     ことばが縦につながって「どこからどこまでが一片か」が読めなかった。枠で閉じる。
+
+     【姿は紙片と同じ】2026-08-07 Kosei：島に降りた紙片とまったく同じ材質にする
+     ——手染めの紙（--pp）に墨の字、影は一本だけ。気分の色は**紙に染みる**（宙の
+     paperOf・棚の紙のままと同じ決め方）。枠線は要らない：紙そのものが一片の境目を
+     言うので、1pxの罫よりずっと強い。
+     字も**縦書き**（2026-08-07 Kosei）。棚では長らく横に寝かせていたが、この宙の
+     ことばは縦に書かれて縦に漂っているもので、棚でだけ倒すと別のことばに見える。
+     紙のままとの違いは色や形ではなく**道具の有無**——付箋も「ほかの棚へ」も
+     「この棚から、外す」も出さない。読む面に押せるものを増やすと、目は必ずそちらへ行く。
+     色が選ばれていないことばは生成り〜灰白の三種（paper() が本文のハッシュで選ぶ）＝
+     **選ばれていない色は空気にしない**（2026-07-28 の恒久ルール）。 */
+  /* 紙の丈はこちらで決める（--vh）。縦書きは「どこで折り返すか」が丈で決まるので、
+     中身まかせにすると一列のまま下へ伸びていく。
+     携帯を低く（190px）するのは、そこでは紙が横いっぱいに広がるから——丈を高く
+     取ると一列だけの字の左に、紙の八割が空いたまま残る。低く広い紙にすると、
+     80字が7列に折れて紙をちょうど埋める。机では紙が細いので、逆に丈を取る。 */
+  .sheet-cell{--vh:190px;
+              display:flex;flex-direction:column;align-items:flex-end;
+              height:calc(var(--vh) + var(--s3) * 2);
+              padding:var(--s3);border-radius:var(--edge);
+              background:var(--pp,#EBE7DE);
+              box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
+  /* 縦の版面。題が右、本文がその左（縦書きの読み順）。
+     幅は中身なりで、**紙の右端に寄せる**（中央ではなく）。理由は二つ：
+     ・縦書きは右から始まるので、どの紙でも一列目が同じ場所にある＝目が迷わない
+     ・打鍵の再生で列が一本増えるたび、中央寄せだと版面が左右に跳ねる
+       （島の紙片は寸法を留めて（_pin）これを消しているが、ここは丈が固定なので
+        右端に寄せるだけで済む——増えるのは左へだけ） */
+  .sheet-v{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+           flex:1;min-height:0;height:100%;max-width:100%;overflow:hidden}
+  /* 入り切らないことばは行送り方向（左）へフェード＝「続きがある」（島の .w.ovf と同じ） */
+  .sheet-v.ovf{-webkit-mask-image:linear-gradient(to left,#000 72%,transparent 97%);
+               mask-image:linear-gradient(to left,#000 72%,transparent 97%)}
+  @media (min-width:640px){
+    .sheet{padding:var(--s3) var(--s4) var(--s5)}
+    .sheet-grid{gap:var(--s3)}
+    .sheet-cell{--vh:340px;padding:var(--s4);height:calc(var(--vh) + var(--s4) * 2)}
+  }
+  /* 紙の上の字はすべて墨の濃淡で（闇用の --ink-* は紙では読めない・紙のままと同じ値）。
+     余白は論理方向で書く——縦書きでは block-end が「左」、inline-start が「上」。
+     物理の margin-bottom / margin-left で書くと、縦に倒した瞬間に全部ずれる。 */
+  .sheet-title{margin:0;margin-block-end:var(--s2);margin-inline-start:-.5em;
+               font-family:var(--font-body);
+               font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
+               word-break:keep-all;overflow-wrap:anywhere}
+  .sheet-title::before{content:"「"}
+  .sheet-title::after{content:"」"}
+  /* 本文。ここが版面の主で、ほかは全部この一段のために退いている。
+     字は大きめ・行間は広め（詩集の一段）。keep-all は掛けない——文節で折るのは
+     UI 文言の作法で、人のことばには介入しない（tayori の恒久方針）。 */
+  .sheet-poem{margin:0;font-family:var(--font-body);
+              font-size:15px;line-height:2.5;letter-spacing:0.06em;
+              white-space:pre-wrap;overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
+  /* 日付は道具の字（§3.3）。ここだけ横に寝かせるのは、縦の版面の「読み終えたあと」に
+     置く奥付だから（縦書きの終わりは左端。そこへ横一行で添える）。 */
+  .sheet-when{align-self:stretch;margin-top:var(--s2);font-family:var(--font-ui);
+              font-size:var(--t-mono);font-variant-numeric:tabular-nums;
+              letter-spacing:0.18em;color:rgba(30,27,33,.5);text-align:left}
+  .sheet-more{display:flex;justify-content:center;padding-top:var(--s4)}
+  .sheet-more[hidden]{display:none}
+  /* 「つづきを、めくる」は共通の .ruled のまま（闇の上なので、そのまま通る）。
+     的の高さだけこの面の寸法に合わせる。 */
+  .sheet-more .ruled{min-height:var(--touch);padding:13px 6px}
+
   /* ── 自分の書架（v2 §11）──────────────────────────────
      自分が放ったことばの全部。並べるのは時間順ではなく「季節と気分の色」。
      件数・文字数・連続日数は出さない。眺めるだけで季節と色の偏りが伝わる状態が正。 */
   .season{margin:0 0 var(--s6)}
   .season-head{display:flex;align-items:baseline;gap:var(--s3);
                margin:0 0 var(--s2);color:var(--ink-3)}
-  .season-head .yr{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:var(--t-mono);
+  .season-head .yr{font-family:var(--font-ui);font-size:var(--t-mono);
+                   font-variant-numeric:tabular-nums;
                    letter-spacing:0.22em;color:var(--ink-4)}
   .season-head .sn{font-size:13.5px;letter-spacing:0.3em}
   /* ことばは色相の順に緯（よこいと）として並ぶ。左の糸が気分の色。
@@ -206,7 +328,7 @@
      窓を過ぎたことばには何も出ない——できないことは、見せない。 */
   .m-undo{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--s3);margin:2px 0 0}
   .m-undo button{background:none;border:none;border-bottom:1px solid transparent;
-                 font-family:inherit;font-size:11px;letter-spacing:0.18em;color:rgba(30,27,33,.55);
+                 font-family:var(--font-ui);font-size:11px;letter-spacing:0.18em;color:rgba(30,27,33,.55);
                  padding:11px 2px;min-height:var(--touch);cursor:pointer;
                  transition:color .22s var(--ease),border-color .22s var(--ease)}
   .m-undo button:hover{color:rgba(30,27,33,.85);border-bottom-color:rgba(30,27,33,.45)}
@@ -252,9 +374,33 @@
     <div class="shelves" id="shelves" role="tablist" aria-label="棚"></div>
     <div class="shelf-tools" id="shelfTools"></div>
 
+    {# ── 見え方（2026-08-07 §3.2）────────────────────────────────
+       「紙のまま」＝これまでの棚（気分の色の紙・付箋・置き外しの道具が付く）。
+       「並べて読む」＝道具も色も落として、一枚の紙に文字だけを並べる面。
+       二語を並べて、選ばれている方に罫を立てる（この面の me-tab と同じ作法）。
+       並びの切り替え（§3.4）は「並べて読む」の中にだけ出す——紙のままの並びは
+       残した順で、それは棚の履歴そのものだから動かさない。 #}
+    <div class="view-pick" id="viewPick" hidden>
+      <div class="view-set" role="group" aria-label="棚の見え方">
+        <button type="button" class="view-opt on" data-v="paper" aria-pressed="true">紙のまま</button>
+        <button type="button" class="view-opt" data-v="read" aria-pressed="false">並べて読む</button>
+      </div>
+      <div class="view-set" id="viewSort" role="group" aria-label="並び" hidden>
+        <button type="button" class="view-opt sub on" data-s="new" aria-pressed="true">新しい順</button>
+        <button type="button" class="view-opt sub" data-s="rand" aria-pressed="false">ランダム</button>
+      </div>
+    </div>
+
     {# 段は中の <ul class="slip-col"> が持つ（2026-08-03）。<ul> の直下に <ul> は
        置けないので、外側は器だけの箱にして、名前（aria-label）をここへ残す。 #}
     <div class="slips" id="slips" role="group" aria-label="棚に残したことば"></div>
+    {# 並べて読む面。紙は一枚だけ（紙片を敷き詰めない）＝ここは眺める所ではなく読む所 #}
+    <div class="sheet" id="sheet" hidden>
+      <ul class="sheet-grid" id="sheetGrid" aria-label="棚に残したことば"></ul>
+      <div class="sheet-more" id="sheetMore" hidden>
+        <button type="button" class="ruled" id="sheetMoreBtn">つづきを、めくる</button>
+      </div>
+    </div>
     <p class="state" id="shelfState" hidden></p>
   </section>
 
@@ -427,8 +573,21 @@ addEventListener('resize',()=>{
   'use strict';
   const shelvesBox=document.getElementById('shelves'),
         toolsBox=document.getElementById('shelfTools'),
-        box=document.getElementById('slips'), state=document.getElementById('shelfState');
+        box=document.getElementById('slips'), state=document.getElementById('shelfState'),
+        pickBox=document.getElementById('viewPick'), sortBox=document.getElementById('viewSort'),
+        sheet=document.getElementById('sheet'), sheetGrid=document.getElementById('sheetGrid'),
+        sheetMore=document.getElementById('sheetMore'),
+        sheetMoreBtn=document.getElementById('sheetMoreBtn');
   let D=null, cur=null;   // 取ってきた棚とことば／いま開いている棚のid
+  /* ── 見え方と並び（2026-08-07 §3.2・§3.4）──
+     view … 'paper'（これまでの紙片）｜'read'（並べて読む）
+     sort … 'new'（残した新しい順・APIが返す順そのまま）｜'rand'（ランダム）
+     shown … いま何枚めくったか。一度に50枚（§5）——数百枚を一度に組むと、
+             読む前に指が止まる。数は画面に出さない（枚数は数えない線のまま）。
+     どちらも DB には持たない：これは「いま、どう見ているか」であって、その人の
+     設定ではない（§4）。面を離れれば紙のままへ戻る。 */
+  const PAGE=50;
+  let view='paper', sort='new', shown=0, rseed=1;
   function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   function say(html){ state.hidden=!html; state.innerHTML=html||''; }
   /* 気分の色を、闇の中で読める文字色へ（宙の tintOf と同じ作法） */
@@ -576,10 +735,103 @@ addEventListener('resize',()=>{
     box.appendChild(add);
   }
 
-  /* ── いまの棚のことば。ほかの棚にも置ける（同じことばを複数の棚へ・§5）── */
+  /* ── いまの棚に置いてあることば ── */
+  function wordsHere(){ return D.words.filter(w=>w.shelves.indexOf(cur)>=0); }
+
+  /* ══ 並べて読む（2026-08-07 §3.2）══════════════════════════════
+     紙の色も、傾きも、付箋も、置き外しも出さない。題と本文と日付だけ。
+     ここで「外す」を出さないのは、道具を隠したいからではなく、**道具は必ず字より
+     目立つ**から——読む面に一つでも押せるものを置くと、目はそちらへ行く。
+     手を入れたくなったら紙のままへ戻る。二語の切り替えは、その往復のためにある。 */
+  /* ランダムの並び（§3.4）。押した時に種を一つ決めて、その種で混ぜる——
+     めくるたびに引き直すと、続きをめくった時に前の50枚がもう一度出てくる。
+     種は押すたびに変わるので、二度押せば違う並びになる。 */
+  function shuffled(list,seed){
+    const a=list.slice(); let s=seed>>>0||1;
+    for(let i=a.length-1;i>0;i--){
+      s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;   // xorshift32（決まった種で同じ並び）
+      const j=s%(i+1); const t=a[i];a[i]=a[j];a[j]=t;
+    }
+    return a;
+  }
+  function readOrder(){
+    const words=wordsHere();
+    return sort==='rand'?shuffled(words,rseed):words;   // 'new' は API が返す残した順
+  }
+  function renderRead(more){
+    const words=readOrder();
+    if(!words.length){
+      sheet.hidden=true;
+      say('この棚には、<wbr>まだ<wbr>何も<wbr>置かれていません。');
+      return;
+    }
+    say('');
+    sheet.hidden=false;
+    if(!more){ sheetGrid.textContent=''; shown=0; }
+    const upto=Math.min(words.length,shown+PAGE);
+    const frag=document.createDocumentFragment();
+    for(let i=shown;i<upto;i++){
+      const w=words[i];
+      const li=document.createElement('li');
+      li.className='sheet-cell';
+      // 紙の色は紙のままと同じ決め方（paper()）＝同じことばは、どちらの見え方でも同じ紙
+      li.style.setProperty('--pp',paper(w.color,w.ref||w.id));
+      li.innerHTML='<div class="sheet-v">'+
+        (w.title?'<p class="sheet-title"></p>':'')+
+        '<p class="sheet-poem"></p></div><span class="sheet-when"></span>';
+      if(w.title)li.querySelector('.sheet-title').textContent=w.title;
+      li.querySelector('.sheet-poem').textContent=w.poem;
+      li.querySelector('.sheet-when').textContent=whenLabel(w.saved_at);
+      frag.appendChild(li);
+    }
+    sheetGrid.appendChild(frag);
+    /* 溢れた紙にだけ左フェード。読むのは足したぶんだけ・書くのはそのあとで一度に
+       （測ると書くを混ぜない・2026-08-03 カクツキの作法） */
+    const vs=[...sheetGrid.children].slice(more?shown:0).map(li=>li.querySelector('.sheet-v'));
+    const ovf=vs.map(v=>v&&v.scrollWidth>v.clientWidth+2);
+    vs.forEach((v,i)=>{ if(v&&ovf[i])v.classList.add('ovf'); });
+    shown=upto;
+    sheetMore.hidden=shown>=words.length;
+  }
+  /* めくった続きは、いま読んでいた所の続きから始まる（頭へ戻さない）。
+     押した紙が画面のどこにあったかは動かさないので、目の置き場所も動かない。 */
+  sheetMoreBtn.addEventListener('click',()=>renderRead(true));
+
+  /* ── 見え方・並びの切り替え ── */
+  function renderPick(){
+    pickBox.hidden=!(D&&wordsHere().length);
+    sortBox.hidden=view!=='read';
+    pickBox.querySelectorAll('[data-v]').forEach(b=>{
+      const on=b.dataset.v===view;
+      b.classList.toggle('on',on); b.setAttribute('aria-pressed',on?'true':'false');
+    });
+    pickBox.querySelectorAll('[data-s]').forEach(b=>{
+      const on=b.dataset.s===sort;
+      b.classList.toggle('on',on); b.setAttribute('aria-pressed',on?'true':'false');
+    });
+  }
+  pickBox.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.v){ view=b.dataset.v; }
+    else if(b.dataset.s){
+      sort=b.dataset.s;
+      // 押すたびに種を引き直す＝「ランダム」をもう一度押せば、別の並びになる
+      if(sort==='rand')rseed=(Math.random()*0x7fffffff)>>>0||1;
+    }else return;
+    renderPick(); renderWords();
+  });
+
+  /* ── ことばを出す。紙のままか、並べて読むか ── */
   function renderWords(){
+    renderPick();
+    if(view==='read'){ layColumns(box,[]); box.hidden=true; renderRead(false); return; }
+    sheet.hidden=true; sheetMore.hidden=true; box.hidden=false; shown=0;
+    renderPaper();
+  }
+  /* ── 紙のまま。ほかの棚にも置ける（同じことばを複数の棚へ・§5）── */
+  function renderPaper(){
     layColumns(box,[]);            // 段ごと畳む（前の棚の紙を残さない）
-    const words=D.words.filter(w=>w.shelves.indexOf(cur)>=0);
+    const words=wordsHere();
     if(!words.length){
       say('この棚には、<wbr>まだ<wbr>何も<wbr>置かれていません。<br>'+
           'tayori-たより- で<wbr>ことばに<wbr>触れて<wbr>「手元に、<wbr>残す」<wbr>を<wbr>選ぶと、<wbr>ここへ<wbr>置かれます。');

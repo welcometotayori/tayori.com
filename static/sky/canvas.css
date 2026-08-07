@@ -66,7 +66,7 @@
             width:100%;min-height:var(--touch);padding:11px 12px;
             background:none;border:none;border-radius:10px;text-align:left;
             color:var(--ink-2);text-decoration:none;
-            font-family:inherit;font-size:13px;letter-spacing:.1em;
+            font-family:var(--font-ui);font-size:13px;letter-spacing:.1em;
             transition:background .18s var(--ease),color .18s var(--ease)}
   .menu-row:hover{background:rgba(250,248,243,.07);color:var(--ink-1)}
   .menu-row:active{background:rgba(250,248,243,.12)}
@@ -79,7 +79,7 @@
   .menu-rooms{display:grid;grid-template-columns:1fr 1fr;gap:1px;
               max-height:216px;overflow-y:auto;overscroll-behavior:contain;
               scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
-  .menu-rooms button{background:none;border:none;font-family:inherit;cursor:pointer;
+  .menu-rooms button{background:none;border:none;font-family:var(--font-ui);cursor:pointer;
               display:flex;align-items:center;min-height:40px;padding:10px 12px;
               border-radius:9px;font-size:12.5px;letter-spacing:.12em;color:var(--ink-3);
               transition:background .18s var(--ease),color .18s var(--ease)}
@@ -291,7 +291,7 @@
      2026-07-31：語（よる／ひく）をやめ、どの地図でも通じる ＋／− に。 */
   .zoom{display:flex;gap:10px}
   .zoom button{background:none;border:none;
-        color:var(--ink-3);font-family:inherit;font-size:19px;line-height:1;
+        color:var(--ink-3);font-family:var(--font-ui);font-size:19px;line-height:1;
         width:var(--touch);min-height:var(--touch);padding:0;
         transition:color .22s var(--ease);
         touch-action:none}   /* 押し続けの寄り引き（pointerdown 連打）を巻き取らせない */
@@ -299,7 +299,7 @@
   .zoom button:active{opacity:.62}
   /* 引き返す語（2026-08-03 操作性）。島に降りている間（body.reading）だけ立つ。
      語で押す作法のまま、罫一本を下に敷く——器は作らない（宙の中の道具ではなく出口）。 */
-  .sky-home{background:none;border:none;font-family:inherit;
+  .sky-home{background:none;border:none;font-family:var(--font-ui);
         color:var(--ink-3);font-size:12.5px;letter-spacing:.2em;
         min-height:var(--touch);padding:0 2px 0 6px;
         border-bottom:1px solid transparent;
@@ -310,6 +310,9 @@
         transition:opacity .6s var(--ease),color .22s var(--ease)}
   .sky-home:hover{color:var(--ink-1);border-bottom-color:var(--rule-faint)}
   .sky-home:active{opacity:.62}
+  /* 並べて読む（§3.2）。出口（宙へもどる）と同じ現れ方・同じ姿で、隣に一語だけ。
+     入口と出口を同じ形にするのは、どちらも「この島に降りている間だけの行い」だから。 */
+  .sky-read{padding:0 6px 0 2px}
   /* ── 言葉の漂流物：島の岸（§4.4）。人のことばと同じ姿では置かない——
         色を持たず、紙に染みた淡墨。書かれもしない（打鍵の再生から除外） ── */
   .w.pd{color:var(--ink-3);text-shadow:0 0 16px rgba(179,143,111,.20)}
@@ -371,8 +374,17 @@
                    rgba(8,8,13,.80) 70%,rgba(8,8,13,0) 100%)}
   .hold-src{margin:0;font-size:10.5px;line-height:1.9;letter-spacing:0.14em;color:var(--ink-4);
             word-break:keep-all;overflow-wrap:anywhere;padding:2px 0 4px}
+  /* 収蔵数（2026-08-07 §3.1）。行いではなく、そのことばについての事実なので、
+     押せる罫（--rule-act）も触れる高さ（--touch）も与えない——読むだけの一行。
+     出典の刻印と同じ段（--ink-4・数字と控えの下限）に置き、数字だけを一段上げる。
+     数はUIの字（ゴシック）で出す：本文の明朝と混ざると、数が本文の一部に見える。 */
+  .hold-kept{margin:0;padding:2px 0 4px;font-family:var(--font-ui);
+             font-size:10.5px;line-height:1.9;letter-spacing:0.14em;color:var(--ink-4);
+             word-break:keep-all;overflow-wrap:anywhere}
+  .hold-kept .n{color:var(--ink-3);font-variant-numeric:tabular-nums;
+                letter-spacing:0.06em;padding-right:.1em}
   .hold-act{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
-            background:none;border:none;padding:11px 2px;font-family:inherit;
+            background:none;border:none;padding:11px 2px;font-family:var(--font-ui);
             font-size:var(--t-meta);letter-spacing:0.16em;color:var(--ink-2);
             white-space:nowrap;transition:color .22s var(--ease),opacity .22s var(--ease)}
   .hold-act:hover{color:var(--ink-1)}
@@ -404,7 +416,7 @@
   .seek-ic{flex:none;display:block;width:16px;height:16px;color:var(--ink-3)}
   .seek-ic svg{width:100%;height:100%;display:block}
   .seek input{flex:1;min-width:0;height:100%;background:none;border:none;outline:none;
-              font-family:inherit;font-size:13px;letter-spacing:0.12em;
+              font-family:var(--font-ui);font-size:13px;letter-spacing:0.12em;
               color:var(--ink-1);padding:0}
   .seek input::placeholder{color:var(--ink-3);letter-spacing:0.18em}
   .seek button#seekBack{flex:none;background:none;border:none;border-radius:50%;
@@ -421,6 +433,155 @@
   @media (prefers-reduced-motion:reduce){
     .seek.waiting .seek-ic{animation:none;opacity:.62}
   }
+  /* ══ 並べて読む（2026-08-07 §3.2・§3.3）══════════════════════════
+     島に降りた紙片は「漂うものを眺める」姿で、読み通すためのものではない
+     （縦書き・傾き・色・沈降の薄さ——どれも眺めるための仕掛け）。同じ部屋のことばを、
+     色も傾きも落として一枚の紙に組み直す面を、その上に重ねる。
+
+     **地は闇のまま**（2026-08-07 Kosei）。一度は紙の白を敷いたが、白くした時点で
+     それは宙ではない別の場所になり、「宙は置き換えない」の大原則が畳から抜ける。
+     落とすのは紙のほう——紙片（器・影・色・傾き・縦書き）をぜんぶ外すと、闇の上に
+     字だけが残る。宙は下に在り続け、この面はその上の一枚の版面になる。
+     地は**透かさない**（var(--space) そのもの）。.gather のように薄い veil を敷くと、
+     3%でも下は透ける——実測では頭の帯（検索の器・書くの錠剤）と島の名と灯が読める濃さで
+     浮き、読んでいる字と重なった。あちらは「宙のどこから寄ってきたか」を見せる面なので
+     透けてよいが、ここは読み通す面：下に何が在るかは、畳めば分かる。
+     時刻でごく僅かに移ろう闇（--space）をそのまま使うので、宙と地続きのままではある。
+
+     この面に置く行いは「とじる」と並びの二語と「つづきを、めくる」だけ。
+     棚も印ももう見ないも出さない——読む面に押せるものを増やすと、目は必ずそちらへ行く。
+     手を伸ばしたくなったら畳めばいい。島は同じ場所に、そのまま在る。 */
+  .rsheet{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;
+          background:var(--space);
+          opacity:0;visibility:hidden;pointer-events:none;
+          transition:opacity .34s var(--ease),visibility 0s linear .34s}
+  .rsheet.on{opacity:1;visibility:visible;pointer-events:auto;
+             transition:opacity .34s var(--ease),visibility 0s}
+  .rsheet[hidden]{display:none}
+  /* 出口は sticky ではなく flex の固定段（面そのものが縦に分かれている・v4作法）。
+     頭の帯（探す・しるし）より上に立つ面なので、上端は safe-area だけ避ければよい。 */
+  .rsheet-top{flex:none;display:flex;flex-wrap:wrap;align-items:center;
+          gap:2px var(--s3);
+          padding:calc(14px + var(--safe-t)) calc(20px + var(--safe-r)) 10px calc(20px + var(--safe-l));
+          border-bottom:1px solid var(--rule-faint);background:var(--space)}
+  .rsheet-lead{flex:1 1 auto;margin:0;font-family:var(--font-ui);
+          font-size:11.5px;letter-spacing:.18em;color:var(--ink-4);
+          word-break:keep-all;overflow-wrap:anywhere}
+  .rsheet-lead b{color:var(--ink-2);font-weight:400}
+  .rsheet-set{flex:none;display:flex;align-items:center;gap:0 var(--s3)}
+  .rsheet-opt{background:none;border:none;font-family:var(--font-ui);
+          font-size:11px;letter-spacing:.14em;color:var(--ink-4);
+          min-height:var(--touch);padding:12px 2px 10px;
+          transition:color .22s var(--ease)}
+  .rsheet-opt:hover{color:var(--ink-2)}
+  .rsheet-opt:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
+  .rsheet-opt.on{color:var(--ink-1)}
+  .rsheet-opt::after{content:'';display:block;height:1px;margin-top:8px;
+          background:var(--rule);opacity:0;transition:opacity .22s var(--ease)}
+  .rsheet-opt.on::after{opacity:.7}
+  .rsheet-close{flex:none;background:none;border:none;
+          border-bottom:1px solid var(--rule-act);
+          font-family:var(--font-ui);font-size:var(--t-meta);letter-spacing:var(--tr-meta);
+          color:var(--ink-2);min-height:var(--touch);padding:12px 2px;
+          transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .rsheet-close:hover{color:var(--ink-1);border-color:var(--thread)}
+  .rsheet-close:active{opacity:.62}
+  /* 狭い画面では、部屋の名で一行・道具で一行と決めておく（2026-08-07）。
+     名の長さまかせに折り返させると、「音楽」の部屋では〈とじる〉だけが三行目へ
+     落ちて、読む所が60px削れた。どの部屋でも同じ二行にする。 */
+  @media (max-width:520px){
+    .rsheet-lead{flex:0 0 100%}
+    .rsheet-set{margin-right:auto}
+  }
+  .rsheet-field{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+          -webkit-overflow-scrolling:touch;
+          padding:0 calc(12px + var(--safe-r)) calc(28px + var(--safe-b)) calc(12px + var(--safe-l))}
+  /* 段は字の幅で決まる（auto-fill）＝机で3〜4段・板で2段・携帯で1段（§3.2）。
+     ── 一片ずつ枠で囲む（2026-08-07 Kosei）──────────────────────────
+     最初は横罫一本だけで区切っていた。机では行がそろうので読めるが、携帯は必ず
+     一段になるので、罫だけだとことばが縦につながって「どこからどこまでが一片か」が
+     読めなかった。枠で閉じる（縦罫を nth-child で当てにいく話とは別で、枠なら
+     auto-fill の段数がいくつでも必ず一片ぶんを囲む）。
+
+     【姿は紙片と同じ】2026-08-07 Kosei：島に降りた紙片（.isl.sheet .w）とまったく
+     同じ材質にする——手染めの紙（--pp）に墨の字、影は一本だけ。気分の色は**紙に
+     染みる**（paperOf・島の上とまったく同じ決め方なので、同じことばは島でも読む面でも
+     同じ紙をしている）。枠線は要らない：紙そのものが一片の境目を言う。
+     字も**縦書きのまま**（2026-08-07 Kosei）。横に寝かせたほうが読みやすいと一度は
+     判断したが、この宙のことばは縦に書かれて縦に漂っているもので、読む面でだけ倒すと
+     別のことばに見える。島の紙片から降ろすのは、眺めるための規律だけ——寸法の3値
+     スナップ・沈降の薄さ・焦点レンズ・散らばり。丈は面のほうで決め（縦書きは丈が
+     決まって初めて列に折り返せる）、幅は中身にまかせて短冊のように中央へ置く。
+     色が選ばれていないことばは生成り〜灰白の三種（paperOf が本文のハッシュで選ぶ）＝
+     **選ばれていない色は空気にしない**（2026-07-28 の恒久ルール）。 */
+  .rsheet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(16em,1fr));
+          gap:var(--s2);margin:0 auto;padding:var(--s2) 0 0;
+          list-style:none;max-width:1240px}
+  /* 紙の丈はこちらで決める（--vh）。縦書きは「どこで折り返すか」が丈で決まるので、
+     中身まかせにすると一列のまま画面の外へ伸びていく。
+     携帯を低く（190px）するのは、そこでは紙が横いっぱいに広がるから——丈を高く
+     取ると一列だけの字の左に、紙の八割が空いたまま残る。低く広い紙にすると、
+     80字が7列に折れて紙をちょうど埋める（1列32px・12字/列）。
+     机では紙が295pxと細いので、逆に丈を取る（340px＝22字/列・80字で4列）。 */
+  .rsheet-cell{--vh:190px;
+          display:flex;flex-direction:column;align-items:flex-end;
+          height:calc(var(--vh) + var(--s3) * 2);
+          padding:var(--s3);border-radius:var(--edge);
+          background:var(--pp,#EBE7DE);color:rgba(30,27,33,.9);
+          box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
+  /* 漂流物は色を持たない灰の紙で、字も一段薄い（島の .isl.sheet .w.pd と同じ） */
+  .rsheet-cell.pd{color:rgba(30,27,33,.7)}
+  /* 縦の版面。題が右、本文がその左（縦書きの読み順）。
+     幅は中身なりで、**紙の右端に寄せる**（中央ではなく）。理由は二つ：
+     ・縦書きは右から始まるので、どの紙でも一列目が同じ場所にある＝目が迷わない
+     ・打鍵の再生で列が一本増えるたび、中央寄せだと版面が左右に跳ねる
+       （島の紙片は寸法を留めて（_pin）これを消しているが、ここは丈が固定なので
+        右端に寄せるだけで済む——増えるのは左へだけ） */
+  .rsheet-v{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
+          flex:1;min-height:0;height:100%;max-width:100%;overflow:hidden}
+  /* 入り切らないことばは、行送り方向（左）へフェード＝「続きがある」。…は使わない
+     （島の .w.ovf と同じ規律）。mask は一枚ごとに描画層を作るので、溢れた紙にだけ。 */
+  .rsheet-v.ovf{-webkit-mask-image:linear-gradient(to left,#000 72%,transparent 97%);
+          mask-image:linear-gradient(to left,#000 72%,transparent 97%)}
+  @media (min-width:640px){
+    .rsheet-grid{gap:var(--s3);padding-top:var(--s3)}
+    .rsheet-cell{--vh:340px;padding:var(--s4);height:calc(var(--vh) + var(--s4) * 2)}
+  }
+  /* 紙の上の字はすべて墨の濃淡で（闇用の --ink-* は紙では読めない）。
+     余白は論理方向で書く——縦書きでは block-end が「左」、inline-start が「上」。
+     物理の margin-bottom / margin-left で書くと、縦に倒した瞬間に全部ずれる。 */
+  .rsheet-title{margin:0;margin-block-end:var(--s2);margin-inline-start:-.5em;
+          font-size:11px;letter-spacing:.2em;
+          color:rgba(30,27,33,.55);word-break:keep-all;overflow-wrap:anywhere}
+  .rsheet-title::before{content:"「"}
+  .rsheet-title::after{content:"」"}
+  /* 本文。ここが版面の主。宙では縦書きで漂っていたことばも、ここでは横に寝かせる
+     （棚と同じ判断：眺める場所ではなく読み返す場所なので、読みやすさを取る）。
+     keep-all は掛けない——文節で折るのは UI 文言の作法で、人のことばには介入しない。 */
+  .rsheet-poem{margin:0;font-size:15px;line-height:2.5;letter-spacing:.06em;
+          white-space:pre-wrap;overflow-wrap:anywhere;color:inherit}
+  /* 打鍵の再生（v2追補 §1）が走っている間だけ、筆先と「ためらいのにじみ」が立つ。
+     宙の紙片（.w.nijimi）と同じ見え方だが、こちらは寸法が固定なので留め（_pin）は要らない。 */
+  .rsheet-poem.nijimi{filter:blur(.7px)}
+  /* 筆先は縦書きでは横一本（字の下に置く一画）。縦棒のままだと字に重なって読めない */
+  .rsheet-poem .tcaret{background:rgba(30,27,33,.6);width:1em;height:2px;
+          vertical-align:baseline}
+  /* 出どころの刻印（§4.4）。漂流物にだけ付く。外へ出る導線は作らない。
+     ここだけ横に寝かせるのは、縦の版面の「読み終えたあと」に置く奥付だから
+     （縦書きの終わりは左端。そこへ横一行で添える）。 */
+  .rsheet-src{align-self:stretch;margin:var(--s2) 0 0;
+          font-size:10.5px;line-height:1.7;letter-spacing:.14em;text-align:left;
+          color:rgba(30,27,33,.45);word-break:keep-all;overflow-wrap:anywhere;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rsheet-more{display:flex;justify-content:center;padding:var(--s4) 0 var(--s3)}
+  .rsheet-more[hidden]{display:none}
+  .rsheet-mb{background:none;border:none;border-bottom:1px solid var(--rule-act);
+          font-family:var(--font-ui);font-size:var(--t-meta);letter-spacing:var(--tr-meta);
+          color:var(--ink-2);min-height:var(--touch);padding:13px 6px;
+          transition:color .22s var(--ease),border-color .22s var(--ease)}
+  .rsheet-mb:hover{color:var(--ink-1);border-color:var(--thread)}
+  .rsheet-mb:active{opacity:.62}
+
   /* ── 集まってきた片（2026-08-02）──────────────────────────────
      返ってきたことばは、宙のどこに在っても、この面へ流れ着いて並ぶ。
      出どころ（画面に見えていた片はその場所から、見えていないものは宙の外から）
@@ -440,7 +601,7 @@
           word-break:keep-all;overflow-wrap:anywhere}
   .gather-lead b{color:var(--ink-1);font-weight:400}
   .gather-close{flex:none;background:none;border:none;border-bottom:1px solid var(--rule-act);
-          font-family:inherit;font-size:var(--t-meta);letter-spacing:var(--tr-meta);
+          font-family:var(--font-ui);font-size:var(--t-meta);letter-spacing:var(--tr-meta);
           color:var(--ink-2);min-height:var(--touch);padding:12px 2px;
           transition:color .22s var(--ease),border-color .22s var(--ease)}
   .gather-close:hover{color:var(--ink-1);border-color:var(--thread)}
@@ -524,7 +685,7 @@
   .cast-btn{display:inline-flex;align-items:center;gap:6px;flex:none;
             height:42px;padding:0 18px;border:none;border-radius:21px;
             background:rgba(250,248,243,.10);
-            font-family:inherit;color:var(--ink-1);font-size:14px;letter-spacing:0.18em;
+            font-family:var(--font-ui);color:var(--ink-1);font-size:14px;letter-spacing:0.18em;
             white-space:nowrap;
             transition:background .22s var(--ease),opacity .22s var(--ease)}
   .cast-btn:hover{background:rgba(250,248,243,.15)}
@@ -549,7 +710,7 @@
          width:100%;max-width:22em;max-height:132px;overflow-y:auto;overscroll-behavior:contain;
          scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
   .where button{background:none;border:none;padding:9px 2px;min-height:var(--touch);
-                font-family:inherit;font-size:var(--t-meta);letter-spacing:0.14em;
+                font-family:var(--font-ui);font-size:var(--t-meta);letter-spacing:0.14em;
                 color:var(--ink-4);border-bottom:1px solid transparent;
                 transition:color .22s var(--ease),border-color .22s var(--ease)}
   .where button:hover{color:var(--ink-2)}
@@ -658,7 +819,9 @@
         /* +3px は「20字目が1px足りずに次の列へ落ちる」のを防ぐ遊び（字送りの端数のため） */
         width:calc(var(--cw) * 4);height:calc(var(--cch) * (var(--fs) + 0.14em) + 3px);
         background:none;border:none;color:var(--chalk);
-        font-family:inherit;font-size:var(--fs);line-height:var(--cw);letter-spacing:0.14em;
+        /* ここはことばそのものが入る枠なので明朝（§3.3）。contenteditable の div で
+           textarea ではないから、トークン側の一行では拾われない——名指しで書く。 */
+        font-family:var(--font-body);font-size:var(--fs);line-height:var(--cw);letter-spacing:0.14em;
         padding:0;overflow:hidden;
         /* 縦罫は列の境目に一本ずつ。vertical-rl は右から埋まるので 270deg（右→左）で数える */
         background-image:repeating-linear-gradient(270deg,
@@ -701,7 +864,10 @@
           pointer-events:none;display:none;animation:vcaretBlink .9s steps(1) infinite}
   @keyframes vcaretBlink{50%{opacity:0}}
   @media (prefers-reduced-motion: reduce){ .vcaret{animation:none} }
-  .cast-count{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:var(--t-mono);
+  /* 字数は道具の側（§3.3）。明朝の数字は幅がまちまちで、打つたびに桁が身じろぎする
+     ——等幅の数字にすると、数だけが静かに入れ替わる（Apple §7 craft）。 */
+  .cast-count{font-family:var(--font-ui);font-size:var(--t-mono);
+              font-variant-numeric:tabular-nums;
               letter-spacing:0.3em;color:var(--ink-4);
               transition:color .3s var(--ease)}
   /* 打った過程が記録されている間だけ、字数の隣で小さく呼吸する点（カーム・テクノロジー：
@@ -723,7 +889,7 @@
      付箋と同じ「罫一本」の姿にそろえ、中央に据えて〈この一枚の名〉であることを示す。
      的は44px（v14）。書いている間の字数表示は付けない：10字は数える前に見て分かる。 */
   #castTitle{width:100%;max-width:min(70vw,300px);background:none;border:none;
-             border-bottom:1px solid var(--rule);color:var(--ink-1);font-family:inherit;
+             border-bottom:1px solid var(--rule);color:var(--ink-1);font-family:var(--font-ui);
              font-size:13.5px;letter-spacing:0.16em;text-align:center;
              padding:12px 2px;min-height:var(--touch);outline:none;
              transition:border-color .22s var(--ease),color .22s var(--ease)}
@@ -784,7 +950,7 @@
      押しにくいのは寸法ではなく**姿**のほう。
      字を --t-meta（12px）へ、墨を --ink-2（操作の主）へ、罫は常時 --rule-act
      （＝この宙で「押せる」を意味する唯一の罫）。塗りも角丸の器も作らない。 */
-  .cast-opt-row button{background:none;border:none;font-family:inherit;cursor:pointer;
+  .cast-opt-row button{background:none;border:none;font-family:var(--font-ui);cursor:pointer;
                        min-height:var(--touch);padding:12px 10px;
                        font-size:var(--t-meta);letter-spacing:0.18em;color:var(--ink-2);
                        border-bottom:1px solid var(--rule-act);
@@ -869,7 +1035,7 @@
   .fusen-row{display:flex;flex-wrap:wrap;gap:8px}
   .fusen{display:inline-flex;align-items:center;gap:6px;max-width:100%;
          background:rgba(250,248,243,.07);border:1px solid var(--rule);border-radius:1px;
-         font-family:inherit;font-size:11.5px;letter-spacing:0.14em;color:var(--ink-3);
+         font-family:var(--font-ui);font-size:11.5px;letter-spacing:0.14em;color:var(--ink-3);
          padding:7px 10px;min-height:32px;cursor:pointer;
          transition:color .22s var(--ease),background .22s var(--ease)}
   .fusen:active{color:var(--ink-1);background:rgba(250,248,243,.12)}
@@ -887,7 +1053,7 @@
                display:flex;flex-wrap:wrap;align-items:baseline;gap:0 12px}
   .where-lead{font-size:11.5px;letter-spacing:0.1em;color:var(--ink-3)}
   .where-change{background:none;border:none;border-bottom:1px solid var(--rule-act);
-                font-family:inherit;font-size:11.5px;letter-spacing:0.1em;color:var(--ink-2);
+                font-family:var(--font-ui);font-size:11.5px;letter-spacing:0.1em;color:var(--ink-2);
                 padding:9px 2px;min-height:var(--touch);
                 transition:color .22s var(--ease),opacity .22s var(--ease)}
   .where-change:hover{color:var(--ink-1)}
@@ -895,13 +1061,13 @@
   .where-pick{flex:1 0 100%;display:flex;flex-wrap:wrap;gap:0 14px;padding-top:2px}
   .where-pick[hidden]{display:none}
   .where-opt{background:none;border:none;border-bottom:1px solid transparent;
-             font-family:inherit;font-size:12px;letter-spacing:0.12em;color:var(--ink-3);
+             font-family:var(--font-ui);font-size:12px;letter-spacing:0.12em;color:var(--ink-3);
              padding:10px 2px;min-height:var(--touch);
              transition:color .22s var(--ease),border-color .22s var(--ease)}
   .where-opt:hover{color:var(--ink-1);border-bottom-color:var(--thread)}
   .where-opt:active{opacity:.62}
   input.where-new{flex:1 0 100%;background:none;border:none;border-bottom:1px solid var(--rule);
-                  font-family:inherit;font-size:12px;letter-spacing:0.1em;color:var(--ink-2);
+                  font-family:var(--font-ui);font-size:12px;letter-spacing:0.1em;color:var(--ink-2);
                   padding:10px 2px;min-height:var(--touch);outline:none}
   input.where-new::placeholder{color:var(--ink-4)}
   input.where-new:focus{border-bottom-color:var(--ink-4)}
@@ -909,7 +1075,7 @@
   #readFusen{width:min(280px,72vw)}
   .fusen-pad .fusen-row{margin-bottom:8px}
   .fusen-in{width:100%;background:none;border:none;border-bottom:1px solid var(--rule);
-            font-family:inherit;font-size:12.5px;letter-spacing:0.1em;color:var(--ink-2);
+            font-family:var(--font-ui);font-size:12.5px;letter-spacing:0.1em;color:var(--ink-2);
             padding:11px 2px;min-height:var(--touch);outline:none}
   .fusen-in::placeholder{color:var(--ink-4)}
   .fusen-in:focus{border-bottom-color:var(--ink-4)}
@@ -934,7 +1100,7 @@
   /* だれかのことばに結ぶ、静かな印（放った人には何も伝わらない）
      宙で漂うことばに触れた時の .hold-act と同じ形（同じ行いは同じ姿・Apple §16 familiarity） */
   .like-mark{display:inline-flex;align-items:center;gap:10px;min-height:var(--touch);
-             background:none;border:none;color:var(--ink-3);font-family:inherit;
+             background:none;border:none;color:var(--ink-3);font-family:var(--font-ui);
              font-size:var(--t-meta);letter-spacing:0.16em;padding:11px 4px;
              transition:color .22s var(--ease),opacity .22s var(--ease)}
   .like-mark:hover{color:var(--ink-1)}
@@ -956,7 +1122,7 @@
      実際に「この部屋を消す」と重なって、どちらを押したのか分からなかった。一段下げる。 */
   body.in-room .arrivals{top:calc(104px + var(--safe-t))}
   .arrival{display:flex;align-items:center;gap:10px;background:none;border:none;
-           font-family:inherit;font-size:var(--t-meta);letter-spacing:var(--tr-body);
+           font-family:var(--font-ui);font-size:var(--t-meta);letter-spacing:var(--tr-body);
            min-height:var(--touch);padding:12px 2px;
            color:var(--ink-3);transition:color .22s var(--ease),opacity .22s var(--ease);
            text-shadow:0 0 14px rgba(8,8,13,.95)}
