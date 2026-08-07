@@ -773,9 +773,11 @@
      ホームバーの下に潜らせない（vh はアドレスバーの下まで数える／--safe-b はその縁） */
   /* 2026-08-02：下辺の帯の中央から、頭の帯の右へ。罫一本ではなく器（角丸の帯）で
      押せることを言う——探すの器と同じ形にそろえ、二つで一組に見えるようにする。 */
+  /* 未ログインでは a、ログイン済みでは button（2026-08-08）。姿は一つ——罫も下線も
+     出さないので text-decoration:none、a には効かない font 継承もここで揃える。 */
   .cast-btn{display:inline-flex;align-items:center;gap:6px;flex:none;
             height:42px;padding:0 18px;border:none;border-radius:21px;
-            background:rgba(250,248,243,.10);
+            background:rgba(250,248,243,.10);cursor:pointer;text-decoration:none;
             font-family:var(--font-ui);color:var(--ink-1);font-size:14px;letter-spacing:0.18em;
             white-space:nowrap;
             transition:background .22s var(--ease),opacity .22s var(--ease)}
