@@ -57,3 +57,19 @@ services:
         sync: false                   # R2 APIトークンの Access Key ID
       - key: TAYORI_BACKUP_S3_SECRET
         sync: false                   # R2 APIトークンの Secret Access Key
+      # --- 課金（Stripe / 収益モデル v1・2026-08-07） ---
+      # 4つとも未設定なら /api/billing/* は503を返すだけで、他の機能には影響しない。
+      - key: STRIPE_SECRET_KEY
+        sync: false                   # sk_live_... をダッシュボードで手入力
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false                   # pk_live_...（クライアント側で使う想定。今は未使用でも先に置く）
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false                   # ダッシュボードの Webhook 設定画面で発行される whsec_...
+      - key: STRIPE_PRICE_PREMIUM_MONTHLY
+        sync: false                   # 商品(Product)から作った価格(Price)のid（price_...）
+      - key: STRIPE_PRICE_PREMIUM_YEARLY
+        sync: false
+      - key: STRIPE_PRICE_SUPPORTER_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_SUPPORTER_YEARLY
+        sync: false                   # サポーター年額は「年一括限定にするか検討中」。作るまでは空でよい

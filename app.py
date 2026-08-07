@@ -926,11 +926,25 @@ def init_db():
             # 'public_domain'＝著作権の切れた本から拾った一節。索引は一枚で持つが、
             # 作り直すときに片方だけ捨てられるようにこの列で分ける。
             "ALTER TABLE letter_vectors ADD COLUMN source_type TEXT DEFAULT 'user'",
+            # ── 収益モデル v1（2026-08-07）─────────────────────────────
+            # plan: 'free' / 'premium' / 'supporter'。premium と supporter は付与される
+            # 機能フラグが完全に同一（価格だけが違う＝支える気持ちの受け皿）なので、
+            # 判定コード側は「free かどうか」だけを見ればよい（_plan_of の呼び出し側参照）。
+            "ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'",
+            # Stripe の Customer / Subscription id。webhook が届いた時にこの2つで
+            # 該当ユーザーを引く（stripe_customer_id に索引を張る・下の CREATE INDEX）。
+            "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT",
+            "ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT",
+            "ALTER TABLE users ADD COLUMN plan_updated_at TEXT",
         ):
             try:
                 db.execute(stmt)
             except sqlite3.OperationalError:
                 pass
+
+        # webhook はまず stripe_customer_id で該当ユーザーを引く（events/customer.*）。
+        db.execute("CREATE INDEX IF NOT EXISTS idx_users_stripe_customer"
+                   " ON users (stripe_customer_id)")
 
         # 「ほどけるまで」への移行: 既存の紙玉に created_at 基準で7日ルールを当てると
         # デプロイ即日に古い紙玉の本文が消えてしまう。既存行には「今から7日」の猶予を与える。
@@ -1399,9 +1413,33 @@ def current_user():
     if not u:
         return None
     return get_db().execute(
-        "SELECT id,username,email,email_verified,onboarded,is_admin,suspended_at"
+        "SELECT id,username,email,email_verified,onboarded,is_admin,suspended_at,"
+        "COALESCE(plan,'free') AS plan"
         " FROM users WHERE id=? AND suspended_at IS NULL", (u,)
     ).fetchone()
+
+
+# ── 収益モデル v1（2026-08-07）─────────────────────────────────────
+# plan は 'free' / 'premium' / 'supporter' の3値。premium と supporter は機能フラグが
+# 完全に同一なので、判定コードはどこも「free かどうか」だけを見る＝
+# supporter を新設しても、この2つの表を書き換えるだけで済む。
+_FREE_POST_HOURLY_MAX = 5
+_SHELF_MAX_BY_PLAN = {"free": 50, "premium": 200, "supporter": 200}
+_SHELVES_MAX_BY_PLAN = {"free": 3, "premium": 10, "supporter": 10}
+
+
+def _plan_of(db, user_id):
+    r = db.execute("SELECT COALESCE(plan,'free') AS plan FROM users WHERE id=?",
+                   (user_id,)).fetchone()
+    return r["plan"] if r and r["plan"] in _SHELF_MAX_BY_PLAN else "free"
+
+
+def _shelf_max(plan):
+    return _SHELF_MAX_BY_PLAN.get(plan, 50)
+
+
+def _shelves_max(plan):
+    return _SHELVES_MAX_BY_PLAN.get(plan, 3)
 
 
 ONBOARDING_QUESTIONS = [
@@ -2215,6 +2253,21 @@ def api_account_delete():
         return jsonify(error="パスワードが違います。"), 401
     if _json_str(data.get("confirm")).strip() != _DELETE_CONFIRM:
         return jsonify(error=f"確かめのため、「{_DELETE_CONFIRM}」と書き写してください。"), 400
+    # ── 契約を先に止める（2026-08-07 夜）────────────────────────────
+    # users の行を消すと stripe_customer_id / stripe_subscription_id も一緒に消える。
+    # 消したあとでは「どの契約がこの人のものだったか」を引く手がかりがどこにも無く、
+    # webhook（customer.subscription.* は stripe_customer_id で人を引く）も宙に浮く。
+    # ＝ 解約を先にやらないと、退会した人に請求だけが残り、こちらから止められない。
+    #
+    # 止められなかった時は、**退会そのものを通さない**。ここは「アカウントを消す」より
+    # 「お金を止める」ほうが取り返しのつかない側なので、安全な方へ倒す（DBの書き込みに
+    # 失敗した時に 503 で戻して再試行してもらうのと同じ作法）。Stripe の障害は数分で
+    # 直るが、止まらないまま消えた契約は本人にも運営者にも二度と触れない。
+    sub = _cancel_subscription_for(db, me)
+    if sub is False:
+        return jsonify(error="いま、ご契約を止められませんでした。"
+                             "数分おいて、もう一度お試しください。"
+                             "続くようでしたら tayoriletter@gmail.com までお知らせください。"), 503
     # 自分のことばのidを先に押さえる（letters を消した後では引けない）
     lids = [r["id"] for r in db.execute("SELECT id FROM letters WHERE user_id=?", (me,))]
     saved = [r["id"] for r in db.execute("SELECT id FROM saved_words WHERE user_id=?", (me,))]
@@ -6496,11 +6549,23 @@ def api_create_letter():
         room_id = int(data.get("room"))
     except (TypeError, ValueError):
         return jsonify(error="どこへ放つか、えらんでください。", room_required=True), 400
-    room = _room_row(get_db(), room_id)
+    db_check = get_db()
+    room = _room_row(db_check, room_id)
     if not room:
         return jsonify(error="それは見つかりません。"), 404
     if room["archived"]:
         return jsonify(error="ここへは、もう新しいことばを放てません。"), 403
+
+    # スパム対策の軽いレート制限（収益モデル v1・2026-08-07）。投稿数そのものは
+    # 無料会員も無制限——ここで見ているのは「1時間あたり」の勢いだけ。
+    # 有料・サポーターは対象外（"探す範囲拡大" 等と同じく、詰まるのは無料会員だけでいい）。
+    if _plan_of(db_check, uid()) == "free":
+        cutoff = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
+        c = db_check.execute(
+            "SELECT COUNT(*) AS c FROM letters WHERE user_id=? AND sent_date>=?",
+            (uid(), cutoff)).fetchone()["c"]
+        if c >= _FREE_POST_HOURLY_MAX:
+            return jsonify(error="少し間を置いてから、また放ってください。"), 429
 
     # 全面刷新（2026-07-25）：行為は「宙へ放つ」ただ一つ。宛先も日時も受け取らない
     # （クライアントが arrive_at 等を送ってきても無視する）。降ってくる日時は
@@ -6864,7 +6929,8 @@ def api_like_sky_delivery(did):
 #      ハッシュのままにしておく（棚のために匿名性へ穴を開けない）。
 # 本文は控え（スナップショット）で持つ。一度その人の手に渡ったことばは、元が宙から
 # 降ろされても取り上げない。書き手を指す情報は最初から棚にも入らない。
-_SHELF_MAX = 500
+# 上限はプラン別（収益モデル v1・2026-08-07）: _shelf_max()/_shelves_max() を参照。
+# 旧・単一定員（500）はここでは使わない。
 
 
 def _shelf_source(db, src, ref):
@@ -7042,7 +7108,7 @@ def api_mine_delete(lid):
 
 
 # 棚の数の上限（v2 §5.3・2026-07-26 Kosei確定＝10前後）。無制限だと整理そのものが作業になる。
-_SHELVES_MAX = 10
+# 上限はプラン別（収益モデル v1・2026-08-07）: _shelf_max()/_shelves_max() を参照。
 
 
 def _default_shelf(db, user):
@@ -7125,9 +7191,10 @@ def api_shelves_create():
     if not name:
         return jsonify(error="棚に、名前をひとつ。"), 400
     db = get_db()
+    smax = _shelves_max(_plan_of(db, uid()))
     n = db.execute("SELECT COUNT(*) AS c FROM shelves WHERE owner_id=?", (uid(),)).fetchone()
-    if n and n["c"] >= _SHELVES_MAX:
-        return jsonify(error="棚は10までです。ひとつ手放してからにしてください。"), 409
+    if n and n["c"] >= smax:
+        return jsonify(error=f"棚は{smax}までです。ひとつ手放してからにしてください。"), 409
     if db.execute("SELECT 1 FROM shelves WHERE owner_id=? AND name=?", (uid(), name)).fetchone():
         return jsonify(error="その名前の棚は、もうあります。"), 409
     sid = secrets.token_hex(8)
@@ -7214,7 +7281,7 @@ def api_shelf_save():
     if not (poem or "").strip():
         return jsonify(error="そのことばは棚に載せられません。"), 400
     n = db.execute("SELECT COUNT(*) AS c FROM saved_words WHERE user_id=?", (uid(),)).fetchone()
-    if n and n["c"] >= _SHELF_MAX:
+    if n and n["c"] >= _shelf_max(_plan_of(db, uid())):
         return jsonify(error="棚がいっぱいです。いくつか外してからにしてください。"), 409
     now_iso = datetime.now().isoformat(timespec="seconds")
     with _WRITE_LOCK:
@@ -7273,10 +7340,11 @@ def api_shelf_move(wid):
     # 名前の正規化は棚づくり（api_shelves_create）と同じ規則に揃える
     name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:24]
     if not sid and name:
+        smax = _shelves_max(_plan_of(db, uid()))
         have = db.execute("SELECT COUNT(*) AS c FROM shelves WHERE owner_id=?",
                           (uid(),)).fetchone()["c"]
-        if have >= _SHELVES_MAX:
-            return jsonify(error="棚は10までです。ひとつ手放してからにしてください。"), 409
+        if have >= smax:
+            return jsonify(error=f"棚は{smax}までです。ひとつ手放してからにしてください。"), 409
         dup = db.execute("SELECT id FROM shelves WHERE owner_id=? AND name=?",
                          (uid(), name)).fetchone()
         if dup:
@@ -7302,6 +7370,210 @@ def api_shelf_move(wid):
     shelves = [{"id": r["id"], "name": r["name"]} for r in db.execute(
         "SELECT id, name FROM shelves WHERE owner_id=? ORDER BY created_at, id", (uid(),))]
     return jsonify(ok=True, shelf=sid, shelves=shelves)
+
+
+# ══ 課金（Stripe・収益モデル v1・2026-08-07）══════════════════════════
+# 詳細は docs/overview-brief.md §6。課金対象は「書く」ではなく「集める」——
+# 投稿数はどのプランでも無制限。有料化するのは棚の容量と探すの質だけ。
+# premium と supporter は付与フラグが完全同一（価格だけが違う＝支える気持ちの
+# 受け皿）。カード情報はうちのサーバを一切通らない——Checkout も Portal も
+# Stripe がホストする画面へ丸ごと預ける。
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+# Stripe ダッシュボードで作った Price の id（price_...）。月額と年額は別の Price なので
+# プランごとに2つ持つ（サポーターの年額は「年一括限定にするか検討中」なので未設定でもよい
+# ＝その組み合わせだけ選べない状態で運用できる）。
+_STRIPE_PRICES = {
+    ("premium", "month"): os.environ.get("STRIPE_PRICE_PREMIUM_MONTHLY"),
+    ("premium", "year"): os.environ.get("STRIPE_PRICE_PREMIUM_YEARLY"),
+    ("supporter", "month"): os.environ.get("STRIPE_PRICE_SUPPORTER_MONTHLY"),
+    ("supporter", "year"): os.environ.get("STRIPE_PRICE_SUPPORTER_YEARLY"),
+}
+# Price id → plan の逆引き。webhook が「どのプランになったか」をここだけで知る。
+_STRIPE_PRICE_TO_PLAN = {v: k[0] for k, v in _STRIPE_PRICES.items() if v}
+
+
+def _stripe():
+    """遅延 import（boto3/anthropic と同じ流儀）。鍵が無い環境でも起動だけはできる。"""
+    if not STRIPE_SECRET_KEY:
+        return None
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+    return stripe
+
+
+def _cancel_subscription_for(db, user_id):
+    """退会の前に、その人の契約を止める（2026-08-07 夜）。
+
+    返す値の三つは、呼ぶ側の分岐そのもの：
+      None  … 止めるものが無い（契約を持っていない）＝そのまま退会してよい
+      True  … 止めた（Stripe が subscription を canceled にした）
+      False … 止められなかった＝**退会を通してはいけない**
+
+    契約を持っているのに鍵が無い（決済を止めた環境で古い契約が残っている）場合も
+    False。ここで「鍵が無いから素通し」にすると、いちばん止められない状況で
+    いちばん静かに通ってしまう。
+
+    解約は即時（期末までの猶予を作らない）。退会は「もう来ない」という意思表示で、
+    残り期間を使えると言われても使う場所がもう無い——第6条第6項の「日割り返金は
+    しない」と対で、期末まで課金し続けないことのほうを取る。
+    Stripe から返る customer.subscription.deleted の webhook は、その頃には
+    users の行が消えているので何にも当たらない（UPDATE が0行＝無害）。"""
+    row = db.execute("SELECT stripe_subscription_id AS sub FROM users WHERE id=?",
+                     (user_id,)).fetchone()
+    sub_id = (row["sub"] if row and "sub" in row.keys() else None) or None
+    if not sub_id:
+        return None
+    stripe = _stripe()
+    if not stripe:
+        print(f"[たより] 退会を止めた：契約({sub_id})が残っているのに Stripe の鍵が無い", flush=True)
+        return False
+    try:
+        # stripe-python は 10 系で cancel へ寄せた（delete は旧名で残っている）。
+        # 版を跨いでも動くよう、在るほうを呼ぶ。
+        fn = getattr(stripe.Subscription, "cancel", None) or stripe.Subscription.delete
+        fn(sub_id)
+    except Exception as e:
+        # 「もう無い」（何度も押した・Portal で先に解約した）は失敗ではない。
+        # 契約が現に無いのだから、退会は通してよい。
+        if "No such subscription" in str(e) or "resource_missing" in str(e):
+            print(f"[たより] 退会：契約({sub_id})はすでに無かった（そのまま進む）", flush=True)
+            return True
+        print(f"[たより] 退会を止めた：契約({sub_id})の解約に失敗 {e}", flush=True)
+        return False
+    return True
+
+
+@app.route("/api/billing/checkout", methods=["POST"])
+@login_required
+def api_billing_checkout():
+    """有料会員／サポーターへ進む Checkout セッションを作る。返る url へ飛ばせば
+    あとは Stripe のホスト画面がやる。plan/interval は users.plan に直接書かず、
+    実際の契約成立（webhook の checkout.session.completed）を待って初めて反映する
+    ——ここで即 plan を書くと、途中で離脱した人まで有料になってしまう。"""
+    stripe = _stripe()
+    if not stripe:
+        return jsonify(error="決済はいまお休み中です。"), 503
+    data = request.get_json(force=True) or {}
+    plan = data.get("plan")
+    interval = data.get("interval") or "month"
+    if plan not in ("premium", "supporter") or interval not in ("month", "year"):
+        return jsonify(error="そのプランは見つかりません。"), 400
+    price = _STRIPE_PRICES.get((plan, interval))
+    if not price:
+        return jsonify(error="そのプランはまだ用意できていません。"), 400
+    db = get_db()
+    u = db.execute("SELECT email, stripe_customer_id FROM users WHERE id=?", (uid(),)).fetchone()
+    try:
+        kwargs = dict(
+            mode="subscription",
+            line_items=[{"price": price, "quantity": 1}],
+            client_reference_id=uid(),
+            metadata={"user_id": uid(), "plan": plan, "interval": interval},
+            success_url=SITE_URL + "/settings?billing=success",
+            cancel_url=SITE_URL + "/settings?billing=cancelled",
+        )
+        if u and u["stripe_customer_id"]:
+            kwargs["customer"] = u["stripe_customer_id"]
+        elif u and u["email"]:
+            kwargs["customer_email"] = u["email"]
+        cs = stripe.checkout.Session.create(**kwargs)
+    except Exception as e:
+        print(f"[たより] Stripe Checkout 作成に失敗: {e}", flush=True)
+        return jsonify(error="決済の準備に失敗しました。少し時間をおいてお試しください。"), 502
+    return jsonify(ok=True, url=cs.url)
+
+
+@app.route("/api/billing/portal", methods=["POST"])
+@login_required
+def api_billing_portal():
+    """契約の変更・解約は Stripe の Customer Portal に任せる（自前でカード更新・
+    請求書・解約のUIを持たないための唯一の窓口）。"""
+    stripe = _stripe()
+    if not stripe:
+        return jsonify(error="決済はいまお休み中です。"), 503
+    db = get_db()
+    u = db.execute("SELECT stripe_customer_id FROM users WHERE id=?", (uid(),)).fetchone()
+    if not u or not u["stripe_customer_id"]:
+        return jsonify(error="まだ契約がありません。"), 404
+    try:
+        ps = stripe.billing_portal.Session.create(
+            customer=u["stripe_customer_id"], return_url=SITE_URL + "/settings")
+    except Exception as e:
+        print(f"[たより] Stripe Portal 作成に失敗: {e}", flush=True)
+        return jsonify(error="いま開けません。少し時間をおいてお試しください。"), 502
+    return jsonify(ok=True, url=ps.url)
+
+
+def _apply_plan_from_subscription(db, customer_id, subscription):
+    """Subscription オブジェクトから plan を決めて users へ書く。status が
+    active/trialing 以外（支払い失敗の猶予切れ等）は free へ戻す。"""
+    items = (subscription.get("items") or {}).get("data") or []
+    price_id = items[0]["price"]["id"] if items else None
+    plan = (_STRIPE_PRICE_TO_PLAN.get(price_id)
+            if subscription.get("status") in ("active", "trialing") else None)
+    with _WRITE_LOCK:
+        db.execute(
+            "UPDATE users SET plan=?, stripe_subscription_id=?, plan_updated_at=?"
+            " WHERE stripe_customer_id=?",
+            (plan or "free", subscription.get("id"),
+             datetime.now().isoformat(timespec="seconds"), customer_id))
+        db.commit()
+
+
+@app.route("/api/billing/webhook", methods=["POST"])
+def api_billing_webhook():
+    """Stripe からの通知だけの入口。ログインは要らない（Stripe が呼ぶ）代わりに、
+    署名（STRIPE_WEBHOOK_SECRET）で本物の Stripe からの通知かを確かめる。
+    ここが唯一 users.plan を書き換える場所——クライアントからは一切書けない。"""
+    stripe = _stripe()
+    if not stripe or not STRIPE_WEBHOOK_SECRET:
+        return jsonify(error="webhook 未設定です。"), 503
+    payload = request.get_data()
+    sig = request.headers.get("Stripe-Signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        print(f"[たより] Stripe webhook 署名検証に失敗: {e}", flush=True)
+        return jsonify(error="invalid signature"), 400
+
+    db = get_db()
+    etype = event["type"]
+    obj = event["data"]["object"]
+
+    if etype == "checkout.session.completed":
+        # 初回契約の確定。customer と subscription がここで初めて紐づく。
+        user_id = obj.get("client_reference_id") or (obj.get("metadata") or {}).get("user_id")
+        customer_id = obj.get("customer")
+        sub_id = obj.get("subscription")
+        plan = (obj.get("metadata") or {}).get("plan", "premium")
+        if user_id and customer_id:
+            with _WRITE_LOCK:
+                db.execute(
+                    "UPDATE users SET plan=?, stripe_customer_id=?, stripe_subscription_id=?,"
+                    " plan_updated_at=? WHERE id=?",
+                    (plan, customer_id, sub_id,
+                     datetime.now().isoformat(timespec="seconds"), user_id))
+                db.commit()
+
+    elif etype == "customer.subscription.deleted":
+        customer_id = obj.get("customer")
+        if customer_id:
+            with _WRITE_LOCK:
+                db.execute(
+                    "UPDATE users SET plan='free', stripe_subscription_id=NULL, plan_updated_at=?"
+                    " WHERE stripe_customer_id=?",
+                    (datetime.now().isoformat(timespec="seconds"), customer_id))
+                db.commit()
+
+    elif etype == "customer.subscription.updated":
+        # プラン変更（月額⇄年額・premium⇄supporter）や、支払い失敗による status 変化。
+        customer_id = obj.get("customer")
+        if customer_id:
+            _apply_plan_from_subscription(db, customer_id, obj)
+
+    return jsonify(ok=True)
 
 
 @app.route("/api/shelf/<wid>/tags", methods=["POST"])
