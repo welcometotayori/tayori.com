@@ -835,11 +835,22 @@ function gesture(){
    ——Apple §1 の作法。離せば、封蝋が戻るのと同じ滑走で縁まで帰る。 */
 const EDGE_PAD=56;          // 縁の余白。席が画面の縁に貼り付くと、島が半分に切れて見える
 let edgeSoft=false;         // 手がふれているか（ゴムを効かせてよいか）
+/* 席の箱は、島の**中心の点**だけでは足りない（2026-08-07）。
+   紙を敷いた島は円ではなく帯で、束の丈（_bh）は 8000px に届く——半径 638 の島の
+   12倍。中心一点で縁を引くと、帯の上下半分は「縁の外」になり、ひきずっても寄っても
+   辿り着けない場所になっていた（部屋の後ろ半分のことばが、読めないまま在る）。
+   焦点レンズがその席を狙うと、狙いだけ縁に押し戻されて、開いたはずの一枚が
+   画面の外に置き去りになる——これが「触れたら、宙ごと消えた」の正体。
+   だから敷いている島だけ、束の四隅も箱に入れる。畳んでいる島は今までどおり中心だけ。 */
 function worldBox(){
   let x0=1/0,y0=1/0,x1=-1/0,y1=-1/0;
+  const put=(x,y)=>{ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; };
   islands.forEach(i=>{
-    if(i.cx<x0)x0=i.cx; if(i.cx>x1)x1=i.cx;
-    if(i.cy<y0)y0=i.cy; if(i.cy>y1)y1=i.cy;
+    put(i.cx,i.cy);
+    if(i.sheeted&&i._bh){
+      const hw=(i._bw||0)/2, hh=i._bh/2;
+      put(i.cx-hw,i.cy-hh); put(i.cx+hw,i.cy+hh);
+    }
   });
   return isFinite(x0)?{x0:x0,y0:y0,x1:x1,y1:y1}:null;
 }
@@ -945,7 +956,12 @@ function onScreen(x,y,w,h){         // world座標の箱が、どれかの眺め
 function cull(){
   islands.forEach(isl=>{
     const r=isl.R*1.25+560;
-    const off=!onScreen(isl.cx-r,isl.cy-r,r*2,r*2);
+    /* 紙を敷いた島は円ではない（2026-08-07）。束は半径の数倍に伸びるので、円の
+       物差しで畳むと、帯の下のほうを読んでいる最中に**島ごと** visibility:hidden に
+       なる——読んでいた紙も、まわりの紙も、一斉に消える。敷いている間は束の箱で見る。 */
+    const rx=isl.sheeted?Math.max(r,(isl._bw||0)/2+CULL_M):r,
+          ry=isl.sheeted?Math.max(r,(isl._bh||0)/2+CULL_M):r;
+    const off=!onScreen(isl.cx-rx,isl.cy-ry,rx*2,ry*2);
     if(isl.off!==off){
       isl.off=off;
       if(!off)isl.nmDirty=true;     // 戻ってきた島の名は、いまの倍率で書き直す
@@ -1338,6 +1354,9 @@ function lensAim(el){
   views=[[PX,PY,K],[-wx*k,-wy*k-room/2,k]];
   K=k; PX=-wx*K; PY=-wy*K-room/2;
   applyNow();
+  // 縁が狙いを退けたぶんは、到着の眺めにも書き戻す（退いた先で間引く＝道中と
+  // 着いた後で、見えているものが食い違わない）
+  if(views)views[1]=[PX,PY,K];
   clearTimeout(lensT);
   lensT=setTimeout(()=>{ world.style.transition=''; views=null; applyNow();
                          if(held===el)placeHold(); },740);
