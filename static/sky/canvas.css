@@ -12,7 +12,14 @@
          align-items:center;gap:var(--s2);
          padding:calc(12px + var(--safe-t)) calc(16px + var(--safe-r)) 10px calc(20px + var(--safe-l));
          pointer-events:none}
-  header a,header button,header input,header .seek{pointer-events:auto}
+  /* 帯そのものは指を受けないが、中の押せるものは受ける。
+     ── 2026-08-07 Kosei「携帯でジャンルがスクロールできない」──────────────
+     .menu-list を足した。戸の板は語（a/button）だけが指を受けていたので、行と行の
+     すきま・板の余白に触れた指は板をすり抜けて #vp（touch-action:none の宙）に
+     着いていた——携帯でジャンルの一覧を送ろうとすると、送られるのは宙のほうで、
+     一覧はぴくりとも動かない。**巻き取る面そのもの**が指を受けていなければ、
+     ブラウザはそこを送る面だと見なせない。 */
+  header a,header button,header input,header .seek,header .menu-list{pointer-events:auto}
   /* 頭の帯も、足元の帯と同じように闇を敷く（2026-08-02）。紙片の面では背が白い紙に
      なるので、白い字も白いしるしも、そのままでは消える。下辺の .dock と同じ作法——
      上から下へ薄れる霞を一枚。指は受けない（宙は掴んで動かす面なので塞がない）。 */
@@ -99,6 +106,7 @@
      ここからなら別の島へ降りられる——それがこの一覧の在る理由（2026-08-02）。 */
   .menu-rooms{display:grid;grid-template-columns:1fr 1fr;gap:1px;
               max-height:216px;overflow-y:auto;overscroll-behavior:contain;
+              -webkit-overflow-scrolling:touch;touch-action:pan-y;
               scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
   .menu-rooms button{background:none;border:none;font-family:var(--font-ui);cursor:pointer;
               display:flex;align-items:center;min-height:40px;padding:10px 12px;
@@ -1308,7 +1316,11 @@
     .top-right{flex:0 0 auto}
     .seek{height:38px;padding-left:12px}
     .cast-btn{height:38px;padding:0 12px;font-size:13px;letter-spacing:.1em}
-    .menu-rooms{grid-template-columns:1fr 1fr}
+    /* 携帯では、戸の中に巻き取る面を**二つ**作らない（2026-08-07 Kosei）。
+       ジャンルの一覧（216px の窓）と板そのもの（78dvh）が入れ子に巻き取ると、
+       内側の端に着いたところで overscroll-behavior:contain が外側へ渡すのを断つ
+       ＝一覧の途中で指が効かなくなる。狭い画面では窓をやめ、板ごと送らせる。 */
+    .menu-rooms{max-height:none;overflow:visible}
   }
   @media (max-width:430px){
     .seek{padding-left:10px;gap:6px}
