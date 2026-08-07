@@ -245,35 +245,52 @@ function sizeOf(w){
    島の紙片（sizeOf）と同じ考えを、読む面（並べて読む・棚）へも降ろす：
    **寸法はことばの長さから純関数で決める**。狙いは二列。
 
-   1列に入れる字数を四段から選び、**二列に折れるいちばん浅い丈**を採る。二列で
-   収まらない長いことばだけ、丈は最大のまま列を増やす。改行は書き手の形なので、
-   行ごとに列を数える（島と同じ）。列の下限は二——一列の紙は、足（棚にとっておく）
-   より細くなってしまう。
+   1列に入れる字数を選び、**二列に折れるいちばん浅い丈**を採る。二列で収まらない
+   長いことばだけ、丈は最大のまま列を増やす。改行は書き手の形なので、行ごとに列を
+   数える（島と同じ）。列の下限は二——一列の紙は、足（棚にとっておく）より細くなる。
    字送りの根拠：本文 font 15px / line-height 2.5 ＝ 1列 37.5px、
-   letter-spacing .06em ＝ 縦1字 15.9px。丈の +8px は丸めの遊び。 */
+   letter-spacing .06em ＝ 縦1字 15.9px（実測 15.9017）。
+
+   ── 2026-08-07 夜・Kosei「スクショの文章のバランスが悪い」──────────────
+   丈を四段（7・11・15・19）から選んでいた。二列に折れる**いちばん浅い**段を採る
+   ので、9字のことばは 7字の段に落ちる——一列目が7字、二列目が2字。段が粗いほど、
+   最後の列に一字二字だけが残る。実際にそうなっていた（「曇りの朝に流す一曲」の
+   二列目が「曲」の一字だけ）。
+   段はやめて、**均す丈**を字数から直に出す：二列に折れる最小の丈＝ceil(字数/2)。
+   一列目と二列目は必ず同じか一字違いになり、孤り字は原理的に出ない。丈の散らばりが
+   増える心配は要らない——上限（19字）は据え置きなので、いちばん高い紙の丈は変わらず、
+   低いほうが**ことばの短さのぶんだけ**低くなるだけ。下限は4字：これより浅い紙は
+   足（棚にとっておく）の一段より低くなって、字より道具が大きい紙になる。 */
 const RS_COLW=37.5, RS_CHH=15.9;
-/* 1列あたりの字数（丈の四段）。上限を19に留めてあるのは、紙の丈の散らばりを
-   抑えるため——22まで許すと、いちばん高い紙が低い紙の2.1倍になり、段の下に
-   大きな空きが残る。19なら1.8倍で、長いことばは丈ではなく**列**のほうへ伸びる。 */
-const RS_CAP=[7,11,15,19];
+const RS_MIN=4, RS_MAX=19;
 function rsSize(poem){
   const lines=String(poem||'').split('\n').map(s=>s.length);
   const cols=cap=>lines.reduce((a,L)=>a+Math.max(1,Math.ceil(L/cap)),0);
-  for(const cap of RS_CAP){ if(cols(cap)<=2)return {cap:cap,cols:2}; }
+  for(let cap=RS_MIN;cap<=RS_MAX;cap++){ if(cols(cap)<=2)return {cap:cap,cols:2}; }
   /* 二列に折れないことば。ここで丈をいちばん深いものに決め打つと、行を三つに
-     分けて書かれた24字の紙が「三列 × 22字」の背高の紙になり、また八割が空く。
-     列がいちばん少なくなる丈のうち、**いちばん浅いもの**を採る。 */
-  let best=RS_CAP[RS_CAP.length-1], n=cols(best);
-  for(const cap of RS_CAP){ if(cols(cap)<=n){ n=cols(cap); best=cap; break; } }
-  return {cap:best,cols:Math.max(2,Math.min(6,n))};
+     分けて書かれた24字の紙が「三列 × 19字」の背高の紙になり、また八割が空く。
+     列がいちばん少なくなる丈のうち、**いちばん浅いもの**を採る（＝ここでも均す）。 */
+  const n=cols(RS_MAX);
+  for(let cap=RS_MIN;cap<=RS_MAX;cap++){
+    if(cols(cap)<=n)return {cap:cap,cols:Math.max(2,Math.min(6,n))};
+  }
+  return {cap:RS_MAX,cols:Math.max(2,Math.min(6,n))};
 }
 /* 紙に寸法を書き留める。題があれば、その一列ぶん（＋行間）を幅に足す。
-   漂流物は三列を下限にする——奥付（「— 誰々『何々』より」）だけは横に寝ている一行で、
-   二列の紙（版面75px）では五行にも折れて、紙が629pxの塔になった（実測）。 */
+
+   漂流物の三列の下限は降ろした（2026-08-07 夜）。置いた理由は「奥付が横一行だから、
+   二列の紙では五行に折れて紙が塔になる」だったが、いまは紙の丈を中身が決めるので
+   塔にはならず、しかも三列に広げても奥付は**12枚が12枚とも切れていた**（実測）
+   ＝ 広げたぶんの一列は、何の役にも立たない空白だった。奥付は折る側へ回した。
+
+   丈に遊び（+8px）を足さない（2026-08-07 夜）。版面は --vh ちょうどで（下の CSS の
+   .rsheet-v）、縦1字は 15.9px——ceil で足りるのは 1px 未満なので、**一字も余分に
+   入らない**。ここに 8px を足していたことが、均した丈を一字ぶん崩していた
+   （版面はさらに足の負のマージンぶん 8px 広く、合わせて 16px ＝ ちょうど一字）。 */
 function rsFit(li,w){
   const sz=rsSize(w&&w.poem);
-  li.style.setProperty('--rcol',String(w&&w.pd?Math.max(3,sz.cols):sz.cols));
-  li.style.setProperty('--vh',Math.ceil(sz.cap*RS_CHH+8)+'px');
+  li.style.setProperty('--rcol',String(sz.cols));
+  li.style.setProperty('--vh',Math.ceil(sz.cap*RS_CHH)+'px');
   li.style.setProperty('--rtl',(w&&w.title)?'34px':'0px');
 }
 /* ── 読む面の紙も、切らずに伸ばす（2026-08-07 Kosei「影があって途中から読めない」）──
@@ -3442,19 +3459,22 @@ Promise.all([
      残すのは読みながらでもできるが、選り分けと手入れは読み終えてからのことで、
      場所も島の紙片と /me に在る。
 
-     姿は紙の**奥付の下**に一行——本文の版面（縦書き）には触れない。紙はそのぶん
-     丈を足す（.rsheet-cell.act）ので、読める字数は押せる前と変わらない。 */
+     姿は紙の**奥付の下**に一行——本文の版面（縦書き）には触れない。紙の丈は中身が
+     決める（版面は --vh ちょうど）ので、足が増えても読める字数は変わらない。 */
   function keepFoot(w){
     if(!LOGGED_IN||!w.id)return '';
     const on=kept.has('drift:'+w.id);
     return '<div class="rsheet-foot"><button type="button" class="rsheet-keep'+(on?' on':'')+
       '" aria-pressed="'+(on?'true':'false')+'">'+IC_SHELF+
-      '<span class="txt">'+(on?T_KEEP_ON:T_KEEP_OFF)+'</span></button></div>';
+      '<span class="txt">'+footTxt(on)+'</span></button></div>';
   }
+  /* 二列の紙では足の一語が一行に入らない。折れる所を語の切れ目に指しておく
+     （keep-all と組で効く・この宙の日本語改行の作法）。「棚に／とっておく」。 */
+  function footTxt(on){ return (on?T_KEEP_ON:T_KEEP_OFF).replace('棚に','棚に<wbr>'); }
   function paintKeep(b,on){
     b.classList.toggle('on',on);
     b.setAttribute('aria-pressed',on?'true':'false');
-    b.querySelector('.txt').textContent=on?T_KEEP_ON:T_KEEP_OFF;
+    b.querySelector('.txt').innerHTML=footTxt(on);
   }
   /* 控え（kept）は宙と同じ集合を書き換える＝この面で残したことばは、畳んで島の紙片に
      触れた時にはもう「棚にあります」になっている（同じ棚を、二つの面から見ている）。
@@ -3514,7 +3534,6 @@ Promise.all([
          生成り〜灰白の三種、漂流物は灰の紙——どちらも paperOf の中で決まる。 */
       li.style.setProperty('--pp',paperOf(w));
       if(w.pd)li.classList.add('pd');
-      if(LOGGED_IN&&w.id)li.classList.add('act');   // 足を一段ぶん伸ばす（下の CSS）
       rsFit(li,w);          // 紙の寸法は、ことばの長さから（狙いは二列）
       li.innerHTML='<div class="rsheet-v">'+
         (w.title?'<p class="rsheet-title"></p>':'')+'<p class="rsheet-poem"></p></div>'+
@@ -3523,8 +3542,9 @@ Promise.all([
       if(w.title)li.querySelector('.rsheet-title').textContent=w.title;
       const pe=li.querySelector('.rsheet-poem');
       pe.textContent=w.poem||'';
-      if(w.pd)li.querySelector('.rsheet-src').textContent=
-        '— '+(w.author||'')+'『'+(w.work||'')+'』より';
+      // 奥付は折れてよい。折る所は作者名と書名のあいだ（keep-all と組で効く <wbr>）
+      if(w.pd)li.querySelector('.rsheet-src').innerHTML=
+        '— '+esc(w.author||'')+'<wbr>『'+esc(w.work||'')+'』より';
       // 打鍵の再生は人のことばだけ（上の watch の節）。漂流物は置くだけ。
       if(watch&&!w.pd&&w.id){ pe._w=w; watch.observe(pe); }
       frag.appendChild(li);

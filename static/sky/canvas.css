@@ -569,42 +569,46 @@
        ・--rtl … 題の列（題があるときだけ。無ければ 0）
      列は**二列を下限**にする：一列の紙は足（棚にとっておく）より細くなってしまう。
 
-     --fh … 足の高さ。丈は「読める字数（--vh）＋足」で、足のぶんは版面から削らずに
-     紙のほうを伸ばす＝押せるものが増えても、読める量は変わらない。
-     入っていない人（.act が付かない）の紙は 0 のまま＝空の足を持たない。 */
-  .rsheet-cell{--vh:190px;--fh:0px;--sh:0px;--rcol:2;--rcw:37.5px;--rtl:0px;
+     丈は「読める字数（--vh）＋足＋奥付」で、足や奥付のぶんは版面から削らずに紙の
+     ほうを伸ばす＝押せるものが増えても、読める量は変わらない。
+     ── 2026-08-07 夜 ──────────────────────────────────────────
+     その足し算を calc で書いていた（--fh ＋ --sh）。足と奥付の**実寸**は決め打ちの
+     44px / 52px とは違い、余ったぶんは flex:1 の版面が吸って、--vh より広い版面に
+     なる（実測 +8px＝ちょうど一字）。均した丈が一字ぶん崩れていたのはこれで、
+     「二列目に一字だけ残る」の正体でもある。
+     足し算はやめて、**版面を --vh ちょうどに留め、紙の丈は中身にまかせる**
+     （flex の折り返しで並べている面なので、丈が揃っている必要はない）。 */
+  .rsheet-cell{--vh:190px;--rcol:2;--rcw:37.5px;--rtl:0px;
           flex:none;                      /* 紙は縮まない（幅は寸法規律が決めている） */
           display:flex;flex-direction:column;align-items:flex-end;
           width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s3) * 2);
           max-width:100%;
-          height:calc(var(--vh) + var(--fh) + var(--sh) + var(--s3) * 2);
           padding:var(--s3);border-radius:var(--edge);
           background:var(--pp,#EBE7DE);color:rgba(30,27,33,.9);
           box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
   /* 漂流物は色を持たない灰の紙で、字も一段薄い（島の .isl.sheet .w.pd と同じ）。
-     --sh は奥付（出どころの一行）のぶん。足（--fh）と同じ約束で、**版面からは削らず
-     紙のほうを伸ばす**——削ると、丈から決まっている1列の字数が足りなくなって、
-     計算した列数に収まらなくなる（実測：43字の一節が三列に入らず切れた）。 */
-  .rsheet-cell.pd{color:rgba(30,27,33,.7);--sh:52px}
+     奥付（出どころの一行）は版面の下に足される——版面からは削らない（削ると、丈から
+     決まっている1列の字数が足りなくなって、計算した列数に収まらない）。 */
+  .rsheet-cell.pd{color:rgba(30,27,33,.7)}
   /* 縦の版面。題が右、本文がその左（縦書きの読み順）。
      幅は中身なりで、**紙の右端に寄せる**（中央ではなく）。理由は二つ：
      ・縦書きは右から始まるので、どの紙でも一列目が同じ場所にある＝目が迷わない
      ・打鍵の再生で列が一本増えるたび、中央寄せだと版面が左右に跳ねる
        （島の紙片は寸法を留めて（_pin）これを消しているが、ここは丈が固定なので
         右端に寄せるだけで済む——増えるのは左へだけ） */
+  /* 版面は --vh **ちょうど**（flex:1 で余りを吸わせない）。縦書きは丈が決まって
+     初めて列に折り返せるので、この一行が「一列に何字入るか」そのもの。 */
   .rsheet-v{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-          flex:1;min-height:0;height:100%;max-width:100%;overflow:hidden}
+          flex:none;height:var(--vh);max-width:100%;overflow:hidden}
   /* 2026-08-07：入り切らないことばに掛けていた左フェードは廃止（Kosei「影があって
      途中から読めない」）。薄れる代わりに、紙の丈のほうを伸ばして全文を入れる
      ——JS が溢れを測って --vh を書き足す（島の紙片を広げたのと同じ判断）。 */
-  .rsheet-cell.act{--fh:var(--touch)}
   /* 机の画面では余白だけ広げる。丈（--vh）は画面ではなく**ことばの長さ**が決めるので、
      ここで上書きしない（2026-08-07。旧実装の 340px 固定がバランスを崩していた張本人）。 */
   @media (min-width:640px){
     .rsheet-grid{gap:var(--s4) var(--s3);padding-top:var(--s3)}
     .rsheet-cell{padding:var(--s4);
-            width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s4) * 2);
-            height:calc(var(--vh) + var(--fh) + var(--sh) + var(--s4) * 2)}
+            width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s4) * 2)}
   }
   /* 紙の上の字はすべて墨の濃淡で（闇用の --ink-* は紙では読めない）。
      余白は論理方向で書く——縦書きでは block-end が「左」、inline-start が「上」。
@@ -627,11 +631,16 @@
           vertical-align:baseline}
   /* 出どころの刻印（§4.4）。漂流物にだけ付く。外へ出る導線は作らない。
      ここだけ横に寝かせるのは、縦の版面の「読み終えたあと」に置く奥付だから
-     （縦書きの終わりは左端。そこへ横一行で添える）。 */
+     （縦書きの終わりは左端。そこへ横一行で添える）。
+     ── 2026-08-07 夜：名を「…」で切らない ────────────────────────
+     一行に押し込んで（nowrap ＋ ellipsis）いた。紙を三列まで広げてもなお、
+     数えた12枚**すべて**が切れていた——「— 坂口安吾『わが血を追ふ人々』より」が
+     「— 坂口安吾『わが血…」になる。出どころは飾りではなく、借りているものの名。
+     切るくらいなら折る（この面の他のどこでも、もう影で切っていない）。
+     折る所は書き手が指す（<wbr>：作者名と書名のあいだ）。 */
   .rsheet-src{align-self:stretch;margin:var(--s2) 0 0;
           font-size:10.5px;line-height:1.7;letter-spacing:.14em;text-align:left;
-          color:rgba(30,27,33,.45);word-break:keep-all;overflow-wrap:anywhere;
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+          color:rgba(30,27,33,.45);word-break:keep-all;overflow-wrap:anywhere}
   /* ── 紙の足（2026-08-07 Kosei「並べて読む でも棚に残せるように」）────────
      読み通している最中に出会ったことばを、島へ戻らずに残せるようにする。置くのは
      縦書きの版面が終わったところ＝紙の左下（漂流物なら奥付の下）で、**本文の内側には
@@ -642,16 +651,24 @@
   /* 2026-08-07：紙の幅がことばの長さで決まるようになり（rsSize）、二列の紙では
      版面が75pxしかない。足の一語（棚にとっておく＝11px×7字＋印）は110px要るので、
      nowrap のままだと紙の右へ食み出して切れていた。**足は紙の幅を決める側ではない**
-     ——道具のほうを折り返させる（丈は --touch のぶん既に取ってある）。 */
+     ——道具のほうを折り返させる（丈は --touch のぶん既に取ってある）。
+     ── 2026-08-07 夜・Kosei「文章のバランスが悪い」──────────────────────
+     折り返させたはいいが、印を横に並べる箱（inline-flex）にしていたので、字の取り分は
+     75−22＝53px しか無く「棚に／とっ／ておく」と語の途中で三つに割れていた。
+     印を字の**行の中へ**戻す（block ＋ inline の印）と、一行目は「印＋棚に」46px、
+     二行目は「とっておく」61px——どちらも 75px に収まって、語の切れ目で折れる。
+     切れ目は <wbr> で書き手が指す（この宙の日本語改行の作法。keep-all を掛けて、
+     指した所**以外**では折らせない）。 */
   .rsheet-foot{flex:none;align-self:stretch;display:flex;align-items:center;
-          height:var(--touch);overflow:hidden;margin-block-start:calc(var(--s1) * -1)}
-  .rsheet-keep{display:inline-flex;align-items:center;gap:6px;
+          min-height:var(--touch);margin-block-start:calc(var(--s1) * -1)}
+  .rsheet-keep{display:block;
           min-height:var(--touch);margin-inline-start:-2px;padding:11px 2px;
           background:none;border:none;cursor:pointer;text-align:left;
           font-family:var(--font-ui);font-size:11px;letter-spacing:0.1em;line-height:1.55;
           color:rgba(30,27,33,.5);
           transition:color .22s var(--ease),opacity .22s var(--ease)}
-  .rsheet-keep .txt{min-width:0}
+  .rsheet-keep .ic-shelf{display:inline-block;vertical-align:-3px;margin-inline-end:6px}
+  .rsheet-keep .txt{word-break:keep-all;overflow-wrap:anywhere}
   .rsheet-keep:hover{color:rgba(30,27,33,.78)}
   .rsheet-keep:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
   .rsheet-keep.on{color:rgba(30,27,33,.8)}

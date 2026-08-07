@@ -104,9 +104,14 @@
   .slip-title::before{content:"「"}
   .slip-title::after{content:"」"}
   /* 本文に keep-all は掛けない——文節折返しは UI 文言の作法で、人のことばには介入しない
-     （tayori の恒久方針）。overflow-wrap は箱を破らないための安全網なので残す。 */
+     （tayori の恒久方針）。overflow-wrap は箱を破らないための安全網なので残す。
+     ── 2026-08-07 夜：**書かないだけでは掛からない、にはならなかった** ──────
+     _sky_doc.html の素の `p{…keep-all;text-wrap:pretty}` が、この面のすべての p に
+     当たっている。.slip-poem は word-break を書いていないので、そこだけ素の p の
+     値が通る——恒久方針が、七つの面で黙って破られていた。打ち消しは書いて言う。 */
   .slip-poem{margin:0 0 var(--s2);font-size:var(--t-lead);line-height:2.4;
              letter-spacing:var(--tr-word);white-space:pre-wrap;
+             word-break:normal;text-wrap:wrap;
              overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
   /* 付箋（v2.2 §3）：残した本人が、自分の控えに貼る紙片。あとから貼っても剥がしてもいい。
      書き手には届かない・宙にも出ない。棚に並べたことばを、自分の言葉で仕分けるためだけのもの。 */
@@ -252,15 +257,17 @@
        ・--rcw … 本文1列の幅（font 15px × line-height 2.5 ＝ 37.5px）
        ・--rtl … 題の列（題があるときだけ）
      列の下限は二：一列の紙は、日付の一行より細くなってしまう。 */
-  /* --sh は日付の一行（奥付）のぶん。版面からは削らず、紙のほうを伸ばす
-     （宙の .rsheet-cell と同じ約束）。削ると、丈から決まっている1列の字数が
-     足りなくなり、計算した列数に収まらなくなる。 */
-  .sheet-cell{--vh:190px;--sh:32px;--rcol:2;--rcw:37.5px;--rtl:0px;
+  /* 日付の一行（奥付）は版面の下に足す。版面からは削らない——削ると、丈から
+     決まっている1列の字数が足りなくなり、計算した列数に収まらなくなる。
+     2026-08-07 夜：その足し算を calc（--sh 32px）で書いていたが、奥付の実寸は
+     決め打ちと違い、余ったぶんは flex:1 の版面が吸って --vh より広くなる
+     ＝一列に一字よけいに入り、二列目に一字だけ残る紙ができていた。
+     **版面は --vh ちょうどに留め、紙の丈は中身にまかせる**（宙の .rsheet-cell と同じ）。 */
+  .sheet-cell{--vh:190px;--rcol:2;--rcw:37.5px;--rtl:0px;
               flex:none;                  /* 紙は縮まない（幅は寸法規律が決めている） */
               display:flex;flex-direction:column;align-items:flex-end;
               width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s3) * 2);
               max-width:100%;
-              height:calc(var(--vh) + var(--sh) + var(--s3) * 2);
               padding:var(--s3);border-radius:var(--edge);
               background:var(--pp,#EBE7DE);
               box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
@@ -270,8 +277,10 @@
      ・打鍵の再生で列が一本増えるたび、中央寄せだと版面が左右に跳ねる
        （島の紙片は寸法を留めて（_pin）これを消しているが、ここは丈が固定なので
         右端に寄せるだけで済む——増えるのは左へだけ） */
+  /* 版面は --vh **ちょうど**（flex:1 で余りを吸わせない）。縦書きは丈が決まって
+     初めて列に折り返せるので、この一行が「一列に何字入るか」そのもの。 */
   .sheet-v{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
-           flex:1;min-height:0;height:100%;max-width:100%;overflow:hidden}
+           flex:none;height:var(--vh);max-width:100%;overflow:hidden}
   /* 2026-08-07：入り切らない紙に掛けていた左フェードは廃止（Kosei「影があって途中から
      読めない」）。薄れさせる代わりに、JS が溢れを測って紙の丈（--vh）を足す＝fitTall。 */
   @media (min-width:640px){
@@ -279,8 +288,7 @@
     .sheet-grid{gap:var(--s4) var(--s3)}
     /* 丈（--vh）は画面ではなく**ことばの長さ**が決める（2026-08-07）ので上書きしない */
     .sheet-cell{padding:var(--s4);
-                width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s4) * 2);
-                height:calc(var(--vh) + var(--sh) + var(--s4) * 2)}
+                width:calc(var(--rcol) * var(--rcw) + var(--rtl) + var(--s4) * 2)}
   }
   /* 紙の上の字はすべて墨の濃淡で（闇用の --ink-* は紙では読めない・紙のままと同じ値）。
      余白は論理方向で書く——縦書きでは block-end が「左」、inline-start が「上」。
@@ -294,8 +302,12 @@
   /* 本文。ここが版面の主で、ほかは全部この一段のために退いている。
      字は大きめ・行間は広め（詩集の一段）。keep-all は掛けない——文節で折るのは
      UI 文言の作法で、人のことばには介入しない（tayori の恒久方針）。 */
+  /* keep-all / text-wrap:pretty は素の p から降りてくるので、ここで打ち消す
+     （2026-08-07 夜）。掛かったままだと、句読点のある一節が「、」で早々に折れて
+     計算した列数（rsSize）に収まらず、fitTall が紙の丈を1.6倍に押し上げていた。 */
   .sheet-poem{margin:0;font-family:var(--font-body);
               font-size:15px;line-height:2.5;letter-spacing:0.06em;
+              word-break:normal;text-wrap:wrap;
               white-space:pre-wrap;overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
   /* 日付は道具の字（§3.3）。ここだけ横に寝かせるのは、縦の版面の「読み終えたあと」に
      置く奥付だから（縦書きの終わりは左端。そこへ横一行で添える）。 */
@@ -334,8 +346,9 @@
            word-break:keep-all;overflow-wrap:anywhere}
   .m-title::before{content:"「"}
   .m-title::after{content:"」"}
-  /* 本文に keep-all は掛けない（.slip-poem と同じ理由） */
+  /* 本文に keep-all は掛けない（.slip-poem と同じ理由・素の p の打ち消しも同じ） */
   .m-poem{margin:0;font-size:var(--t-lead);line-height:2.3;letter-spacing:var(--tr-word);
+          word-break:normal;text-wrap:wrap;
           white-space:pre-wrap;overflow-wrap:anywhere;color:rgba(30,27,33,.9)}
   /* 「だれかの手元にあります」＝出来事ではなく状態。現在形の一行（v2 §9） */
   .m-hands{margin:6px 0 0;font-size:11px;letter-spacing:0.2em;color:rgba(30,27,33,.55);
@@ -632,19 +645,24 @@ addEventListener('resize',()=>{
      狙いは二列：1列に入れる字数を四段から選び、二列に折れるいちばん浅い丈を採る。
      二列で収まらないことばだけ、列を増やす（そのときも、列がいちばん少なくなる丈の
      うち浅いほうを採る＝行を分けて書かれた短いことばが背高の紙にならないように）。 */
-  const RS_COLW=37.5, RS_CHH=15.9, RS_CAP=[7,11,15,19];
+  /* 2026-08-07 夜：丈の四段（7・11・15・19）をやめ、**均す丈**（ceil(字数/2)）に。
+     段が粗いと、二列目に一字だけ残る紙ができていた（canvas.js の同名関数と同じ直し）。
+     丈に +8px の遊びも足さない——版面は --vh ちょうどで、縦1字は 15.9px。 */
+  const RS_COLW=37.5, RS_CHH=15.9, RS_MIN=4, RS_MAX=19;
   function rsSize(poem){
     const lines=String(poem||'').split('\n').map(s=>s.length);
     const cols=cap=>lines.reduce((a,L)=>a+Math.max(1,Math.ceil(L/cap)),0);
-    for(const cap of RS_CAP){ if(cols(cap)<=2)return {cap:cap,cols:2}; }
-    let best=RS_CAP[RS_CAP.length-1], n=cols(best);
-    for(const cap of RS_CAP){ if(cols(cap)<=n){ n=cols(cap); best=cap; break; } }
-    return {cap:best,cols:Math.max(2,Math.min(6,n))};
+    for(let cap=RS_MIN;cap<=RS_MAX;cap++){ if(cols(cap)<=2)return {cap:cap,cols:2}; }
+    const n=cols(RS_MAX);
+    for(let cap=RS_MIN;cap<=RS_MAX;cap++){
+      if(cols(cap)<=n)return {cap:cap,cols:Math.max(2,Math.min(6,n))};
+    }
+    return {cap:RS_MAX,cols:Math.max(2,Math.min(6,n))};
   }
   function rsFit(li,w){
     const sz=rsSize(w&&w.poem);
     li.style.setProperty('--rcol',String(sz.cols));
-    li.style.setProperty('--vh',Math.ceil(sz.cap*RS_CHH+8)+'px');
+    li.style.setProperty('--vh',Math.ceil(sz.cap*RS_CHH)+'px');
     li.style.setProperty('--rtl',(w&&w.title)?'34px':'0px');
   }
   /* 読む面の紙を、切らずに伸ばす（2026-08-07・static/sky/canvas.js の fitTall と同じもの）。
