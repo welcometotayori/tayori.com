@@ -39,16 +39,31 @@
   /* しるし＝戸。三つの粒はロゴそのもの（tayori.png）。ただし黒地のPNGをそのまま貼ると
      白い紙片の上で黒い四角になる——形を型（mask）として使い、塗りは字の色にする。
      こうすればどんな地の上でも消えず、hover も active も字の色に連れて動く。 */
-  .logo-mark{display:grid;place-items:center;width:var(--touch);height:var(--touch);
-        padding:0;background:none;border:none;border-radius:50%;color:var(--ink-1);
+  .logo-mark{display:inline-flex;align-items:center;gap:3px;
+        width:auto;height:var(--touch);padding:0 7px 0 8px;
+        background:none;border:none;border-radius:22px;color:var(--ink-1);
         filter:drop-shadow(0 0 8px rgba(8,8,13,.92));
         transition:background .2s var(--ease),opacity .2s var(--ease)}
   .logo-glyph{width:32px;height:26px;display:block;background:currentColor;
         -webkit-mask:url(/static/img/logo-mark.png) center/contain no-repeat;
                 mask:url(/static/img/logo-mark.png) center/contain no-repeat}
+  /* ── 戸の向き（2026-08-07 Kosei「押せることが分からない」）─────────────
+     しるしは絵であって、押せるものの形をしていない。右に小さな山を添えて、
+     **閉じている時は下・開いている時は上**を向かせる（＝板がこれからどちらへ
+     動くかを指す）。回すのは 180° ちょうどで、途中に跳ねを持たせる：戸は
+     押した瞬間に開くもので、じわりと回るものではない（Apple §1・封蝋の物理）。
+     字の色は一段落として、しるしより前に出ないようにする。 */
+  .logo-caret{flex:none;width:12px;height:12px;color:var(--ink-4);
+        transition:transform .34s cubic-bezier(.34,1.42,.5,1),color .2s var(--ease)}
   .logo-mark:hover{background:rgba(250,248,243,.08)}
+  .logo-mark:hover .logo-caret{color:var(--ink-2)}
   .logo-mark:active{opacity:.62}
   .logo-mark[aria-expanded="true"]{background:rgba(250,248,243,.10)}
+  .logo-mark[aria-expanded="true"] .logo-caret{transform:rotate(180deg);color:var(--ink-1)}
+  /* 動きを控える設定では、回さずに色だけで言う（向きは静止画でも読める） */
+  @media (prefers-reduced-motion:reduce){
+    .logo-caret{transition:color .2s var(--ease)}
+  }
   /* ── 戸の中身（Kosei の画の作法：暗い板・行は左に語、右に符）──────────
      v3.10 で汎用の板を物質へ置き換えた線を、ここだけは越える。戸は宙の中の物では
      なく「宙の外へ出る道」の一覧で、白い紙片の上に重なる面でもある——霞では読めない。 */
@@ -59,7 +74,13 @@
              background:rgba(16,16,22,.97);border:1px solid rgba(179,143,111,.18);
              box-shadow:0 26px 60px -26px rgba(0,0,0,.92);
              max-height:min(78dvh,600px);overflow-y:auto;overscroll-behavior:contain;
-             scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent}
+             scrollbar-width:thin;scrollbar-color:var(--rule-faint) transparent;
+             /* 開く時は、しるしの下から降りてくる（起点は右上＝戸の蝶番の側）。
+                hidden を外すと display が none から戻るので、その一度だけ走る。 */
+             transform-origin:top right;animation:menu-in .26s var(--ease)}
+  @keyframes menu-in{from{opacity:0;transform:translateY(-8px) scale(.97)}
+                       to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){ .menu-list{animation:none} }
   .menu-list[hidden]{display:none}
   .menu-form{margin:0}
   .menu-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);
@@ -377,7 +398,8 @@
   /* 収蔵数（2026-08-07 §3.1）。行いではなく、そのことばについての事実なので、
      押せる罫（--rule-act）も触れる高さ（--touch）も与えない——読むだけの一行。
      出典の刻印と同じ段（--ink-4・数字と控えの下限）に置き、数字だけを一段上げる。
-     数はUIの字（ゴシック）で出す：本文の明朝と混ざると、数が本文の一部に見える。 */
+     2026-08-07 夜に書体を一本へ戻したので、この行を本文と分けているのは字の形では
+     なく、寸法（10.5px）と色（--ink-4）だけ。 */
   .hold-kept{margin:0;padding:2px 0 4px;font-family:var(--font-ui);
              font-size:10.5px;line-height:1.9;letter-spacing:0.14em;color:var(--ink-4);
              word-break:keep-all;overflow-wrap:anywhere}
@@ -523,9 +545,12 @@
      取ると一列だけの字の左に、紙の八割が空いたまま残る。低く広い紙にすると、
      80字が7列に折れて紙をちょうど埋める（1列32px・12字/列）。
      机では紙が295pxと細いので、逆に丈を取る（340px＝22字/列・80字で4列）。 */
-  .rsheet-cell{--vh:190px;
+  /* --fh … 足（棚にとっておく）の高さ。丈は「読める字数（--vh）＋足」で、足のぶんは
+     版面から削らずに紙のほうを伸ばす＝押せるものが増えても、読める量は変わらない。
+     入っていない人（.act が付かない）の紙は 0 のまま＝空の足を持たない。 */
+  .rsheet-cell{--vh:190px;--fh:0px;
           display:flex;flex-direction:column;align-items:flex-end;
-          height:calc(var(--vh) + var(--s3) * 2);
+          height:calc(var(--vh) + var(--fh) + var(--s3) * 2);
           padding:var(--s3);border-radius:var(--edge);
           background:var(--pp,#EBE7DE);color:rgba(30,27,33,.9);
           box-shadow:0 8px 14px -12px rgba(0,0,0,.95)}
@@ -543,9 +568,11 @@
      （島の .w.ovf と同じ規律）。mask は一枚ごとに描画層を作るので、溢れた紙にだけ。 */
   .rsheet-v.ovf{-webkit-mask-image:linear-gradient(to left,#000 72%,transparent 97%);
           mask-image:linear-gradient(to left,#000 72%,transparent 97%)}
+  .rsheet-cell.act{--fh:var(--touch)}
   @media (min-width:640px){
     .rsheet-grid{gap:var(--s3);padding-top:var(--s3)}
-    .rsheet-cell{--vh:340px;padding:var(--s4);height:calc(var(--vh) + var(--s4) * 2)}
+    .rsheet-cell{--vh:340px;padding:var(--s4);
+            height:calc(var(--vh) + var(--fh) + var(--s4) * 2)}
   }
   /* 紙の上の字はすべて墨の濃淡で（闇用の --ink-* は紙では読めない）。
      余白は論理方向で書く——縦書きでは block-end が「左」、inline-start が「上」。
@@ -573,6 +600,30 @@
           font-size:10.5px;line-height:1.7;letter-spacing:.14em;text-align:left;
           color:rgba(30,27,33,.45);word-break:keep-all;overflow-wrap:anywhere;
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* ── 紙の足（2026-08-07 Kosei「並べて読む でも棚に残せるように」）────────
+     読み通している最中に出会ったことばを、島へ戻らずに残せるようにする。置くのは
+     縦書きの版面が終わったところ＝紙の左下（漂流物なら奥付の下）で、**本文の内側には
+     入れない**。行いは一つだけ——「もう見ない」も付箋も持ち込まない（読む面に押せる
+     ものを増やすと、目は必ずそちらへ行く、はこの一つを足したうえでも守る線）。
+     字は端末のゴシック（§3.3・押すものはUIの側）で、色は紙に載る墨——闇用の --ink-*
+     は紙の上では読めない（.rsheet-title / -src と同じ扱い）。 */
+  .rsheet-foot{flex:none;align-self:stretch;display:flex;align-items:center;
+          height:var(--touch);margin-block-start:calc(var(--s1) * -1)}
+  .rsheet-keep{display:inline-flex;align-items:center;gap:8px;
+          min-height:var(--touch);margin-inline-start:-2px;padding:11px 2px;
+          background:none;border:none;cursor:pointer;
+          font-family:var(--font-ui);font-size:11px;letter-spacing:0.14em;
+          white-space:nowrap;color:rgba(30,27,33,.5);
+          transition:color .22s var(--ease),opacity .22s var(--ease)}
+  .rsheet-keep:hover{color:rgba(30,27,33,.78)}
+  .rsheet-keep:active{opacity:.62}          /* 離すのを待たない（Apple §1） */
+  .rsheet-keep.on{color:rgba(30,27,33,.8)}
+  /* 印は宙の札（.hold-act）と同じ形。色だけ紙用に差し替える——札は闇の上に立つので
+     --thread / --rule-act を使っているが、それは紙の上では見えない。 */
+  .rsheet-keep .ic-shelf .b{background:rgba(30,27,33,.32)}
+  .rsheet-keep .ic-shelf .p{border-color:rgba(30,27,33,.5)}
+  .rsheet-keep.on .ic-shelf .p{bottom:4px;
+          background:rgba(30,27,33,.7);border-color:rgba(30,27,33,.7)}
   .rsheet-more{display:flex;justify-content:center;padding:var(--s4) 0 var(--s3)}
   .rsheet-more[hidden]{display:none}
   .rsheet-mb{background:none;border:none;border-bottom:1px solid var(--rule-act);
@@ -638,7 +689,10 @@
   .gw{transition:opacity .5s var(--ease)}
   /* ひとこと（0件・不通のときだけ。数字は出さない） */
   .whisper{position:fixed;left:50%;bottom:calc(15dvh + var(--safe-b));transform:translateX(-50%);
-           z-index:22;margin:0;color:var(--ink-3);font-size:12px;letter-spacing:.14em;
+           /* 「並べて読む」（z:30）の上まで届かせる——棚に届かなかった、が
+              紙の裏に隠れると、押した結果が誰にも見えないことになる。触れないので
+              （pointer-events:none）、上に置いても面の邪魔はしない。 */
+           z-index:32;margin:0;color:var(--ink-3);font-size:12px;letter-spacing:.14em;
            text-align:center;opacity:0;transition:opacity .5s var(--ease);pointer-events:none;
            word-break:keep-all;max-width:86vw}
   .whisper.on{opacity:1}
@@ -864,10 +918,14 @@
           pointer-events:none;display:none;animation:vcaretBlink .9s steps(1) infinite}
   @keyframes vcaretBlink{50%{opacity:0}}
   @media (prefers-reduced-motion: reduce){ .vcaret{animation:none} }
-  /* 字数は道具の側（§3.3）。明朝の数字は幅がまちまちで、打つたびに桁が身じろぎする
-     ——等幅の数字にすると、数だけが静かに入れ替わる（Apple §7 craft）。 */
+  /* 【2026-08-07 夜・書体を一本へ戻した時に測った】Shippori Mincho は等幅の数字
+     （tabular figures）を持っていない——tabular-nums を書いても効かず、字ごとの
+     幅の差は 20px で 1.17px 残る（0〜9を実測）。行そのものが伸び縮みしないよう、
+     ここは幅を先に取っておく（4.6em＝「80/80」＋字間ぶん）。tabular-nums は
+     消さない：明朝が落ちて端末の書体になった時には、そちらが効く。 */
   .cast-count{font-family:var(--font-ui);font-size:var(--t-mono);
               font-variant-numeric:tabular-nums;
+              display:inline-block;min-width:4.6em;text-align:right;
               letter-spacing:0.3em;color:var(--ink-4);
               transition:color .3s var(--ease)}
   /* 打った過程が記録されている間だけ、字数の隣で小さく呼吸する点（カーム・テクノロジー：

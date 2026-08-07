@@ -3247,6 +3247,59 @@ Promise.all([
     });
   },{root:field,rootMargin:'0px 0px -15% 0px'}):null;
 
+  /* ── 棚にとっておく（2026-08-07 Kosei）─────────────────────────────
+     この面は最初、押せるものを一つも持たなかった（「読む面に押せるものを増やすと、
+     目は必ずそちらへ行く」）。けれど**読み通している最中こそ、残したいことばに出会う**
+     ——そこで島へ戻って同じ一枚をもう一度探させるのは、読むことのほうを切っている。
+     出すのは棚ひとつだけ。「もう見ない」も付箋も「ほかの棚へ」も出さない：
+     残すのは読みながらでもできるが、選り分けと手入れは読み終えてからのことで、
+     場所も島の紙片と /me に在る。
+
+     姿は紙の**奥付の下**に一行——本文の版面（縦書き）には触れない。紙はそのぶん
+     丈を足す（.rsheet-cell.act）ので、読める字数は押せる前と変わらない。 */
+  function keepFoot(w){
+    if(!LOGGED_IN||!w.id)return '';
+    const on=kept.has('drift:'+w.id);
+    return '<div class="rsheet-foot"><button type="button" class="rsheet-keep'+(on?' on':'')+
+      '" aria-pressed="'+(on?'true':'false')+'">'+IC_SHELF+
+      '<span class="txt">'+(on?T_KEEP_ON:T_KEEP_OFF)+'</span></button></div>';
+  }
+  function paintKeep(b,on){
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-pressed',on?'true':'false');
+    b.querySelector('.txt').textContent=on?T_KEEP_ON:T_KEEP_OFF;
+  }
+  /* 控え（kept）は宙と同じ集合を書き換える＝この面で残したことばは、畳んで島の紙片に
+     触れた時にはもう「棚にあります」になっている（同じ棚を、二つの面から見ている）。
+     押した瞬間に姿を変えて、返事は待たない（Apple §1）。届かなかった時だけ、戻す。 */
+  async function toggleCellKeep(b,w){
+    if(b._busy)return;
+    b._busy=1;
+    const key='drift:'+w.id, on=!kept.has(key);
+    if(on)kept.add(key); else kept.delete(key);
+    paintKeep(b,on);
+    try{
+      const r=await fetch('/api/shelf',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({src:'drift',ref:w.id,on:on})});
+      if(!r.ok)throw new Error('keep');
+      await r.json().catch(()=>null);
+    }catch(e){
+      if(on)kept.delete(key); else kept.add(key);
+      paintKeep(b,!on);
+      whisper('いま、<wbr>棚に<wbr>届きませんでした。',6000);
+    }finally{ b._busy=0; }
+  }
+  /* 受けるのは grid ひとつ（50枚ごとに増えていく紙に、一枚ずつ耳を付けない）。
+     ここは #vp の外なので click でよい——setPointerCapture で click が付け替わる
+     地雷は、宙の面の中だけの話（2026-07-31）。 */
+  grid.addEventListener('click',e=>{
+    const b=e.target.closest('.rsheet-keep');
+    if(!b)return;
+    const li=b.closest('.rsheet-cell');
+    if(li&&li._w)toggleCellKeep(b,li._w);
+  });
+
   /* ランダムの並び（§3.4）。押した時に種を一つ決めて、その種で混ぜる——
      めくるたびに引き直すと、続きをめくった時に前の50枚がもう一度出てくる。 */
   function shuffled(a,seed){
@@ -3274,9 +3327,11 @@ Promise.all([
          生成り〜灰白の三種、漂流物は灰の紙——どちらも paperOf の中で決まる。 */
       li.style.setProperty('--pp',paperOf(w));
       if(w.pd)li.classList.add('pd');
+      if(LOGGED_IN&&w.id)li.classList.add('act');   // 足を一段ぶん伸ばす（下の CSS）
       li.innerHTML='<div class="rsheet-v">'+
         (w.title?'<p class="rsheet-title"></p>':'')+'<p class="rsheet-poem"></p></div>'+
-        (w.pd?'<p class="rsheet-src"></p>':'');
+        (w.pd?'<p class="rsheet-src"></p>':'')+keepFoot(w);
+      li._w=w;
       if(w.title)li.querySelector('.rsheet-title').textContent=w.title;
       const pe=li.querySelector('.rsheet-poem');
       pe.textContent=w.poem||'';

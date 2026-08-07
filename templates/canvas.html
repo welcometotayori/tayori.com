@@ -74,6 +74,12 @@ function bootOr(k,url){
               aria-controls="logoMenu" aria-label="メニュー">
         {# 三つの粒はロゴそのもの（tayori.png の形）。地は透かし、形だけを字の色で塗る #}
         <span class="logo-glyph" aria-hidden="true"></span>
+        {# しるしの右の小さな山（2026-08-07 Kosei）。しるしだけでは「押せる」ことも
+           「いま開いている」ことも言えなかった。閉じている時は下を向き、開くと上を
+           向く——戸の板がどちらへ動くかを、山の向きがそのまま指している。 #}
+        <svg class="logo-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+             stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true"><path d="M2.6 4.4 6 7.8l3.4-3.4"/></svg>
       </button>
       <div class="menu-list" id="logoMenu" hidden>
         {# ジャンルの名。見えていない島へも、読んでいる最中でも、ここから降りられる #}
