@@ -92,6 +92,81 @@ if _LOCAL_CACHE:
           f"（{_PERSIST_SECONDS}秒ごと＋終了時に保存）", flush=True)
 
 
+def _restore_from_upload():
+    """控えから戻す唯一の安全な瞬間＝**まだ誰もDBを開いていない起動直後**（2026-08-12）。
+
+    走っている本番で `/var/data/tayori.db` を手で差し替えても戻らない。`_LOCAL_CACHE` が
+    有効な本番では、実体は `/tmp/tayori-live.db` のほうで、30秒ごとにそれが永続側へ
+    上から書かれる——差し替えたものは、次の30秒で消える。だから戻す道は
+    「置く → 環境変数で指す → 一度立て直す」にした。旗を見るのはこの一箇所だけ。
+
+        TAYORI_RESTORE_FROM=/var/data/restore.db.gz   （.gz でも素の .db でも可）
+
+    守り:
+      * 検めてから置き換える（integrity_check と、users / letters が空でないこと）。
+        駄目なら**何もせず**いまのDBのまま起きる（戻せない控えでサービスを壊さない）。
+      * いまのDBは消さずに `.before-restore-<日時>` へ退ける（rename なので一瞬・容量も食わない）。
+      * 済んだら指し先を `.restored-<日時>` へ改名する＝**二度は戻さない**。旗を消し忘れて
+        再デプロイしても、そこにファイルはもう無いので黙って素通りする。
+    手順は docs/restore.md に。
+    """
+    src = os.environ.get("TAYORI_RESTORE_FROM")
+    if not src:
+        return
+    if not os.path.exists(src):
+        print(f"[たより] TAYORI_RESTORE_FROM={src} は在りません（戻さずに起動します）", flush=True)
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    incoming = _PERSIST_DB_PATH + ".incoming"
+    try:
+        print(f"[たより] ★控えから戻します: {src}", flush=True)
+        if src.endswith(".gz"):
+            import gzip
+            with gzip.open(src, "rb") as fh, open(incoming, "wb") as w:
+                shutil.copyfileobj(fh, w, 1024 * 1024)   # 丸ごと載せない（8/2 のOOMと同じ轍）
+        else:
+            shutil.copyfile(src, incoming)
+        c = sqlite3.connect(f"file:{incoming}?mode=ro", uri=True, timeout=30)
+        try:
+            res = (c.execute("PRAGMA integrity_check").fetchone() or [""])[0]
+            n_users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            n_letters = c.execute("SELECT COUNT(*) FROM letters").fetchone()[0]
+        finally:
+            c.close()
+        if res != "ok" or n_users == 0:
+            print(f"[たより] ！控えが検めを通りませんでした（integrity={res} / 人={n_users}）"
+                  "。戻さずにいまのDBで起動します。", flush=True)
+            return
+        print(f"[たより] 控えの中身: 人={n_users} ことば={n_letters}", flush=True)
+        if os.path.exists(_PERSIST_DB_PATH):
+            aside = f"{_PERSIST_DB_PATH}.before-restore-{stamp}"
+            os.replace(_PERSIST_DB_PATH, aside)
+            print(f"[たより] いまのDBを退けました → {aside}（確かめたら消すこと）", flush=True)
+        for ext in ("-wal", "-shm", "-journal"):     # 前のDBの続きが残っていると混ざる
+            try:
+                os.remove(_PERSIST_DB_PATH + ext)
+            except OSError:
+                pass
+        os.replace(incoming, _PERSIST_DB_PATH)
+        if _LOCAL_CACHE:
+            # 実体側に前のものが残っていると `_restore_from_durable` が写さない（在る時は写さない設計）
+            for p in (DB_PATH, DB_PATH + "-wal", DB_PATH + "-shm", DB_PATH + "-journal"):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+        done = f"{src}.restored-{stamp}"
+        os.replace(src, done)
+        print(f"[たより] ★戻しました。指し先は {done} へ改名済み（旗はもう効きません）", flush=True)
+    except Exception as e:
+        print(f"[たより] ！控えからの復元に失敗（いまのDBのまま起動します）: {e}", flush=True)
+    finally:
+        try:
+            os.remove(incoming)
+        except OSError:
+            pass
+
+
 def _restore_from_durable():
     if not _LOCAL_CACHE:
         return
@@ -711,6 +786,7 @@ def init_db():
     
     with _WRITE_LOCK:
         if _init_db_done: return
+        _restore_from_upload()      # 旗が立っている時だけ。まだ誰もDBを開いていないこの一瞬に
         _restore_from_durable()
         _normalize_journal_mode()
         db = _connect()
