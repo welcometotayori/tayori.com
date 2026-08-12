@@ -26,6 +26,34 @@
   "inLanguage": "ja"
 }
 </script>
+{# 名乗りの一枚（2026-08-12）。WebApplication は「何ができるか」、WebSite は「どのURLか」を
+   言っているが、「だれがやっているか」を言う型が無かった。alternateName は綴りの揺れ
+   （たより／tayori／tayori-letter）を一つの名前として結び付けるためのもの。
+   sameAs（SNS等の別の顔）は、アカウントが出来たらここへ足す——無いうちは書かない。
+   founder と email は /about と /contact の名乗りと同じにすること（違うと信用が減る）。 #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "tayori-たより-",
+  "alternateName": ["たより", "tayori", "tayori-letter"],
+  "url": "{{ SITE_URL }}",
+  {# ?v= のバージョンは付けない——av は _head.html の中で set されていて、include は
+     別スコープなのでこの面からは引けない（付けると ?v= だけの空の尾が出る）。 #}
+  "logo": "{{ SITE_URL }}/static/icons/apple-touch-icon.png",
+  "image": "{{ SITE_URL }}/static/og.png",
+  "description": "{{ page_desc }}",
+  "email": "tayoriletter@gmail.com",
+  "founder": {"@type": "Person", "name": "筒井晃生"},
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "customer support",
+    "email": "tayoriletter@gmail.com",
+    "url": "{{ SITE_URL }}/contact",
+    "availableLanguage": ["ja"]
+  }
+}
+</script>
 {# ══ フェーズ5（2026-07-28）：index.html を「門」だけに削ぎ落とした ══════════
    ここに在ったもの——投函（便箋・封蝋・写真・声）・受信（開封）・年表・設定・
    オンボーディング・人物像——はすべて旧「手紙」アプリの残骸で、いまの tayori の
@@ -75,7 +103,7 @@
   body{line-break:strict}
   .concept-body p,.gate-tag,.gate-note,.gate-err{word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
   h1{font-family:'Shippori Mincho',serif;font-weight:600;font-size:42px;letter-spacing:0.14em;margin-bottom:6px}
-  .romaji{font-family:var(--font-body);font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
+  .romaji{display:block;font-weight:400;font-family:var(--font-body);font-size:11px;letter-spacing:0.42em;color:var(--ink-mute);text-transform:uppercase;padding-left:0.42em}
   @media(max-width:420px){h1{font-size:36px}.romaji{font-size:10px;letter-spacing:0.34em}}
 
   /* auth gate */
@@ -206,8 +234,12 @@
 <body>
 <div class="gate" id="gate">
   <div class="gate-card">
-    <h1>たより<span class="vh"> — あなたの何気ない言葉が、いつか知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
-    <div class="romaji">tayori</div>
+    {# ローマ字は h1 の中へ入れた（2026-08-12）。姿は今までと同じ（.romaji は display:block）
+       だが、見出しの文字列が「たより」だけだったのを「たより tayori」にする——指名検索は
+       かな綴りとローマ字綴りの両方で打たれるのに、この面で一番強い見出しが片方しか
+       持っていなかった。CSS の .romaji に display:block と font-weight:400 を足してあるのは、
+       div から span へ移したぶんを打ち消すため（h1 の 600 を継がせない）。 #}
+    <h1>たより<span class="romaji">tayori</span><span class="vh"> — あなたの何気ない言葉が、いつか知らない誰かの意味になる。そしてある日、あの日のあなたの言葉が、ふと帰ってくる。</span></h1>
     <div class="gate-tag">ことばを tayori-たより- へ放つために。<br>はじめに、あなたの名前を。</div>
     <div class="gate-form">
       <div class="gate-tabs">
