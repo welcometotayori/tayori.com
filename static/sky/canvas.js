@@ -639,12 +639,34 @@ function partnerDir(isl,el){
    ので、一度測れば次からは測り直さなくてよい。これが効くのは fitK ——降りる先の
    倍率を決めるために、島を一瞬だけ紙片の姿にして数百枚を測っていた。class を立てて
    読んで戻す＝島を渡るたび、版面の強制的な組み直しが二度走っていた。 */
+/* 2026-08-14：cached は「全部か、ゼロか」だった。控えを持たないのは横書きの紙だけ
+   （snapSize は字数から数えるので縦書きにしか書けない）なのに、島に一枚でも横書きが
+   混じると**その島の全部**を測り直していた——控えのある数百枚まで巻き添えにして。
+   だから控えの有無は島ではなく一枚ずつで見る：足りない紙だけ測り、あとは控えを読む。
+   控えと実測が食い違う心配は要らない（box-sizing:border-box ＋ .isl.sheet .w が
+   width/height に --sw/--sh をそのまま敷くので、測っても同じ値が返る＝実測で確認済み）。 */
+function coldSizes(isl){
+  return isl.words.filter(el=>
+    !el.classList.contains('mutedout')&&!(el._pw&&el._ph));
+}
 function sheetPlan(isl,maxW,cached){
   const live=isl.words.filter(el=>!el.classList.contains('mutedout'));
   if(!live.length)return null;
   let items;
   if(cached){
-    items=live.map(el=>({el:el,w:el._pw,h:el._ph}));
+    const cold=live.filter(el=>!(el._pw&&el._ph));
+    if(!cold.length){
+      items=live.map(el=>({el:el,w:el._pw,h:el._ph}));
+    }else{
+      // 測るのと書くのを混ぜない：留めを外す（書く）→ まとめて測る（読む）
+      cold.forEach(el=>{ if(el._pin){el._pin=0;el.style.width='';el.style.height='';} });
+      const dim=new Map();
+      cold.forEach(el=>dim.set(el,[el.offsetWidth,el.offsetHeight]));
+      items=live.map(el=>{
+        const d=dim.get(el);
+        return d?{el:el,w:d[0],h:d[1]}:{el:el,w:el._pw,h:el._ph};
+      });
+    }
   }else{
     // 再生中の一枚は寸法を留めてある（playType の pin）。測る前に、まず外す
     live.forEach(el=>{ if(el._pin){el._pin=0;el.style.width='';el.style.height='';} });
@@ -719,7 +741,12 @@ function sheetLayout(isl,stagger){
      組み替え）で上限が三百px台まで縮み、束が幅一枚ぶんの縦長の紐に化けた
      （実測16段・丈5248——読んでいた島ごと画面から消えた）。 */
   const kRef=isl._fitK!=null?isl._fitK:Math.max(K,0.08);
-  const pl=sheetPlan(isl,(VW*0.94)/Math.max(kRef,0.08)); if(!pl)return;
+  /* 控えで組む（2026-08-14 カクツキ）。ここは第三引数を渡し忘れていて、島に降りる
+     たび・岸が着くたび・画面が変わるたびに、その島の紙を全部測り直していた
+     （実測 62枚で 12〜24ms＝携帯なら 60〜120ms。控えなら 0.1ms）。しかも直前の
+     fitK は控えで倍率を決めているので、**倍率を決めた寸法と、並べた寸法が別**
+     という取り合わせになっていた。同じ控えで見れば、決める側と並べる側が揃う。 */
+  const pl=sheetPlan(isl,(VW*0.94)/Math.max(kRef,0.08),true); if(!pl)return;
   isl._bw=pl.W; isl._bh=pl.H;   // 束の箱（「島に居る」の物差し。帯は半径より縦に長い）
   const ax=Math.max(pl.W/2,1), ay=Math.max(pl.H/2,1);
   pl.items.forEach(it=>{
@@ -1625,11 +1652,13 @@ function screenPos(el){
    追い出されては元も子もない。収める前に、まず居られること。 */
 function fitK(isl){
   /* 控えが揃っているなら、島を紙片の姿にして測り直さない（2026-08-03 カクツキ）。
-     揃っていないのは、まだ一度も降りていない島と、あとから来た岸の漂流物だけ。 */
-  const warm=isl.words.length&&isl.words.every(el=>
-    el.classList.contains('mutedout')||(el._pw&&el._ph));
+     揃っていないのは、まだ一度も降りていない島と、あとから来た岸の漂流物だけ。
+     2026-08-14：足りない紙が一枚でもあれば紙片の姿を立てる（測るのはその一枚だけ
+     ——sheetPlan が控えのある紙は読むだけで済ませる）。姿を立てずに測ると、
+     散らばりの寸法を紙片の控えとして焼き付けてしまう＝以後ずっと狂う。 */
+  const cold=coldSizes(isl).length>0;
   const was=isl.el.classList.contains('sheet');
-  if(!warm&&!was)isl.el.classList.add('sheet');
+  if(cold&&!was)isl.el.classList.add('sheet');
   // 下限は、字が読めるところ（0.42）と、島から押し出されない線（出る線 0.20）の外側
   const lo=Math.max(0.42,0.21*Math.min(VW,VH)/isl.R);
   /* 束の形は倍率で変わり（幅の上限）、倍率は束の形で決まる。数回まわせば落ち着く
@@ -1637,7 +1666,7 @@ function fitK(isl){
   let k=1.05,pl=null;
   try{
     for(let t=0;t<5;t++){
-      pl=sheetPlan(isl,(VW*0.94)/k,warm);
+      pl=sheetPlan(isl,(VW*0.94)/k,true);
       if(!pl)break;
       const nk=Math.max(lo,Math.min(1.05,
         Math.min((VW*0.94)/Math.max(pl.W,1),((VH-SHEET_PAD)*0.94)/Math.max(pl.H,1))));
@@ -1645,7 +1674,7 @@ function fitK(isl){
       k=nk;
     }
   }catch(e){ pl=null; }
-  if(!warm&&!was)isl.el.classList.remove('sheet');
+  if(cold&&!was)isl.el.classList.remove('sheet');
   if(!pl)return Math.max(0.55,Math.min(1.1,Math.min(VW,VH)/(isl.R*1.12*2.15)));
   return k;
 }
