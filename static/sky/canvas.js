@@ -23,8 +23,17 @@ let VW=vp.clientWidth, VH=vp.clientHeight;
 /* 携帯はアドレスバーの出入りでも resize が飛ぶ（スクロールのたび何度も）。
    測り直しと敷き直しは落ち着いてから一度だけ（2026-07-31 夜）。 */
 let rsT=0;
+/* アドレスバーの出入りは「画面が変わった」ではない（2026-08-14）。
+   携帯で宙を上下にひきずると、バーが引っ込む／出るたびに resize が飛び、
+   そのたびに束の敷き直し（sheetLayout）と全景の引き直し（homeFit）が走っていた
+   ——指を動かしているまさにその最中に、島ぜんぶを組み直す仕事が挟まる。
+   幅が同じで丈だけが 160px 以内で動いたなら、それはバーの出入りなので、
+   測り直すだけにして敷き直しはしない。向きが変われば幅が変わる＝ちゃんと通る。 */
+const BAR_H=160;
 addEventListener('resize',()=>{
+  const w0=VW,h0=VH;
   VW=vp.clientWidth;VH=vp.clientHeight;
+  if(VW===w0&&Math.abs(VH-h0)<=BAR_H){ apply(); return; }
   clearTimeout(rsT);
   rsT=setTimeout(()=>{
     // 画面の向きが変われば紙片の敷き詰めも変わる（縦長は一行2〜3枚）
@@ -154,6 +163,11 @@ function noteTouch(room){
    rooms … 気配のある島（遠景では、その島の灯が息をする）。数は聞かないし、返ってこない */
 const lantern=document.getElementById('lantern');
 function pollLantern(){
+  /* 見ていない面の気配は、鳴らさない（2026-08-14）。灯は 30 秒ごとに問い続ける
+     だけの仕掛けで、畳んだ面・裏に回った面でも同じだけ問うていた——携帯では
+     そのたびに無線が起きる。裏に居るあいだは黙り、表に戻った時に一度だけ問い直す
+     （既に arrivals が同じ作法を採っている）。 */
+  if(document.hidden)return;
   const q=focusIsl?('?here='+focusIsl.id):'?rooms=1';
   fetch('/api/sky/lantern'+q).then(r=>r.ok?r.json():null).then(d=>{
     if(!(d&&lantern))return;
@@ -177,6 +191,7 @@ function pollLantern(){
 }
 setTimeout(pollLantern,4000);
 setInterval(pollLantern,30000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden)pollLantern(); });
 
 /* ── 見え方の定数 ──
    濃さ＝沈降（1=いま昇ったばかり）。3年で1/4に沈むが、ゼロにはしない——
