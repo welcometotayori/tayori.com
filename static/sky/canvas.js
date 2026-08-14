@@ -436,6 +436,10 @@ function build(rooms,words){
   islands.forEach(isl=>isl.words.forEach(el=>{
     el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
   }));
+  /* 寸法だけは、ここで一度まとめて測っておく（2026-08-14）。押し出し（relax）は
+     一フレーム後でよいが、間引きの物差しは**一枚目のフレームから**要る。
+     置いた直後の一括読み＝強制的な組み直しは一度きり（実測 15ms）。 */
+  measureScatter();
   /* 順点灯（2026-08-05・旧一覧の 120+i*70ms を戻した）。名と炎は一斉にポンと
      出ない——輪の内から外へ、順に灯る。inline の 0 を外すだけ＝あとは CSS の
      遷移（.8s）が .82 まで運ぶ。炎は名の中に居るので、親と一緒に現れる。
@@ -488,6 +492,12 @@ function mkWord(isl,w,frag){
   }
   el._hx=ux*(isl.R-70);
   el._hy=uy*(isl.R-70);
+  /* 種の席は別に控える（2026-08-14）。押し出し（relax）は _hx/_hy を**上書き**
+     するので、二度目からは「もう逃がした席」を種にして解くことになり、そのたび
+     地形が遠ざかっていく（実測 527枚が動き、いちばん遠いもので634px）。
+     一度しか呼ばないうちは表に出なかったが、書体が着いた時に組み直すには
+     何度呼んでも同じ答えが要る——決定論の約束は、回数にも掛かる。 */
+  el._ox=el._hx; el._oy=el._hy;
   el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
   (frag||isl.wordsEl).appendChild(el);
   isl.words.push(el);
@@ -545,11 +555,16 @@ function reshore(isl){
    ことばが空いた席へ逃げる。逃げ方は一直線ではなく家のまわりの渦巻き——
    直線に押すと、同じ向きに並んだことばが島の外まで筋になって流れ出す（初版で実際に
    起きた）。渦なら家の近くの空席に収まり、島は塊のまま。順序固定＝決定論。 */
-function relax(){
-  /* 測るのと書くのを混ぜない（2026-07-31 夜・立ち上がりの固まりの真因）。
-     旧実装は「一枚測って、一枚置く」を数百回くり返していた。置いた瞬間に版面は
-     汚れるので、次の一枚を測るたびブラウザは版面を組み直す——数百回の強制レイアウト
-     ＝立ち上がりで宙が数秒沈黙する。先に全部測り、計算し、最後にまとめて置く。 */
+/* 散らばりの姿の寸法をまとめて測る（2026-08-14 に relax から切り出した）。
+   切り出した理由：この寸法（_sw/_sh）は押し出しのためだけのものではなく、
+   **画面外の間引き（cullWords）が読む唯一の物差し**でもある。relax は build の
+   一フレーム後（rAF）に走るので、それまでのあいだ _sw/_sh は undefined ——
+   間引きは「寸法をまだ測っていない紙は間引かない」の枝に落ちて、一枚も畳めない。
+   立ち上がりの最初の数フレームだけ、画面の外の数百枚（実測 804枚中 474枚）を
+   まるごと塗っていた。測るのは 15ms、押し出しを解いて書くのが残り——重いほうは
+   rAF に残したまま、軽い「測る」だけを build の側へ寄せれば、間引きは一枚目の
+   フレームから効く。 */
+function measureScatter(){
   const measured=new Map();
   // 再生中の一枚は寸法を留めてある（playType の pin）。測る前に、まず外す
   islands.forEach(isl=>isl.words.forEach(el=>{
@@ -560,23 +575,56 @@ function relax(){
     el._sw=w; el._sh=h;                // 散らばりの姿の寸法（画面外の間引きに使う）
     measured.set(el,[w,h]);
   }));
+  return measured;
+}
+function relax(){
+  /* 測るのと書くのを混ぜない（2026-07-31 夜・立ち上がりの固まりの真因）。
+     旧実装は「一枚測って、一枚置く」を数百回くり返していた。置いた瞬間に版面は
+     汚れるので、次の一枚を測るたびブラウザは版面を組み直す——数百回の強制レイアウト
+     ＝立ち上がりで宙が数秒沈黙する。先に全部測り、計算し、最後にまとめて置く。 */
+  const measured=measureScatter();
   const writes=[];
   islands.forEach(isl=>{
-    const done=[];
     const order=[...isl.words].sort((a,b)=>(b._w.sink-a._w.sink)||(a._w.id<b._w.id?-1:1));
+    /* 席の当たり判定を、置いた全部との突き合わせから**近所だけ**へ（2026-08-14）。
+       旧実装は一枚置くごとに「もう置いた全部」を順に見ていた。渦は最大160周
+       まわるので、一周ごとにその走査が走る——実測219,245回の突き合わせ。
+       島ごとに粗い升目を敷いて、当たりうる升（自分と八方）だけを見る。
+       升の一辺は「いちばん大きな紙＋遊び」なので、隣の升より外の紙は
+       **どう置いても届かない**＝落ちる相手はいない。判定の式も、置く順も
+       元のまま＝出来上がる地形は一枚も変わらない（配置は決定論の約束）。 */
+    let maxW=0,maxH=0;
+    order.forEach(el=>{ const m=measured.get(el); if(m){ if(m[0]>maxW)maxW=m[0]; if(m[1]>maxH)maxH=m[1]; } });
+    const cell=Math.max(maxW,maxH)+36||1;
+    const grid=new Map();
+    const key=(cx,cy)=>cx+','+cy;
+    const put=d=>{
+      const k=key(Math.floor(d.x/cell),Math.floor(d.y/cell));
+      const b=grid.get(k); if(b)b.push(d); else grid.set(k,[d]);
+    };
     order.forEach(el=>{
       const m=measured.get(el)||[0,0], w=m[0], h=m[1];
-      let x=el._hx,y=el._hy;
-      const base=Math.atan2(el._hy,el._hx);
-      const hits=()=>done.some(d=>Math.abs(x-d.x)<(w+d.w)/2+18&&Math.abs(y-d.y)<(h+d.h)/2+18);
+      // 解くのは、いつも種の席から（_ox/_oy）。前に逃がした席からではない
+      const hx=el._ox!=null?el._ox:el._hx, hy=el._oy!=null?el._oy:el._hy;
+      let x=hx,y=hy;
+      const base=Math.atan2(hy,hx);
+      const hits=()=>{
+        const cx=Math.floor(x/cell), cy=Math.floor(y/cell);
+        for(let gx=cx-1;gx<=cx+1;gx++)for(let gy=cy-1;gy<=cy+1;gy++){
+          const b=grid.get(key(gx,gy)); if(!b)continue;
+          for(let i=0;i<b.length;i++){ const d=b[i];
+            if(Math.abs(x-d.x)<(w+d.w)/2+18&&Math.abs(y-d.y)<(h+d.h)/2+18)return true; }
+        }
+        return false;
+      };
       let t=0;
       while(hits()&&t<160){
         t++;
         const rr=34+t*7.5;
         const aa=base+t*2.39996;
         // 縦書きの塊は縦に長いので、横へ広めに・縦へ狭めに逃がす（島を楕円に保つ）
-        x=el._hx+Math.cos(aa)*rr*1.15;
-        y=el._hy+Math.sin(aa)*rr*0.6;
+        x=hx+Math.cos(aa)*rr*1.15;
+        y=hy+Math.sin(aa)*rr*0.6;
       }
       /* 逃げてよい。ただし**隣の島には入らない**（2026-08-02）。島の席を意味の
          地図に置いて間合いを詰めたので、押し出された一枚がそのまま隣の島へ紛れる
@@ -590,7 +638,7 @@ function relax(){
       });
       el._hx=x; el._hy=y;
       writes.push([el,x,y]);
-      done.push({x,y,w,h});
+      put({x:x,y:y,w:w,h:h});
     });
   });
   writes.forEach(a=>{a[0].style.left=a[1]+'px';a[0].style.top=a[2]+'px';});
@@ -1846,6 +1894,7 @@ function castLand(isl,poem,color,steps){
   // 島の心の近く。種は本文＝置き直しても同じ場所（決定論の作法に合わせる）
   const aa=(fnv(poem)%360)*Math.PI/180, rr=40+(fnv(poem+'r')%60);
   el._hx=Math.cos(aa)*rr; el._hy=Math.sin(aa)*rr;
+  el._ox=el._hx; el._oy=el._hy;                  // 種の席（relax は毎回ここから解く）
   el.style.left=el._hx+'px'; el.style.top=el._hy+'px';
   el.style.zIndex=6;
   isl.wordsEl.appendChild(el);
