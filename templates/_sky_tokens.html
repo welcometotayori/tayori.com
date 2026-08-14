@@ -19,13 +19,22 @@
    自前で一枚にすると、誰が何を書くか分からない宙では数MBを常に配ることになる。
    _head.html も同じ行を持っている（/privacy と /terms はここを通らないため）。
    **URLは必ず両方そろえること**——揃っていれば取りに行くのは一度きりで済む。 #}
+{# ウェイトは面ごとに要るぶんだけ（2026-08-14）。宙（canvas.html）は 400 しか
+   使っていないのに、三段ぶんの @font-face を配っていた——日本語は一段が120枚ほどの
+   割り当てなので、三段で366枚。宙は 804 枚のことばを持つ面なので、宣言の枚数が
+   そのまま立ち上がりの重さに乗る。呼ぶ側が sky_weights を渡さなければ今までどおり。 #}
+{% set sky_weights = sky_weights|default('400;500;600') %}
+{# 待ち方も面ごと（2026-08-14）。紙の面は今までどおり swap——字数が知れているので、
+   差し替わっても組み直すのは数十行。宙だけは optional にしてある（canvas.html）。 #}
+{% set sky_font_display = sky_font_display|default('swap') %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&display=swap">
+      href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@{{ sky_weights }}&display={{ sky_font_display }}">
 <style>
   /* 太字は600へ寄せる。既定の700は、どの面も指定していないのに <b> と <strong> だけが
-     呼び出していた——そのために書体をもう一段まるごと配るのは釣り合わない。 */
+     呼び出していた——そのために書体をもう一段まるごと配るのは釣り合わない。
+     600 を配らない面（宙）では、太さではなく糸の色で言う——下の canvas.css を見よ。 */
   b,strong{font-weight:600}
   :root{
     /* ── 書体は一本（2026-08-07 夜 Kosei「フォントがバラバラなのが気になる」）───

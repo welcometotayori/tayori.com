@@ -3253,6 +3253,30 @@ Promise.all([
   KFIT=homeFit();    // 島の席が決まった＝手で引ける下限（全景）もここで決まる
   fillMenuRooms();   // 戸の中のジャンル（見えていない島への道）
   fetchMine();   // 自分の棚の控え（棚にあります の札のため）
+  /* 書体が着いたら、寸法は測り直す（2026-08-14）。
+     日本語の Shippori Mincho は字ごとに約120枚へ割ってあり、その面に出ている字の
+     ぶんだけ順に落ちてくる（この宙では実測91枚）。display:swap なので字はすぐ出るが、
+     出ているのは**代わりの書体**で、字幅も行の高さも違う。押し出し（relax）も
+     画面外の間引きの箱（_sw/_sh）も、その代わりの寸法で決まってしまい、
+     あとから本物が着いても二度と測り直されていなかった——重なったまま、あるいは
+     見えているのに間引かれたまま、の紙が残る。
+     着き終わりを一度だけ待って、押し出しと束を組み直す。fonts.ready は既に
+     着いていれば即座に解けるので、机の上（書体が控えにある時）では何も遅れない。 */
+  if(document.fonts&&document.fonts.ready){
+    document.fonts.ready.then(()=>{
+      if(!islands.size)return;
+      relax();                                  // 散らばりの寸法と押し出しを引き直す
+      if(sheetId!=null&&islands.has(sheetId)){  // 降りている島は、束も組み直す
+        const isl=islands.get(sheetId);
+        /* 控えを捨てるのは横書きの紙だけ。縦書きの紙片の寸法（snapSize）は
+           字数と CSS の定数から出る純関数で、書体が変わっても一画も動かない。 */
+        isl.words.forEach(el=>{ if(el._w&&!el._w.vertical){el._pw=0;el._ph=0;} });
+        isl._fitK=fitK(isl);
+        sheetLayout(isl);
+      }
+      apply();
+    }).catch(()=>{});
+  }
   requestAnimationFrame(()=>{ relax();
     /* 2026-07-31：宙はミクロから始まる。全景（マクロ）から入ると、最初に見えるのが
        「地図」で、ことばそのものに触れるまでが遠かった——降りた島の紙片から始め、
