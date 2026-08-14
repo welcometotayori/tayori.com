@@ -6,6 +6,18 @@
 <meta name="theme-color" content="#08080D">
 <meta name="robots" content="noindex">{# SEO方針：宙の中身は検索に出さない。索引可能なのは「/」の門だけ #}
 <title>tayori -たより-｜ひとつづきの宙</title>
+{# 印と、home画面へ入れた時の姿（2026-08-14）。この面は _head.html を通らない
+   （宙は宙で <head> を持っている）ので、印の宣言だけが**この一枚から抜けていた**。
+   宙は毎日開く面＝home画面へ置かれるのはまさにこの面なのに、iOS は宣言が無いと
+   ルートの /apple-touch-icon.png を勝手に探しに行き（404）、印の代わりに画面の
+   写しを置く。manifest も同じ理由で要る（Android の「ホーム画面に追加」）。
+   番号（v=4）は _head.html と揃えること——揃っていないと片方だけ古い印が残る。 #}
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=4">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png?v=4">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png?v=4">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png?v=4">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-mobile-web-app-title" content="たより">
 {# ══ 一枚の宙（無限キャンバス・2026-07-30 方向転換）══════════════════
    「リストを作らない」の線を降ろした日の面。部屋は壁から地形（島）になり、
    その部屋の全ことばが一望に並ぶ。沈降は深さ（薄さ・ぼけ）として見える。
